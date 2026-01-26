@@ -42,7 +42,7 @@ jobs:
       matrix:
         distro: [ubuntu2204]
         scenario: [kibana_default]
-        release: [ 7, 8 ]
+        release: [ 7, 8, 9 ]
 
     steps:
       - name: Check out code

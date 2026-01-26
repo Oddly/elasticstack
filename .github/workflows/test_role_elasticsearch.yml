@@ -43,11 +43,19 @@ jobs:
         scenario:
           - elasticsearch_default
           - elasticsearch_roles_calculation
-          - elasticsearch_cluster-oss
-          - elasticsearch_no-security
+          - elasticsearch_test_modules
         release:
           - 7
           - 8
+          - 9
+        include:
+          # OSS and no-security only work with release 7
+          - distro: ubuntu2204
+            scenario: elasticsearch_cluster-oss
+            release: 7
+          - distro: ubuntu2204
+            scenario: elasticsearch_no-security
+            release: 7
 
     steps:
       - name: Check out code
