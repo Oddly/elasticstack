@@ -56,7 +56,7 @@ You will need the following Ansible collections installed
 You will need these packages / libraries installed. Some very basic packages like `openssl` get handled by the collection if needed. The following list contains packages and libraries which only apply to special cases or need for you to decide on the installation method.
 
 * `passlib` Python library if you do not disable password hashing for logstash user and you want to use logstash role from this collection. It should be installed with pip on the Ansible controller.
-* `elasticsearch` Python module. Current versions are either compatible to Elasticsearch 9 or versions lower than 9. There seems to be no version that can serve both. So for now we install a version of the client lower than 9 but need to take care to install the right one when we make this collection compatible to Elastic Stack 9
+* `elasticsearch` Python module (version 8.x or 9.x). See the [Python Client Compatibility](#python-client-compatibility) section below for upgrade guidance.
 
 You may want the following Ansible roles installed. There other ways to achieve what they are doing but using them is easy and convenient.
 
@@ -64,7 +64,7 @@ You may want the following Ansible roles installed. There other ways to achieve 
 
 ### Supported systems
 
-We test the collection on the following Linux distributions. Each one with Elastic Stack 7 and 8.
+We test the collection on the following Linux distributions. Each one with Elastic Stack 7, 8, and 9.
 
 * Rocky Linux 9
 * Rocky Linux 8
@@ -72,8 +72,30 @@ We test the collection on the following Linux distributions. Each one with Elast
 * Ubuntu 20.04 LTS
 * Debian 11
 
+> **Note**: Elastic Stack 9.x support is available starting with this version of the collection. See the [Elasticsearch 9.x Upgrade Guide](./docs/elasticsearch-9x-upgrade.md) for upgrade instructions.
+
 ### Known Issues
 
+
+### Python Client Compatibility
+
+The `elasticsearch` Python library follows specific compatibility rules with Elasticsearch servers:
+
+| Client Version | ES 8.x Server | ES 9.x Server |
+|---------------|---------------|---------------|
+| elasticsearch 8.x | ✅ Full support | ✅ Forward compatible |
+| elasticsearch 9.x | ❌ Will not work | ✅ Full support |
+
+**Key points:**
+- The 8.x client is **forward compatible** with ES 9.x servers (works, but without new 9.x features)
+- The 9.x client is **NOT backward compatible** with ES 8.x servers (will fail immediately)
+
+**Upgrade path (ES 8.x → 9.x):**
+1. **Before upgrading ES:** Keep using `pip install 'elasticsearch>=8,<9'`
+2. **Upgrade ES server** to 9.x (the 8.x client continues to work)
+3. **After ES upgrade (optional):** Upgrade to `pip install 'elasticsearch>=9,<10'` for full 9.x feature support
+
+The collection includes a `Api.check_version_compatibility()` method that validates client/server compatibility and provides actionable guidance.
 
 ## Usage
 
@@ -89,7 +111,9 @@ The variable `elasticstack_no_log` can be set to `false` if you want to see the 
 
 *elasticstack_version*: Version number of tools to install. Only set if you don't want the latest on new setups. (default: none). If you already have an installation of Elastic Stack, this collection will query the version of Elasticsearch on the CA host and use it for all further installations in the same setup. (Only if you run the `elasticsearch` role before all others) Example: `7.17.2`
 
-*elasticstack_release*: Major release version of Elastic stack to configure. (default: `7`) Make sure it corresponds to `elasticstack_version` if you set both.
+*elasticstack_release*: Major release version of Elastic stack to configure. (default: `8`) Make sure it corresponds to `elasticstack_version` if you set both. Supported values: `7`, `8`, `9`.
+
+> **Note**: The OSS variant is only available for version `7.x`. For versions 8.x and 9.x, use `elasticstack_variant: elastic`.
 
 For OSS version see `elasticstack_variant` below.
 
@@ -108,6 +132,11 @@ roles:
 #### Upgrades ####
 
 Set `elasticstack_version` to the version you want to upgrade to. Positively do read and understand Elastics changelog and "breaking changes" of your target version and all between your current and the target version. Do not use unless you have a valid backup.
+
+**Upgrading to Elasticsearch 9.x**: See the [Elasticsearch 9.x Upgrade Guide](./docs/elasticsearch-9x-upgrade.md) for detailed requirements and considerations. Key points:
+- You must upgrade to 8.18.x or 8.19.x before upgrading to 9.x
+- Old 7.x indices must be reindexed or deleted before upgrading
+- Run the Upgrade Assistant in Kibana to identify deprecation warnings
 
 If an upgrade fails, you can try re-running the collection with the same settings. There are several tasks that can provide "self-healing". Please do not rely on these mechanisms, they are more of a "convenience recovery" for easier steps.
 
