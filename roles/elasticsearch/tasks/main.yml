@@ -221,6 +221,10 @@
     - Restart Elasticsearch
   when: elasticsearch_jna_workaround | bool
 
+# Ansible 2.20+ is stricter about boolean coercion. For non-boolean variables
+# (numbers, strings, lists), use 'VAR | string | length > 0' instead of bare
+# truthiness checks. This pattern checks "has meaningful content" rather than
+# "is truthy". Do NOT use this pattern for actual boolean variables.
 - name: Set jvm heap size
   ansible.builtin.template:
     src: "jvm.options.d/heap.options.j2"
@@ -230,7 +234,7 @@
     mode: "660"
     force: yes
   notify: Restart Elasticsearch
-  when: (elasticsearch_heap)
+  when: elasticsearch_heap is defined and (elasticsearch_heap | string | length > 0)
 
 - name: Set jvm paths
   ansible.builtin.template:
@@ -251,7 +255,7 @@
     mode: "660"
     force: yes
   notify: Restart Elasticsearch
-  when: (elasticsearch_jvm_custom_parameters)
+  when: elasticsearch_jvm_custom_parameters is defined and (elasticsearch_jvm_custom_parameters | string | length > 0)
 
 # On containerized Debian 10 systemd will not recognize elasticsearch service
 - name: Force systemd to reread configs on container
@@ -329,7 +333,7 @@
 - name: Show Info about heap
   ansible.builtin.debug:
     msg: "Using {{ elasticsearch_heap | int * 1024 }} of {{ ansible_memtotal_mb }} MB as heap for Elasticsearch"
-  when: (elasticsearch_heap)
+  when: elasticsearch_heap is defined and (elasticsearch_heap | string | length > 0)
 
 - name: Show hint about passwords
   ansible.builtin.debug:
