@@ -1,0 +1,24 @@
+---
+# Molecule scenario for testing single-node Elasticsearch 8.x to 9.x upgrade
+# Simpler test case than multi-node cluster upgrade
+dependency:
+  name: galaxy
+  options:
+    requirements-file: requirements.yml
+driver:
+  name: docker
+platforms:
+  - name: "es_upgrade_single-${MOLECULE_DISTRO:-debian11}"
+    groups:
+      - elasticsearch
+    image: "geerlingguy/docker-${MOLECULE_DISTRO:-debian11}-ansible:latest"
+    command: ${MOLECULE_DOCKER_COMMAND:-""}
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    pre_build_image: true
+provisioner:
+  name: ansible
+verifier:
+  name: ansible

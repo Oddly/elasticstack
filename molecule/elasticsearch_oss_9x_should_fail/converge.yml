@@ -1,0 +1,24 @@
+---
+# This test verifies that OSS variant is properly rejected for ES 9.x
+# Expected behavior: This playbook SHOULD FAIL with an error message
+# about OSS not being available for Elasticsearch 8.x or 9.x
+
+- name: Attempt to install ES 9.x with OSS variant (SHOULD FAIL)
+  collections:
+    - netways.elasticstack
+  hosts: all
+  vars:
+    elasticstack_full_stack: false
+    elasticstack_release: 9
+    elasticstack_variant: oss  # This is invalid for 9.x!
+    elasticsearch_jna_workaround: true
+    elasticsearch_heap: "1"
+    elasticstack_no_log: false
+  tasks:
+    - name: Include Elastic repos role
+      ansible.builtin.include_role:
+        name: repos
+
+    - name: Include Elasticsearch role (should fail before this)
+      ansible.builtin.include_role:
+        name: elasticsearch

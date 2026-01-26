@@ -49,4 +49,4 @@
       ansible.builtin.pip:
         name: "{{ item }}"
       loop:
-        - elasticsearch
+        - "elasticsearch>=8,<10"

@@ -1,0 +1,80 @@
+---
+# Verify single-node Elasticsearch 8.x to 9.x upgrade
+
+- name: Verify ES 9.x upgrade
+  hosts: all
+  vars:
+    elasticstack_elasticsearch_http_port: 9200
+    elasticstack_initial_passwords: /usr/share/elasticsearch/initial_passwords
+  tasks:
+    - name: Fetch Elastic password
+      ansible.builtin.shell: |
+        grep "PASSWORD elastic " {{ elasticstack_initial_passwords }} |
+        awk {' print $4 '}
+      register: elastic_pass
+      changed_when: false
+
+    - name: Check ES version
+      ansible.builtin.uri:
+        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/
+        method: GET
+        force_basic_auth: yes
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        validate_certs: false
+      register: es_info
+
+    - name: Verify ES 9.x is running
+      ansible.builtin.assert:
+        that:
+          - es_info.json.version.number is version('9.0.0', '>=')
+        fail_msg: "Expected ES 9.x but got {{ es_info.json.version.number }}"
+        success_msg: "ES 9.x ({{ es_info.json.version.number }}) - upgrade successful!"
+
+    - name: Check cluster health
+      ansible.builtin.uri:
+        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health
+        method: GET
+        force_basic_auth: yes
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        validate_certs: false
+      register: health
+      retries: 12
+      delay: 10
+      until: health.json.status in ['green', 'yellow']
+
+    - name: Verify cluster is healthy
+      ansible.builtin.assert:
+        that:
+          - health.json.status in ['green', 'yellow']
+        success_msg: "Cluster status: {{ health.json.status }}"
+
+    - name: Verify test data survived upgrade
+      ansible.builtin.uri:
+        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/upgrade-test/_doc/1
+        method: GET
+        force_basic_auth: yes
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        validate_certs: false
+      register: test_doc
+
+    - name: Verify data integrity
+      ansible.builtin.assert:
+        that:
+          - test_doc.json._source.message == "pre-upgrade-test-data"
+          - test_doc.json._source.version == "8.10"
+        fail_msg: "Test data corrupted or lost during upgrade!"
+        success_msg: "Data preserved: {{ test_doc.json._source }}"
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: |
+          =====================================
+          SINGLE-NODE UPGRADE COMPLETE
+          =====================================
+          Version: {{ es_info.json.version.number }}
+          Status: {{ health.json.status }}
+          Data: PRESERVED
+          =====================================

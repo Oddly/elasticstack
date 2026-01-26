@@ -1,0 +1,128 @@
+---
+# Elasticsearch 8.x to 9.x upgrade test
+#
+# This scenario tests a rolling upgrade from Elasticsearch 8.x to 9.x:
+# 1. Install ES 8.x cluster (2 nodes)
+# 2. Verify cluster is green
+# 3. Index some test data
+# 4. Upgrade to ES 9.x (rolling upgrade)
+# 5. Verify cluster is green and data preserved
+
+- name: Install Elasticsearch 8.x (initial deployment)
+  collections:
+    - netways.elasticstack
+  hosts: all
+  vars:
+    elasticstack_full_stack: false
+    elasticstack_release: 8
+    elasticsearch_jna_workaround: true
+    elasticsearch_disable_systemcallfilterchecks: true
+    elasticsearch_heap: "1"
+    elasticstack_no_log: false
+  tasks:
+    - name: Include Elastic repos role (8.x)
+      ansible.builtin.include_role:
+        name: repos
+
+    - name: Include Elasticsearch role (8.x)
+      ansible.builtin.include_role:
+        name: elasticsearch
+
+- name: Verify ES 8.x cluster is healthy and index test data
+  hosts: elasticsearch[0]
+  vars:
+    elasticstack_elasticsearch_http_port: 9200
+    elasticstack_initial_passwords: /usr/share/elasticsearch/initial_passwords
+  tasks:
+    - name: Fetch Elastic password
+      ansible.builtin.shell: |
+        grep "PASSWORD elastic " {{ elasticstack_initial_passwords }} |
+        awk {' print $4 '}
+      register: elastic_pass
+      changed_when: false
+
+    - name: Wait for ES cluster to be green
+      ansible.builtin.uri:
+        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health?wait_for_status=green&timeout=120s
+        method: GET
+        force_basic_auth: yes
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        return_content: yes
+        status_code: 200
+        validate_certs: false
+      register: cluster_health
+      retries: 6
+      delay: 20
+      until: cluster_health.status == 200
+
+    - name: Display ES 8.x cluster health
+      ansible.builtin.debug:
+        var: cluster_health.json
+
+    - name: Check ES version is 8.x
+      ansible.builtin.uri:
+        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/
+        method: GET
+        force_basic_auth: yes
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        return_content: yes
+        validate_certs: false
+      register: es_info
+
+    - name: Verify ES 8.x is running
+      ansible.builtin.assert:
+        that:
+          - es_info.json.version.number is version('8.0.0', '>=')
+          - es_info.json.version.number is version('9.0.0', '<')
+        fail_msg: "Expected ES 8.x but got {{ es_info.json.version.number }}"
+        success_msg: "ES 8.x ({{ es_info.json.version.number }}) is running"
+
+    - name: Create test index with some data
+      ansible.builtin.uri:
+        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/upgrade-test-index/_doc/1
+        method: PUT
+        force_basic_auth: yes
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        body_format: json
+        body:
+          test_field: "pre-upgrade-data"
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+        validate_certs: false
+        status_code: [200, 201]
+      register: index_result
+
+    - name: Display indexing result
+      ansible.builtin.debug:
+        var: index_result
+
+    - name: Refresh index
+      ansible.builtin.uri:
+        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/upgrade-test-index/_refresh
+        method: POST
+        force_basic_auth: yes
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        validate_certs: false
+
+- name: Upgrade to Elasticsearch 9.x
+  collections:
+    - netways.elasticstack
+  hosts: all
+  vars:
+    elasticstack_full_stack: false
+    elasticstack_release: 9
+    elasticsearch_jna_workaround: true
+    elasticsearch_disable_systemcallfilterchecks: true
+    elasticsearch_heap: "1"
+    elasticstack_no_log: false
+  tasks:
+    - name: Include Elastic repos role (9.x)
+      ansible.builtin.include_role:
+        name: repos
+
+    - name: Include Elasticsearch role (upgrade to 9.x)
+      ansible.builtin.include_role:
+        name: elasticsearch
