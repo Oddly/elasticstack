@@ -1,4 +1,11 @@
 ---
+- name: Fail when OSS variant is used with Elasticsearch 8.x or 9.x
+  ansible.builtin.fail:
+    msg: "The OSS variant is only available for Elasticsearch 7.x. Use elasticstack_variant: elastic for version {{ elasticstack_release }}.x"
+  when:
+    - elasticstack_release | int >= 8
+    - elasticstack_variant == 'oss'
+
 - name: Fail when security is not declared when elasticsearch >= 8
   ansible.builtin.fail:
     msg: "Elasticsearch >= 8 requires enabled security. Set elasticsearch_security to true"

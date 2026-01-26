@@ -36,16 +36,17 @@
     elasticstack_ca_expiration_days is defined and
     elasticstack_ca_expiration_days | int <= elasticstack_ca_expiration_buffer | int
 
+# Use default([]) + length > 0 for group checks (Ansible 2.20 compatibility)
 - name: Stop Logstash
   ansible.builtin.service:
     name: logstash
     state: stopped
-  with_items: "{{ groups[elasticstack_logstash_group_name] }}"
+  with_items: "{{ groups[elasticstack_logstash_group_name] | default([]) }}"
   delegate_to: "{{ item }}"
   when:
     - "'renew_ca' in ansible_run_tags or elasticstack_ca_will_expire_soon | bool"
     - elasticstack_logstash_group_name is defined
-    - groups[elasticstack_logstash_group_name] is defined
+    - groups[elasticstack_logstash_group_name] | default([]) | length > 0
 
 - name: Backup ca directory on elasticsearch ca host then remove
   when: (inventory_hostname == elasticstack_ca_host) and ('renew_ca' in "ansible_run_tags" or elasticstack_ca_will_expire_soon | bool)

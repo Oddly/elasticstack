@@ -26,6 +26,7 @@
     - "oss-7"
     - "8"
     - "oss-8"
+    - "9"
 
 - name: Ensure Elastic Stack apt repository is configured (Debian)
   ansible.builtin.apt_repository:
