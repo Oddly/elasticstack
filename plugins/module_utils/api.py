@@ -165,6 +165,32 @@ class Api():
         return result
 
     @staticmethod
+    def _create_ssl_context(ca_certs, verify_certs):
+        """
+        Create an SSL context for Elasticsearch connections.
+
+        Args:
+            ca_certs: Path to CA certificate file (optional)
+            verify_certs: Whether to verify SSL certificates
+
+        Returns:
+            ssl.SSLContext: Configured SSL context
+        """
+        if ca_certs:
+            ctx = ssl.create_default_context(cafile=ca_certs)
+        else:
+            ctx = ssl.create_default_context()
+
+        if not verify_certs:
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+        else:
+            ctx.check_hostname = True
+            ctx.verify_mode = ssl.CERT_REQUIRED
+
+        return ctx
+
+    @staticmethod
     def new_client_basic_auth(host, auth_user, auth_pass, ca_certs, verify_certs) -> 'Elasticsearch':
         """
         Create an Elasticsearch client using basic authentication.
@@ -186,33 +212,12 @@ class Api():
         """
         Api.check_elasticsearch_import()
 
-        # Create SSL context
-        if ca_certs:
-            ctx = ssl.create_default_context(cafile=ca_certs)
-        else:
-            ctx = ssl.create_default_context()
-
-        # Configure SSL verification
-        if not verify_certs:
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-        else:
-            ctx.check_hostname = True
-            ctx.verify_mode = ssl.CERT_REQUIRED
-
-        # Build client kwargs - compatible with both 8.x and 9.x
-        client_kwargs = {
-            'hosts': [host],
-            'basic_auth': (auth_user, auth_pass),
-            'ssl_context': ctx,
-            'verify_certs': verify_certs,
-        }
-
-        # elasticsearch-py 9.x removed some parameters and renamed others
-        # The parameters we use (hosts, basic_auth, ssl_context, verify_certs)
-        # are compatible with both versions
-
-        return Elasticsearch(**client_kwargs)
+        return Elasticsearch(
+            hosts=[host],
+            basic_auth=(auth_user, auth_pass),
+            ssl_context=Api._create_ssl_context(ca_certs, verify_certs),
+            verify_certs=verify_certs,
+        )
 
     @staticmethod
     def new_client_api_key(host, api_key, ca_certs, verify_certs) -> 'Elasticsearch':
@@ -235,26 +240,9 @@ class Api():
         """
         Api.check_elasticsearch_import()
 
-        # Create SSL context
-        if ca_certs:
-            ctx = ssl.create_default_context(cafile=ca_certs)
-        else:
-            ctx = ssl.create_default_context()
-
-        # Configure SSL verification
-        if not verify_certs:
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-        else:
-            ctx.check_hostname = True
-            ctx.verify_mode = ssl.CERT_REQUIRED
-
-        # Build client kwargs - compatible with both 8.x and 9.x
-        client_kwargs = {
-            'hosts': [host],
-            'api_key': api_key,
-            'ssl_context': ctx,
-            'verify_certs': verify_certs,
-        }
-
-        return Elasticsearch(**client_kwargs)
+        return Elasticsearch(
+            hosts=[host],
+            api_key=api_key,
+            ssl_context=Api._create_ssl_context(ca_certs, verify_certs),
+            verify_certs=verify_certs,
+        )

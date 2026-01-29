@@ -7,76 +7,133 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
+DOCUMENTATION = r'''
+---
+module: elasticsearch_role
+short_description: Manage Elasticsearch roles
+version_added: "1.0.0"
+description:
+    - Create, update, and delete Elasticsearch security roles.
+    - Requires the Elasticsearch Python client library.
+options:
+    name:
+        description: Name of the Elasticsearch role.
+        required: true
+        type: str
+    cluster:
+        description: List of cluster privileges for the role.
+        required: false
+        type: list
+        elements: str
+    indices:
+        description:
+            - List of index privilege objects for the role.
+            - Each object should contain C(names) and C(privileges) keys.
+        required: false
+        type: list
+        elements: dict
+        aliases: ['indicies']
+    state:
+        description: Whether the role should be present or absent.
+        required: false
+        type: str
+        default: present
+        choices: ['present', 'absent']
+    host:
+        description: Elasticsearch host URL.
+        required: true
+        type: str
+    auth_user:
+        description: Username for Elasticsearch authentication.
+        required: true
+        type: str
+    auth_pass:
+        description: Password for Elasticsearch authentication.
+        required: true
+        type: str
+        no_log: true
+    ca_certs:
+        description: Path to a CA certificate file for SSL verification.
+        required: false
+        type: str
+    verify_certs:
+        description: Whether to verify SSL certificates.
+        required: false
+        type: bool
+        default: true
+author:
+    - Tobias Bauriedel (@tobiasbauriedel)
+'''
+
+EXAMPLES = r'''
+- name: Create a role with cluster and index privileges
+  oddly.elasticstack.elasticsearch_role:
+    name: my-role
+    cluster:
+      - manage_own_api_key
+    indices:
+      - names:
+          - my-index-*
+        privileges:
+          - read
+          - write
+    state: present
+    host: https://localhost:9200
+    auth_user: elastic
+    auth_pass: changeme
+    verify_certs: false
+
+- name: Delete a role
+  oddly.elasticstack.elasticsearch_role:
+    name: my-role
+    state: absent
+    host: https://localhost:9200
+    auth_user: elastic
+    auth_pass: changeme
+    verify_certs: false
+'''
+
+RETURN = r'''
+msg:
+    description: A message describing what action was taken.
+    returned: changed
+    type: str
+    sample: "my-role has been created"
+diff:
+    description: Before and after state when running with --diff.
+    returned: changed and diff mode
+    type: dict
+'''
+
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.oddly.elasticstack.plugins.module_utils.elasticsearch_role import (
     Role
 )
 
+
 def run_module():
-    '''
-    Elasticsearch user management.
-
-    ```
-    oddly.elasticstack.elasticsearch_role:
-        name: new-role
-        cluster:
-          - manage_own_api_key
-          - delegate_pki
-        indicies:
-          - names:
-              - foobar
-            privileges:
-              - read
-              - write
-        state: present
-        host: https://localhost:9200
-        auth_user: elastic
-        auth_pass: changeMe123!
-        verify_certs: false
-        ca_certs: /etc/elasticsearch/certs/http_ca.crt
-    ```
-    '''
-
-    # get role
-    # https://www.elastic.co/guide/en/elasticsearch/reference/current/security-api-get-role.html
-
-    # create or update role
-    # https://www.elastic.co/guide/en/elasticsearch/reference/current/security-api-put-role.html
-
     module = AnsibleModule(
         argument_spec=dict(
-            # User args
-            name=dict(type=str, required=True),
-            cluster=dict(type=list, required=False),
-            indicies=dict(type=list, required=False),
-            state=dict(type=str, required=False, default='present'),
-
-            # Auth args
-            host=dict(type=str, required=True),
-            auth_user=dict(type=str, required=True),
-            auth_pass=dict(type=str, required=True, no_log=True),
-            ca_certs=dict(type=str, required=False),
-            verify_certs=dict(type=bool, required=False, default=True)
-        )
+            name=dict(type='str', required=True),
+            cluster=dict(type='list', required=False, elements='str'),
+            indices=dict(type='list', required=False, elements='dict',
+                         aliases=['indicies']),
+            state=dict(type='str', required=False, default='present',
+                       choices=['present', 'absent']),
+            host=dict(type='str', required=True),
+            auth_user=dict(type='str', required=True),
+            auth_pass=dict(type='str', required=True, no_log=True),
+            ca_certs=dict(type='str', required=False),
+            verify_certs=dict(type='bool', required=False, default=True),
+        ),
+        supports_check_mode=True,
     )
-
-    result = dict(
-        failed=False,
-        changed=False
-    )
-
-    if module.params['state'] != 'absent' and module.params['state'] != 'present':
-        result['stderr'] = "Invalid state given. Please use 'absent' or 'present'"
-        result['failed'] = True
-        
-        module.exit_json(**result)
-
 
     role = Role(
-        result=result, 
-        role_name=module.params['name'], 
+        module=module,
+        role_name=module.params['name'],
         cluster=module.params['cluster'],
-        indicies=module.params['indicies'],
+        indices=module.params['indices'],
         state=module.params['state'],
         host=module.params['host'],
         auth_user=module.params['auth_user'],
@@ -86,7 +143,6 @@ def run_module():
     )
 
     result = role.return_result()
-
     module.exit_json(**result)
 
 
