@@ -72,9 +72,9 @@ jobs:
 
       - name: Test with molecule
         run: |
-          # RHEL 8 ships Python 3.6 which is incompatible with community.general 12.x
+          # RHEL 8 ships Python 3.6; use 3.12 from AppStream
           if [[ "${{ matrix.distro }}" == "rockylinux8" ]]; then
-            molecule test -s ${{ matrix.scenario }} --destroy=never -- -e ansible_python_interpreter=/usr/bin/python3.9
+            molecule test -s ${{ matrix.scenario }} --destroy=never -- -e ansible_python_interpreter=/usr/bin/python3.12
           else
             molecule test -s ${{ matrix.scenario }} --destroy=never
           fi

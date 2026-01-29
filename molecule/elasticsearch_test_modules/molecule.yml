@@ -21,9 +21,8 @@ provisioner:
   inventory:
     group_vars:
       all:
-        # Force Ansible to use /usr/bin/python3 which points to python3.9 on RHEL 8
-        # after our prepare.yml bootstrap. This is required because community.general 12.x
-        # uses `from __future__ import annotations` which requires Python 3.7+
+        # Force Ansible to use /usr/bin/python3 which points to python3.12 on RHEL 8
+        # after our prepare.yml bootstrap (RHEL 8 ships Python 3.6 which is unsupported)
         ansible_python_interpreter: /usr/bin/python3
   # Just enable temporarily. Sometimes it's useful, but most of the time it's
   # overwhelming

@@ -71,7 +71,7 @@ jobs:
       - name: Test with molecule
         run: |
           if [[ "${{ matrix.distro }}" == "rockylinux8" ]]; then
-            molecule test -s ${{ matrix.scenario }} --destroy=never -- -e ansible_python_interpreter=/usr/bin/python3.9
+            molecule test -s ${{ matrix.scenario }} --destroy=never -- -e ansible_python_interpreter=/usr/bin/python3.12
           else
             molecule test -s ${{ matrix.scenario }} --destroy=never
           fi
