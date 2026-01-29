@@ -34,3 +34,22 @@
           - openssl
           - unzip
           - systemd
+
+    - name: Install Python 3.12 on Rocky Linux 8
+      when:
+        - ansible_os_family == "RedHat"
+        - ansible_distribution_major_version == "8"
+      block:
+        - name: Install python3.12 from AppStream
+          ansible.builtin.dnf:
+            name:
+              - python3.12
+              - python3.12-pip
+            state: present
+
+        - name: Set python3.12 as default python3
+          community.general.alternatives:
+            name: python3
+            link: /usr/bin/python3
+            path: /usr/bin/python3.12
+            priority: 100

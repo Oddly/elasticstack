@@ -6,7 +6,7 @@ dependency:
 driver:
   name: docker
 platforms:
-  - name: elasticsearch-nosecurity1
+  - name: "elasticsearch-nosecurity1-${MOLECULE_DISTRO:-debian11}"
     groups:
       - elasticsearchXYZ
     image: "geerlingguy/docker-${MOLECULE_DISTRO:-debian11}-ansible:latest"
@@ -16,7 +16,7 @@ platforms:
     cgroupns_mode: host
     privileged: true
     pre_build_image: true
-  - name: elasticsearch-nosecurity2
+  - name: "elasticsearch-nosecurity2-${MOLECULE_DISTRO:-debian11}"
     groups:
       - elasticsearchXYZ
     image: "geerlingguy/docker-${MOLECULE_DISTRO:-debian11}-ansible:latest"
@@ -28,5 +28,17 @@ platforms:
     pre_build_image: true
 provisioner:
   name: ansible
+  inventory:
+    group_vars:
+      all:
+        # Force Ansible to use /usr/bin/python3 which points to python3.12 on RHEL 8
+        # after our prepare.yml bootstrap (RHEL 8 ships Python 3.6 which is unsupported)
+        ansible_python_interpreter: /usr/bin/python3
+    host_vars:
+      # Use Python 3.12 on Rocky Linux 8 (system Python 3.6 is unsupported)
+      elasticsearch-nosecurity1-rockylinux8:
+        ansible_python_interpreter: /usr/bin/python3.12
+      elasticsearch-nosecurity2-rockylinux8:
+        ansible_python_interpreter: /usr/bin/python3.12
 verifier:
   name: ansible

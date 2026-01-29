@@ -10,13 +10,17 @@ galaxy_info:
     - name: EL
       versions:
         - "8"
+        - "9"
+        - "10"
     - name: Debian
       versions:
         - bullseye
+        - bookworm
+        - trixie
     - name: Ubuntu
       versions:
-        - focal
         - jammy
+        - noble
   galaxy_tags: []
 dependencies: []
   # List your role dependencies here, one per line. Be sure to remove the '[]' above,

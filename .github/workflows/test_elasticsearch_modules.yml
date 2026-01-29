@@ -17,6 +17,10 @@ on:
       - '.github/workflows/test_elasticsearch_modules.yml'
       - 'molecule/elasticsearch_test_modules/*'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   molecule_elasticsearch_modules:
     runs-on: ubuntu-latest
@@ -83,3 +87,14 @@ jobs:
         continue-on-error: true
         env:
           MOLECULE_DISTRO: ${{ matrix.distro }}
+
+      - name: Upload molecule logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: molecule-${{ matrix.scenario }}-${{ matrix.distro }}-r${{ matrix.release }}
+          path: |
+            /tmp/molecule-*
+            ~/.cache/molecule/
+          retention-days: 7
+          if-no-files-found: ignore

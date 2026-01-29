@@ -19,9 +19,15 @@ on:
   merge_group:
   schedule:
     - cron: '15 6 * * 4'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   kics:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v6

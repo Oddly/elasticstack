@@ -24,6 +24,7 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Check out the codebase.
         uses: actions/checkout@v6
@@ -45,7 +46,7 @@ jobs:
 
       - name: Lint Role (yamllint).
         run: |
-          ansible-lint roles/${{ inputs.rolename }}
+          yamllint roles/${{ inputs.rolename }}
         if: ${{ inputs.rolename != '' }}
 
       - name: Lint Role (ansible-lint).

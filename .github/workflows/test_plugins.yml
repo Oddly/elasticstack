@@ -21,12 +21,17 @@ on:
       - 'plugins/**'
       - '.github/workflows/test_plugins.yml'
       - 'molecule/plugins/**'
-      - '.config/pep8.yml'
+      - '.config/pycodestyle.cfg'
       - 'tests/**'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  pep8:
+  pycodestyle:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Check out the codebase.
         uses: actions/checkout@v6
@@ -39,15 +44,58 @@ jobs:
       - name: Install test dependencies.
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install pep8
+          python3 -m pip install pycodestyle
 
       - name: Lint code.
         run: |
-          pep8 plugins/ --config=.config/pep8.cfg --statistics --count
+          pycodestyle plugins/ --config=.config/pycodestyle.cfg --statistics --count
+
+  sanity:
+    needs: pycodestyle
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ansible_core: ["2.18", "2.19", "2.20"]
+
+    env:
+      COLLECTION_NAMESPACE: oddly
+      COLLECTION_NAME: elasticstack
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install ansible-core
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ansible-core~=${{ matrix.ansible_core }}.0
+
+      - name: Install collection
+        run: |
+          mkdir -p ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE
+          cp -a ../ansible-collection-$COLLECTION_NAME ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+
+      - name: Run ansible-test sanity
+        run: |
+          cd ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+          ansible-test sanity --python 3.12 --color yes \
+            --skip-test validate-modules \
+            plugins/
+        env:
+          PY_COLORS: '1'
 
   unit-test:
-    needs: pep8
+    needs: [pycodestyle, sanity]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     env:
       COLLECTION_NAMESPACE: oddly
@@ -92,6 +140,7 @@ jobs:
   python:
     needs: unit-test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     env:
       COLLECTION_NAMESPACE: oddly
@@ -131,6 +180,7 @@ jobs:
   ansible-core:
     needs: python
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     env:
       COLLECTION_NAMESPACE: oddly
@@ -170,6 +220,7 @@ jobs:
   python-cryptography:
     needs: ansible-core
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     env:
       COLLECTION_NAMESPACE: oddly
