@@ -5,7 +5,7 @@ galaxy_info:
   company: Netways GmbH
   namespace: oddly
   license: GPL-3.0-or-later
-  min_ansible_version: "2.15"
+  min_ansible_version: "2.17"
   platforms:
     - name: EL
       versions:

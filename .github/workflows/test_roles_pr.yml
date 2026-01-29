@@ -52,10 +52,10 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v6
 
-      - name: Set up Python 3.9
+      - name: Set up Python 3.10
         uses: actions/setup-python@v6
         with:
-          python-version: 3.9
+          python-version: "3.10"
 
       - name: Install dependencies
         run: |
@@ -70,15 +70,20 @@ jobs:
 
       - name: Test with molecule
         run: |
-          # RHEL 8 ships Python 3.6 which is incompatible with community.general 12.x
-          # Pass python3.9 interpreter for rockylinux8 (installed in prepare.yml)
           if [[ "${{ matrix.distro }}" == "rockylinux8" ]]; then
-            molecule test -s ${{ matrix.scenario }} -- -e ansible_python_interpreter=/usr/bin/python3.9
+            molecule test -s ${{ matrix.scenario }} --destroy=never -- -e ansible_python_interpreter=/usr/bin/python3.9
           else
-            molecule test -s ${{ matrix.scenario }}
+            molecule test -s ${{ matrix.scenario }} --destroy=never
           fi
         env:
           MOLECULE_DISTRO: ${{ matrix.distro }}
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
           ELASTIC_RELEASE: ${{ matrix.release }}
+
+      - name: Cleanup molecule
+        if: always()
+        run: molecule destroy -s ${{ matrix.scenario }}
+        continue-on-error: true
+        env:
+          MOLECULE_DISTRO: ${{ matrix.distro }}
