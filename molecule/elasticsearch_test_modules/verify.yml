@@ -135,7 +135,7 @@
           API.PY FUNCTIONAL TESTS PASSED
           ==========================================
           Elasticsearch Version: {{ es_info.json.version.number }}
-          
+
           All api.py code paths tested via modules:
             - Version detection (ES {{ es_info.json.version.number[0] }}.x client)
             - new_client_basic_auth() - used by all tests
