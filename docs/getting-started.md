@@ -59,5 +59,4 @@ Variables
 
 Every role got its own set of variables, in addition a few variables are useable on any role. Below are all general collection vars.
 
-* *elasticstack_release*: Major release version of Elastic stack to configure. (default: `8`). Supported values: `7`, `8`, `9`. For upgrading to 9.x, see the [Elasticsearch 9.x Upgrade Guide](./elasticsearch-9x-upgrade.md).
-* *elasticstack_variant*: Variant of the stack to install. Valid values: `elastic` or `oss`. (default: `elastic`). Note: OSS variant is only available for version 7.x.
+* *elasticstack_release*: Major release version of Elastic stack to configure. (default: `8`). Supported values: `8`, `9`. For upgrading to 9.x, see the [Elasticsearch 9.x Upgrade Guide](./elasticsearch-9x-upgrade.md).

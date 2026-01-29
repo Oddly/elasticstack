@@ -13,7 +13,7 @@ For details on how to configure pipelines please refer to our [docs about pipeli
 
 Details about configured pipelines will be written into `pipelines.yml` as comments. Same goes for logging configuration in `log4j.options`.
 
-It will work with the standard Elastic Stack packages and Elastics OSS variant.
+It will work with the standard Elastic Stack packages.
 
 Requirements
 ------------
@@ -35,7 +35,7 @@ If you want to use the default pipeline (or other pipelines communicating via Re
 Role Variables
 --------------
 
-* *elasticstack_version*: Version number of Logstash to install (e.g. `7.10.1`). Only set if you don't want the latest. (default: none). For OSS version see `elasticstack_variant` below.
+* *elasticstack_version*: Version number of Logstash to install (e.g. `8.17.0`). Only set if you don't want the latest. (default: none).
 * *logstash_enable*: Start and enable Logstash service (default: `true`)
 * *logstash_config_backup*: Keep backups of all changed configuration (default: `no`)
 * *logstash_manage_yaml*: Manage and overwrite `logstash.yml` (default: `true`)
@@ -109,8 +109,7 @@ The following variables configure extra fields in your events that help with ide
 
 The following variables are identical over all our elastic related roles, hence the different naming scheme.
 
-*elasticstack_release*: Major release version of Elastic stack to configure. (default: `7`)
-*elasticstack_variant*: Variant of the stack to install. Valid values: `elastic` or `oss`. (default: `elastic`)
+*elasticstack_release*: Major release version of Elastic stack to configure. (default: `8`)
 
 The following variables only apply if you use this role together with our Elasticsearch and Kibana roles.
 

@@ -114,13 +114,7 @@ The variable `elasticstack_no_log` can be set to `false` if you want to see the 
 
 *elasticstack_version*: Version number of tools to install. Only set if you don't want the latest on new setups. (default: none). If you already have an installation of Elastic Stack, this collection will query the version of Elasticsearch on the CA host and use it for all further installations in the same setup. (Only if you run the `elasticsearch` role before all others) Example: `7.17.2`
 
-*elasticstack_release*: Major release version of Elastic stack to configure. (default: `8`) Make sure it corresponds to `elasticstack_version` if you set both. Supported values: `7`, `8`, `9`.
-
-> **Note**: The OSS variant is only available for version `7.x`. For versions 8.x and 9.x, use `elasticstack_variant: elastic`.
-
-For OSS version see `elasticstack_variant` below.
-
-*elasticstack_variant*: Variant of the stack to install. Valid values: `elastic` or `oss`. (default: `elastic`)
+*elasticstack_release*: Major release version of Elastic stack to configure. (default: `8`) Make sure it corresponds to `elasticstack_version` if you set both. Supported values: `8`, `9`.
 
 ```yaml
 roles:
@@ -163,8 +157,6 @@ ansible-galaxy install geerlingguy.redis
 
 1) Default: For general Elastic Stack installations using all features use the following. You will need Redis installed and running for the default setup to run. A viable way is using the `geerlingguy.redis` role.
 
-2) Specific: For OSS Installation without X-Pack features you can use the following. _Note_: this is only available for version `7.x`.
-
 Our default configuration will collect filesystem logs placed by `rsyslog`. Therefor our example playbook makes sure, `rsyslog` is installed. If you don't want that, please change the configuration of the `beats` module. Without syslog you won't receive any messages with the default configuration.
 
 There are some comments in the Playbook. Either fill them with the correct values (`remote_user`) or consider them as a hint to commonly used options.
@@ -183,7 +175,7 @@ The execution order of the roles is important! (see below)
   collections:
     - oddly.elasticstack
   vars:
-    elasticstack_variant: elastic #oss
+
     #  elasticstack_release: 8 #7
   roles:
     - repos
@@ -194,7 +186,7 @@ The execution order of the roles is important! (see below)
   collections:
     - oddly.elasticstack
   vars:
-    elasticstack_variant: elastic #oss
+
     elasticsearch_jna_workaround: true
     #  elasticstack_release: 8 #7
   roles:
@@ -206,7 +198,7 @@ The execution order of the roles is important! (see below)
   collections:
     - oddly.elasticstack
   vars:
-    elasticstack_variant: elastic #oss
+
     elasticstack_override_beats_tls: true
     #  elasticstack_release: 8 #7
   roles:
@@ -219,7 +211,7 @@ The execution order of the roles is important! (see below)
   collections:
     - oddly.elasticstack
   vars:
-    elasticstack_variant: elastic #oss
+
     #  elasticstack_release: 8 #7
   roles:
     - kibana
@@ -230,7 +222,7 @@ The execution order of the roles is important! (see below)
   collections:
     - oddly.elasticstack
   vars:
-    elasticstack_variant: elastic #oss
+
     elasticstack_override_beats_tls: true
     #  elasticstack_release: 8 #7
   pre_tasks:

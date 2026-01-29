@@ -1,12 +1,5 @@
 ---
 
-- name: Check for versions
-  ansible.builtin.fail:
-    msg: "No OSS package with version later than 7 is available for Logstash"
-  when:
-    - elasticstack_release | int > 7
-    - elasticstack_variant == "oss"
-
 - name: Include global role
   ansible.builtin.import_role:
     name: oddly.elasticstack.elasticstack
@@ -58,7 +51,6 @@
   when:
     - logstash_security is undefined or elasticstack_security | bool
     - elasticstack_full_stack | bool
-    - elasticstack_variant == "elastic"
   tags:
     - certificates
     - renew_ca
@@ -69,7 +61,6 @@
     logstash_package: >-
       {{
       'logstash' +
-      ('-oss' if elasticstack_variant == 'oss' else '') +
       ((elasticstack_versionseparator +
       elasticstack_version |
       string ) if (elasticstack_version is defined and elasticstack_version | length > 0)) |
@@ -83,7 +74,6 @@
     logstash_package: >-
       {{
       'logstash' +
-      ('-oss' if elasticstack_variant == 'oss' else '') +
       ((elasticstack_versionseparator + '1:' + elasticstack_version + '-1')
       if (elasticstack_version is defined and elasticstack_version | length > 0) else '') |
       replace(' ', '')
@@ -95,7 +85,7 @@
   ansible.builtin.package:
     name: "{{ logstash_package }}"
     enablerepo:
-      - 'elastic-{% if elasticstack_variant == "oss" %}oss-{% endif %}{{ elasticstack_release }}.x'
+      - 'elastic-{{ elasticstack_release }}.x'
   notify:
     - Restart Logstash
   when:
@@ -124,7 +114,6 @@
   when:
     - elasticstack_full_stack | bool
     - logstash_security is defined and logstash_security | bool
-    - elasticstack_variant == "elastic"
   tags:
     - certificates
     - renew_ca

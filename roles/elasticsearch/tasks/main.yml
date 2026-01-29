@@ -1,12 +1,5 @@
 ---
 
-- name: Check for versions
-  ansible.builtin.fail:
-    msg: "No OSS package with version later than 7 is available for Elasticsearch"
-  when:
-    - elasticstack_release | int > 7
-    - elasticstack_variant == "oss"
-
 - name: Gather package facts for upgrade validation
   ansible.builtin.package_facts:
     manager: auto
@@ -170,7 +163,7 @@
   ansible.builtin.package:
     name: "{{ elasticsearch_package }}"
     enablerepo:
-      - 'elastic-{% if elasticstack_variant == "oss" %}oss-{% endif %}{{ elasticstack_release }}.x'
+      - 'elastic-{{ elasticstack_release }}.x'
   when:
     - ansible_os_family == "RedHat"
     - elasticstack_full_stack | bool
@@ -274,7 +267,6 @@
   ansible.builtin.import_tasks: elasticsearch-security.yml
   when:
     - elasticsearch_security | bool
-    - elasticstack_variant == "elastic"
   tags:
     - certificates
     - renew_ca
@@ -340,5 +332,4 @@
     msg: "Remember, your temporary passwords can be found on {{ elasticstack_ca_host }} in {{ elasticstack_initial_passwords }}"
   when:
     - elasticsearch_security | bool
-    - elasticstack_variant == "elastic"
     - inventory_hostname == elasticstack_ca_host

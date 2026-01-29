@@ -60,7 +60,6 @@ node.attr.temp: "{{ elasticstack_temperature }}"
 {% if elasticsearch_disable_systemcallfilterchecks | bool and elasticstack_release == 7 %}
 bootstrap.system_call_filter: false
 {% endif %}
-{% if elasticstack_variant == "elastic" %}
 xpack.ml.enabled: {{ elasticsearch_ml_enabled }}
 {% if elasticstack_release == 7 %}
 xpack.monitoring.collection.enabled: {{ elasticsearch_monitoring_enabled }}
@@ -82,7 +81,6 @@ xpack.security.http.ssl.truststore.path: certs/{{ ansible_hostname }}.p12
 {% endif %}
 {% if not elasticsearch_security | bool %}
 xpack.security.enabled: false
-{% endif %}
 {% endif %}
 
 {% if elasticsearch_fs_repo is defined %}
