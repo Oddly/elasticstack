@@ -40,9 +40,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [ubuntu2204]
+        distro:
+          - rockylinux8
+          - rockylinux9
+          - rockylinux10
+          - ubuntu2204
+          - ubuntu2404
+          - debian11
+          - debian12
+          - debian13
         scenario: [kibana_default]
-        release: [ 7, 8, 9 ]
+        release: [ 8, 9 ]
 
     steps:
       - name: Check out code
@@ -65,7 +73,12 @@ jobs:
 
       - name: Test with molecule
         run: |
-          molecule test -s ${{ matrix.scenario }}
+          # RHEL 8 ships Python 3.6 which is incompatible with community.general 12.x
+          if [[ "${{ matrix.distro }}" == "rockylinux8" ]]; then
+            molecule test -s ${{ matrix.scenario }} -- -e ansible_python_interpreter=/usr/bin/python3.9
+          else
+            molecule test -s ${{ matrix.scenario }}
+          fi
         env:
           MOLECULE_DISTRO: ${{ matrix.distro }}
           ELASTIC_RELEASE: ${{ matrix.release }}

@@ -40,17 +40,19 @@ jobs:
       matrix:
 
         distro:
-          - debian11
           - rockylinux8
           - rockylinux9
-          - ubuntu2004
+          - rockylinux10
           - ubuntu2204
+          - ubuntu2404
+          - debian11
+          - debian12
+          - debian13
         scenario:
           - repos_default
-          - repos_oss
         release:
-          - 7
           - 8
+          - 9
 
     steps:
       - name: Check out code

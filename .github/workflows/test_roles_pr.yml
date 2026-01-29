@@ -35,12 +35,17 @@ jobs:
         distro:
           - rockylinux8
           - rockylinux9
+          - rockylinux10
           - ubuntu2204
+          - ubuntu2404
+          - debian11
+          - debian12
+          - debian13
         scenario:
           - elasticstack_default
         release:
-          - 7
           - 8
+          - 9
 
     steps:
       - name: Check out code

@@ -5,7 +5,7 @@
 > [!NOTE]
 > This is a fork of [NETWAYS/ansible-collection-elasticstack](https://github.com/NETWAYS/ansible-collection-elasticstack) with Elasticsearch 9.x support and additional fixes. Licensed under GPL-3.0.
 
-This collection installs and manages the Elastic Stack. It provides roles for every component of the Stack. Furthermore, it is possible to differentiate between Enterprise or OSS releases.
+This collection installs and manages the Elastic Stack. It provides roles for every component of the Stack.
 
 Every role is documented with all variables, please refer to the documentation found in **[Getting-Started](./docs/getting-started.md)**
 
@@ -64,12 +64,15 @@ You may want the following Ansible roles installed. There other ways to achieve 
 
 ### Supported systems
 
-We test the collection on the following Linux distributions. Each one with Elastic Stack 7, 8, and 9.
+We test the collection on the following Linux distributions. Each one with Elastic Stack 8 and 9.
 
+* Rocky Linux 10
 * Rocky Linux 9
 * Rocky Linux 8
+* Ubuntu 24.04 LTS
 * Ubuntu 22.04 LTS
-* Ubuntu 20.04 LTS
+* Debian 13
+* Debian 12
 * Debian 11
 
 > **Note**: Elastic Stack 9.x support is available starting with this version of the collection. See the [Elasticsearch 9.x Upgrade Guide](./docs/elasticsearch-9x-upgrade.md) for upgrade instructions.
