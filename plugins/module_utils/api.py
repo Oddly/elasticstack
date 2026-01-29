@@ -77,7 +77,8 @@ class Api():
         if not HAS_ELASTICSEARCH:
             raise ApiError(
                 "The 'elasticsearch' Python library is required. "
-                "Install it with: pip install 'elasticsearch>=8,<10'"
+                "Install it with: pip install 'elasticsearch>=8,<9' (for ES 8.x) "
+                "or 'elasticsearch>=9,<10' (for ES 9.x)"
             )
 
     @staticmethod
