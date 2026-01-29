@@ -30,7 +30,7 @@ Example usage
 ---
 ```
     - name: Create elasticsearch role 'new-role1'
-      netways.elasticstack.elasticsearch_role:
+      oddly.elasticstack.elasticsearch_role:
         name: new-role1
         cluster:
           - manage_own_api_key
@@ -49,7 +49,7 @@ Example usage
         ca_certs: /etc/elasticsearch/certs/http_ca.crt
 
     - name: Create elasticsearch role 'new-role2'
-      netways.elasticstack.elasticsearch_role:
+      oddly.elasticstack.elasticsearch_role:
         name: new-role2
         cluster:
           - manage_own_api_key

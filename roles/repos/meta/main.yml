@@ -1,6 +1,6 @@
 galaxy_info:
   role_name: elasticstack_repos
-  namespace: netways
+  namespace: oddly
   description: Elastic Repositories
   author: Thomas Widhalm <thomas.widhalm@netways.de>
   company: Netways GmbH

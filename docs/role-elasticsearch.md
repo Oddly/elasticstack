@@ -1,7 +1,7 @@
 ELASTICSEARCH
 =========
 
-![Test Role Elasticsearch](https://github.com/netways/ansible-collection-elasticstack/actions/workflows/test_role_elasticsearch.yml/badge.svg)
+![Test Role Elasticsearch](https://github.com/Oddly/ansible-collection-elasticstack/actions/workflows/test_role_elasticsearch.yml/badge.svg)
 
 This role installs manages Elasticsearch on your hosts. Optionally it can configure Elastics Security components, too.
 
@@ -73,7 +73,7 @@ These variables are identical over all our elastic related roles, hence the diff
 ```
 - name: Install Elasticsearch
   collections:
-    - netways.elasticstack
+    - oddly.elasticstack
   hosts: elasticsearch-hosts
   vars:
     elasticstack_variant: oss

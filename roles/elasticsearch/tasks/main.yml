@@ -9,7 +9,7 @@
 
 - name: Include global role
   ansible.builtin.import_role:
-    name: netways.elasticstack.elasticstack
+    name: oddly.elasticstack.elasticstack
   when: not hostvars[inventory_hostname]._elasticstack_role_imported | default(false)
 
 - name: Update apt cache.
@@ -295,7 +295,7 @@
       ansible.builtin.set_fact:
         elaticsearch_cluster_set_up: true
 
-# See https://github.com/NETWAYS/ansible-collection-elasticstack/issues/137
+# See https://github.com/Oddly/ansible-collection-elasticstack/issues/137
 # for details why we have this task again here
 #
 - name: Configure Elasticsearch

@@ -368,7 +368,7 @@
     - logstash_configuration
 
 - name: Create logstash role {{ logstash_role_name }}
-  netways.elasticstack.elasticsearch_role:
+  oddly.elasticstack.elasticsearch_role:
     name: "{{ logstash_role_name }}"
     cluster: "{{ logstash_role_cluster_privileges }}"
     indicies:
@@ -383,7 +383,7 @@
   when: logstash_create_role | bool
 
 - name: Create logstash user {{ logstash_user_name }}
-  netways.elasticstack.elasticsearch_user:
+  oddly.elasticstack.elasticsearch_user:
     name: "{{ logstash_user_name }}"
     fullname: "{{ logstash_user_fullname }}"
     password: "{{ logstash_user_password }}"

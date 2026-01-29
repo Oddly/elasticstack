@@ -3,7 +3,7 @@
 # Found at: https://github.com/ansible-community/molecule/issues/1567#issuecomment-436876722
 - name: Converge
   collections:
-    - netways.elasticstack
+    - oddly.elasticstack
   hosts: all
   vars:
     elasticstack_full_stack: false
@@ -29,7 +29,7 @@
       changed_when: false
 
     - name: Create elasticsearch role 'new-role'
-      netways.elasticstack.elasticsearch_role:
+      oddly.elasticstack.elasticsearch_role:
         name: new-role1
         cluster:
           - manage_own_api_key
@@ -47,7 +47,7 @@
         verify_certs: false
 
     - name: Create elasticsearch user 'new-user'
-      netways.elasticstack.elasticsearch_user:
+      oddly.elasticstack.elasticsearch_user:
         name: new-user1
         fullname: New User
         password: "{{ lookup('community.general.random_string', length=12, min_lower=1, min_upper=1, min_numeric=1, min_special=1, override_special='-_=!') }}"

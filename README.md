@@ -1,9 +1,9 @@
-# Ansible Collection - netways.elasticstack
+# Ansible Collection - oddly.elasticstack
 
-![Test ElasticStack](https://github.com/NETWAYS/ansible-collection-elasticstack/actions/workflows/test_full_stack.yml/badge.svg)
+![Test ElasticStack](https://github.com/Oddly/ansible-collection-elasticstack/actions/workflows/test_full_stack.yml/badge.svg)
 
-> [!CAUTION]
-> The current main branch has some breaking changes. Be careful using it! Everything after commit 3d6673f6d526afeb0fd7ba382d067d76bd10bbd6 is affected!
+> [!NOTE]
+> This is a fork of [NETWAYS/ansible-collection-elasticstack](https://github.com/NETWAYS/ansible-collection-elasticstack) with Elasticsearch 9.x support and additional fixes. Licensed under GPL-3.0.
 
 This collection installs and manages the Elastic Stack. It provides roles for every component of the Stack. Furthermore, it is possible to differentiate between Enterprise or OSS releases.
 
@@ -37,14 +37,14 @@ Every role is documented with all variables, please refer to the documentation f
 You can easily install the collection with the `ansible-galaxy` command.
 
 ```
-ansible-galaxy collection install git+https://github.com/netways/ansible-collection-elasticstack.git
+ansible-galaxy collection install git+https://github.com/Oddly/ansible-collection-elasticstack.git
 ```
 
 Or if you are using Tower or AWX add the collection to your requirements file.
 
 ```
 collections:
-  - name: netways.elasticstack
+  - name: oddly.elasticstack
 ```
 
 ### Requirements
@@ -103,10 +103,10 @@ For OSS version see `elasticstack_variant` below.
 
 ```yaml
 roles:
-   - role: netways.elasticstack.kibana
+   - role: oddly.elasticstack.kibana
      vars:
         elasticstack_version: 8.7.1
-   - role: netways.elasticstack.elasticsearch
+   - role: oddly.elasticstack.elasticsearch
      vars:
         elasticstack_version: 8.8.1
 ```
@@ -155,7 +155,7 @@ The execution order of the roles is important! (see below)
   # remote_user: my_username
   become: true
   collections:
-    - netways.elasticstack
+    - oddly.elasticstack
   vars:
     elasticstack_variant: elastic #oss
     #  elasticstack_release: 8 #7
@@ -166,7 +166,7 @@ The execution order of the roles is important! (see below)
   # remote_user: my_username
   become: true
   collections:
-    - netways.elasticstack
+    - oddly.elasticstack
   vars:
     elasticstack_variant: elastic #oss
     elasticsearch_jna_workaround: true
@@ -178,7 +178,7 @@ The execution order of the roles is important! (see below)
   # remote_user: my_username
   become: true
   collections:
-    - netways.elasticstack
+    - oddly.elasticstack
   vars:
     elasticstack_variant: elastic #oss
     elasticstack_override_beats_tls: true
@@ -191,7 +191,7 @@ The execution order of the roles is important! (see below)
   # remote_user: my_username
   become: true
   collections:
-    - netways.elasticstack
+    - oddly.elasticstack
   vars:
     elasticstack_variant: elastic #oss
     #  elasticstack_release: 8 #7
@@ -202,7 +202,7 @@ The execution order of the roles is important! (see below)
   # remote_user: my_username
   become: true
   collections:
-    - netways.elasticstack
+    - oddly.elasticstack
   vars:
     elasticstack_variant: elastic #oss
     elasticstack_override_beats_tls: true
@@ -223,7 +223,7 @@ The execution order of the roles is important! (see below)
 
 ## Contributing
 
-Every kind of contribution is very welcome. Open [issues](https://github.com/NETWAYS/ansible-collection-elasticstack/issues) or provide [pull requests](https://github.com/NETWAYS/ansible-collection-elasticstack/pulls).
+Every kind of contribution is very welcome. Open [issues](https://github.com/Oddly/ansible-collection-elasticstack/issues) or provide [pull requests](https://github.com/Oddly/ansible-collection-elasticstack/pulls).
 
 Please note that we have some actions bound to specific names of branches. So please stick to the following naming scheme:
 

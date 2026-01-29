@@ -50,7 +50,7 @@ jobs:
     runs-on: ubuntu-20.04
 
     env:
-      COLLECTION_NAMESPACE: netways
+      COLLECTION_NAMESPACE: oddly
       COLLECTION_NAME: elasticstack
 
     strategy:
@@ -94,7 +94,7 @@ jobs:
     runs-on: ubuntu-20.04
 
     env:
-      COLLECTION_NAMESPACE: netways
+      COLLECTION_NAMESPACE: oddly
       COLLECTION_NAME: elasticstack
 
     strategy:
@@ -133,7 +133,7 @@ jobs:
     runs-on: ubuntu-20.04
 
     env:
-      COLLECTION_NAMESPACE: netways
+      COLLECTION_NAMESPACE: oddly
       COLLECTION_NAME: elasticstack
 
     strategy:
@@ -172,7 +172,7 @@ jobs:
     runs-on: ubuntu-20.04
 
     env:
-      COLLECTION_NAMESPACE: netways
+      COLLECTION_NAMESPACE: oddly
       COLLECTION_NAME: elasticstack
 
     strategy:

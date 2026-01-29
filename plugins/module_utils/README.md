@@ -1,9 +1,9 @@
-# Documentation: netways.elasticstack module_utils
+# Documentation: oddly.elasticstack module_utils
 
 ## Overview
 - [`certs` module_util](#cert_info-module)
 
-## `netways.elasticstack.certs` function
+## `oddly.elasticstack.certs` function
 
 ### `bytes_to_hex()` function
 

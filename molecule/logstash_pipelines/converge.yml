@@ -7,7 +7,7 @@
 - name: Converge
   hosts: all
   collections:
-    - netways.elasticstack
+    - oddly.elasticstack
   vars:
     logstash_enable: true
     logstash_pipelines:

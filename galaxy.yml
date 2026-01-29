@@ -1,14 +1,18 @@
-namespace: netways
+namespace: oddly
 name: elasticstack
 version: 1.0.0
 readme: README.md
 authors:
+  - Sam Crauwels <sam.crauwels@gmail.com>
   - Alexander Stoll <alexander.stoll@netways.de>
   - Markus Frosch <markus.frosch@netways.de>
   - Patrick Dolinic <patrick.dolinic@netways.de>
   - Thilo Wening <thilo.wening@netways.de>
   - Thomas Widhalm <thomas.widhalm@netways.de>
-description: This collection installs and configures components from the Elastic Stack. Every role can be used standalone or in combination with other roles.
+description: >-
+  Ansible collection for the Elastic Stack with ES 9.x support.
+  Installs and configures Elasticsearch, Kibana, Logstash, and Beats.
+  Forked from netways.elasticstack.
 license:
   - GPL-3.0
 license_file: 'LICENSE'
@@ -23,10 +27,10 @@ tags:
   - monitoring
 dependencies:
   "community.general": "*"
-repository: https://github.com/netways/ansible-collection-elasticstack
-documentation: https://github.com/netways/ansible-collection-elasticstack/README.md
-homepage: https://www.netways.de
-issues: https://github.com/netways/ansible-collection-elasticstack/issues
+repository: https://github.com/Oddly/ansible-collection-elasticstack
+documentation: https://github.com/Oddly/ansible-collection-elasticstack/blob/main/README.md
+homepage: https://github.com/Oddly/ansible-collection-elasticstack
+issues: https://github.com/Oddly/ansible-collection-elasticstack/issues
 build_ignore:
   - .github
   - .cache

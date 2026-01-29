@@ -3,7 +3,7 @@ galaxy_info:
   description: Elasticsearch Ansible role
   role_name: elasticsearch
   company: Netways GmbH
-  namespace: netways
+  namespace: oddly
   license: GPL-3.0-or-later
   min_ansible_version: "2.4"
   platforms:

@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      COLLECTION_NAMESPACE: NETWAYS
+      COLLECTION_NAMESPACE: oddly
       COLLECTION_NAME: elasticstack
 
     strategy:

@@ -1,7 +1,7 @@
 import unittest
 import sys
 sys.path.append('/home/runner/.ansible/collections/')
-from ansible_collections.netways.elasticstack.plugins.module_utils.certs import (
+from ansible_collections.oddly.elasticstack.plugins.module_utils.certs import (
     check_supported_extensions,
     check_supported_keys,
     bytes_to_hex

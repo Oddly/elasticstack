@@ -1,7 +1,7 @@
 ---
 galaxy_info:
   role_name: beats
-  namespace: netways
+  namespace: oddly
   author: Thomas Widhalm <thomas.widhalm@netways.de>
   description: Beats for Linux
   company: "Netways GmbH"

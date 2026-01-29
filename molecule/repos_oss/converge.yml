@@ -4,7 +4,7 @@
 - name: Converge
   hosts: all
   collections:
-    - netways.elasticstack
+    - oddly.elasticstack
   vars:
     elasticstack_variant: oss
     elasticstack_rpm_workaround: true

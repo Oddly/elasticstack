@@ -10,7 +10,7 @@
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | int}}"
     elasticstack_no_log: false
   collections:
-    - netways.elasticstack
+    - oddly.elasticstack
   tasks:
     - name: Include Elastic Repos
       ansible.builtin.include_role:

@@ -14,7 +14,7 @@ from ansible.module_utils.basic import (
     to_native
 )
 
-from ansible_collections.netways.elasticstack.plugins.module_utils.certs import (
+from ansible_collections.oddly.elasticstack.plugins.module_utils.certs import (
     AnalyzeCertificate
 )
 

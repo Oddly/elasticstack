@@ -8,7 +8,7 @@ from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 from ansible.module_utils.basic import AnsibleModule
-from ansible_collections.netways.elasticstack.plugins.module_utils.elasticsearch_role import (
+from ansible_collections.oddly.elasticstack.plugins.module_utils.elasticsearch_role import (
     Role
 )
 
@@ -17,7 +17,7 @@ def run_module():
     Elasticsearch user management.
 
     ```
-    netways.elasticstack.elasticsearch_role:
+    oddly.elasticstack.elasticsearch_role:
         name: new-role
         cluster:
           - manage_own_api_key

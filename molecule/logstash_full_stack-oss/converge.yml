@@ -12,7 +12,7 @@
 - name: Converge
   hosts: all
   collections:
-    - netways.elasticstack
+    - oddly.elasticstack
   vars:
     elasticstack_full_stack: true
     elasticstack_variant: oss

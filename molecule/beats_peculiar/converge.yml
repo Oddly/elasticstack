@@ -6,7 +6,7 @@
 - name: Converge
   hosts: all
   collections:
-    - netways.elasticstack
+    - oddly.elasticstack
   vars:
     beats_filebeat_log_inputs:
       messages:

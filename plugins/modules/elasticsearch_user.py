@@ -8,7 +8,7 @@ from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 from ansible.module_utils.basic import AnsibleModule
-from ansible_collections.netways.elasticstack.plugins.module_utils.elasticsearch_user import (
+from ansible_collections.oddly.elasticstack.plugins.module_utils.elasticsearch_user import (
     User
 )
 
@@ -18,7 +18,7 @@ def run_module():
     Elasticsearch user management.
 
     ```
-    netways.elasticstack.elasticsearch_user:
+    oddly.elasticstack.elasticsearch_user:
         name: new-user1
         fullname: New User
         password: changeMe123!
