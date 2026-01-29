@@ -77,13 +77,7 @@ jobs:
           cp -a ../ansible-collection-$COLLECTION_NAME ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
 
       - name: Test with molecule
-        run: |
-          # RHEL 8 ships Python 3.6; use 3.12 from AppStream
-          if [[ "${{ matrix.distro }}" == "rockylinux8" ]]; then
-            molecule test -s ${{ matrix.scenario }} --destroy=never -- -e ansible_python_interpreter=/usr/bin/python3.12
-          else
-            molecule test -s ${{ matrix.scenario }} --destroy=never
-          fi
+        run: molecule test -s ${{ matrix.scenario }} --destroy=never
         env:
           MOLECULE_DISTRO: ${{ matrix.distro }}
           ELASTIC_RELEASE: ${{ matrix.release }}
