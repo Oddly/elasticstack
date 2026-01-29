@@ -10,17 +10,14 @@
       changed_when: false
 
     - name: Get ES version to confirm ES 9.x client works
-      ansible.builtin.command:
-        cmd: >-
-          curl -fsSk -u elastic:{{ elastic_pass.stdout }}
-          https://localhost:9200/
-      register: es_info_raw
-      changed_when: false
-
-    - name: Parse ES version info
-      ansible.builtin.set_fact:
-        es_info:
-          json: "{{ es_info_raw.stdout | from_json }}"
+      ansible.builtin.uri:
+        url: https://localhost:9200/
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        force_basic_auth: true
+        validate_certs: false
+        return_content: true
+      register: es_info
 
     - name: Test 1 - Create role via elasticsearch_role module
       oddly.elasticstack.elasticsearch_role:

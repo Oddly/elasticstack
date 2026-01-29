@@ -13,6 +13,7 @@ description: >-
   Ansible collection for the Elastic Stack with ES 9.x support.
   Installs and configures Elasticsearch, Kibana, Logstash, and Beats.
   Forked from netways.elasticstack.
+requires_ansible: ">=2.15.0"
 license:
   - GPL-3.0
 license_file: 'LICENSE'

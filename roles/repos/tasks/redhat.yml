@@ -35,23 +35,9 @@
           changed_when: false
 
 - name: Ensure Elastic repository key is available (RedHat)
-  block:
-    - name: Import Elastic GPG key via rpm_key
-      ansible.builtin.rpm_key:
-        key: "{{ elasticstack_repo_key }}"
-        state: present
-  rescue:
-    # Python 3.12+ removed cert_file from HTTPSConnection, breaking
-    # Ansible's CustomHTTPSConnection on newer distros (Rocky 10)
-    - name: Download Elastic GPG key via curl (fallback)
-      ansible.builtin.command:
-        cmd: curl -fsSL -o /tmp/elasticsearch-gpg.asc {{ elasticstack_repo_key }}
-        creates: /tmp/elasticsearch-gpg.asc
-
-    - name: Import Elastic GPG key from file
-      ansible.builtin.rpm_key:
-        key: /tmp/elasticsearch-gpg.asc
-        state: present
+  ansible.builtin.rpm_key:
+    key: "{{ elasticstack_repo_key }}"
+    state: present
 
 - name: Ensure Elastic Stack yum repository is configured (RedHat)
   ansible.builtin.yum_repository:

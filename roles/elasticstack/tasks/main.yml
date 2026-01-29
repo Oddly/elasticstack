@@ -2,6 +2,15 @@
 - name: Include elasticstack role
   when: not hostvars[inventory_hostname]._elasticstack_role_imported | default(false) # Ensure the global meta role is only called once for each host
   block:
+    - name: Verify minimum Ansible version
+      ansible.builtin.assert:
+        that:
+          - ansible_version.full is version('2.15.0', '>=')
+        fail_msg: >-
+          This collection requires ansible-core >= 2.15.0 (found {{ ansible_version.full }}).
+          Older versions have broken HTTPS support on Python 3.12+.
+          Please upgrade: pip install 'ansible-core>=2.15'
+
     - name: Include OS specific vars
       ansible.builtin.include_vars: '{{ item }}'
       with_first_found:
