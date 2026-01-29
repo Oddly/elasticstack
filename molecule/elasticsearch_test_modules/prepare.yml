@@ -54,9 +54,13 @@
           - python3-setuptools
       when: ansible_os_family == "RedHat"
 
+    - name: Remove PEP 668 marker (test containers only)
+      ansible.builtin.file:
+        path: "/usr/lib/python{{ ansible_python.version.major }}.{{ ansible_python.version.minor }}/EXTERNALLY-MANAGED"
+        state: absent
+
     - name: Install python module dependencies
       ansible.builtin.pip:
         name: "{{ item }}"
-        break_system_packages: true
       loop:
         - "elasticsearch>=8,<10"
