@@ -37,9 +37,7 @@ jobs:
           - rockylinux9
           - ubuntu2004
           - ubuntu2204
-          - debian10
           - debian11
-          - centos8
         scenario:
           - elasticstack_default
         release:
@@ -67,7 +65,13 @@ jobs:
 
       - name: Test with molecule
         run: |
-          molecule test -s ${{ matrix.scenario }}
+          # RHEL 8 ships Python 3.6 which is incompatible with community.general 12.x
+          # Pass python3.9 interpreter for rockylinux8 (installed in prepare.yml)
+          if [[ "${{ matrix.distro }}" == "rockylinux8" ]]; then
+            molecule test -s ${{ matrix.scenario }} -- -e ansible_python_interpreter=/usr/bin/python3.9
+          else
+            molecule test -s ${{ matrix.scenario }}
+          fi
         env:
           MOLECULE_DISTRO: ${{ matrix.distro }}
           PY_COLORS: '1'

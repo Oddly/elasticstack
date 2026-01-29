@@ -71,12 +71,6 @@ We test the collection on the following Linux distributions. Each one with Elast
 * Ubuntu 22.04 LTS
 * Ubuntu 20.04 LTS
 * Debian 11
-* Debian 10
-* CentOS 8
-
-We know from personal experience, that the collections work in following combinations. Missing tests mostly come from incompatibilties between the distribution and our testing environment, not from problems with the collection itself.
-
-* CentOS 7 - Elastic Stack 7
 
 ### Known Issues
 

@@ -25,19 +25,25 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-      - name: Mkdir results-dir
-        # make sure results dir is created
+
+      - name: Create results directory
         run: mkdir -p results-dir
-      - name: run kics Scan
-        uses: Checkmarx/kics-github-action@c11ca46d31795a2f186f1af610d121e3bcd647a0 # v2.1.14
-        with:
-          # path: 'roles,plugins'
-          path: '.'
-          # fail_on: high
-          ignore_on_exit: results
-          output_formats: 'json,sarif'
-          output_path: results-dir
+
+      - name: Run KICS scan
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/path" \
+            -v "${{ github.workspace }}/results-dir:/results" \
+            checkmarx/kics:latest scan \
+            --path /path \
+            --output-path /results \
+            --report-formats json,sarif \
+            --ignore-on-exit results
+        # Use github.workspace for compatibility with both GitHub and Gitea runners
+
       - name: Upload SARIF file
+        # Only upload SARIF on GitHub (not Gitea)
+        if: github.server_url == 'https://github.com'
         uses: github/codeql-action/upload-sarif@af56b044b5d41c317aef5d19920b3183cb4fbbec # v3
         with:
           sarif_file: results-dir/results.sarif
