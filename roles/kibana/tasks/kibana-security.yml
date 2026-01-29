@@ -14,7 +14,7 @@
 
 - name: Set the kibana certificate expiration date in days
   ansible.builtin.set_fact:
-    kibana_cert_expiration_days: "{{ ((kibana_cert_expiration_date.not_valid_after | to_datetime()) - (ansible_date_time.date | to_datetime('%Y-%m-%d'))).days }}"
+    kibana_cert_expiration_days: "{{ ((kibana_cert_expiration_date.not_valid_after | to_datetime('%Y-%m-%d %H:%M:%S%z')) - (ansible_date_time.date | to_datetime('%Y-%m-%d'))).days }}"
   when: kibana_cert_expiration_date.skipped is not defined
 
 - name: Set kibana certificate will expire soon to true

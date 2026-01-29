@@ -19,8 +19,6 @@ provisioner:
   inventory:
     group_vars:
       all:
-        # Force Ansible to use /usr/bin/python3 which points to python3.12 on RHEL 8
-        # after our prepare.yml bootstrap (RHEL 8 ships Python 3.6 which is unsupported)
         ansible_python_interpreter: /usr/bin/python3
 verifier:
   name: ansible

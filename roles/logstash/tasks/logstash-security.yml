@@ -14,7 +14,7 @@
 
 - name: Set the logstash certificate expiration date in days
   ansible.builtin.set_fact:
-    logstash_cert_expiration_days: "{{ ((logstash_cert_expiration_date.not_valid_after | to_datetime()) - (ansible_date_time.date | to_datetime('%Y-%m-%d'))).days }}"
+    logstash_cert_expiration_days: "{{ ((logstash_cert_expiration_date.not_valid_after | to_datetime('%Y-%m-%d %H:%M:%S%z')) - (ansible_date_time.date | to_datetime('%Y-%m-%d'))).days }}"
   when: logstash_cert_expiration_date.skipped is not defined
 
 - name: Set logstash certificate will expire soon to true

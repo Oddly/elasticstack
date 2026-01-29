@@ -65,7 +65,7 @@ class Role():
                 msg="Failed to delete role '%s': %s" % (self.role_name, str(e))
             )
 
-        if res['found'] is True:
+        if res.get('found') is True:
             self.result['changed'] = True
             self.result['msg'] = self.role_name + " has been deleted"
 
@@ -97,7 +97,7 @@ class Role():
                 msg="Failed to create/update role '%s': %s" % (self.role_name, str(e))
             )
 
-        if res.raw['role']['created'] is True:
+        if res.raw.get('role', {}).get('created') is True:
             self.result['changed'] = True
             self.result['msg'] = self.role_name + " has been created"
             if self.module._diff:

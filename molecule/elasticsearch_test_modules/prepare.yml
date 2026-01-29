@@ -1,33 +1,4 @@
 ---
-# First play: Bootstrap Python 3.12 on RHEL 8 before any Python-dependent tasks
-# RHEL 8 ships Python 3.6 which is unsupported; install 3.12 from AppStream
-- name: Bootstrap Python 3.12 on RHEL 8
-  hosts: all
-  gather_facts: false
-  tasks:
-    - name: Check if this is RHEL 8 (using raw module to avoid Python dependency)
-      ansible.builtin.raw: |
-        if [ -f /etc/redhat-release ] && grep -q "release 8" /etc/redhat-release; then
-          echo "rhel8"
-        else
-          echo "other"
-        fi
-      register: os_check
-      changed_when: false
-
-    - name: Install Python 3.12 on RHEL 8
-      ansible.builtin.raw: dnf install -y python3.12 python3.12-pip
-      when: "'rhel8' in os_check.stdout"
-      changed_when: true
-
-    - name: Set Python 3.12 as default python3 on RHEL 8
-      ansible.builtin.raw: |
-        alternatives --set python3 /usr/bin/python3.12 2>/dev/null || \
-        ln -sf /usr/bin/python3.12 /usr/bin/python3
-      when: "'rhel8' in os_check.stdout"
-      changed_when: true
-
-# Second play: Normal preparation with facts gathering
 - name: Prepare
   hosts: all
   vars:
@@ -64,6 +35,5 @@
     - name: Install python module dependencies
       ansible.builtin.pip:
         name: "{{ item }}"
-        executable: "{{ 'pip3.12' if (ansible_distribution_major_version | default('0')) == '8' and ansible_os_family == 'RedHat' else omit }}"
       loop:
         - "elasticsearch>={{ es_release }},<{{ es_release | int + 1 }}"
