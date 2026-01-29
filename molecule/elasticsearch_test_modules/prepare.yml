@@ -64,5 +64,6 @@
     - name: Install python module dependencies
       ansible.builtin.pip:
         name: "{{ item }}"
+        executable: "{{ 'pip3.9' if (ansible_distribution_major_version | default('0')) == '8' and ansible_os_family == 'RedHat' else omit }}"
       loop:
         - "elasticsearch>={{ es_release }},<{{ es_release | int + 1 }}"

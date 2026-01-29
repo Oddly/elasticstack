@@ -6,11 +6,6 @@
       - gpg-agent
     state: present
 
-- name: Ensure Elastic Stack key is removed (Debian legacy format)
-  ansible.builtin.apt_key:
-    url: "{{ elasticstack_repo_key }}"
-    state: absent
-
 - name: Ensure Elastic Stack key is available (Debian)
   ansible.builtin.get_url:
     url: "{{ elasticstack_repo_key }}"
