@@ -10,7 +10,7 @@
 
 - name: Install Elasticsearch 8.x (initial deployment)
   collections:
-    - netways.elasticstack
+    - oddly.elasticstack
   hosts: all
   vars:
     elasticstack_full_stack: false
@@ -109,7 +109,7 @@
 
 - name: Upgrade to Elasticsearch 9.x
   collections:
-    - netways.elasticstack
+    - oddly.elasticstack
   hosts: all
   vars:
     elasticstack_full_stack: false

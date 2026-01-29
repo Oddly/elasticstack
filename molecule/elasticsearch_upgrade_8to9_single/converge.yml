@@ -11,7 +11,7 @@
 
 - name: Install Elasticsearch 8.10.0 (older 8.x version)
   collections:
-    - netways.elasticstack
+    - oddly.elasticstack
   hosts: all
   vars:
     elasticstack_full_stack: false
@@ -100,7 +100,7 @@
 
 - name: Upgrade to latest Elasticsearch 8.x (required before 9.x)
   collections:
-    - netways.elasticstack
+    - oddly.elasticstack
   hosts: all
   vars:
     elasticstack_full_stack: false
@@ -169,7 +169,7 @@
 
 - name: Upgrade to Elasticsearch 9.x
   collections:
-    - netways.elasticstack
+    - oddly.elasticstack
   hosts: all
   vars:
     elasticstack_full_stack: false

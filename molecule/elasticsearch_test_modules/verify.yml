@@ -21,7 +21,7 @@
       register: es_info
 
     - name: Test 1 - Create role via elasticsearch_role module
-      netways.elasticstack.elasticsearch_role:
+      oddly.elasticstack.elasticsearch_role:
         name: api-test-role
         cluster:
           - monitor
@@ -46,7 +46,7 @@
         success_msg: "elasticsearch_role module works with ES {{ es_info.json.version.number }}"
 
     - name: Test 2 - Create user via elasticsearch_user module
-      netways.elasticstack.elasticsearch_user:
+      oddly.elasticstack.elasticsearch_user:
         name: api-test-user
         fullname: API Test User
         password: "TestPassword123!"
@@ -68,7 +68,7 @@
         success_msg: "elasticsearch_user module works with ES {{ es_info.json.version.number }}"
 
     - name: Test 3 - Update role (add privilege)
-      netways.elasticstack.elasticsearch_role:
+      oddly.elasticstack.elasticsearch_role:
         name: api-test-role
         cluster:
           - monitor
@@ -94,7 +94,7 @@
         success_msg: "Role update works with ES {{ es_info.json.version.number }}"
 
     - name: Test 4 - Delete user
-      netways.elasticstack.elasticsearch_user:
+      oddly.elasticstack.elasticsearch_user:
         name: api-test-user
         password: "dummy"
         roles:
@@ -113,7 +113,7 @@
         success_msg: "User deletion works with ES {{ es_info.json.version.number }}"
 
     - name: Test 5 - Delete role
-      netways.elasticstack.elasticsearch_role:
+      oddly.elasticstack.elasticsearch_role:
         name: api-test-role
         state: absent
         host: https://localhost:9200
