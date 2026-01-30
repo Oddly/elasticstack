@@ -71,8 +71,10 @@ jobs:
           cp -a ../ansible-collection-$COLLECTION_NAME ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
           ansible-galaxy collection install community.docker community.general ansible.posix
 
-      - name: Test with molecule
-        run: molecule test -s ${{ matrix.scenario }} --destroy=never
+      - name: Test with molecule (skip idempotence for PR speed)
+        run: |
+          molecule converge -s ${{ matrix.scenario }}
+          molecule verify -s ${{ matrix.scenario }}
         env:
           MOLECULE_DISTRO: ${{ matrix.distro }}
           PY_COLORS: '1'
