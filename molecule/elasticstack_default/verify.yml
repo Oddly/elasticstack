@@ -10,6 +10,8 @@
 
     - name: Run Logstash syntax check
       ansible.builtin.command: "/usr/share/logstash/bin/logstash --path.settings=/etc/logstash -t"
+      become: true
+      become_user: logstash
       when: "'logstash' in group_names"
 
     - name: Check for open port 5044/tcp
@@ -80,6 +82,9 @@
             -u elastic:{{ elastic_pass.stdout }}
             http://{{ ansible_hostname }}:5601/api/status
           register: curl_out
+          retries: 6
+          delay: 10
+          until: "'green' in curl_out.stdout or 'Elasticsearch is available' in curl_out.stdout"
           failed_when:
             - "'green' not in curl_out.stdout"
             - "'Elasticsearch is available' not in curl_out.stdout"

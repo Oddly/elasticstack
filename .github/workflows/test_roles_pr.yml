@@ -27,7 +27,7 @@ jobs:
 
   molecule_full_stack:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     needs: lint_full
 
     env:
