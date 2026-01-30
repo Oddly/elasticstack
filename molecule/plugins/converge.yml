@@ -26,10 +26,10 @@
         path: es-ca-wrong
         passphrase: PleaseChangeMe
       ignore_errors: true
-    - name: Debug with to_datetime() - (( test.not_valid_after | to_datetime('%Y-%m-%d %H:%M:%S%z')) - (ansible_date_time.date | to_datetime('%Y-%m-%d'))).days
+    - name: Debug with to_datetime() - strip timezone for naive datetime arithmetic
       ansible.builtin.debug:
         msg: >-
-          "{{ (( test.not_valid_after | to_datetime('%Y-%m-%d %H:%M:%S%z')) - (ansible_date_time.date | to_datetime('%Y-%m-%d'))).days }}"
+          "{{ (( test.not_valid_after | regex_replace('[+-]\d{2}:\d{2}$', '') | to_datetime('%Y-%m-%d %H:%M:%S')) - (ansible_date_time.date | to_datetime('%Y-%m-%d'))).days }}"
     - name: Test wrong passphrase
       cert_info:
         path: files/es-ca/elastic-stack-ca.p12
