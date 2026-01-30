@@ -75,6 +75,16 @@ jobs:
           ANSIBLE_FORCE_COLOR: '1'
           ELASTIC_RELEASE: ${{ matrix.release }}
 
+      - name: Collect Docker container logs on failure
+        if: failure()
+        run: |
+          mkdir -p /tmp/molecule-docker-logs
+          for cid in $(docker ps -aq); do
+            name=$(docker inspect --format '{{.Name}}' "$cid" | sed 's|^/||')
+            docker logs "$cid" > "/tmp/molecule-docker-logs/${name}.log" 2>&1 || true
+          done
+        continue-on-error: true
+
       - name: Cleanup molecule
         if: always()
         run: molecule destroy -s ${{ matrix.scenario }}
@@ -88,7 +98,7 @@ jobs:
         with:
           name: molecule-${{ matrix.scenario }}-${{ matrix.distro }}-r${{ matrix.release }}
           path: |
-            /tmp/molecule-*
+            /tmp/molecule-docker-logs/
             ~/.cache/molecule/
           retention-days: 7
           if-no-files-found: ignore
