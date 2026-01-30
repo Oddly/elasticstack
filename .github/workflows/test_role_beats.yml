@@ -80,7 +80,46 @@ jobs:
           MOLECULE_DISTRO: ${{ matrix.distro }}
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
+          ANSIBLE_DIFF_ALWAYS: 'true'
           ELASTIC_RELEASE: ${{ matrix.release }}
+
+      - name: Collect diagnostic logs on failure
+        if: failure()
+        run: |
+          diag="/tmp/molecule-diagnostics"
+          mkdir -p "$diag"/{docker-logs,service-logs}
+
+          for cid in $(docker ps -aq); do
+            name=$(docker inspect --format '{{.Name}}' "$cid" | sed 's|^/||')
+            docker logs "$cid" > "$diag/docker-logs/${name}.log" 2>&1 || true
+
+            dir="$diag/service-logs/$name"
+            mkdir -p "$dir"
+            docker exec "$cid" bash -c 'journalctl --no-pager -n 1000 2>/dev/null' \
+              > "$dir/journal.log" 2>&1 || true
+            for svc in elasticsearch logstash kibana redis filebeat auditbeat metricbeat; do
+              docker exec "$cid" bash -c "systemctl status $svc 2>/dev/null" \
+                > "$dir/${svc}-status.txt" 2>&1 || true
+            done
+            docker exec "$cid" bash -c 'cat /var/log/elasticsearch/*.log 2>/dev/null' \
+              > "$dir/elasticsearch.log" 2>&1 || true
+            docker exec "$cid" bash -c 'cat /var/log/logstash/logstash-plain.log 2>/dev/null' \
+              > "$dir/logstash.log" 2>&1 || true
+            docker exec "$cid" bash -c 'cat /var/log/kibana/kibana.log 2>/dev/null' \
+              > "$dir/kibana.log" 2>&1 || true
+            docker exec "$cid" bash -c \
+              'curl -sk --max-time 5 https://localhost:9200/_cluster/health?pretty 2>/dev/null' \
+              > "$dir/es-cluster-health.json" 2>&1 || true
+          done
+
+          {
+            echo "=== Memory ===" ; free -h
+            echo "=== Disk ===" ; df -h
+            echo "=== Docker stats ===" ; docker stats --no-stream
+            echo "=== Python ===" ; python3 --version ; pip3 list 2>/dev/null
+            echo "=== Ansible ===" ; ansible --version 2>/dev/null
+          } > "$diag/runner-info.txt" 2>&1 || true
+        continue-on-error: true
 
       - name: Cleanup molecule
         if: always()
@@ -89,13 +128,13 @@ jobs:
         env:
           MOLECULE_DISTRO: ${{ matrix.distro }}
 
-      - name: Upload molecule logs on failure
+      - name: Upload diagnostic logs on failure
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: christopherhx/gitea-upload-artifact@v4
         with:
-          name: molecule-${{ matrix.scenario }}-${{ matrix.distro }}-r${{ matrix.release }}
+          name: diag-${{ matrix.scenario }}-${{ matrix.distro }}-r${{ matrix.release }}
           path: |
-            /tmp/molecule-*
+            /tmp/molecule-diagnostics/
             ~/.cache/molecule/
           retention-days: 7
           if-no-files-found: ignore
