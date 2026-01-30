@@ -27,7 +27,7 @@ jobs:
 
   molecule_full_stack:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     needs: lint_full
 
     env:
@@ -71,10 +71,19 @@ jobs:
           cp -a ../ansible-collection-$COLLECTION_NAME ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
           ansible-galaxy collection install community.docker community.general ansible.posix
 
-      - name: Test with molecule (skip idempotence for PR speed)
+      - name: Converge and verify
         run: |
           molecule converge -s ${{ matrix.scenario }}
           molecule verify -s ${{ matrix.scenario }}
+        env:
+          MOLECULE_DISTRO: ${{ matrix.distro }}
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'
+          ELASTIC_RELEASE: ${{ matrix.release }}
+
+      - name: Idempotence check
+        timeout-minutes: 10
+        run: molecule idempotence -s ${{ matrix.scenario }}
         env:
           MOLECULE_DISTRO: ${{ matrix.distro }}
           PY_COLORS: '1'
