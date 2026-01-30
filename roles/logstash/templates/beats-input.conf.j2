@@ -2,12 +2,20 @@ input {
   beats {
     port => {{ elasticstack_beats_port }}
 {% if logstash_beats_tls is defined and logstash_beats_tls | bool %}
+{% if elasticstack_release | int >= 9 %}
+    ssl_enabled => true
+    ssl_certificate => "{{ logstash_certs_dir }}/{{ inventory_hostname }}-server.crt"
+    ssl_key => "{{ logstash_certs_dir }}/{{ inventory_hostname }}-pkcs8.key"
+    ssl_client_authentication => required
+    ssl_certificate_authorities => ["{{ logstash_certs_dir }}/ca.crt"]
+{% else %}
     ssl => true
     ssl_certificate => "{{ logstash_certs_dir }}/{{ inventory_hostname }}-server.crt"
     ssl_key => "{{ logstash_certs_dir }}/{{ inventory_hostname }}-pkcs8.key"
     ssl_verify_mode => force_peer
     ssl_certificate_authorities => ["{{ logstash_certs_dir }}/ca.crt"]
     ssl_peer_metadata => false
+{% endif %}
 {% endif %}
 {% if logstash_beats_timeout is defined %}
     client_inactivity_timeout => "{{ logstash_beats_timeout }}"

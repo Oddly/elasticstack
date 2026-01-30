@@ -32,10 +32,17 @@ output {
 {% endif %}
 {% endif %}
 {% if elasticstack_full_stack | bool and logstash_security is defined and logstash_security | bool %}
+{% if elasticstack_release | int >= 9 %}
+    ssl_enabled => true
+    ssl_keystore_path => "{{ logstash_certs_dir }}/keystore.pfx"
+    ssl_keystore_password => "{{ logstash_tls_key_passphrase }}"
+    ssl_certificate_authorities => ["{{ logstash_certs_dir }}/ca.crt"]
+{% else %}
     keystore => "{{ logstash_certs_dir }}/keystore.pfx"
     keystore_password => "{{ logstash_tls_key_passphrase }}"
     cacert => "{{ logstash_certs_dir }}/ca.crt"
     ssl => true
+{% endif %}
     user => "{{ logstash_user_name }}"
     password => "{{ logstash_user_password }}"
 {% endif %}
