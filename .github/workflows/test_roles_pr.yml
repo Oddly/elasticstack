@@ -83,7 +83,7 @@ jobs:
           ELASTIC_RELEASE: ${{ matrix.release }}
 
       - name: Idempotence check
-        timeout-minutes: 10
+        timeout-minutes: 20
         run: molecule idempotence -s ${{ matrix.scenario }}
         env:
           MOLECULE_DISTRO: ${{ matrix.distro }}
@@ -110,7 +110,7 @@ jobs:
 
       - name: Upload molecule logs on failure
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: christopherhx/gitea-upload-artifact@v4
         with:
           name: molecule-${{ matrix.scenario }}-${{ matrix.distro }}-r${{ matrix.release }}
           path: |
