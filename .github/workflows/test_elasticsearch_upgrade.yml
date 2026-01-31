@@ -57,6 +57,8 @@ jobs:
 
       - name: Install dependencies
         run: uv pip install --system -r requirements-test.txt
+        env:
+          SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
       - name: Install collection
         run: |
@@ -116,6 +118,8 @@ jobs:
 
       - name: Install dependencies
         run: uv pip install --system -r requirements-test.txt
+        env:
+          SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
       - name: Install collection
         run: |

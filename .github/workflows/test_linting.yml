@@ -39,6 +39,8 @@ jobs:
 
       - name: Install test dependencies.
         run: uv pip install --system -r requirements-test.txt
+        env:
+          SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
       - name: Lint code (yamllint).
         run: |

@@ -46,6 +46,8 @@ jobs:
 
       - name: Install test dependencies.
         run: uv pip install --system pycodestyle
+        env:
+          SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
       - name: Lint code.
         run: |
@@ -79,6 +81,8 @@ jobs:
 
       - name: Install ansible-core
         run: uv pip install --system ansible-core~=${{ matrix.ansible_core }}.0
+        env:
+          SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
       - name: Install collection
         run: |
@@ -120,6 +124,8 @@ jobs:
 
       - name: Install dependencies
         run: uv pip install --system ansible
+        env:
+          SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
       - name: Install collection
         run: |
@@ -168,6 +174,8 @@ jobs:
 
       - name: Install dependencies
         run: uv pip install --system ansible
+        env:
+          SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
       - name: Install collection
         run: |
@@ -209,6 +217,8 @@ jobs:
 
       - name: Install dependencies
         run: uv pip install --system ansible-core==${{ matrix.ansible_core_version }}
+        env:
+          SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
       - name: Install collection
         run: |
@@ -252,6 +262,8 @@ jobs:
         run: |
           uv pip install --system cryptography==${{ matrix.python_cryptography_version }}
           uv pip install --system ansible
+        env:
+          SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
       - name: Install collection
         run: |
