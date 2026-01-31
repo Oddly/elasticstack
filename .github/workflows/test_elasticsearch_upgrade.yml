@@ -52,10 +52,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Install dependencies
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install -r requirements-test.txt
+        run: uv pip install --system -r requirements-test.txt
 
       - name: Install collection
         run: |
@@ -63,12 +64,19 @@ jobs:
           cp -a ../ansible-collection-$COLLECTION_NAME ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
 
       - name: Test with molecule
-        run: |
-          molecule test -s ${{ matrix.scenario }} --destroy=never
+        run: molecule test -s ${{ matrix.scenario }} --destroy=never
         env:
           MOLECULE_DISTRO: ${{ matrix.distro }}
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
+          ANSIBLE_DIFF_ALWAYS: 'true'
+          ANSIBLE_CALLBACKS_ENABLED: profile_tasks
+
+      - name: Collect and upload diagnostics
+        if: failure()
+        uses: ./.github/actions/collect-diagnostics
+        with:
+          artifact-name: diag-${{ matrix.scenario }}-${{ matrix.distro }}
 
       - name: Cleanup molecule
         if: always()
@@ -76,17 +84,6 @@ jobs:
         continue-on-error: true
         env:
           MOLECULE_DISTRO: ${{ matrix.distro }}
-
-      - name: Upload molecule logs on failure
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: molecule-${{ matrix.scenario }}-${{ matrix.distro }}
-          path: |
-            /tmp/molecule-*
-            ~/.cache/molecule/
-          retention-days: 7
-          if-no-files-found: ignore
 
   upgrade_single_node:
     needs: lint_elasticsearch
@@ -114,10 +111,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Install dependencies
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install -r requirements-test.txt
+        run: uv pip install --system -r requirements-test.txt
 
       - name: Install collection
         run: |
@@ -125,12 +123,19 @@ jobs:
           cp -a ../ansible-collection-$COLLECTION_NAME ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
 
       - name: Test with molecule
-        run: |
-          molecule test -s ${{ matrix.scenario }} --destroy=never
+        run: molecule test -s ${{ matrix.scenario }} --destroy=never
         env:
           MOLECULE_DISTRO: ${{ matrix.distro }}
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
+          ANSIBLE_DIFF_ALWAYS: 'true'
+          ANSIBLE_CALLBACKS_ENABLED: profile_tasks
+
+      - name: Collect and upload diagnostics
+        if: failure()
+        uses: ./.github/actions/collect-diagnostics
+        with:
+          artifact-name: diag-${{ matrix.scenario }}-${{ matrix.distro }}
 
       - name: Cleanup molecule
         if: always()
@@ -138,14 +143,3 @@ jobs:
         continue-on-error: true
         env:
           MOLECULE_DISTRO: ${{ matrix.distro }}
-
-      - name: Upload molecule logs on failure
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: molecule-${{ matrix.scenario }}-${{ matrix.distro }}
-          path: |
-            /tmp/molecule-*
-            ~/.cache/molecule/
-          retention-days: 7
-          if-no-files-found: ignore
