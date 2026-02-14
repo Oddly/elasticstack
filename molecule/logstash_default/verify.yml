@@ -1,0 +1,181 @@
+---
+- name: Verify Logstash default deployment
+  hosts: all
+  tasks:
+    - name: Check Logstash service is running
+      ansible.builtin.service:
+        name: logstash
+        state: started
+      check_mode: true
+      register: logstash_service
+      failed_when: logstash_service.changed
+
+    # --- Pipeline structure ---
+
+    - name: Check pipeline directory exists
+      ansible.builtin.stat:
+        path: /etc/logstash/conf.d/main
+      register: pipeline_dir
+      failed_when: not pipeline_dir.stat.exists
+
+    - name: Check input configuration exists
+      ansible.builtin.stat:
+        path: /etc/logstash/conf.d/main/10-input.conf
+      register: input_conf
+      failed_when: not input_conf.stat.exists
+
+    - name: Check filter configuration exists
+      ansible.builtin.stat:
+        path: /etc/logstash/conf.d/main/50-filter.conf
+      register: filter_conf
+      failed_when: not filter_conf.stat.exists
+
+    - name: Check output configuration exists
+      ansible.builtin.stat:
+        path: /etc/logstash/conf.d/main/90-output.conf
+      register: output_conf
+      failed_when: not output_conf.stat.exists
+
+    - name: Check custom pipeline does NOT exist
+      ansible.builtin.stat:
+        path: /etc/logstash/conf.d/main/pipeline.conf
+      register: custom_pipeline
+      failed_when: custom_pipeline.stat.exists
+
+    # --- Input verification ---
+
+    - name: Read input configuration
+      ansible.builtin.slurp:
+        src: /etc/logstash/conf.d/main/10-input.conf
+      register: input_content
+
+    - name: Verify beats input is configured without SSL
+      ansible.builtin.assert:
+        that:
+          - "'beats {' in (input_content.content | b64decode)"
+          - "'port => 5044' in (input_content.content | b64decode)"
+          - "'ssl_enabled' not in (input_content.content | b64decode)"
+          - "'ssl => true' not in (input_content.content | b64decode)"
+        fail_msg: "Beats input not properly configured"
+
+    # --- Filter verification ---
+
+    - name: Read filter configuration
+      ansible.builtin.slurp:
+        src: /etc/logstash/conf.d/main/50-filter.conf
+      register: filter_content
+
+    - name: Verify grok and date filters are configured
+      ansible.builtin.assert:
+        that:
+          - "'grok {' in (filter_content.content | b64decode)"
+          - "'SYSLOGLINE' in (filter_content.content | b64decode)"
+          - "'date {' in (filter_content.content | b64decode)"
+        fail_msg: "Filters not properly configured"
+
+    # --- Output verification ---
+
+    - name: Read output configuration
+      ansible.builtin.slurp:
+        src: /etc/logstash/conf.d/main/90-output.conf
+      register: output_content
+
+    - name: Verify no elasticsearch output (standalone mode)
+      ansible.builtin.assert:
+        that:
+          - "'elasticsearch {' not in (output_content.content | b64decode)"
+        fail_msg: "Elasticsearch output should not be present in standalone mode"
+
+    - name: Verify file output is configured
+      ansible.builtin.assert:
+        that:
+          - "'file {' in (output_content.content | b64decode)"
+          - "'standalone-output.log' in (output_content.content | b64decode)"
+        fail_msg: "File output not properly configured"
+
+    # --- Pipelines.yml verification ---
+
+    - name: Read pipelines.yml
+      ansible.builtin.slurp:
+        src: /etc/logstash/pipelines.yml
+      register: pipelines_content
+
+    - name: Verify pipelines.yml structure
+      ansible.builtin.assert:
+        that:
+          - "'pipeline.id: main' in (pipelines_content.content | b64decode)"
+          - "'path.config' in (pipelines_content.content | b64decode)"
+          - "'conf.d/main' in (pipelines_content.content | b64decode)"
+        fail_msg: "pipelines.yml not properly configured"
+
+    # --- Service health ---
+
+    - name: Show Logstash log before port check
+      ansible.builtin.shell: >-
+        journalctl -u logstash --no-pager -n 50 2>/dev/null ||
+        tail -50 /var/log/logstash/logstash-plain.log 2>/dev/null ||
+        echo "No logs found"
+      register: logstash_log_before
+      changed_when: false
+
+    - name: Display Logstash log  # noqa: no-handler
+      ansible.builtin.debug:
+        var: logstash_log_before.stdout_lines
+
+    - name: Check Logstash is listening on port 5044
+      ansible.builtin.wait_for:
+        port: 5044
+        timeout: 120
+        state: started
+      register: port_check
+      ignore_errors: true
+
+    - name: Show diagnostics on port check failure
+      when: port_check is failed
+      block:
+        - name: Show Logstash log after failure
+          ansible.builtin.shell: >-
+            journalctl -u logstash --no-pager -n 100 2>/dev/null ||
+            tail -100 /var/log/logstash/logstash-plain.log 2>/dev/null ||
+            echo "No logs found"
+          register: logstash_log_after
+          changed_when: false
+
+        - name: Display failure log  # noqa: no-handler
+          ansible.builtin.debug:
+            var: logstash_log_after.stdout_lines
+
+        - name: Show listening ports
+          ansible.builtin.shell: ss -tlnp | grep -E '5044|logstash|java' || echo "No matching ports"
+          register: listening_ports
+          changed_when: false
+
+        - name: Display listening ports  # noqa: no-handler
+          ansible.builtin.debug:
+            var: listening_ports.stdout_lines
+
+        - name: Fail with context
+          ansible.builtin.fail:
+            msg: "Logstash port 5044 did not open within timeout. Check logs above."
+
+    # --- Config syntax validation ---
+
+    - name: Get installed Logstash version
+      ansible.builtin.shell: >-
+        (v=$(dpkg-query -W -f='${Version}' logstash 2>/dev/null) &&
+        echo "${v}" | sed 's/^[0-9]*://;s/-.*$//') ||
+        rpm -q --qf '%{VERSION}' logstash 2>/dev/null
+      register: logstash_version
+      changed_when: false
+
+    - name: Verify Logstash config syntax
+      ansible.builtin.command: >-
+        /usr/share/logstash/bin/logstash
+        --path.settings=/etc/logstash
+        --config.test_and_exit
+        -f /etc/logstash/conf.d/main/
+      become: "{{ logstash_version.stdout is version('9.0.0', '>=', version_type='loose') }}"
+      become_user: "{{ 'logstash' if logstash_version.stdout is version('9.0.0', '>=', version_type='loose') else omit }}"
+      register: config_test
+      changed_when: false
+      failed_when: config_test.rc != 0
