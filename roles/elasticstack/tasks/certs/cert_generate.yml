@@ -1,0 +1,33 @@
+---
+# Generate a certificate for a service using elasticsearch-certutil.
+# Delegates to elasticstack_ca_host.
+#
+# Required variables:
+#   _cert_name:     Certificate CN / filename prefix (e.g. "hostname" or "hostname-kibana")
+#   _cert_ip:       IP address for SAN
+#   _cert_dns:      Comma-separated DNS names for SAN
+#   _cert_out:      Full output path on CA host (e.g. "/opt/es-ca/hostname.p12")
+#   _cert_pass:     Key passphrase
+#   _cert_validity: Validity period in days
+#
+# Optional variables:
+#   _cert_format:   "p12" (default) or "pem"
+
+- name: "Generate {{ _cert_format | default('p12') }} certificate for {{ _cert_name }}"
+  ansible.builtin.command: >
+    /usr/share/elasticsearch/bin/elasticsearch-certutil cert
+    --ca {{ elasticstack_ca_dir }}/elastic-stack-ca.p12
+    --ca-pass {{ elasticstack_ca_pass }}
+    --name {{ _cert_name }}
+    --ip {{ _cert_ip }}
+    --dns {{ _cert_dns }}
+    --days {{ _cert_validity }}
+    --pass {{ _cert_pass }}
+    --out {{ _cert_out }}
+    {{ '--pem' if (_cert_format | default('p12')) == 'pem' else '' }}
+  args:
+    creates: "{{ _cert_out }}"
+  delegate_to: "{{ elasticstack_ca_host }}"
+  no_log: "{{ elasticstack_no_log }}"
+  tags:
+    - certificates
