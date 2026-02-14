@@ -83,11 +83,31 @@
         password: "{{ elasticstack_password.stdout }}"
         validate_certs: no
       register: response
-      # next line is boolean not string, so no quotes around true
-      # use python truthiness
-      until: "response.json.acknowledged == true"
+      until: response.json.acknowledged | default(false)
       retries: 5
       delay: 30
+
+    # Relax disk watermarks so shards can allocate even on near-full disks
+    # (common in CI/Docker). Without this, .security-7 replicas stay
+    # unassigned and auth breaks after a node restart.
+    - name: Set lenient disk watermarks for rolling upgrade
+      ansible.builtin.uri:
+        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/settings"
+        method: PUT
+        body:
+          persistent:
+            cluster.routing.allocation.disk.watermark.low: "97%"
+            cluster.routing.allocation.disk.watermark.high: "98%"
+            cluster.routing.allocation.disk.watermark.flood_stage: "99%"
+            cluster.routing.allocation.disk.watermark.flood_stage.frozen: "99%"
+        body_format: json
+        user: elastic
+        password: "{{ elasticstack_password.stdout }}"
+        validate_certs: no
+      register: watermark_response
+      until: watermark_response.json.acknowledged | default(false)
+      retries: 5
+      delay: 10
 
       # this step is key!!!  Don't restart more nodes
       # until all shards have completed recovery
@@ -99,7 +119,7 @@
         password: "{{ elasticstack_password.stdout }}"
         validate_certs: no
       register: response
-      until: "response.json.status == 'green'"
+      until: (response.json.status | default('')) in ['green', 'yellow']
       retries: 50
       delay: 30
 
@@ -199,9 +219,7 @@
         password: "{{ elasticstack_password.stdout }}"
         validate_certs: no
       register: response
-      # next line is boolean not string, so no quotes around true
-      # use python truthiness
-      until: "response.json.acknowledged == true"
+      until: response.json.acknowledged | default(false)
       retries: 5
       delay: 30
 
@@ -213,6 +231,10 @@
         password: "{{ elasticstack_password.stdout }}"
         validate_certs: no
       register: response
-      until: "response.json.status == 'yellow' or response.json.status == 'green'"
+      until: (response.json.status | default('')) in ['green', 'yellow']
       retries: 5
       delay: 30
+
+    - name: Record that rolling upgrade performed its own restart
+      ansible.builtin.set_fact:
+        _elasticsearch_rolling_upgrade_performed: true

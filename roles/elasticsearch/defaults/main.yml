@@ -4,7 +4,6 @@ elasticsearch_enable: true
 elasticsearch_ml_enabled: true
 elasticsearch_config_backup: false
 elasticsearch_manage_yaml: true
-elasticsearch_monitoring_enabled: true
 elasticsearch_security: true
 elasticsearch_bootstrap_pw: PleaseChangeMe
 elasticsearch_http_security: true
@@ -13,7 +12,6 @@ elasticsearch_datapath: /var/lib/elasticsearch
 elasticsearch_create_datapath: false
 elasticsearch_logpath: /var/log/elasticsearch
 elasticsearch_create_logpath: false
-elasticsearch_disable_systemcallfilterchecks: false
 elasticsearch_heap: "{{ [[(ansible_memtotal_mb // 1024) // 2, 30] | min, 1] | max }}"
 elasticsearch_pamlimits: true
 elasticsearch_check_calculation: false

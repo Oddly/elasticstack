@@ -149,6 +149,56 @@
       replace(' ', '')
       }}
 
+# Write config files BEFORE the rolling upgrade so the upgrade restart picks
+# up new config in a single restart. Without this, the rolling upgrade restarts
+# with old config, then config tasks change files and notify the handler,
+# causing a second uncontrolled restart.
+- name: Write config before rolling upgrade
+  when:
+    - elasticstack_version is defined
+    - ansible_facts.packages['elasticsearch'] is defined
+    - ansible_facts.packages['elasticsearch'][0].version is defined
+    - elasticstack_version is version(ansible_facts.packages['elasticsearch'][0].version, '>')
+  block:
+    - name: Configure Elasticsearch (pre-upgrade)
+      ansible.builtin.template:
+        src: elasticsearch.yml.j2
+        dest: /etc/elasticsearch/elasticsearch.yml
+        owner: root
+        group: root
+        mode: 0644
+        backup: "{{ elasticsearch_config_backup }}"
+      when: elasticsearch_manage_yaml | bool
+
+    - name: Set jvm heap size (pre-upgrade)
+      ansible.builtin.template:
+        src: "jvm.options.d/heap.options.j2"
+        dest: "{{ elasticsearch_conf_dir }}/jvm.options.d/10-heap.options"
+        owner: root
+        group: "{{ elasticsearch_group }}"
+        mode: "660"
+        force: yes
+      when: elasticsearch_heap is defined and (elasticsearch_heap | string | length > 0)
+
+    - name: Set jvm paths (pre-upgrade)
+      ansible.builtin.template:
+        src: "jvm.options.d/paths.options.j2"
+        dest: "{{ elasticsearch_conf_dir }}/jvm.options.d/50-paths.options"
+        owner: root
+        group: "{{ elasticsearch_group }}"
+        mode: "660"
+        force: yes
+
+    - name: Set jvm custom options (pre-upgrade)
+      ansible.builtin.template:
+        src: "jvm.options.d/custom.options.j2"
+        dest: "{{ elasticsearch_conf_dir }}/jvm.options.d/90-custom.options"
+        owner: root
+        group: "{{ elasticsearch_group }}"
+        mode: "660"
+        force: yes
+      when: elasticsearch_jvm_custom_parameters is defined and (elasticsearch_jvm_custom_parameters | string | length > 0)
+
 - name: Update Elasticsearch if needed
   ansible.builtin.include_tasks: elasticsearch-rolling-upgrade.yml
   with_items: "{{ groups[elasticstack_elasticsearch_group_name] }}"
@@ -249,6 +299,14 @@
     force: yes
   notify: Restart Elasticsearch
   when: elasticsearch_jvm_custom_parameters is defined and (elasticsearch_jvm_custom_parameters | string | length > 0)
+
+- name: Rolling upgrade completed
+  ansible.builtin.debug:
+    msg: >-
+      A rolling upgrade was performed. Config files were written before the
+      upgrade so the restart picked up new config. The handler restart is
+      suppressed to prevent a second uncontrolled restart.
+  when: _elasticsearch_rolling_upgrade_performed | default(false) | bool
 
 # On containerized Debian 10 systemd will not recognize elasticsearch service
 - name: Force systemd to reread configs on container

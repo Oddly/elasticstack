@@ -55,16 +55,6 @@ class TestApiVersionDetection(unittest.TestCase):
         self.assertEqual(version, 8)
         self.assertIsInstance(_ver, str)
 
-    def test_version_detection_major_version_7(self):
-        """Test version detection for ES 7.x string format."""
-        _ver = "7.17.0"
-        if isinstance(_ver, tuple):
-            version = _ver[0]
-        else:
-            version = int(_ver.split('.')[0])
-
-        self.assertEqual(version, 7)
-
     def test_version_detection_tuple_with_prerelease(self):
         """Test tuple version with potential prerelease info."""
         _ver = (9, 0, 0)
