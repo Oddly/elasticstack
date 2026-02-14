@@ -1,23 +1,5 @@
 ---
 
-- name: Gather package facts for upgrade validation
-  ansible.builtin.package_facts:
-    manager: auto
-  when: elasticstack_release | int >= 9
-
-- name: Check upgrade path requirement for Kibana 9.x
-  ansible.builtin.fail:
-    msg: |
-      UPGRADE PATH VIOLATION: Kibana 9.x requires 8.19.x first.
-      Current version: {{ ansible_facts.packages['kibana'][0].version }}
-      You must upgrade to 8.19.x before upgrading to 9.x.
-      See: https://www.elastic.co/docs/deploy-manage/upgrade/deployment-or-cluster
-  when:
-    - elasticstack_release | int >= 9
-    - ansible_facts.packages['kibana'] is defined
-    - ansible_facts.packages['kibana'][0].version is version('8.0.0', '>=')
-    - ansible_facts.packages['kibana'][0].version is version('8.19.0', '<')
-
 - name: Include global role
   ansible.builtin.import_role:
     name: oddly.elasticstack.elasticstack

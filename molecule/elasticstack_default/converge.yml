@@ -18,8 +18,6 @@
     elasticstack_full_stack: true
     elasticstack_no_log: false
     logstash_pipeline_unsafe_shutdown: true
-    logstash_redis_password: "{{ lookup('ansible.builtin.password', '/tmp/redispassword', chars=['ascii_letters'], length=15) }}"
-    redis_requirepass: "{{ logstash_redis_password }}"
     beats_filebeat_journald: true
     beats_filebeat_modules:
       - system
@@ -32,9 +30,6 @@
       ansible.builtin.set_fact:
         elasticstack_rpm_workaround: true
       when: ansible_os_family == 'RedHat' and ansible_distribution_major_version >= "9"
-    - name: Include Redis
-      ansible.builtin.include_role:
-        name: geerlingguy.redis
     - name: Include Elastic Repos
       ansible.builtin.include_role:
         name: repos
