@@ -1,119 +1,72 @@
 ---
 
-- name: Ensure kibana certificate exists
-  ansible.builtin.stat:
-    path: "/etc/kibana/certs/{{ ansible_hostname }}-kibana.p12"
-  register: kibana_cert_exists
+# -- Check Kibana certificate expiry --
+- name: Check Kibana certificate expiry
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_check_expiry.yml"
+    apply:
+      tags:
+        - certificates
+        - renew_kibana_cert
+  vars:
+    _cert_path: "/etc/kibana/certs/{{ ansible_hostname }}-kibana.p12"
+    _cert_pass: "{{ kibana_tls_key_passphrase }}"
+    _cert_buffer_days: "{{ kibana_cert_expiration_buffer }}"
+    _cert_expiry_fact: kibana_cert_will_expire_soon
+  tags:
+    - certificates
+    - renew_kibana_cert
 
-- name: Get the kibana certificate expiration date
-  cert_info:
-    path: "/etc/kibana/certs/{{ ansible_hostname }}-kibana.p12"
-    passphrase: "{{ kibana_tls_key_passphrase | default(omit, true) }}"
-  register: kibana_cert_expiration_date
-  when: kibana_cert_exists.stat.exists | bool
-
-- name: Set the kibana certificate expiration date in days
-  ansible.builtin.set_fact:
-    kibana_cert_expiration_days: "{{ ((kibana_cert_expiration_date.not_valid_after | regex_replace('[+-]\\d{2}:\\d{2}$', '') | to_datetime('%Y-%m-%d %H:%M:%S')) - (ansible_date_time.date | to_datetime('%Y-%m-%d'))).days }}"
-  when: kibana_cert_expiration_date.skipped is not defined
-
-- name: Set kibana certificate will expire soon to true
-  ansible.builtin.set_fact:
-    kibana_cert_will_expire_soon: true
-  when: kibana_cert_expiration_days is defined and kibana_cert_expiration_days | int <= kibana_cert_expiration_buffer | int
-
-- name: Print the kibana certificate renew message
-  ansible.builtin.debug:
-    msg: |
-      Your kibana certificate will expire in {{ kibana_cert_expiration_days }} days.
-      Ansible will renew it.
-  when: kibana_cert_expiration_days is defined and kibana_cert_expiration_days | int <= kibana_cert_expiration_buffer | int
-
-- name: Backup kibana certs then remove
+# -- Backup Kibana certs on node --
+- name: Backup Kibana certs on node
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
+    apply:
+      tags:
+        - renew_ca
+        - renew_kibana_cert
+  vars:
+    _backup_path: /etc/kibana/certs
+    _backup_target: "{{ inventory_hostname }}"
   when: "'renew_kibana_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or kibana_cert_will_expire_soon | bool"
   tags:
     - renew_ca
     - renew_kibana_cert
-  block:
-    - name: Check if cert directory exists
-      ansible.builtin.stat:
-        path: /etc/kibana/certs
-      register: kibana_check_cert_path
 
-    - name: Move cert directory
-      ansible.builtin.copy:
-        src: /etc/kibana/certs
-        dest: "/etc/kibana/certs_{{ ansible_date_time.iso8601_micro }}"
-        mode: preserve
-        owner: root
-        group: root
-        remote_src: true
-      when: kibana_check_cert_path.stat.exists
-      register: kibana_move_cert_directory
-
-    - name: Remove cert directory
-      ansible.builtin.file:
-        path: /etc/kibana/certs
-        state: absent
-      when: kibana_move_cert_directory.changed
-
-- name: Backup kibana certs on elasticstack_ca_host then remove
-  when: "'renew_kibana_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or kibana_cert_will_expire_soon | bool"
-  delegate_to: "{{ elasticstack_ca_host }}"
-  tags:
-    - renew_ca
-    - renew_kibana_cert
-  block:
-    - name: Check if cert file exists
-      ansible.builtin.stat:
-        path: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-kibana.p12"
-      register: kibana_check_cert_file
-
-    - name: Move cert file
-      ansible.builtin.copy:
-        src: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-kibana.p12"
-        dest: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-kibana.p12_{{ ansible_date_time.iso8601_micro }}"
-        mode: preserve
-        owner: root
-        group: root
-        remote_src: true
-      when: kibana_check_cert_file.stat.exists
-      register: kibana_move_cert_file
-
-    - name: Remove cert file
-      ansible.builtin.file:
-        path: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-kibana.p12"
-        state: absent
-      when: kibana_move_cert_file.changed
-
-- name: Backup kibana cert on localhost then remove
-  delegate_to: localhost
+# -- Backup Kibana cert on CA host --
+- name: Backup Kibana cert on CA host
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
+    apply:
+      tags:
+        - renew_ca
+        - renew_kibana_cert
+  vars:
+    _backup_path: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-kibana.p12"
+    _backup_target: "{{ elasticstack_ca_host }}"
   when: "'renew_kibana_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or kibana_cert_will_expire_soon | bool"
   tags:
     - renew_ca
     - renew_kibana_cert
-  block:
-    - name: Check the existance of cert on localhost
-      ansible.builtin.stat:
-        path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}-kibana.p12"
-      register: kibana_check_temporary_cert
 
-    - name: Move temporary cert file
-      ansible.builtin.copy:
-        src: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}-kibana.p12"
-        dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}-kibana.p12_{{ ansible_date_time.iso8601_micro }}"
-        mode: preserve
-        owner: root
-        group: root
-      when: kibana_check_temporary_cert.stat.exists
-      register: kibana_move_cert_file
+# -- Backup Kibana cert on Ansible controller --
+- name: Backup Kibana cert on Ansible controller
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
+    apply:
+      tags:
+        - renew_ca
+        - renew_kibana_cert
+  vars:
+    _backup_path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}-kibana.p12"
+    _backup_target: localhost
+    _backup_become: false
+  when: "'renew_kibana_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or kibana_cert_will_expire_soon | bool"
+  tags:
+    - renew_ca
+    - renew_kibana_cert
 
-    - name: Remove temporary cert file
-      ansible.builtin.file:
-        path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}-kibana.p12"
-        state: absent
-      when: kibana_move_cert_file.changed
-
+# -- Encryption keys (Kibana-specific, kept inline) --
 - name: Block for key generation
   delegate_to: "{{ elasticstack_ca_host }}"
   run_once: true
@@ -151,6 +104,7 @@
       changed_when: false
       register: kibana_savedobjects_encryption_key
 
+# -- Create Kibana certificate directory (Kibana-specific path/perms) --
 - name: Create certificate directory
   ansible.builtin.file:
     path: /etc/kibana/certs
@@ -163,51 +117,50 @@
     - renew_ca
     - renew_kibana_cert
 
-- name: Create individual certificates for Kibana
-  ansible.builtin.command: >
-    /usr/share/elasticsearch/bin/elasticsearch-certutil cert
-    --days {{ kibana_cert_validity_period }}
-    --ca {{ elasticstack_ca_dir }}/elastic-stack-ca.p12
-    --ca-pass {{ elasticstack_ca_pass }}
-    --name {{ ansible_hostname }}
-    --ip {{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}
-    --dns {{ ansible_hostname }},{{ ansible_fqdn }},{{ inventory_hostname }}
-    --pass {{ kibana_tls_key_passphrase }}
-    --out {{ elasticstack_ca_dir }}/{{ ansible_hostname }}-kibana.p12
-  delegate_to: "{{ elasticstack_ca_host }}"
-  no_log: "{{ elasticstack_no_log }}"
-  args:
-    creates: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-kibana.p12"
+# -- Generate Kibana certificate --
+- name: Generate Kibana certificate
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_generate.yml"
+    apply:
+      tags:
+        - certificates
+        - renew_ca
+        - renew_kibana_cert
+  vars:
+    _cert_name: "{{ ansible_hostname }}"
+    _cert_ip: "{{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}"
+    _cert_dns: "{{ ansible_hostname }},{{ ansible_fqdn }},{{ inventory_hostname }}"
+    _cert_out: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-kibana.p12"
+    _cert_pass: "{{ kibana_tls_key_passphrase }}"
+    _cert_validity: "{{ kibana_cert_validity_period }}"
   tags:
     - certificates
     - renew_ca
     - renew_kibana_cert
 
-- name: Fetch certificate from ca host to master
-  ansible.builtin.fetch:
-    src: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-kibana.p12"
-    dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}-kibana.p12"
-    flat: yes
-  delegate_to: "{{ elasticstack_ca_host }}"
+# -- Distribute Kibana certificate --
+- name: Distribute Kibana certificate
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_distribute.yml"
+    apply:
+      tags:
+        - certificates
+        - renew_ca
+        - renew_kibana_cert
+  vars:
+    _cert_src: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-kibana.p12"
+    _cert_dest: "/etc/kibana/certs/{{ ansible_hostname }}-kibana.p12"
+    _cert_owner: root
+    _cert_group: kibana
+    _cert_mode: "0640"
+    _cert_notify:
+      - Restart Kibana
   tags:
     - certificates
     - renew_ca
     - renew_kibana_cert
 
-- name: Copy the certificate to actual node
-  ansible.builtin.copy:
-    src: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}-kibana.p12"
-    dest: "/etc/kibana/certs"
-    owner: root
-    group: kibana
-    mode: 0640
-  notify:
-    - Restart Kibana
-  tags:
-    - certificates
-    - renew_ca
-    - renew_kibana_cert
-
+# -- Fetch Kibana password (not cert logic, kept inline) --
 - name: Fetch Kibana password # noqa: risky-shell-pipe
   ansible.builtin.shell: >
     if test -n "$(ps -p $$ | grep bash)"; then set -o pipefail; fi;
@@ -218,26 +171,23 @@
   no_log: "{{ elasticstack_no_log }}"
   delegate_to: "{{ elasticstack_ca_host }}"
 
-- name: Fetch ca certificate from ca host to master
-  ansible.builtin.fetch:
-    src: "{{ elasticstack_ca_dir }}/ca.crt"
-    dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/ca.crt"
-    flat: yes
-  delegate_to: "{{ elasticstack_ca_host }}"
-  tags:
-    - certificates
-    - renew_ca
-    - renew_kibana_cert
-
-- name: Copy the ca certificate to actual node
-  ansible.builtin.copy:
-    src: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/ca.crt"
-    dest: /etc/kibana/certs
-    owner: root
-    group: kibana
-    mode: 0640
-  notify:
-    - Restart Kibana
+# -- Distribute CA certificate to Kibana nodes --
+- name: Distribute CA certificate to Kibana nodes
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_distribute.yml"
+    apply:
+      tags:
+        - certificates
+        - renew_ca
+        - renew_kibana_cert
+  vars:
+    _cert_src: "{{ elasticstack_ca_dir }}/ca.crt"
+    _cert_dest: /etc/kibana/certs/ca.crt
+    _cert_owner: root
+    _cert_group: kibana
+    _cert_mode: "0640"
+    _cert_notify:
+      - Restart Kibana
   tags:
     - certificates
     - renew_ca
