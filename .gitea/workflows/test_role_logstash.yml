@@ -14,6 +14,7 @@ on:
           - debug
   pull_request:
     branches:
+      - main
       - 'feature/**'
       - 'fix/**'
       - '!doc/**'
@@ -33,7 +34,7 @@ jobs:
       rolename: logstash
 
 
-  molecule_logstash_extended:
+  molecule_logstash:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: lint_logstash
@@ -64,13 +65,10 @@ jobs:
       - name: Check out code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: "3.12"
-
+      # Python 3.12 and uv are pre-installed in the runner environment
+      # (system Python in Docker image, uv bind-mounted from LXC host)
       - name: Install dependencies
-        run: uv pip install --system -r requirements-test.txt
+        run: uv pip install --system --break-system-packages --python /usr/bin/python3 -r requirements-test.txt
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
