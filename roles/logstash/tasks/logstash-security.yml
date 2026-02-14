@@ -58,72 +58,59 @@
 - name: Handle Elasticsearch CA certificates
   when: _logstash_cert_mode == 'elasticsearch_ca'
   block:
-    - name: Check if logstash certificate exists
-      ansible.builtin.stat:
-        path: "{{ logstash_certs_dir }}/{{ ansible_hostname }}-ls.p12"
-      register: _logstash_cert_exists
+    # -- Check Logstash certificate expiry --
+    - name: Check Logstash certificate expiry
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/certs/cert_check_expiry.yml"
+        apply:
+          tags:
+            - certificates
+      vars:
+        _cert_path: "{{ logstash_certs_dir }}/{{ ansible_hostname }}-ls.p12"
+        _cert_pass: "{{ logstash_tls_key_passphrase }}"
+        _cert_buffer_days: "{{ logstash_cert_expiration_buffer }}"
+        _cert_expiry_fact: logstash_cert_will_expire_soon
+      tags:
+        - certificates
 
-    - name: Get certificate expiration date
-      cert_info:
-        path: "{{ logstash_certs_dir }}/{{ ansible_hostname }}-ls.p12"
-        passphrase: "{{ logstash_tls_key_passphrase | default(omit, true) }}"
-      register: _logstash_cert_expiration
-      when: _logstash_cert_exists.stat.exists | bool
-
-    - name: Calculate days until expiration
-      ansible.builtin.set_fact:
-        _logstash_cert_expiration_days: >-
-          {{ (((_logstash_cert_expiration.not_valid_after | regex_replace('[+-]\d{2}:\d{2}$', ''))
-          | to_datetime('%Y-%m-%d %H:%M:%S')) - (ansible_date_time.date | to_datetime('%Y-%m-%d'))).days }}
-      when:
-        - _logstash_cert_exists.stat.exists | bool
-        - _logstash_cert_expiration.skipped is not defined
-
+    # -- Determine if renewal is needed (Logstash-specific combined logic) --
     - name: Determine if certificate renewal is needed
       ansible.builtin.set_fact:
         _logstash_needs_cert_renewal: >-
-          {{ (not _logstash_cert_exists.stat.exists) or
+          {{ (not (_cert_stat.stat.exists | default(false))) or
              (logstash_cert_force_regenerate | default(false) | bool) or
-             (_logstash_cert_expiration_days is defined and
-              _logstash_cert_expiration_days | int <= logstash_cert_expiration_buffer | int) }}
+             (logstash_cert_will_expire_soon | default(false) | bool) }}
 
-    - name: Display certificate renewal message
-      ansible.builtin.debug:
-        msg: >-
-          Certificate will expire in {{ _logstash_cert_expiration_days }} days.
-          Renewal threshold is {{ logstash_cert_expiration_buffer }} days.
-          Initiating automatic renewal.
+    # -- Backup and remove existing certificates --
+    - name: Backup Logstash cert directory
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
+      vars:
+        _backup_path: "{{ logstash_certs_dir }}"
+        _backup_target: "{{ inventory_hostname }}"
       when:
-        - _logstash_cert_expiration_days is defined
-        - _logstash_cert_expiration_days | int <= logstash_cert_expiration_buffer | int
+        - _logstash_needs_cert_renewal | bool
+        - _cert_stat.stat.exists | default(false)
 
-    - name: Backup and remove existing certificates for renewal
-      when: _logstash_needs_cert_renewal | bool and _logstash_cert_exists.stat.exists
-      block:
-        - name: Backup certificate directory on Logstash host
-          ansible.builtin.copy:
-            src: "{{ logstash_certs_dir }}"
-            dest: "{{ logstash_certs_dir }}_backup_{{ ansible_date_time.iso8601_basic_short }}"
-            mode: preserve
-            remote_src: true
+    - name: Remove old certificate on CA host
+      ansible.builtin.file:
+        path: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-ls.p12"
+        state: absent
+      delegate_to: "{{ elasticstack_ca_host }}"
+      when:
+        - _logstash_needs_cert_renewal | bool
+        - _cert_stat.stat.exists | default(false)
 
-        - name: Remove old certificate directory
-          ansible.builtin.file:
-            path: "{{ logstash_certs_dir }}"
-            state: absent
+    - name: Remove old PEM certificate zip on CA host
+      ansible.builtin.file:
+        path: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-ls.zip"
+        state: absent
+      delegate_to: "{{ elasticstack_ca_host }}"
+      when:
+        - _logstash_needs_cert_renewal | bool
+        - _cert_stat.stat.exists | default(false)
 
-        - name: Remove old certificate on CA host
-          ansible.builtin.file:
-            path: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-ls.p12"
-            state: absent
-          delegate_to: "{{ elasticstack_ca_host }}"
-
-        - name: Remove old PEM certificate zip on CA host
-          ansible.builtin.file:
-            path: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-ls.zip"
-            state: absent
-          delegate_to: "{{ elasticstack_ca_host }}"
-
+    # -- Generate and distribute certificates --
     - name: Generate and distribute certificates
       when: _logstash_needs_cert_renewal | bool
       block:
@@ -137,40 +124,35 @@
           tags:
             - certificates
 
-        - name: Generate P12 certificate on CA host
-          ansible.builtin.command: >
-            /usr/share/elasticsearch/bin/elasticsearch-certutil cert
-            --days {{ logstash_cert_validity_period }}
-            --ca {{ elasticstack_ca_dir }}/elastic-stack-ca.p12
-            --ca-pass {{ elasticstack_ca_pass }}
-            --name {{ ansible_hostname }}
-            --ip {{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}
-            --dns {{ ansible_hostname }},{{ ansible_fqdn }},{{ inventory_hostname }}
-            --pass {{ logstash_tls_key_passphrase }}
-            --out {{ elasticstack_ca_dir }}/{{ ansible_hostname }}-ls.p12
-          delegate_to: "{{ elasticstack_ca_host }}"
-          no_log: "{{ elasticstack_no_log }}"
-          args:
-            creates: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-ls.p12"
+        # -- P12 certificate --
+        - name: Generate P12 certificate for Logstash
+          ansible.builtin.include_tasks:
+            file: "{{ role_path }}/../elasticstack/tasks/certs/cert_generate.yml"
+            apply:
+              tags:
+                - certificates
+          vars:
+            _cert_name: "{{ ansible_hostname }}"
+            _cert_ip: "{{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}"
+            _cert_dns: "{{ ansible_hostname }},{{ ansible_fqdn }},{{ inventory_hostname }}"
+            _cert_out: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-ls.p12"
+            _cert_pass: "{{ logstash_tls_key_passphrase }}"
+            _cert_validity: "{{ logstash_cert_validity_period }}"
           tags:
             - certificates
 
-        - name: Fetch P12 certificate to controller
-          ansible.builtin.fetch:
-            src: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-ls.p12"
-            dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}-ls.p12"
-            flat: true
-          delegate_to: "{{ elasticstack_ca_host }}"
-          tags:
-            - certificates
-
-        - name: Copy P12 certificate to Logstash host
-          ansible.builtin.copy:
-            src: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}-ls.p12"
-            dest: "{{ logstash_certs_dir }}/{{ ansible_hostname }}-ls.p12"
-            owner: root
-            group: logstash
-            mode: "0640"
+        - name: Distribute P12 certificate to Logstash host
+          ansible.builtin.include_tasks:
+            file: "{{ role_path }}/../elasticstack/tasks/certs/cert_distribute.yml"
+            apply:
+              tags:
+                - certificates
+          vars:
+            _cert_src: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-ls.p12"
+            _cert_dest: "{{ logstash_certs_dir }}/{{ ansible_hostname }}-ls.p12"
+            _cert_owner: root
+            _cert_group: logstash
+            _cert_mode: "0640"
           tags:
             - certificates
 
@@ -186,22 +168,21 @@
           tags:
             - certificates
 
-        - name: Generate PEM certificate on CA host
-          ansible.builtin.command: >
-            /usr/share/elasticsearch/bin/elasticsearch-certutil cert
-            --days {{ logstash_cert_validity_period }}
-            --ca {{ elasticstack_ca_dir }}/elastic-stack-ca.p12
-            --ca-pass {{ elasticstack_ca_pass }}
-            --name {{ ansible_hostname }}
-            --ip {{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}
-            --dns {{ ansible_hostname }},{{ ansible_fqdn }},{{ inventory_hostname }}
-            --pass {{ logstash_tls_key_passphrase }}
-            --pem
-            --out {{ elasticstack_ca_dir }}/{{ ansible_hostname }}-ls.zip
-          delegate_to: "{{ elasticstack_ca_host }}"
-          no_log: "{{ elasticstack_no_log }}"
-          args:
-            creates: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-ls.zip"
+        # -- PEM certificate (kept inline, zip+PKCS8 flow is Logstash-specific) --
+        - name: Generate PEM certificate for Logstash
+          ansible.builtin.include_tasks:
+            file: "{{ role_path }}/../elasticstack/tasks/certs/cert_generate.yml"
+            apply:
+              tags:
+                - certificates
+          vars:
+            _cert_name: "{{ ansible_hostname }}"
+            _cert_ip: "{{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}"
+            _cert_dns: "{{ ansible_hostname }},{{ ansible_fqdn }},{{ inventory_hostname }}"
+            _cert_out: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-ls.zip"
+            _cert_pass: "{{ logstash_tls_key_passphrase }}"
+            _cert_validity: "{{ logstash_cert_validity_period }}"
+            _cert_format: pem
           tags:
             - certificates
 
@@ -269,24 +250,21 @@
           tags:
             - certificates
 
-        - name: Fetch CA certificate to controller
-          ansible.builtin.fetch:
-            src: "{{ elasticstack_ca_dir }}/ca.crt"
-            dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/ca.crt"
-            flat: true
-          delegate_to: "{{ elasticstack_ca_host }}"
-          tags:
-            - certificates
-
-        - name: Copy CA certificate to Logstash host
-          ansible.builtin.copy:
-            src: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/ca.crt"
-            dest: "{{ logstash_certs_dir }}/ca.crt"
-            owner: root
-            group: logstash
-            mode: "0640"
-          notify:
-            - Restart Logstash
+        # -- CA certificate distribution --
+        - name: Distribute CA certificate to Logstash host
+          ansible.builtin.include_tasks:
+            file: "{{ role_path }}/../elasticstack/tasks/certs/cert_distribute.yml"
+            apply:
+              tags:
+                - certificates
+          vars:
+            _cert_src: "{{ elasticstack_ca_dir }}/ca.crt"
+            _cert_dest: "{{ logstash_certs_dir }}/ca.crt"
+            _cert_owner: root
+            _cert_group: logstash
+            _cert_mode: "0640"
+            _cert_notify:
+              - Restart Logstash
           tags:
             - certificates
 
