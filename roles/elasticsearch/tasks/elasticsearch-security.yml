@@ -1,41 +1,30 @@
 ---
+# --- CA and certificate management (modular) ---
+#
+# This section uses shared task files from roles/elasticstack/tasks/certs/
+# to handle CA creation, certificate generation, distribution, backup, and
+# renewal. The modular files are reusable across elasticsearch, kibana,
+# logstash, and beats roles.
 
-- name: Ensure ca exists
-  ansible.builtin.stat:
-    path: "{{ elasticstack_ca_dir }}/elastic-stack-ca.p12"
-  register: elasticstack_ca_exists
+# -- Check CA expiry on CA host --
+- name: Check CA certificate expiry
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_check_expiry.yml"
+    apply:
+      tags:
+        - certificates
+        - renew_ca
+  vars:
+    _cert_path: "{{ elasticstack_ca_dir }}/elastic-stack-ca.p12"
+    _cert_pass: "{{ elasticstack_ca_pass }}"
+    _cert_buffer_days: "{{ elasticstack_ca_expiration_buffer }}"
+    _cert_expiry_fact: elasticstack_ca_will_expire_soon
   when: inventory_hostname == elasticstack_ca_host
+  tags:
+    - certificates
+    - renew_ca
 
-- name: Get CA informations
-  cert_info:
-    path: "{{ elasticstack_ca_dir }}/elastic-stack-ca.p12"
-    passphrase: "{{ elasticstack_ca_pass | default(omit, true) }}"
-  register: elasticstack_ca_infos
-  when: inventory_hostname == elasticstack_ca_host and elasticstack_ca_exists.stat.exists | bool
-
-- name: Set the ca expiration date in days
-  ansible.builtin.set_fact:
-    elasticstack_ca_expiration_days: "{{ ((elasticstack_ca_infos.not_valid_after | regex_replace('[+-]\\d{2}:\\d{2}$', '') | to_datetime('%Y-%m-%d %H:%M:%S')) - (ansible_date_time.date | to_datetime('%Y-%m-%d'))).days }}"
-  when: inventory_hostname == elasticstack_ca_host and elasticstack_ca_infos.skipped is not defined
-
-- name: Set ca will expire soon to true
-  ansible.builtin.set_fact:
-    elasticstack_ca_will_expire_soon: true
-  when: >
-    inventory_hostname == elasticstack_ca_host and
-    elasticstack_ca_expiration_days is defined and
-    elasticstack_ca_expiration_days | int <= elasticstack_ca_expiration_buffer | int
-
-- name: Print the ca renew message
-  ansible.builtin.debug:
-    msg: |
-      Your ca will expire in {{ elasticstack_ca_expiration_days }} days.
-      Ansible will renew it and all elastic stack certificates
-  when: >
-    inventory_hostname == elasticstack_ca_host and
-    elasticstack_ca_expiration_days is defined and
-    elasticstack_ca_expiration_days | int <= elasticstack_ca_expiration_buffer | int
-
+# -- Stop Logstash for CA renewal (orchestration, kept inline) --
 # Use default([]) + length > 0 for group checks (Ansible 2.20 compatibility)
 - name: Stop Logstash
   ansible.builtin.service:
@@ -48,246 +37,165 @@
     - elasticstack_logstash_group_name is defined
     - groups[elasticstack_logstash_group_name] | default([]) | length > 0
 
-- name: Backup ca directory on elasticsearch ca host then remove
-  when: (inventory_hostname == elasticstack_ca_host) and ('renew_ca' in "ansible_run_tags" or elasticstack_ca_will_expire_soon | bool)
+# -- Backup CA directory on CA host --
+- name: Backup CA directory on CA host
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
+    apply:
+      tags:
+        - renew_ca
+  vars:
+    _backup_path: "{{ elasticstack_ca_dir }}"
+    _backup_target: "{{ inventory_hostname }}"
+  when:
+    - inventory_hostname == elasticstack_ca_host
+    - "'renew_ca' in ansible_run_tags or elasticstack_ca_will_expire_soon | bool"
   tags:
     - renew_ca
-  block:
-    - name: Check if ca directory exists on elasticsearch ca host
-      ansible.builtin.stat:
-        path: "{{ elasticstack_ca_dir }}"
-      register: elasticsearch_check_ca_path
 
-    - name: Move the ca directory on elasticsearch ca host
-      ansible.builtin.copy:
-        src: "{{ elasticstack_ca_dir }}"
-        dest: "{{ elasticstack_ca_dir }}_{{ ansible_date_time.iso8601_micro }}"
-        mode: preserve
-        remote_src: true
-      when: elasticsearch_check_ca_path.stat.exists
-      register: elasticsearch_move_ca_directory
-
-    - name: Remove ca directory on elasticsearch ca host
-      ansible.builtin.file:
-        path: "{{ elasticstack_ca_dir }}"
-        state: absent
-      when: elasticsearch_move_ca_directory.changed
-
-    - name: Check the existance of ca on Ansible controler
-      ansible.builtin.stat:
-        path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/ca.crt"
-      register: elasticsearch_check_temporary_ca
-      delegate_to: localhost
-      become: false
-
-    - name: Move temporary ca file on Ansible controler
-      ansible.builtin.copy:
-        src: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/ca.crt"
-        dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/ca.crt_{{ ansible_date_time.iso8601_micro }}"
-        mode: preserve
-      when: elasticsearch_check_temporary_ca.stat.exists
-      delegate_to: localhost
-      become: false
-      register: elasticsearch_move_ca_file
-
-    - name: Remove temporary ca file on Ansible controler
-      ansible.builtin.file:
-        path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/ca.crt"
-        state: absent
-      when: elasticsearch_move_ca_file.changed
-      delegate_to: localhost
-      become: false
-
-- name: Ensure elasticsearch certificate exists
-  ansible.builtin.stat:
-    path: "/etc/elasticsearch/certs/{{ ansible_hostname }}.p12"
-  register: elasticsearch_cert_exists
-
-- name: Get the elasticsearch certificate expiration date
-  cert_info:
-    path: "/etc/elasticsearch/certs/{{ ansible_hostname }}.p12"
-    passphrase: "{{ elasticsearch_tls_key_passphrase | default(omit, true) }}"
-  register: elasticsearch_cert_infos
-  when: elasticsearch_cert_exists.stat.exists | bool
-
-- name: Set the elasticsearch certificate expiration date in days
-  ansible.builtin.set_fact:
-    elasticsearch_cert_expiration_days: "{{ ((elasticsearch_cert_infos.not_valid_after | regex_replace('[+-]\\d{2}:\\d{2}$', '') | to_datetime('%Y-%m-%d %H:%M:%S')) - (ansible_date_time.date | to_datetime('%Y-%m-%d'))).days }}"
-  when: elasticsearch_cert_infos.skipped is not defined
-
-- name: Set elasticsearch certificate will expire soon to true
-  ansible.builtin.set_fact:
-    elasticsearch_cert_will_expire_soon: true
-  when: elasticsearch_cert_expiration_days is defined and elasticsearch_cert_expiration_days | int <= elasticsearch_cert_expiration_buffer | int
-
-- name: Print the elasticsearch certificate renew message
-  ansible.builtin.debug:
-    msg: |
-      Your elasticsearch certificate will expire in {{ elasticsearch_cert_expiration_days }} days.
-      Ansible will renew it.
-  when: elasticsearch_cert_expiration_days is defined and elasticsearch_cert_expiration_days | int <= elasticsearch_cert_expiration_buffer | int
-
-- name: Backup elasticsearch certs on node then remove
-  when: "'renew_es_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or elasticsearch_cert_will_expire_soon | bool"
+# -- Backup CA cert on Ansible controller --
+- name: Backup CA cert on Ansible controller
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
+    apply:
+      tags:
+        - renew_ca
+  vars:
+    _backup_path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/ca.crt"
+    _backup_target: localhost
+    _backup_become: false
+  when:
+    - inventory_hostname == elasticstack_ca_host
+    - "'renew_ca' in ansible_run_tags or elasticstack_ca_will_expire_soon | bool"
   tags:
     - renew_ca
-    - renew_es_cert
-  block:
-    - name: Check if cert directory exists on elasticsearch node
-      ansible.builtin.stat:
-        path: /etc/elasticsearch/certs
-      register: elasticsearch_check_cert_path
 
-    - name: Move cert directory on elasticsearch node
-      ansible.builtin.copy:
-        src: /etc/elasticsearch/certs
-        dest: "/etc/elasticsearch/certs_{{ ansible_date_time.iso8601_micro }}"
-        mode: preserve
-        remote_src: true
-      when: elasticsearch_check_cert_path.stat.exists
-      register: elasticsearch_move_cert_directory
-
-    - name: Remove cert directory on elasticsearch node
-      ansible.builtin.file:
-        path: /etc/elasticsearch/certs
-        state: absent
-      when: elasticsearch_move_cert_directory.changed
-
-- name: Backup elasticsearch certs on elasticstack_ca_host host then remove
-  when: "'renew_es_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or elasticsearch_cert_will_expire_soon | bool"
-  delegate_to: "{{ elasticstack_ca_host }}"
-  tags:
-    - renew_ca
-    - renew_es_cert
-  block:
-    - name: Check if cert file exists on elasticstack_ca_host host
-      ansible.builtin.stat:
-        path: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}.p12"
-      register: elasticsearch_check_cert_file
-
-    - name: Move cert file on elasticstack_ca_host
-      ansible.builtin.copy:
-        src: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}.p12"
-        dest: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}.p12_{{ ansible_date_time.iso8601_micro }}"
-        mode: preserve
-        remote_src: true
-      when: elasticsearch_check_cert_file.stat.exists
-      register: elasticsearch_move_cert_file
-
-    - name: Remove cert file on elasticstack_ca_host
-      ansible.builtin.file:
-        path: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}.p12"
-        state: absent
-      when: elasticsearch_move_cert_file.changed
-
-- name: Backup elasticsearch cert on localhost then remove
-  when: "'renew_es_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or elasticsearch_cert_will_expire_soon | bool"
-  delegate_to: localhost
-  become: false
-  tags:
-    - renew_es_cert
-    - renew_ca
-  block:
-    - name: Check the existance of cert on Ansible controler
-      ansible.builtin.stat:
-        path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}.p12"
-      register: elasticsearch_check_temporary_cert
-
-    - name: Move temporary cert on Ansible controler
-      ansible.builtin.copy:
-        src: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}.p12"
-        dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}.p12_{{ ansible_date_time.iso8601_micro }}"
-        mode: preserve
-      when: elasticsearch_check_temporary_cert.stat.exists
-      register: elasticsearch_move_cert_file
-
-    - name: Remove temporary cert on Ansible controler
-      ansible.builtin.file:
-        path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}.p12"
-        state: absent
-      when: elasticsearch_move_cert_file.changed
-
-- name: Create directory for Elasticsearch CA
-  ansible.builtin.file:
-    path: "{{ elasticstack_ca_dir }}"
-    owner: root
-    group: elasticsearch
-    mode: 0700
-    state: directory
+# -- Check ES node certificate expiry --
+- name: Check Elasticsearch certificate expiry
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_check_expiry.yml"
+    apply:
+      tags:
+        - certificates
+        - renew_es_cert
+  vars:
+    _cert_path: "/etc/elasticsearch/certs/{{ ansible_hostname }}.p12"
+    _cert_pass: "{{ elasticsearch_tls_key_passphrase }}"
+    _cert_buffer_days: "{{ elasticsearch_cert_expiration_buffer }}"
+    _cert_expiry_fact: elasticsearch_cert_will_expire_soon
   tags:
     - certificates
+    - renew_es_cert
+
+# -- Backup ES certs on the node --
+- name: Backup Elasticsearch certs on node
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
+    apply:
+      tags:
+        - renew_ca
+        - renew_es_cert
+  vars:
+    _backup_path: /etc/elasticsearch/certs
+    _backup_target: "{{ inventory_hostname }}"
+  when: "'renew_es_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or elasticsearch_cert_will_expire_soon | bool"
+  tags:
     - renew_ca
     - renew_es_cert
 
+# -- Backup ES cert on CA host --
+- name: Backup Elasticsearch cert on CA host
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
+    apply:
+      tags:
+        - renew_ca
+        - renew_es_cert
+  vars:
+    _backup_path: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}.p12"
+    _backup_target: "{{ elasticstack_ca_host }}"
+  when: "'renew_es_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or elasticsearch_cert_will_expire_soon | bool"
+  tags:
+    - renew_ca
+    - renew_es_cert
+
+# -- Backup ES cert on Ansible controller --
+- name: Backup Elasticsearch cert on Ansible controller
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
+    apply:
+      tags:
+        - renew_ca
+        - renew_es_cert
+  vars:
+    _backup_path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}.p12"
+    _backup_target: localhost
+    _backup_become: false
+  when: "'renew_es_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or elasticsearch_cert_will_expire_soon | bool"
+  tags:
+    - renew_ca
+    - renew_es_cert
+
+# -- Keystore setup (kept inline, import_tasks) --
 - name: Import Tasks elasticsearch-keystore.yml
   ansible.builtin.import_tasks: elasticsearch-keystore.yml
 
-- name: Create ca and certificates on elasticstack_ca_host
-  when: inventory_hostname == elasticstack_ca_host
-  tags:
-    - certificates
-    - renew_ca
-    - renew_es_cert
-  block:
-    - name: Configure ca on elasticstack_ca_host
-      ansible.builtin.command: >
-        /usr/share/elasticsearch/bin/elasticsearch-certutil ca
-        --ca-dn {{ elasticstack_ca_name }}
-        --days {{ elasticstack_ca_validity_period }}
-        --pass {{ elasticstack_ca_pass }}
-        --out {{ elasticstack_ca_dir }}/elastic-stack-ca.p12
-        --silent
-      args:
-        creates: "{{ elasticstack_ca_dir }}/elastic-stack-ca.p12"
-      no_log: "{{ elasticstack_no_log }}"
-
-    - name: Create node certificates on elasticstack_ca_host
-      ansible.builtin.command: >
-        /usr/share/elasticsearch/bin/elasticsearch-certutil cert
-        --ca {{ elasticstack_ca_dir }}/elastic-stack-ca.p12
-        --days {{ elasticsearch_cert_validity_period }}
-        --ca-pass {{ elasticstack_ca_pass }}
-        --name {{ hostvars[item].ansible_hostname }}
-        --ip {{ hostvars[item].ansible_default_ipv4.address | default(hostvars[item].ansible_all_ipv4_addresses[0]) }}
-        --dns {{ hostvars[item].ansible_hostname }},{{ hostvars[item].ansible_fqdn }},{{ hostvars[item].inventory_hostname }}
-        --pass {{ (hostvars[item].elasticsearch_tls_key_passphrase is defined) | ternary(hostvars[item].elasticsearch_tls_key_passphrase, elasticsearch_tls_key_passphrase) }}
-        --out {{ elasticstack_ca_dir }}/{{ hostvars[item].ansible_hostname }}.p12
-      loop: "{{ groups[elasticstack_elasticsearch_group_name] }}"
-      no_log: "{{ elasticstack_no_log }}"
-      args:
-        creates: "{{ elasticstack_ca_dir }}/{{ hostvars[item].ansible_hostname }}.p12"
-
-    - name: Extract CA certificate on elasticstack_ca host
-      ansible.builtin.command: >
-        openssl pkcs12 -in {{ elasticstack_ca_dir }}/{{ ansible_hostname }}.p12
-        -cacerts -nokeys -out {{ elasticstack_ca_dir }}/ca.crt
-        -password pass:{{ elasticsearch_tls_key_passphrase }}
-      args:
-        creates: "{{ elasticstack_ca_dir }}/ca.crt"
-      no_log: "{{ elasticstack_no_log }}"
-
-- name: Fetch ca certificate from ca host to Ansible controller
-  ansible.builtin.fetch:
-    src: "{{ elasticstack_ca_dir }}/ca.crt"
-    dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ elasticstack_ca_host }}.crt"
-    flat: yes
+# -- Create CA on CA host --
+- name: Ensure CA exists on CA host
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/certs/ca_ensure.yml"
+    apply:
+      tags:
+        - certificates
+        - renew_ca
+        - renew_es_cert
   when: inventory_hostname == elasticstack_ca_host
   tags:
     - certificates
     - renew_ca
     - renew_es_cert
 
-- name: Fetch certificate from ca host to Ansible controller
-  ansible.builtin.fetch:
-    src: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}.p12"
-    dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}.p12"
-    flat: yes
-  delegate_to: "{{ elasticstack_ca_host }}"
+# -- Generate node certificates on CA host --
+- name: Generate Elasticsearch node certificate
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_generate.yml"
+    apply:
+      tags:
+        - certificates
+        - renew_ca
+        - renew_es_cert
+  vars:
+    _cert_name: "{{ hostvars[item].ansible_hostname }}"
+    _cert_ip: "{{ hostvars[item].ansible_default_ipv4.address | default(hostvars[item].ansible_all_ipv4_addresses[0]) }}"
+    _cert_dns: "{{ hostvars[item].ansible_hostname }},{{ hostvars[item].ansible_fqdn }},{{ hostvars[item].inventory_hostname }}"
+    _cert_out: "{{ elasticstack_ca_dir }}/{{ hostvars[item].ansible_hostname }}.p12"
+    _cert_pass: "{{ (hostvars[item].elasticsearch_tls_key_passphrase is defined) | ternary(hostvars[item].elasticsearch_tls_key_passphrase, elasticsearch_tls_key_passphrase) }}"
+    _cert_validity: "{{ elasticsearch_cert_validity_period }}"
+  loop: "{{ groups[elasticstack_elasticsearch_group_name] }}"
+  when: inventory_hostname == elasticstack_ca_host
   tags:
     - certificates
     - renew_ca
     - renew_es_cert
 
+# -- Extract CA public certificate --
+- name: Extract CA public certificate
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/certs/ca_extract_public.yml"
+    apply:
+      tags:
+        - certificates
+        - renew_ca
+  vars:
+    _cert_p12_path: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}.p12"
+    _cert_ca_out: "{{ elasticstack_ca_dir }}/ca.crt"
+    _cert_pass: "{{ elasticsearch_tls_key_passphrase }}"
+  when: inventory_hostname == elasticstack_ca_host
+  tags:
+    - certificates
+    - renew_ca
+
+# -- Create ES certificate directory (ES-specific path/perms, kept inline) --
 - name: Create certificate directory
   ansible.builtin.file:
     state: directory
@@ -300,37 +208,51 @@
     - renew_ca
     - renew_es_cert
 
-- name: Copy the ca certificate to elasticsearch nodes
-  ansible.builtin.copy:
-    src: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ elasticstack_ca_host }}.crt"
-    dest: "/etc/elasticsearch/certs/ca.crt"
-    owner: root
-    group: elasticsearch
-    mode: 0640
-  notify:
-    - Restart Elasticsearch
-    - Restart kibana if available for elasticsearch certificates
+# -- Distribute CA certificate to ES nodes --
+- name: Distribute CA certificate to Elasticsearch nodes
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_distribute.yml"
+    apply:
+      tags:
+        - certificates
+        - renew_ca
+        - renew_es_cert
+  vars:
+    _cert_src: "{{ elasticstack_ca_dir }}/ca.crt"
+    _cert_dest: /etc/elasticsearch/certs/ca.crt
+    _cert_owner: root
+    _cert_group: elasticsearch
+    _cert_mode: "0640"
+    _cert_notify:
+      - Restart Elasticsearch
+      - Restart kibana if available for elasticsearch certificates
   tags:
     - certificates
     - renew_ca
     - renew_es_cert
-  ignore_errors: "{{ ansible_check_mode }}"
 
-- name: Copy the certificate to elasticsearch nodes
-  ansible.builtin.copy:
-    src: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}.p12"
-    dest: "/etc/elasticsearch/certs"
-    owner: root
-    group: elasticsearch
-    mode: 0640
-  notify:
-    - Restart Elasticsearch
-    - Restart kibana if available for elasticsearch certificates
+# -- Distribute node certificate to ES nodes --
+- name: Distribute node certificate to Elasticsearch nodes
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_distribute.yml"
+    apply:
+      tags:
+        - certificates
+        - renew_ca
+        - renew_es_cert
+  vars:
+    _cert_src: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}.p12"
+    _cert_dest: "/etc/elasticsearch/certs/{{ ansible_hostname }}.p12"
+    _cert_owner: root
+    _cert_group: elasticsearch
+    _cert_mode: "0640"
+    _cert_notify:
+      - Restart Elasticsearch
+      - Restart kibana if available for elasticsearch certificates
   tags:
     - certificates
     - renew_ca
     - renew_es_cert
-  ignore_errors: "{{ ansible_check_mode }}"
 
 - name: Start Elasticsearch for security tasks
   ansible.builtin.service:
