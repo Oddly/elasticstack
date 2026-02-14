@@ -1,130 +1,334 @@
-Ansible Role: Logstash
-=========
+# Ansible Role: Logstash
 
 ![Test Role Logstash](https://github.com/Oddly/ansible-collection-elasticstack/actions/workflows/test_role_logstash.yml/badge.svg)
 
 This role installs and configures [Logstash](https://www.elastic.co/products/logstash) on Linux systems.
 
-It can optionally configure two types of Logstash pipelines:
-* Pipeline configuration managed in an external git repository
-* A default pipeline which will read from different Redis keys and write into Elasticsearch
+## Quick Start
 
-For details on how to configure pipelines please refer to our [docs about pipelines](./logstash-pipelines.md).
+Zero-config deployment with sensible defaults:
 
-Details about configured pipelines will be written into `pipelines.yml` as comments. Same goes for logging configuration in `log4j.options`.
-
-It will work with the standard Elastic Stack packages.
-
-Requirements
-------------
-
-* `community.general` collection
-
-You will need these packages / libraries installed. Some very basic packages like `openssl` get handled by the collection if needed. The following list contains packages and libraries which only apply to special cases or need for you to decide on the installation method.
-
-* `passlib` Python library if you do not disable password hashing for logstash user. It should be installed with pip on the Ansible controller.
-
-You need to have the Elastic Repos configured on your system. You can use our [role](./role-repos.md)
-
-If you want to use the default pipeline configuration you need to have `git` available.
-
-You need to have `curl` installed. We are using `curl` instead of the `uri` module because we got better results. Feel free to file a pull request if you find a working solution. (And please remove this line with it)
-
-If you want to use the default pipeline (or other pipelines communicating via Redis) you might want to install Redis first (e.g. by using an [Ansible Role for Redis](https://galaxy.ansible.com/geerlingguy/redis)
-
-Role Variables
---------------
-
-* *elasticstack_version*: Version number of Logstash to install (e.g. `8.17.0`). Only set if you don't want the latest. (default: none).
-* *logstash_enable*: Start and enable Logstash service (default: `true`)
-* *logstash_config_backup*: Keep backups of all changed configuration (default: `no`)
-* *logstash_manage_yaml*: Manage and overwrite `logstash.yml` (default: `true`)
-* *logstash_manage_logging*: Manage log4j configuration (default: `false`)
-* *logstash_plugins*: List of plugins to install (default: none)
-* *logstash_certs_dir*: Path to certificates. Will be used to build paths of several files. (Default: `/etc/logstash/certs`)
-
-If `logstash.yml` is managed, the following settings apply.
-
-* *logstash_config_autoreload*: Enable autoreload of Logstash configuration (default: `true`)
-* *logstash_config_path_data*: Logstash data directory (default: `/var/lib/logstash`)
-* *logstash_config_path_logs*: Logstash log directory (default: `/var/log/logstash`)
-
-Aside from `logstash.yml` we can manage Logstashs pipelines.
-
-* *logstash_manage_pipelines*: Manage `pipelines.yml` (default: `true`)
-* *logstash_no_pipelines*: Don't manage pipelines at all (default: `false`)
-* *logstash_pipelines*: List of pipelines with optional URL to repo (see [pipelines documentation](file:///roles/logstash/docs/pipelines.md) for details)
-* *logstash_global_ecs*: Set ECS compatibilty mode (default: none. Possible values: `disabled` or `v1`)
-* *logstash_elasticsearch_output*: Enable default pipeline to Elasticsearch (default: `true`)
-* *logstash_ident*: Add a field identifying the node that processed an event (default: `true`)
-* *logstash_ident_field_name*: Name of the identifying the instance (default: `"[netways][instance]"`)
-* *logstash_beats_input*: Enable default pipeline with `beats` input (default: `true`)
-* *logstash_beats_input_congestion*: Optional congestion threshold for the beats input pipeline
-* *logstash_beats_timeout*: Optional timeout for client connections. (Example: `60s`)
-* *logstash_beats_tls*: Activate TLS for the beats input pipeline (default: none but `true` with full stack setup if not set)
-* *logstash_tls_key_passphrase*: Passphrase for Logstash certificates (default: `LogstashChangeMe`)
-* *elasticstack_ca_pass*: Password for Elasticsearch CA (default: `PleaseChangeMe`)
-* *logstash_cert_validity_period*: number of days that the generated certificates are valid (default: 1095).
-* *logstash_cert_expiration_buffer*: Ansible will renew the Logstash certificate if its validity is shorter than this value, which should be number of days. (default: 30)
-* *logstash_cert_will_expire_soon*: Set it to true to renew logstash certificate (default: `false`), Or run the playbook with `--tags renew_logstash_cert` to do that.
-* *logstash_elasticsearch*: Address of Elasticsearch instance for default output (default: list of Elasticsearch nodes from `elasticsearch` role or `localhost` when used standalone)
-* *logstash_security*: Enable X-Security (No default set, but will be activated when in full stack mode)
-* *logstash_create_user*: Enables creation `logstash_user_name` (Default: `true`)
-* *logstash_user_name*: Name of the user to connect to Elasticsearch (Default: `logstash_writer`)
-* *logstash_user_email*: email-address that is linked with the logstash_user_name (Default: `""`)
-* *logstash_user_fullname*: fullname that is linked with the logstash_user_name (Default: `Internal Logstash User`)
-* *logstash_user_password*: Password of `logstash_user_name` in Elasticsearch. It must be at least 6 characters long (default: `password`)
-* *logstash_create_role*: Enables creation `logstash_role_name` (Default: `true`)
-* *logstash_role_name*: Name of the logstash role that is getting created (Default: `logstash_writer`)
-* *logstash_role_cluster_privileges*: Cluster privileges the role has access to (default: `"manage_index_templates", "monitor", "manage_ilm"`)
-* *logstash_role_indicies_names*: Indices the role has access to (default: `"ecs-logstash*", "logstash*", "logs*"`)
-* *logstash_role_indicies_privileges*: Index permissions the role has on `logstash_role_indicies_names` (default: `"write", "create", "delete", "create_index", "manage", "manage_ilm"`)
-* *logstash_reset_writer_role*: Reset user and role with every run: (default: `true`)
-* *logstash_validate_after_inactivity*: How long should logstash wait, before starting a new connection and leave the old one with elasticsearch, when the connection with elasticsearch get lost: (Default: `300`).
-* *logstash_queue_type*: What kind of queue should Logstash use per default: (Default: `persisted`, alternative: `memory`)
-* *logstash_queue_max_bytes*: The total capacity of ansible-forwarder queue in number of bytes: (Default: `2gb`)
-* *logstash_sniffing*: Enable sniffing (Default: `false`).
-* *logstash_sniffing_delay*: How long to wait, in seconds, between sniffing attempts (Default: `not set`).
-* *logstash_sniffing_path*: HTTP Path to be used for the sniffing requests (Default: `not set`).
-* *logstash_legacy_monitoring*: Enables legacy monitoring - ignored when `elasticstack_full_stack` is not set. (default: `true`)
-* *logstash_redis_password*: If set this will use this password when connecting our simple inputs and outputs to Redis. (default: not set)
-
-* *logstash_mermaid*: Print overview over Logstash pipelines in Mermaid syntax. (default: `true`)
-* *logstash_mermaid_logstash*: Place Mermaid syntax into `/etc/logstash/pipelines.mermaid` on Logstash hosts. (default: `true`)
-* *logstash_mermaid_local*: Place Mermaid syntax into temporary file on control node. (default: `false`)
-* *logstash_mermaid_extra*: You can add extra Mermaid syntax to the output by adding it to this variable. YAML-multiline is supported. (default: none)
-
-The following variables configure Log4j for Logstash. All default to `true` as this is the default after the installation.
-
-* *logstash_logging_console*: Log to console - syslog when run via systemd
-* *logstash_logging_file*: Log to logfile
-* *logstash_logging_slow_console*: Log slowlog to console - syslog when run via systemd
-* *logstash_logging_slow_file*: Log slowlog to logfile
-
-The following variables configure extra fields in your events that help with identifying which pipelines have been passed or which pipeline is used how much.
-
-* *logstash_pipeline_identifier*: Activate this feature (default: `true`)
-* *logstash_pipeline_identifier_field_name*: Name of the field to add (default: `"[netways][pipeline]"`)
-* *logstash_pipeline_identifier_defaults*: Use identifiers in default pipelines, too (default: `false`) This could lead to the defaults dominating all statistics with virtually no value, but if you want to see, them, you can.
-
-The following variables are identical over all our elastic related roles, hence the different naming scheme.
-
-*elasticstack_release*: Major release version of Elastic stack to configure. (default: `8`)
-
-The following variables only apply if you use this role together with our Elasticsearch and Kibana roles.
-
-* *elasticstack_full_stack*: Use `ansible-role-elasticsearch` as well (default: `false`)
-* *elasticstack_ca_dir*: Directory where the CA and certificates lie on the main Elasticsearch host (default: `/opt/es-ca`)
-* *elasticstack_elasticsearch_http_port*: Port of Elasticsearch to send events to (Default: `9200`)
-* *elasticstack_initial_passwords*: File where initial passwords are stored on the main Elasticsearch host (default: `/usr/share/elasticsearch/initial_passwords`)
-
-## Usage
-
+```yaml
+- hosts: logstash
+  roles:
+    - oddly.elasticstack.repos
+    - oddly.elasticstack.logstash
 ```
-- name: Install Logstash
-  hosts: logstash-host
+
+This gives you:
+- Beats input on port 5044
+- Elasticsearch output (auto-discovered from inventory)
+- TLS enabled in full stack mode
+
+## Pipeline Configuration
+
+### Default Pipeline (Recommended)
+
+The simplest approach - just add your filters:
+
+```yaml
+logstash_filters: |
+  grok {
+    match => { "message" => "%{SYSLOGLINE}" }
+  }
+  date {
+    match => [ "timestamp", "MMM  d HH:mm:ss", "MMM dd HH:mm:ss" ]
+  }
+```
+
+### Filter Files
+
+Copy filter files from your playbook:
+
+```yaml
+logstash_filter_files:
+  - files/logstash/syslog-filter.conf
+  - files/logstash/nginx-filter.conf
+```
+
+### Extra Inputs/Outputs
+
+Add additional inputs or outputs alongside defaults:
+
+```yaml
+logstash_extra_inputs: |
+  http {
+    port => 8080
+  }
+
+logstash_extra_outputs: |
+  file {
+    path => "/var/log/logstash/debug.log"
+  }
+```
+
+### Custom Pipeline (Full Control)
+
+For complete control, use a custom pipeline:
+
+```yaml
+logstash_custom_pipeline: |
+  input {
+    generator {
+      message => "test"
+      count => 1
+    }
+  }
+  filter {
+    mutate {
+      add_field => { "custom" => "value" }
+    }
+  }
+  output {
+    stdout { codec => rubydebug }
+  }
+```
+
+## Input Configuration
+
+### Beats Input
+
+```yaml
+logstash_input_beats: true           # Enable beats input (default)
+logstash_input_beats_port: 5044      # Listen port
+logstash_input_beats_ssl: true       # Enable TLS
+```
+
+### Elastic Agent Input
+
+```yaml
+logstash_input_elastic_agent: true   # Enable elastic_agent input
+logstash_input_elastic_agent_port: 5044
+logstash_input_elastic_agent_ssl: true  # Required for production
+```
+
+## Output Configuration
+
+### Elasticsearch Output
+
+```yaml
+logstash_output_elasticsearch: true  # Enable ES output (default)
+logstash_elasticsearch_hosts:        # Manual hosts (or auto-discover)
+  - "es1.example.com:9200"
+  - "es2.example.com:9200"
+logstash_elasticsearch_index: "logs-%{+YYYY.MM.dd}"  # Custom index pattern
+```
+
+## Certificate Management
+
+### Using Elasticsearch CA (Default)
+
+When used with the full Elastic Stack, certificates are automatically generated:
+
+```yaml
+elasticstack_full_stack: true
+# Certificates auto-generated from ES CA
+```
+
+### External Certificates
+
+Bring your own certificates:
+
+```yaml
+logstash_cert_source: external
+logstash_tls_certificate_file: "/path/to/server.crt"
+logstash_tls_key_file: "/path/to/server.key"
+logstash_tls_ca_file: "/path/to/ca.crt"
+```
+
+### Certificate Renewal
+
+Automatic renewal when certificates approach expiration:
+
+```yaml
+logstash_cert_validity_period: 365   # Days certs are valid
+logstash_cert_expiration_buffer: 30  # Renew when this many days left
+```
+
+Force regeneration:
+
+```yaml
+logstash_cert_force_regenerate: true
+```
+
+Or via tag:
+
+```bash
+ansible-playbook site.yml --tags renew_logstash_cert
+```
+
+## Standalone Mode
+
+Run Logstash without Elasticsearch integration:
+
+```yaml
+logstash_output_elasticsearch: false
+logstash_create_user: false
+logstash_create_role: false
+logstash_input_beats_ssl: false
+
+logstash_extra_outputs: |
+  file {
+    path => "/var/log/logstash/output.log"
+  }
+```
+
+## Requirements
+
+- `community.general` collection
+- `community.crypto` collection (for external certificate mode)
+- Elastic Repos configured (use `oddly.elasticstack.repos` role)
+- `passlib` Python library for password hashing
+
+## All Variables Reference
+
+### Service Management
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `logstash_enable` | `true` | Start and enable Logstash service |
+| `logstash_config_backup` | `false` | Keep backups of config changes |
+| `logstash_manage_yaml` | `true` | Manage logstash.yml |
+| `logstash_manage_logging` | `false` | Manage log4j configuration |
+| `logstash_plugins` | `[]` | List of plugins to install |
+
+### Pipeline Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `logstash_manage_pipelines` | `true` | Manage pipelines.yml |
+| `logstash_no_pipelines` | `false` | Disable all pipeline management |
+| `logstash_queue_type` | `persisted` | Queue type (persisted/memory) |
+| `logstash_queue_max_bytes` | `1gb` | Maximum queue size |
+| `logstash_filters` | `""` | Inline filter configuration |
+| `logstash_filter_files` | `[]` | Filter files to copy |
+| `logstash_extra_inputs` | `""` | Additional input configuration |
+| `logstash_extra_outputs` | `""` | Additional output configuration |
+| `logstash_custom_pipeline` | `""` | Complete custom pipeline |
+
+### Input Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `logstash_input_beats` | `true` | Enable beats input |
+| `logstash_input_beats_port` | `5044` | Beats listen port |
+| `logstash_input_beats_ssl` | auto | Enable TLS for beats |
+| `logstash_input_elastic_agent` | `false` | Enable elastic_agent input |
+| `logstash_input_elastic_agent_port` | `5044` | Agent listen port |
+| `logstash_input_elastic_agent_ssl` | `true` | Enable TLS for agent |
+
+### Output Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `logstash_output_elasticsearch` | `true` | Enable ES output |
+| `logstash_elasticsearch_hosts` | `[]` | ES hosts (empty = auto-discover) |
+| `logstash_elasticsearch_index` | `""` | Custom index pattern |
+| `logstash_elasticsearch_ssl` | `true` | Use HTTPS for ES |
+| `logstash_validate_after_inactivity` | `300` | Connection validation interval |
+| `logstash_sniffing` | `false` | Enable ES sniffing |
+
+### Certificate Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `logstash_cert_source` | `elasticsearch_ca` | Certificate source mode |
+| `logstash_certs_dir` | `/etc/logstash/certs` | Certificate directory |
+| `logstash_cert_validity_period` | `1095` | Cert validity (days) |
+| `logstash_cert_expiration_buffer` | `30` | Renewal threshold (days) |
+| `logstash_cert_force_regenerate` | `false` | Force cert regeneration |
+| `logstash_tls_key_passphrase` | `LogstashChangeMe` | Key passphrase |
+| `logstash_tls_certificate_file` | - | External cert path |
+| `logstash_tls_key_file` | - | External key path |
+| `logstash_tls_ca_file` | - | External CA path |
+
+### User/Role Management
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `logstash_create_role` | `true` | Create ES role |
+| `logstash_role_name` | `logstash_writer` | Role name |
+| `logstash_create_user` | `true` | Create ES user |
+| `logstash_user_name` | `logstash_writer` | User name |
+| `logstash_user_password` | `password` | User password |
+
+### Event Enrichment
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `logstash_ident` | `true` | Add instance identifier |
+| `logstash_ident_field_name` | `[logstash][instance]` | Identifier field name |
+| `logstash_pipeline_identifier` | `true` | Add pipeline identifier |
+
+### Full Stack Integration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `elasticstack_full_stack` | `false` | Full stack mode |
+| `elasticstack_release` | `8` | Major release version |
+| `elasticstack_version` | - | Specific version to install |
+| `elasticstack_ca_dir` | `/opt/es-ca` | CA directory |
+| `elasticstack_ca_pass` | `PleaseChangeMe` | CA password |
+
+## Usage Examples
+
+### Basic with Filters
+
+```yaml
+- name: Install Logstash with syslog parsing
+  hosts: logstash
   collections:
     - oddly.elasticstack
+  vars:
+    logstash_filters: |
+      grok {
+        match => { "message" => "%{SYSLOGLINE}" }
+      }
+  roles:
+    - repos
+    - logstash
+```
+
+### Full Stack with Elasticsearch
+
+```yaml
+- name: Full Elastic Stack
+  hosts: all
+  collections:
+    - oddly.elasticstack
+  vars:
+    elasticstack_full_stack: true
+    elasticstack_release: 9
+  roles:
+    - repos
+
+- hosts: elasticsearch
+  roles:
+    - elasticsearch
+
+- hosts: logstash
+  roles:
+    - logstash
+
+- hosts: kibana
+  roles:
+    - kibana
+```
+
+### Standalone with File Output
+
+```yaml
+- name: Standalone Logstash
+  hosts: logstash
+  collections:
+    - oddly.elasticstack
+  vars:
+    logstash_output_elasticsearch: false
+    logstash_input_beats_ssl: false
+    logstash_extra_outputs: |
+      file {
+        path => "/var/log/logstash/events-%{+YYYY-MM-dd}.log"
+      }
   roles:
     - repos
     - logstash
