@@ -416,7 +416,7 @@
 
 - name: Set var that cluster is set up
   ansible.builtin.set_fact:
-    elaticsearch_cluster_set_up: true
+    elasticsearch_cluster_set_up: true
 
 - name: Create initial passwords # noqa: risky-shell-pipe
   ansible.builtin.shell: >

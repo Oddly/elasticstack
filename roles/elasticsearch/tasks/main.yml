@@ -63,14 +63,14 @@
 
 - name: Set var that cluster is set up
   ansible.builtin.set_fact:
-    elaticsearch_cluster_set_up: true
+    elasticsearch_cluster_set_up: true
   when:
     - cluster_setup_check.stat.exists | bool
     - cluster_setup_check is defined
 
 - name: Set var that cluster is not set up
   ansible.builtin.set_fact:
-    elaticsearch_cluster_set_up: false
+    elasticsearch_cluster_set_up: false
   when:
     - cluster_setup_check is undefined or
       not cluster_setup_check.stat.exists | bool
@@ -140,7 +140,7 @@
 
 - name: Construct exact name of Elasticsearch package
   ansible.builtin.set_fact:
-    elasticsearch_package: >
+    elasticsearch_package: >-
       {{
       'elasticsearch' +
       ((elasticstack_versionseparator +
@@ -365,7 +365,7 @@
 
     - name: Set var that cluster is set up
       ansible.builtin.set_fact:
-        elaticsearch_cluster_set_up: true
+        elasticsearch_cluster_set_up: true
 
 # See https://github.com/Oddly/ansible-collection-elasticstack/issues/137
 # for details why we have this task again here

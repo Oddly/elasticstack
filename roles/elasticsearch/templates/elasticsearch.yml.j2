@@ -42,7 +42,7 @@ discovery.seed_hosts: [ {% for host in groups[elasticstack_elasticsearch_group_n
 {% endif %}
 {% endif %}
 
-{% if not elaticsearch_cluster_set_up | bool and groups[elasticstack_elasticsearch_group_name] | length > 1 %}
+{% if not elasticsearch_cluster_set_up | bool and groups[elasticstack_elasticsearch_group_name] | length > 1 %}
 {% if elasticsearch_node_types is defined %}
 cluster.initial_master_nodes: [ {% for host in groups['elasticsearch_role_master']  %}
 "{{ hostvars[host]['elasticsearch_nodename'] }}"{% if not loop.last %},{% endif %}
