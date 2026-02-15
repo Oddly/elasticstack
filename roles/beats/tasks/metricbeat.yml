@@ -23,7 +23,7 @@
   ansible.builtin.command: "/usr/bin/metricbeat modules enable {{ item }}"
   args:
     creates: "/etc/metricbeat/modules.d/{{ item }}.yml"
-  with_items: "{{ beats_metricbeat_modules }}"
+  loop: "{{ beats_metricbeat_modules }}"
   when: beats_metricbeat_modules is defined
 
 - name: Enable Ingest Pipelines

@@ -13,7 +13,7 @@
 
 - name: Restart kibana if available for elasticsearch certificates
   ansible.builtin.include_tasks: handlers/restart_kibana.yml
-  with_items: "{{ groups[elasticstack_kibana_group_name] | default([]) }}"
+  loop: "{{ groups[elasticstack_kibana_group_name] | default([]) }}"
   when:
     - elasticstack_full_stack | bool
     - "not 'renew_ca' in ansible_run_tags"

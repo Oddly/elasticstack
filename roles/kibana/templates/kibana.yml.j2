@@ -18,8 +18,8 @@ elasticsearch.password: "{{ kibana_password.stdout }}"
 elasticsearch.ssl.certificateAuthorities:  "/etc/kibana/certs/ca.crt"
         {%- if "localhost" in kibana_elasticsearch_hosts +%}elasticsearch.ssl.verificationMode: certificate
         {%- endif +%}
-xpack.security.encryptionKey: "{{ kibana_encryption_key.stdout }}"
-xpack.encryptedSavedObjects.encryptionKey: "{{ kibana_savedobjects_encryption_key.stdout }}"
+xpack.security.encryptionKey: "{{ kibana_encryption_key.content | b64decode | trim }}"
+xpack.encryptedSavedObjects.encryptionKey: "{{ kibana_savedobjects_encryption_key.content | b64decode | trim }}"
     {%- else +%}
 elasticsearch.hosts: [{% for host in kibana_elasticsearch_hosts %}"http://{{ host }}:{{ elasticstack_elasticsearch_http_port }}"{% if not loop.last %},{% endif %}{% endfor %}]
     {%- endif %}

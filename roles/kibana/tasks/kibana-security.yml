@@ -86,8 +86,8 @@
       changed_when: false
 
     - name: Fetch encryption key
-      ansible.builtin.command: cat {{ elasticstack_ca_dir }}/encryption_key
-      changed_when: false
+      ansible.builtin.slurp:
+        src: "{{ elasticstack_ca_dir }}/encryption_key"
       register: kibana_encryption_key
 
     - name: Generate saved objects encryption key
@@ -101,8 +101,8 @@
       changed_when: false
 
     - name: Fetch saved objects encryption key
-      ansible.builtin.command: cat {{ elasticstack_ca_dir }}/savedobjects_encryption_key
-      changed_when: false
+      ansible.builtin.slurp:
+        src: "{{ elasticstack_ca_dir }}/savedobjects_encryption_key"
       register: kibana_savedobjects_encryption_key
 
 # -- Create Kibana certificate directory (Kibana-specific path/perms) --
