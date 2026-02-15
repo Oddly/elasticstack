@@ -133,6 +133,10 @@
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
         validate_certs: no
+      register: response
+      until: response.json.acknowledged | default(false)
+      retries: 5
+      delay: 10
 
     - name: Stop non essential indexing to speed up shard recovery
       ansible.builtin.uri:

@@ -3,7 +3,6 @@
 - name: Gather package facts for upgrade validation
   ansible.builtin.package_facts:
     manager: auto
-  when: elasticstack_release | int >= 9
 
 - name: Check upgrade path requirement for ES 9.x
   ansible.builtin.fail:

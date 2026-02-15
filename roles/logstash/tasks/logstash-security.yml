@@ -246,7 +246,7 @@
             path: "{{ logstash_certs_dir }}/{{ inventory_hostname }}-pkcs8.key"
             owner: root
             group: logstash
-            mode: "0660"
+            mode: "0640"
           tags:
             - certificates
 
