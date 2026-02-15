@@ -1,8 +1,8 @@
 galaxy_info:
-  author: Netways GmbH
+  author: oddly
   description: Elasticsearch Ansible role
   role_name: elasticsearch
-  company: Netways GmbH
+  company: oddly
   namespace: oddly
   license: GPL-3.0-or-later
   min_ansible_version: "2.18"

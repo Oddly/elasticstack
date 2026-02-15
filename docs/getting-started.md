@@ -20,28 +20,14 @@ collections:
 Usage
 ---------
 
-To use the collection in your Ansible playbook add the following key to your playbook.
+Refer to roles using their fully-qualified collection name (FQCN):
 
-```
+```yaml
 - name: Playbook
   hosts: some_host_pattern
-  collections:
-    - oddly.elasticstack
-  tasks:
-    - name: import role logstash
-      import_role:
-        name: logstash
-```
-
-Or refer to the role with the FQCN of the role.
-
-```
-- name: Playbook
-  hosts: some_host_pattern
-  tasks:
-    - name: import role by FQCN  from a collection
-      import_role:
-        name: oddly.elasticstack.logstash
+  roles:
+    - oddly.elasticstack.repos
+    - oddly.elasticstack.logstash
 ```
 
 Roles

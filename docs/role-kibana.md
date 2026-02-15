@@ -1,7 +1,7 @@
 Ansible Role: Kibana
 =========
 
-![Test Role Kibana](https://github.com/Oddly/ansible-collection-elasticstack/actions/workflows/test_role_kibana.yml/badge.svg)
+![Test Role Kibana](https://github.com/Oddly/elasticstack/actions/workflows/test_role_kibana.yml/badge.svg)
 
 This roles installs and configures Kibana.
 
@@ -19,7 +19,7 @@ Role Variables
 
 These variables are identical over all our elastic related roles, hence the different naming scheme.
 
-* *elasticstack_full_stack*: Use `ansible-role-elasticsearch` as well (default: `false`). If you set to `true`, you will be able to use the following variables:
+* *elasticstack_full_stack*: Use the Elasticsearch role as well (default: `false`). If you set to `true`, you will be able to use the following variables:
     * *kibana_elasticsearch_hosts*: A list of DNS resolvable hostnames of Elasticsearch hosts to connect your Kibana instance to. (default: `- localhost`)
     * *elasticstack_elasticsearch_http_port*: Port of Elasticsearch http (Default: `9200`)
     * *kibana_sniff_on_start*: Attempt to find other Elasticsearch nodes on startup (default: `false`)
@@ -33,24 +33,24 @@ These variables are identical over all our elastic related roles, hence the diff
 * *elasticstack_kibana_host*: Hostname users use to connect to Kibana (default: FQDN of the host the role is executed on)
 * *elasticstack_kibana_port*: Port Kibana webinterface is listening on (default: `5601`)
 * *elasticstack_ca_host*: Set to the inventory hostname of the host that should house the CA for certificates for inter-node communication. (default: First node in the `elasticsearch` host group)
-* *elasticstack_ca_dir*: Directory where on the Elasticsearch CA host certificates are stored. This is only useful in connection with out other Elastic Stack related roles. (default: `/opt/es-ca`)
+* *elasticstack_ca_dir*: Directory where on the Elasticsearch CA host certificates are stored. This is only useful in connection with our other Elastic Stack related roles. (default: `/opt/es-ca`)
 * *elasticstack_ca_pass*: Password for Elasticsearch CA (default: `PleaseChangeMe`)
-* *elasticstack_initial_passwords*: Path to file with initical elasticsearch passwords (default: `/usr/share/elasticsearch/initial_passwords`)
-* *elasticstack_release*: Major release version of Elastic stack to configure. (default: `8`)
+* *elasticstack_initial_passwords*: Path to file with initial Elasticsearch passwords (default: `/usr/share/elasticsearch/initial_passwords`)
+* *elasticstack_release*: Major release version of Elastic stack to configure. (default: `8`). Supported values: `8`, `9`.
 
+If you use `localhost` in `kibana_elasticsearch_hosts` , certificate verification will skip hostname checks.
 
-If you use `localhost` in `kibana_elasticsearch_hosts` , certificate verification will skip hostname checks
+> **Note**: Kibana must match the Elasticsearch major version. When upgrading to 9.x, upgrade Elasticsearch first, then Kibana.
 
 ## Usage
 
-```
+```yaml
 - name: Install Kibana
-  collections:
-    - oddly.elasticstack
   hosts: kibana-host
   vars:
     elasticstack_full_stack: true
+    elasticstack_release: 9
   roles:
-    - repos
-    - kibana
+    - oddly.elasticstack.repos
+    - oddly.elasticstack.kibana
 ```

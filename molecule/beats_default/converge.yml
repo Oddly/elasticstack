@@ -5,17 +5,15 @@
 # https://github.com/ansible-community/molecule/issues/1567#issuecomment-436876722
 - name: Converge
   hosts: all
-  collections:
-    - oddly.elasticstack
   vars:
     elasticstack_full_stack: false
     elasticsearch_jna_workaround: true
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticstack_no_log: false
   tasks:
-    - name: Include Elastics repos role
+    - name: Include Elastic repos role
       ansible.builtin.include_role:
-        name: repos
+        name: oddly.elasticstack.repos
     - name: Include Beats
       ansible.builtin.include_role:
-        name: beats
+        name: oddly.elasticstack.beats

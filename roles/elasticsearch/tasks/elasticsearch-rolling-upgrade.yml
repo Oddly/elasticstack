@@ -10,7 +10,7 @@
 
 # For now we support upgrade only for clusters with security enabled
 # If you positively need support for safely upgrading clusters without security,
-# feel free to open an issue at https://github.com/Oddly/ansible-collection-elasticstack/issues
+# feel free to open an issue at https://github.com/Oddly/elasticstack/issues
 - name: Set connection protocol to https
   ansible.builtin.set_fact:
     elasticsearch_http_protocol: "https"

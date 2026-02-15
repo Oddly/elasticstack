@@ -366,7 +366,7 @@
       ansible.builtin.set_fact:
         elasticsearch_cluster_set_up: true
 
-# See https://github.com/Oddly/ansible-collection-elasticstack/issues/137
+# See https://github.com/Oddly/elasticstack/issues/137
 # for details why we have this task again here
 #
 - name: Configure Elasticsearch

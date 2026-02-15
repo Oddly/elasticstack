@@ -1,6 +1,6 @@
 # Ansible Role: Logstash
 
-![Test Role Logstash](https://github.com/Oddly/ansible-collection-elasticstack/actions/workflows/test_role_logstash.yml/badge.svg)
+![Test Role Logstash](https://github.com/Oddly/elasticstack/actions/workflows/test_role_logstash.yml/badge.svg)
 
 This role installs and configures [Logstash](https://www.elastic.co/products/logstash) on Linux systems.
 

@@ -7,8 +7,8 @@ warn_list:
   - key-order[task]  # Ensure specific order of keys in mappings.
   - name[casing]
   - 'risky-shell-pipe'
-  - var-naming[no-role-prefix] # remove when https://github.com/ansible/ansible-lint/discussions/3451 is done
 skip_list:
+  - var-naming[no-role-prefix] # private _prefixed vars are intentional include_tasks params
   - '106'
   - 'command-instead-of-module'
   - 'role-name'

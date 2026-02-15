@@ -1,6 +1,6 @@
 # Elasticsearch 9.x Upgrade Guide
 
-This document covers the requirements and considerations for upgrading to Elasticsearch 9.x using the NETWAYS Ansible collection.
+This document covers the requirements and considerations for upgrading to Elasticsearch 9.x using this Ansible collection.
 
 ## Upgrade Path Requirements
 
@@ -22,7 +22,7 @@ This document covers the requirements and considerations for upgrading to Elasti
 
 ## Rolling Upgrade Procedure
 
-The NETWAYS collection supports rolling upgrades. The procedure is:
+The collection supports rolling upgrades. The procedure is:
 
 1. **Upgrade data nodes first** (one at a time)
 2. **Upgrade master nodes last** (one at a time)
@@ -91,7 +91,7 @@ The `elasticsearch-py` library has breaking changes between 8.x and 9.x:
 
 ### Our Approach
 
-The NETWAYS collection uses runtime detection to support both client versions:
+The collection uses runtime detection to support both client versions:
 
 ```python
 import elasticsearch

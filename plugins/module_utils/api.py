@@ -10,6 +10,7 @@ __metaclass__ = type
 
 import ssl
 
+
 def parse_version(version):
     """
     Parse version to extract major version number.
@@ -191,7 +192,9 @@ class Api():
         return ctx
 
     @staticmethod
-    def new_client_basic_auth(host, auth_user, auth_pass, ca_certs, verify_certs) -> 'Elasticsearch':
+    def new_client_basic_auth(
+        host, auth_user, auth_pass, ca_certs, verify_certs
+    ) -> 'Elasticsearch':
         """
         Create an Elasticsearch client using basic authentication.
 

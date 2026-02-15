@@ -41,6 +41,9 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@eac588ad8def6316056a12d4907a9d4d84ff7a3b # v7.3.0
+
       - name: Install test dependencies.
         run: uv pip install --system pycodestyle
         env:
@@ -72,6 +75,9 @@ jobs:
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@eac588ad8def6316056a12d4907a9d4d84ff7a3b # v7.3.0
+
 
       - name: Install ansible-core
         run: uv pip install --system ansible-core~=${{ matrix.ansible_core }}.0
@@ -81,7 +87,7 @@ jobs:
       - name: Install collection
         run: |
           mkdir -p ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE
-          cp -a ../ansible-collection-$COLLECTION_NAME ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+          cp -a $GITHUB_WORKSPACE ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
 
       - name: Run ansible-test sanity
         run: |
@@ -112,6 +118,9 @@ jobs:
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@eac588ad8def6316056a12d4907a9d4d84ff7a3b # v7.3.0
+
 
       - name: Install dependencies
         run: uv pip install --system ansible
@@ -121,7 +130,7 @@ jobs:
       - name: Install collection
         run: |
           mkdir -p ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE
-          cp -a ../ansible-collection-$COLLECTION_NAME ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+          cp -a $GITHUB_WORKSPACE ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
 
       - name: Test `cert_info` module
         run: |
@@ -160,6 +169,9 @@ jobs:
         with:
           python-version: ${{ matrix.python_version }}
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@eac588ad8def6316056a12d4907a9d4d84ff7a3b # v7.3.0
+
       - name: Install dependencies
         run: uv pip install --system ansible
         env:
@@ -168,7 +180,7 @@ jobs:
       - name: Install collection
         run: |
           mkdir -p ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE
-          cp -a ../ansible-collection-$COLLECTION_NAME ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+          cp -a $GITHUB_WORKSPACE ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
 
       - name: Test with ansible-playbook
         run: |
@@ -199,6 +211,9 @@ jobs:
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@eac588ad8def6316056a12d4907a9d4d84ff7a3b # v7.3.0
+
 
       - name: Install dependencies
         run: uv pip install --system ansible-core==${{ matrix.ansible_core_version }}
@@ -208,7 +223,7 @@ jobs:
       - name: Install collection
         run: |
           mkdir -p ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE
-          cp -a ../ansible-collection-$COLLECTION_NAME ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+          cp -a $GITHUB_WORKSPACE ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
 
       - name: Test with ansible-playbook
         run: |
@@ -239,6 +254,9 @@ jobs:
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@eac588ad8def6316056a12d4907a9d4d84ff7a3b # v7.3.0
+
 
       - name: Install dependencies
         run: |
@@ -250,7 +268,7 @@ jobs:
       - name: Install collection
         run: |
           mkdir -p ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE
-          cp -a ../ansible-collection-$COLLECTION_NAME ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+          cp -a $GITHUB_WORKSPACE ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
 
       - name: Test with ansible-playbook
         run: |
