@@ -1,6 +1,6 @@
 ---
 # Check certificate expiration and set renewal facts.
-# Works with both P12 (via cert_info module) and PEM (via community.crypto) certs.
+# Works with both P12 and PEM certificates via the cert_info module.
 #
 # Required variables:
 #   _cert_path:        Path to certificate file
@@ -12,23 +12,22 @@
 #   _cert_format:      "p12" (default) or "pem"
 #
 # Sets facts:
-#   {{ _cert_expiry_fact }}:       true if cert expires within buffer
-#   _cert_expiration_days:         days until expiration (P12 only)
+#   {{ _cert_expiry_fact }}:  true if cert expires within buffer
+#   _cert_expiration_days:    days until expiration
 
 - name: Check if certificate exists
   ansible.builtin.stat:
     path: "{{ _cert_path }}"
   register: _cert_stat
 
-- name: "Check certificate expiry (P12)"
-  when:
-    - _cert_stat.stat.exists
-    - (_cert_format | default('p12')) == 'p12'
+- name: Check certificate expiry
+  when: _cert_stat.stat.exists
   block:
-    - name: Get certificate info (P12)
+    - name: Get certificate info
       cert_info:
         path: "{{ _cert_path }}"
         passphrase: "{{ _cert_pass | default(omit, true) }}"
+        format: "{{ _cert_format | default('p12') }}"
       register: _cert_info
 
     - name: Calculate days until expiration
@@ -49,27 +48,3 @@
           Certificate {{ _cert_path }} will expire in {{ _cert_expiration_days }} days.
           Ansible will renew it.
       when: _cert_expiration_days | int <= _cert_buffer_days | int
-
-- name: "Check certificate expiry (PEM)"
-  when:
-    - _cert_stat.stat.exists
-    - (_cert_format | default('p12')) == 'pem'
-  block:
-    - name: Get certificate info (PEM)
-      community.crypto.x509_certificate_info:
-        path: "{{ _cert_path }}"
-        valid_at:
-          check_period: "+{{ _cert_buffer_days }}d"
-      register: _pem_cert_info
-
-    - name: "Set {{ _cert_expiry_fact }} fact"
-      ansible.builtin.set_fact:
-        "{{ _cert_expiry_fact }}": true
-      when: not _pem_cert_info.valid_at.check_period
-
-    - name: Show certificate renewal message
-      ansible.builtin.debug:
-        msg: >-
-          Certificate {{ _cert_path }} will expire within {{ _cert_buffer_days }} days.
-          Ansible will renew it.
-      when: not _pem_cert_info.valid_at.check_period
