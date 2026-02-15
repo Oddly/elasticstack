@@ -3,7 +3,8 @@ name: Collect diagnostic logs
 description: >
   Collects comprehensive diagnostics from molecule Docker containers
   on test failure: service logs, journal, systemctl status, ES cluster
-  health, and runner system info. Uploads as a Gitea artifact.
+  health, and runner system info. Uploads as an artifact on both
+  GitHub and Gitea runners.
 
 inputs:
   artifact-name:
@@ -91,12 +92,20 @@ runs:
           echo "=== Ansible ===" ; ansible --version 2>/dev/null
         } > "$diag/runner-info.txt" 2>&1 || true
 
-    - name: Upload diagnostic logs
+    - name: Upload diagnostics (GitHub)
+      if: github.server_url == 'https://github.com'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: /tmp/molecule-diagnostics/
+        retention-days: 7
+        if-no-files-found: ignore
+
+    - name: Upload diagnostics (Gitea)
+      if: github.server_url != 'https://github.com'
       uses: christopherhx/gitea-upload-artifact@v4
       with:
         name: ${{ inputs.artifact-name }}
-        path: |
-          /tmp/molecule-diagnostics/
-          ~/.cache/molecule/
+        path: /tmp/molecule-diagnostics/
         retention-days: 7
         if-no-files-found: ignore

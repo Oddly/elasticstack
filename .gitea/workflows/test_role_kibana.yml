@@ -1,5 +1,5 @@
 ---
-name: Test Role Logstash
+name: Test Role Kibana
 on:
   workflow_dispatch:
     inputs:
@@ -14,29 +14,28 @@ on:
           - debug
   pull_request:
     branches:
-      - main
       - 'feature/**'
       - 'fix/**'
       - '!doc/**'
     paths:
-      - 'roles/logstash/**'
-      - '.gitea/workflows/test_role_logstash.yml'
-      - 'molecule/logstash_**'
+      - 'roles/kibana/**'
+      - '.gitea/workflows/test_role_kibana.yml'
+      - 'molecule/kibana_**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  lint_logstash:
+  lint_kibana:
     uses: ./.gitea/workflows/test_linting.yml
     with:
-      rolename: logstash
+      rolename: kibana
 
-  molecule_logstash:
+  molecule_kibana:
+    needs: lint_kibana
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: lint_logstash
 
     env:
       COLLECTION_NAMESPACE: oddly
@@ -53,20 +52,13 @@ jobs:
           - debian11
           - debian12
           - debian13
-        scenario:
-          - logstash_default
-          - logstash_ssl
-          - logstash_custom_pipeline
-        release:
-          - 8
-          - 9
+        scenario: [kibana_default]
+        release: [8, 9]
 
     steps:
       - name: Check out code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
-      # Python 3.12 and uv are pre-installed in the runner environment
-      # (system Python in Docker image, uv bind-mounted from LXC host)
       - name: Install dependencies
         run: uv pip install --system --break-system-packages --python /usr/bin/python3 -r requirements-test.txt
         env:
@@ -81,11 +73,11 @@ jobs:
         run: molecule test -s ${{ matrix.scenario }} --destroy=never
         env:
           MOLECULE_DISTRO: ${{ matrix.distro }}
+          ELASTIC_RELEASE: ${{ matrix.release }}
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
           ANSIBLE_DIFF_ALWAYS: 'true'
           ANSIBLE_CALLBACKS_ENABLED: profile_tasks
-          ELASTIC_RELEASE: ${{ matrix.release }}
 
       - name: Collect and upload diagnostics
         if: failure()

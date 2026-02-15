@@ -29,13 +29,9 @@ jobs:
       - name: Check out the codebase.
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: "3.12"
-
+      # Python 3.12 and uv are pre-installed in the runner environment
       - name: Install test dependencies.
-        run: uv pip install --system -r requirements-test.txt
+        run: uv pip install --system --break-system-packages --python /usr/bin/python3 -r requirements-test.txt
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
