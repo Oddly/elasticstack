@@ -110,7 +110,7 @@
     host: localhost
     port: 5601
 
-# Free up some space to let elsticsearch allocate replica in GitHub Action
+# Free up some space to let Elasticsearch allocate replica in GitHub Action
 - name: Remove cache
   ansible.builtin.command: >
     rm -rf /var/cache/*

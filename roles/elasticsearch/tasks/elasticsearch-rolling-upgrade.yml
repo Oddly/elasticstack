@@ -195,25 +195,19 @@
         port: "{{ elasticstack_elasticsearch_http_port }}"
         delay: 30
 
-    - name: Confirm the node joins the cluster # noqa: risky-shell-pipe
-      ansible.builtin.shell: >
-        set -o pipefail;
-        curl
-        -k
-        -u elastic:{{ elasticstack_password.stdout }}
-        -s
-        -m 2
-        '{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cat/nodes?h=name'
-        | grep
-        -E
-        '^{{ elasticsearch_nodename }}$'
-      args:
-        executable: /bin/bash
+    - name: Confirm the node joins the cluster
+      ansible.builtin.uri:
+        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cat/nodes?h=name"
+        method: GET
+        user: elastic
+        password: "{{ elasticstack_password.stdout }}"
+        validate_certs: false
+        return_content: true
       register: result
-      until: result.rc == 0
+      until: elasticsearch_nodename in (result.content | default('')).split()
       retries: 200
       delay: 3
-      changed_when: false
+      no_log: "{{ elasticstack_no_log }}"
 
     - name: Enable shard allocation for the cluster
       ansible.builtin.uri:

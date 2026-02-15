@@ -355,10 +355,10 @@
   retries: 20
   delay: 10
 
-- name: Work around low ressources on CI/CD nodes
+- name: Work around low resources on CI/CD nodes
   when: ansible_virtualization_type == "container" or ansible_virtualization_type == "docker"
   block:
-    # Free up some space to let elsticsearch allocate replica in GitHub Action
+    # Free up some space to let Elasticsearch allocate replica in GitHub Action
     - name: Remove cache
       ansible.builtin.command: >
         rm -rf /var/cache/*
