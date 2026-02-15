@@ -30,11 +30,11 @@ If you want to be able to update your operating system without worrying about ac
 Example playbook
 ================
 
-```
-  - hosts: all
-    become: yes
-    collections:
-      - oddly.elasticstack
-    roles:
-      - repos
+```yaml
+- hosts: all
+  become: true
+  vars:
+    elasticstack_release: 9
+  roles:
+    - oddly.elasticstack.repos
 ```

@@ -36,21 +36,21 @@ These variables are identical over all our elastic related roles, hence the diff
 * *elasticstack_ca_dir*: Directory where on the Elasticsearch CA host certificates are stored. This is only useful in connection with out other Elastic Stack related roles. (default: `/opt/es-ca`)
 * *elasticstack_ca_pass*: Password for Elasticsearch CA (default: `PleaseChangeMe`)
 * *elasticstack_initial_passwords*: Path to file with initical elasticsearch passwords (default: `/usr/share/elasticsearch/initial_passwords`)
-* *elasticstack_release*: Major release version of Elastic stack to configure. (default: `8`)
+* *elasticstack_release*: Major release version of Elastic stack to configure. (default: `8`). Supported values: `8`, `9`.
 
+If you use `localhost` in `kibana_elasticsearch_hosts` , certificate verification will skip hostname checks.
 
-If you use `localhost` in `kibana_elasticsearch_hosts` , certificate verification will skip hostname checks
+> **Note**: Kibana must match the Elasticsearch major version. When upgrading to 9.x, upgrade Elasticsearch first, then Kibana.
 
 ## Usage
 
-```
+```yaml
 - name: Install Kibana
-  collections:
-    - oddly.elasticstack
   hosts: kibana-host
   vars:
     elasticstack_full_stack: true
+    elasticstack_release: 9
   roles:
-    - repos
-    - kibana
+    - oddly.elasticstack.repos
+    - oddly.elasticstack.kibana
 ```

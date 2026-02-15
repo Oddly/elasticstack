@@ -14,7 +14,7 @@ Every role is documented with all variables, please refer to the documentation f
 ## Roles documentation
 
 > [!NOTE]
-> Some roles have fixed requirements that you must observe. Please have a look at the [requirements](docs/01-requirements.md) before using the collection. (There is a high probability that some of them will be refactored soon)
+> Some roles have requirements that you must observe. Please have a look at the [requirements](docs/01-requirements.md) before using the collection.
 
 * [Beats](docs/role-beats.md)
 * [Elasticsearch](docs/role-elasticsearch.md)
@@ -112,7 +112,7 @@ The variable `elasticstack_no_log` can be set to `false` if you want to see the 
 
 ### Versions and upgrades
 
-*elasticstack_version*: Version number of tools to install. Only set if you don't want the latest on new setups. (default: none). If you already have an installation of Elastic Stack, this collection will query the version of Elasticsearch on the CA host and use it for all further installations in the same setup. (Only if you run the `elasticsearch` role before all others) Example: `7.17.2`
+*elasticstack_version*: Version number of tools to install. Only set if you don't want the latest on new setups. (default: none). If you already have an installation of Elastic Stack, this collection will query the version of Elasticsearch on the CA host and use it for all further installations in the same setup. (Only if you run the `elasticsearch` role before all others) Example: `8.19.0`
 
 *elasticstack_release*: Major release version of Elastic stack to configure. (default: `8`) Make sure it corresponds to `elasticstack_version` if you set both. Supported values: `8`, `9`.
 
@@ -170,73 +170,47 @@ The execution order of the roles is important! (see below)
 ```yaml
 ---
 - hosts: all
-  # remote_user: my_username
   become: true
-  collections:
-    - oddly.elasticstack
   vars:
-
-    #  elasticstack_release: 8 #7
+    elasticstack_release: 9
   roles:
-    - repos
+    - oddly.elasticstack.repos
 
 - hosts: elasticsearch
-  # remote_user: my_username
   become: true
-  collections:
-    - oddly.elasticstack
   vars:
-
     elasticsearch_jna_workaround: true
-    #  elasticstack_release: 8 #7
   roles:
-    - elasticsearch
+    - oddly.elasticstack.elasticsearch
 
 - hosts: logstash
-  # remote_user: my_username
   become: true
-  collections:
-    - oddly.elasticstack
   vars:
-
     elasticstack_override_beats_tls: true
-    #  elasticstack_release: 8 #7
   roles:
     - geerlingguy.redis
-    - logstash
+    - oddly.elasticstack.logstash
 
 - hosts: kibana
-  # remote_user: my_username
   become: true
-  collections:
-    - oddly.elasticstack
-  vars:
-
-    #  elasticstack_release: 8 #7
   roles:
-    - kibana
+    - oddly.elasticstack.kibana
 
 - hosts: all
-  # remote_user: my_username
   become: true
-  collections:
-    - oddly.elasticstack
   vars:
-
     elasticstack_override_beats_tls: true
-    #  elasticstack_release: 8 #7
   pre_tasks:
     - name: Install Rsyslog
       ansible.builtin.package:
         name: rsyslog
     - name: Start rsyslog
-       ansible.builtin.service:
+      ansible.builtin.service:
         name: rsyslog
         state: started
         enabled: true
   roles:
-    - beats
-
+    - oddly.elasticstack.beats
 ```
 
 ## Contributing
