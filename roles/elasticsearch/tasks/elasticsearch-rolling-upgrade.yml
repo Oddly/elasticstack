@@ -71,6 +71,23 @@
     - groups[elasticstack_elasticsearch_group_name] | length > 1
   block:
 
+    # After a previous node's upgrade, the local ES instance may need time to
+    # re-discover the master (e.g. during 8.x→9.x rolling upgrades). Wait for
+    # the cluster API to respond with 200 before attempting any cluster operations.
+    - name: Wait for Elasticsearch cluster API to be responsive
+      ansible.builtin.uri:
+        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/health"
+        method: GET
+        user: elastic
+        password: "{{ elasticstack_password.stdout }}"
+        validate_certs: false
+        status_code: [200, 503]
+      register: _es_responsive
+      until: (_es_responsive.status | default(0)) == 200
+      retries: 30
+      delay: 10
+      no_log: "{{ elasticstack_no_log }}"
+
     # Usually we should not need this step. It's only there to recover from broken upgrade plays
     # Without this step the cluster would never recover and the play would always fail
     - name: Enable shard allocation for the cluster
@@ -84,7 +101,7 @@
         validate_certs: false
       register: response
       until: response.json.acknowledged | default(false)
-      retries: 5
+      retries: 10
       delay: 30
 
     # Relax disk watermarks so shards can allocate even on near-full disks
