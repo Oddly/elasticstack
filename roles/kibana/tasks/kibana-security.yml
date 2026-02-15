@@ -160,16 +160,13 @@
     - renew_ca
     - renew_kibana_cert
 
-# -- Fetch Kibana password (not cert logic, kept inline) --
-- name: Fetch Kibana password # noqa: risky-shell-pipe
-  ansible.builtin.shell: >
-    if test -n "$(ps -p $$ | grep bash)"; then set -o pipefail; fi;
-    grep "PASSWORD kibana_system " /usr/share/elasticsearch/initial_passwords |
-    awk {' print $4 '}
-  register: kibana_password
-  changed_when: false
-  no_log: "{{ elasticstack_no_log }}"
-  delegate_to: "{{ elasticstack_ca_host }}"
+# -- Fetch Kibana password --
+- name: Fetch Kibana password
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/fetch_password.yml"
+  vars:
+    _password_user: kibana_system
+    _password_fact: kibana_password
 
 # -- Distribute CA certificate to Kibana nodes --
 - name: Distribute CA certificate to Kibana nodes

@@ -331,15 +331,12 @@
   retries: 5
   delay: 10
 
-- name: Fetch Elastic password # noqa: risky-shell-pipe
-  ansible.builtin.shell: >
-    if test -n "$(ps -p $$ | grep bash)"; then set -o pipefail; fi;
-    grep "PASSWORD elastic" {{ elasticstack_initial_passwords }} |
-    awk {' print $4 '}
-  register: elasticstack_password
-  changed_when: false
-  no_log: "{{ elasticstack_no_log }}"
-  delegate_to: "{{ elasticstack_ca_host }}"
+- name: Fetch Elastic password
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/fetch_password.yml"
+  vars:
+    _password_user: elastic
+    _password_fact: elasticstack_password
   when: elasticsearch_passwords_file.stat.exists | bool
 
 - name: Check for API availability with elastic password
