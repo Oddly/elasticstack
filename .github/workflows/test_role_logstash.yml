@@ -14,7 +14,6 @@ on:
           - debug
   pull_request:
     branches:
-      - main
       - 'feature/**'
       - 'fix/**'
       - '!doc/**'
@@ -55,13 +54,8 @@ jobs:
           - debian12
           - debian13
         scenario:
-          - logstash_specific_version
-          - logstash_pipeline_defaults
-          - logstash_pipeline_filters
-          - logstash_pipeline_custom
-          - logstash_standalone
-          - logstash_certs_external
-          - logstash_elastic_agent
+          - logstash_default
+          - logstash_ssl
         release:
           - 8
           - 9

@@ -6,7 +6,7 @@ dependency:
 driver:
   name: docker
 platforms:
-  - name: logstash-custom
+  - name: logstash-ssl
     groups:
       - logstash
     image: "geerlingguy/docker-${MOLECULE_DISTRO:-debian12}-ansible:latest"

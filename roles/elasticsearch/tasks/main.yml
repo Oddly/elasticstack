@@ -214,8 +214,6 @@
     name: "{{ elasticsearch_package }}"
     enablerepo:
       - 'elastic-{{ elasticstack_release }}.x'
-  notify:
-    - Restart Elasticsearch
   when:
     - ansible_os_family == "RedHat"
     - elasticstack_full_stack | bool
@@ -223,8 +221,6 @@
 - name: Install Elasticsearch - rpm - standalone
   ansible.builtin.package:
     name: "{{ elasticsearch_package }}"
-  notify:
-    - Restart Elasticsearch
   when:
     - ansible_os_family == "RedHat"
     - not elasticstack_full_stack | bool
@@ -232,8 +228,6 @@
 - name: Install Elasticsearch - deb
   ansible.builtin.package:
     name: "{{ elasticsearch_package }}"
-  notify:
-    - Restart Elasticsearch
   when:
     - ansible_os_family == "Debian"
 

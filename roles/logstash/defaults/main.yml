@@ -132,6 +132,7 @@ logstash_cert_source: elasticsearch_ca
 # logstash_tls_certificate_file: "/path/to/server.crt"
 # logstash_tls_key_file: "/path/to/server.key"
 # logstash_tls_ca_file: "/path/to/ca.crt"
+# logstash_tls_remote_src: false  # Set true if cert files are on remote host
 
 # Certificate directory on Logstash host
 logstash_certs_dir: /etc/logstash/certs
@@ -165,3 +166,5 @@ logstash_plugins: []
 # === Internal Use ===
 logstash_freshstart:
   changed: false
+
+# CI test trigger - can be removed after tests pass

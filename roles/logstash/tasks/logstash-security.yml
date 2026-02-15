@@ -28,6 +28,7 @@
         owner: root
         group: logstash
         mode: "0640"
+        remote_src: "{{ logstash_tls_remote_src | default(false) }}"
       notify:
         - Restart Logstash
 
@@ -38,6 +39,7 @@
         owner: root
         group: logstash
         mode: "0640"
+        remote_src: "{{ logstash_tls_remote_src | default(false) }}"
       notify:
         - Restart Logstash
 
@@ -48,6 +50,7 @@
         owner: root
         group: logstash
         mode: "0640"
+        remote_src: "{{ logstash_tls_remote_src | default(false) }}"
       when: logstash_tls_ca_file is defined
       notify:
         - Restart Logstash

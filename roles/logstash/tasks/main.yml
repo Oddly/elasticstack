@@ -1,5 +1,29 @@
 ---
 
+- name: Gather package facts for Logstash upgrade validation
+  ansible.builtin.package_facts:
+    manager: auto
+  when: elasticstack_release | int >= 9
+
+- name: Warn about Logstash 9 superuser restriction on upgrade
+  ansible.builtin.fail:
+    msg: >-
+      UPGRADE WARNING: Logstash 9.x refuses to run as root (superuser).
+      Currently installed: Logstash {{ ansible_facts.packages['logstash'][0].version }}.
+      Upgrading to 9.x will break any workflow that runs Logstash CLI commands
+      as root (e.g. logstash --config.test_and_exit). The systemd service runs
+      as the 'logstash' user and is not affected, but custom scripts or cron
+      jobs running as root will fail. Review your setup before proceeding.
+      To bypass this check, set logstash_skip_root_check: true.
+  when:
+    - elasticstack_release | int >= 9
+    - ansible_facts.packages['logstash'] is defined
+    - ansible_facts.packages['logstash'][0].version | regex_replace('^[0-9]+:', '') | regex_replace('-.*$', '') is version('9.0.0', '<')
+    - not logstash_skip_root_check | default(false) | bool
+  tags:
+    - upgrade
+    - preflight
+
 - name: Include global role
   ansible.builtin.import_role:
     name: oddly.elasticstack.elasticstack
@@ -134,8 +158,8 @@
 - name: Import Logstash Security tasks
   ansible.builtin.import_tasks: logstash-security.yml
   when:
-    - elasticstack_full_stack | default(false) | bool
-    - _logstash_security | bool
+    - (elasticstack_full_stack | default(false) | bool and _logstash_security | bool) or
+      logstash_cert_source | default('elasticsearch_ca') == 'external'
   tags:
     - certificates
     - renew_ca

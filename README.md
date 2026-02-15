@@ -58,6 +58,10 @@ You will need these packages / libraries installed. Some very basic packages lik
 * `passlib` Python library if you do not disable password hashing for logstash user and you want to use logstash role from this collection. It should be installed with pip on the Ansible controller.
 * `elasticsearch` Python module (version 8.x or 9.x). See the [Python Client Compatibility](#python-client-compatibility) section below for upgrade guidance.
 
+You may want the following Ansible roles installed. There other ways to achieve what they are doing but using them is easy and convenient.
+
+* `geerlingguy.redis` if you want to use logstash role
+
 ### Supported systems
 
 We test the collection on the following Linux distributions. Each one with Elastic Stack 8 and 9.
@@ -143,9 +147,17 @@ To turn off security:
 
 `elasticstack_override_beats_tls: true`
 
-### Example Playbook
+### Requirements
 
-Our default configuration will collect filesystem logs placed by `rsyslog`. Therefore our example playbook makes sure `rsyslog` is installed. If you don't want that, please change the configuration of the `beats` module. Without syslog you won't receive any messages with the default configuration.
+0) You need to install the redis role which is maintained by geerlingguy.
+
+```
+ansible-galaxy install geerlingguy.redis
+```
+
+1) Default: For general Elastic Stack installations using all features use the following. You will need Redis installed and running for the default setup to run. A viable way is using the `geerlingguy.redis` role.
+
+Our default configuration will collect filesystem logs placed by `rsyslog`. Therefor our example playbook makes sure, `rsyslog` is installed. If you don't want that, please change the configuration of the `beats` module. Without syslog you won't receive any messages with the default configuration.
 
 There are some comments in the Playbook. Either fill them with the correct values (`remote_user`) or consider them as a hint to commonly used options.
 
@@ -190,6 +202,7 @@ The execution order of the roles is important! (see below)
     elasticstack_override_beats_tls: true
     #  elasticstack_release: 8 #7
   roles:
+    - geerlingguy.redis
     - logstash
 
 - hosts: kibana
