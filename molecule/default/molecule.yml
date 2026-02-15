@@ -1,0 +1,8 @@
+---
+# Stub scenario to satisfy molecule 25.x shared state requirement.
+# Molecule 25.x always checks for molecule/default/molecule.yml even when
+# running a named scenario with -s. Without this file, molecule logs a
+# CRITICAL error and may return a non-zero exit code.
+# See: https://github.com/ansible/molecule/issues/4391
+driver:
+  name: docker

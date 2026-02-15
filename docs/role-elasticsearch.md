@@ -26,7 +26,6 @@ Role Variables
 * *elasticsearch_create_logpath*: Create the path for log to store if it doesn't exist. (default: `false` - only useful if you change `elasticsearch_datapath`)
 * *elasticsearch_fs_repo*: List of paths that should be registered as repository for snapshots (only filesystem supported so far). (default: none) Remember, that every node needs access to the same share under the same path.
 * *elasticsearch_bootstrap_pw*: Bootstrap password for Elasticsearch (Default: `PleaseChangeMe`)
-* *elasticsearch_disable_systemcallfilterchecks*: Disable system call filter checks. This has a security impact but is necessary on some systems. Please refer to the [docs](https://www.elastic.co/guide/en/elasticsearch/reference/7.17/_system_call_filter_check.html) for details. (default: `false`)
 * *elasticsearch_http_publish_host*: (String) The network address for HTTP clients to contact the node using sniffing. Accepts an IP address, a hostname, or a special value. (default: `not set`)
 * *elasticsearch_http_publish_port*: (integer) The port of the HTTP publish address. Configure this setting only if you need the publish port to be different from http.port. (default: `not set`)
 * *elasticsearch_pamlimits*: Set pam_limits neccessary for Elasticsearch. (Default: `true`)
@@ -76,7 +75,6 @@ These variables are identical over all our elastic related roles, hence the diff
   hosts: elasticsearch-hosts
   vars:
     elasticsearch_jna_workaround: true
-    elasticsearch_disable_systemcallfilterchecks: true
   roles:
     - repos
     - elasticsearch

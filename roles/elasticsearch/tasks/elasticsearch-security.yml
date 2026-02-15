@@ -405,7 +405,7 @@
   when:
     - not elasticsearch_passwords_file.stat.exists | bool
     - groups[elasticstack_elasticsearch_group_name] | length > 1
-  until: elasticsearch_cluster_status_bootstrap.json.status == "green"
+  until: elasticsearch_cluster_status_bootstrap.json.status in ["green", "yellow"]
   retries: 5
   delay: 10
 
@@ -483,7 +483,7 @@
   when:
     - elasticsearch_passwords_file.stat.exists | bool
     - groups[elasticstack_elasticsearch_group_name] | length > 1
-  until: elasticsearch_cluster_status.json.status == "green"
+  until: (elasticsearch_cluster_status.json.status | default('')) in ['green', 'yellow']
   retries: 20
   delay: 10
 

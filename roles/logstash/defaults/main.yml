@@ -149,9 +149,6 @@ logstash_logging_file: true
 logstash_logging_slow_console: true
 logstash_logging_slow_file: true
 
-# === Monitoring ===
-logstash_legacy_monitoring: true
-
 # === Plugins ===
 # List of plugins to install
 # Example:

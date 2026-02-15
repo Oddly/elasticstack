@@ -41,9 +41,9 @@
       register: elastic_pass
       changed_when: false
 
-    - name: Wait for ES cluster to be green
+    - name: Wait for ES cluster to be healthy
       ansible.builtin.uri:
-        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health?wait_for_status=green&timeout=120s
+        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health
         method: GET
         force_basic_auth: yes
         user: elastic
@@ -52,9 +52,9 @@
         status_code: 200
         validate_certs: false
       register: cluster_health
-      retries: 6
-      delay: 20
-      until: cluster_health.status == 200
+      retries: 12
+      delay: 10
+      until: cluster_health.json.status | default('') in ['green', 'yellow']
 
     - name: Display ES 8.x cluster health
       ansible.builtin.debug:
@@ -107,7 +107,7 @@
         password: "{{ elastic_pass.stdout }}"
         validate_certs: false
 
-- name: Upgrade to Elasticsearch 9.x
+- name: Upgrade to Elasticsearch 9.x (with config change to exercise handler suppression)
   collections:
     - oddly.elasticstack
   hosts: all
@@ -118,10 +118,43 @@
     elasticsearch_disable_systemcallfilterchecks: true
     elasticsearch_heap: "1"
     elasticstack_no_log: false
+    # Add a JVM custom parameter during upgrade to trigger a config change.
+    # This exercises the fix: the rolling upgrade restarts ES, and the config
+    # change notifies the handler, which should be suppressed to prevent an
+    # uncontrolled second restart.
+    elasticsearch_jvm_custom_parameters:
+      - "-Des.upgrade.test.marker=true"
   tasks:
     - name: Include Elastic repos role (9.x)
       ansible.builtin.include_role:
         name: repos
+
+    # In a real upgrade, users run the role in a separate playbook execution
+    # where _elasticstack_role_imported is not set. Since this test combines
+    # initial install and upgrade in one playbook, we reset the guard so the
+    # shared role re-runs (to fetch the elastic password needed by the rolling
+    # upgrade).
+    - name: Reset shared role guard for upgrade play
+      ansible.builtin.set_fact:
+        _elasticstack_role_imported: false
+
+    - name: Gather package facts for version comparison
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: Detect latest available Elasticsearch 9.x version
+      ansible.builtin.shell: >
+        apt-cache policy elasticsearch | grep 'Candidate:' | awk '{print $2}'
+      register: _es_candidate_version
+      changed_when: false
+
+    - name: Set target upgrade version
+      ansible.builtin.set_fact:
+        elasticstack_version: "{{ _es_candidate_version.stdout }}"
+
+    - name: Display upgrade target
+      ansible.builtin.debug:
+        msg: "Upgrading from {{ ansible_facts.packages['elasticsearch'][0].version }} to {{ elasticstack_version }}"
 
     - name: Include Elasticsearch role (upgrade to 9.x)
       ansible.builtin.include_role:

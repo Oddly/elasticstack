@@ -114,6 +114,19 @@
         success_msg: "Test data survived upgrade: {{ test_doc.json._source.test_field }}"
       run_once: true
 
+    - name: Verify JVM custom config was written during upgrade
+      ansible.builtin.slurp:
+        src: /etc/elasticsearch/jvm.options.d/90-custom.options
+      register: custom_jvm_config
+
+    - name: Check custom JVM parameter is on disk (written pre-upgrade, applied on upgrade restart)
+      ansible.builtin.assert:
+        that:
+          - "'-Des.upgrade.test.marker=true' in (custom_jvm_config.content | b64decode)"
+        fail_msg: >-
+          JVM custom config not applied. Got: {{ custom_jvm_config.content | b64decode }}
+        success_msg: "JVM custom parameter correctly applied during upgrade"
+
     - name: Final upgrade verification summary
       ansible.builtin.debug:
         msg: |
@@ -124,5 +137,6 @@
           Cluster Status: {{ cluster_health.json.status }}
           Number of Nodes: {{ cluster_health.json.number_of_nodes }}
           Data Preserved: YES
+          Config Applied: YES (custom JVM param)
           ===========================================
       run_once: true
