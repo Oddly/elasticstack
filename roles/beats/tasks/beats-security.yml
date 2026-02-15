@@ -11,7 +11,7 @@
   vars:
     _cert_path: "/etc/beats/certs/{{ inventory_hostname }}-beats.crt"
     _cert_format: pem
-    _cert_buffer_days: "{{ beats_cert_expiration_buffer | regex_replace('[^0-9]', '') }}"
+    _cert_buffer_days: "{{ beats_cert_expiration_buffer }}"
     _cert_expiry_fact: beats_cert_will_expire_soon
   tags:
     - certificates
