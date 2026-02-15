@@ -11,6 +11,7 @@
     - name: Run Logstash syntax check
       ansible.builtin.command: "/usr/share/logstash/bin/logstash --path.settings=/etc/logstash -t"
       become: true
+      become_method: su
       become_user: logstash
       when: "'logstash' in group_names"
 

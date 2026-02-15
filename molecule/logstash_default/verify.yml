@@ -175,6 +175,7 @@
         --config.test_and_exit
         -f /etc/logstash/conf.d/main/
       become: "{{ logstash_version.stdout is version('9.0.0', '>=', version_type='loose') }}"
+      become_method: su
       become_user: "{{ 'logstash' if logstash_version.stdout is version('9.0.0', '>=', version_type='loose') else omit }}"
       register: config_test
       changed_when: false

@@ -140,15 +140,23 @@
       ansible.builtin.package_facts:
         manager: auto
 
-    - name: Detect latest available Elasticsearch 9.x version
+    - name: Detect latest available Elasticsearch 9.x version (Debian)
       ansible.builtin.shell: >
         apt-cache policy elasticsearch | grep 'Candidate:' | awk '{print $2}'
-      register: _es_candidate_version
+      register: _es_candidate_version_deb
       changed_when: false
+      when: ansible_os_family == 'Debian'
+
+    - name: Detect latest available Elasticsearch 9.x version (RedHat)
+      ansible.builtin.shell: >
+        yum info --available elasticsearch 2>/dev/null | grep '^Version' | awk '{print $3}'
+      register: _es_candidate_version_rpm
+      changed_when: false
+      when: ansible_os_family == 'RedHat'
 
     - name: Set target upgrade version
       ansible.builtin.set_fact:
-        elasticstack_version: "{{ _es_candidate_version.stdout }}"
+        elasticstack_version: "{{ (_es_candidate_version_deb.stdout | default('')) or (_es_candidate_version_rpm.stdout | default('')) }}"
 
     - name: Display upgrade target
       ansible.builtin.debug:
