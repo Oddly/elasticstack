@@ -17,12 +17,10 @@ elasticsearch_pamlimits: true
 elasticsearch_check_calculation: false
 elasticsearch_clustername: elasticsearch
 elasticsearch_conf_dir: "/etc/elasticsearch/"
-elasticsearch_user: elasticsearch
 elasticsearch_group: elasticsearch
 elasticsearch_api_host: localhost
 
 # JVM custom parameters
-elasticsearch_java_home: ''
 elasticsearch_jvm_custom_parameters: ''
 elasticsearch_heap_dump_path: "/var/lib/elasticsearch"
 

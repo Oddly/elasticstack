@@ -18,7 +18,6 @@
     elasticstack_release: 8
     elasticstack_version: "8.10.0"
     elasticsearch_jna_workaround: true
-    elasticsearch_disable_systemcallfilterchecks: true
     elasticsearch_heap: "1"
     elasticstack_no_log: false
     elasticsearch_seed_hosts: []
@@ -106,7 +105,6 @@
     elasticstack_full_stack: false
     elasticstack_release: 8
     elasticsearch_jna_workaround: true
-    elasticsearch_disable_systemcallfilterchecks: true
     elasticsearch_heap: "1"
     elasticstack_no_log: false
     elasticsearch_seed_hosts: []
@@ -175,7 +173,6 @@
     elasticstack_full_stack: false
     elasticstack_release: 9
     elasticsearch_jna_workaround: true
-    elasticsearch_disable_systemcallfilterchecks: true
     elasticsearch_heap: "1"
     elasticstack_no_log: false
     elasticsearch_seed_hosts: []
