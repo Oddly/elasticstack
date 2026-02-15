@@ -81,7 +81,7 @@
         body_format: json
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: no
+        validate_certs: false
       register: response
       until: response.json.acknowledged | default(false)
       retries: 5
@@ -103,7 +103,7 @@
         body_format: json
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: no
+        validate_certs: false
       register: watermark_response
       until: watermark_response.json.acknowledged | default(false)
       retries: 5
@@ -117,7 +117,7 @@
         method: GET
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: no
+        validate_certs: false
       register: response
       until: (response.json.status | default('')) in ['green', 'yellow']
       retries: 50
@@ -132,7 +132,7 @@
         body_format: json
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: no
+        validate_certs: false
       register: response
       until: response.json.acknowledged | default(false)
       retries: 5
@@ -144,13 +144,13 @@
         method: POST
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: no
+        validate_certs: false
       failed_when: false
 
     - name: Shutdown elasticsearch service
       ansible.builtin.service:
         name: elasticsearch
-        enabled: yes
+        enabled: true
         state: stopped
       when:
         - not elasticsearch_unsafe_upgrade_restart | bool
@@ -174,7 +174,7 @@
     - name: Start elasticsearch
       ansible.builtin.service:
         name: elasticsearch
-        enabled: yes
+        enabled: true
         state: started
       when:
         - elasticsearch_running.status.ActiveState == "active"
@@ -183,7 +183,7 @@
     - name: Restart elasticsearch (fast, for non-prod)
       ansible.builtin.service:
         name: elasticsearch
-        enabled: yes
+        enabled: true
         state: restarted
       when:
         - elasticsearch_running.status.ActiveState == "active"
@@ -223,7 +223,7 @@
         body_format: json
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: no
+        validate_certs: false
       register: response
       until: response.json.acknowledged | default(false)
       retries: 5
@@ -235,7 +235,7 @@
         method: GET
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: no
+        validate_certs: false
       register: response
       until: (response.json.status | default('')) in ['green', 'yellow']
       retries: 5

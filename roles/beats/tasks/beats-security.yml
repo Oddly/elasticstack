@@ -106,7 +106,7 @@
   ansible.builtin.fetch:
     src: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-beats.zip"
     dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}-beats.zip"
-    flat: yes
+    flat: true
   delegate_to: "{{ elasticstack_ca_host }}"
   tags:
     - certificates

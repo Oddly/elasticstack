@@ -10,5 +10,5 @@
           - procps
           - curl
           - git
-        update_cache: yes
+        update_cache: true
       when: ansible_os_family == "Debian"

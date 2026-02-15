@@ -15,7 +15,7 @@
   ansible.builtin.fetch:
     src: "{{ _cert_src }}"
     dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ _cert_src | basename }}"
-    flat: yes
+    flat: true
   delegate_to: "{{ elasticstack_ca_host }}"
   tags:
     - certificates

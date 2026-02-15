@@ -18,7 +18,7 @@
       ansible.builtin.service:
         name: NetworkManager
         state: started
-        enabled: yes
+        enabled: true
       when: ansible_os_family == "RedHat"
 
     - name: Install packages for Debian
@@ -29,7 +29,7 @@
           - procps
           - curl
           - iproute2
-        update_cache: yes
+        update_cache: true
       when: ansible_os_family == "Debian"
 
     - name: Install common packages

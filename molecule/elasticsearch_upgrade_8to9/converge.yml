@@ -44,10 +44,10 @@
       ansible.builtin.uri:
         url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health
         method: GET
-        force_basic_auth: yes
+        force_basic_auth: true
         user: elastic
         password: "{{ elastic_pass.stdout }}"
-        return_content: yes
+        return_content: true
         status_code: 200
         validate_certs: false
       register: cluster_health
@@ -63,10 +63,10 @@
       ansible.builtin.uri:
         url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/
         method: GET
-        force_basic_auth: yes
+        force_basic_auth: true
         user: elastic
         password: "{{ elastic_pass.stdout }}"
-        return_content: yes
+        return_content: true
         validate_certs: false
       register: es_info
 
@@ -82,7 +82,7 @@
       ansible.builtin.uri:
         url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/upgrade-test-index/_doc/1
         method: PUT
-        force_basic_auth: yes
+        force_basic_auth: true
         user: elastic
         password: "{{ elastic_pass.stdout }}"
         body_format: json
@@ -101,7 +101,7 @@
       ansible.builtin.uri:
         url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/upgrade-test-index/_refresh
         method: POST
-        force_basic_auth: yes
+        force_basic_auth: true
         user: elastic
         password: "{{ elastic_pass.stdout }}"
         validate_certs: false

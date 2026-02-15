@@ -15,7 +15,7 @@
 # kics-scan ignore-line
         url: http://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health
         method: GET
-        return_content: yes
+        return_content: true
         status_code: 200
         validate_certs: false
       register: result
@@ -29,7 +29,7 @@
 # kics-scan ignore-line
         url: http://localhost:{{ elasticstack_elasticsearch_http_port }}/_cat/nodes
         method: GET
-        return_content: yes
+        return_content: true
         status_code: 200
         validate_certs: false
       register: nodes

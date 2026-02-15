@@ -104,10 +104,10 @@
       ansible.builtin.uri:
         url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health
         method: GET
-        force_basic_auth: yes
+        force_basic_auth: true
         user: elastic
         password: "{{ elastic_pass.stdout }}"
-        return_content: yes
+        return_content: true
         status_code: 200
         validate_certs: false
       register: result
@@ -120,10 +120,10 @@
       ansible.builtin.uri:
         url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cat/nodes
         method: GET
-        force_basic_auth: yes
+        force_basic_auth: true
         user: elastic
         password: "{{ elastic_pass.stdout }}"
-        return_content: yes
+        return_content: true
         status_code: 200
         validate_certs: false
       register: nodes

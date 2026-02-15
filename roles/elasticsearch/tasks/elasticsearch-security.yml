@@ -258,7 +258,7 @@
   ansible.builtin.service:
     name: elasticsearch
     state: started
-    enabled: yes
+    enabled: true
   register: elasticsearch_freshstart_security
 
 - name: Wait for all instances to start

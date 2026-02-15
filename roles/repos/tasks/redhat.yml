@@ -45,6 +45,6 @@
     description: Elastic Release {{ elasticstack_release }}.x
     file: elastic-release
     baseurl: https://artifacts.elastic.co/packages/{{ elasticstack_release }}.x/yum
-    gpgcheck: yes
+    gpgcheck: true
     gpgkey: "{{ elasticstack_repo_key }}"
     enabled: "{{ elasticstack_enable_repos | bool }}"
