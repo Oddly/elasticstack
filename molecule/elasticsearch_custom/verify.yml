@@ -1,0 +1,92 @@
+---
+- name: Verify custom Elasticsearch configuration
+  hosts: all
+  vars:
+    elasticstack_elasticsearch_http_port: 9200
+  tasks:
+    - name: Fetch Elastic password
+      ansible.builtin.shell: |
+        set -o pipefail
+        grep "PASSWORD elastic " /usr/share/elasticsearch/initial_passwords |
+        awk {' print $4 '}
+      args:
+        executable: /bin/bash
+      register: elastic_pass
+      changed_when: false
+
+    - name: Check cluster health
+      ansible.builtin.uri:
+        url: "https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health"
+        method: GET
+        force_basic_auth: true
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        return_content: true
+        status_code: 200
+        validate_certs: false
+      register: health
+
+    - name: Verify cluster name is custom
+      ansible.builtin.assert:
+        that:
+          - health.json.cluster_name == "custom-test-cluster"
+        fail_msg: "Expected cluster name 'custom-test-cluster', got '{{ health.json.cluster_name }}'"
+
+    - name: Verify custom data directory is used
+      ansible.builtin.stat:
+        path: /data/elasticsearch/indices
+      register: datadir
+
+    - name: Assert data directory exists
+      ansible.builtin.assert:
+        that:
+          - datadir.stat.exists
+          - datadir.stat.isdir
+        fail_msg: "Custom data directory /data/elasticsearch/indices not found"
+
+    - name: Verify custom log directory has log files
+      ansible.builtin.find:
+        paths: /var/log/elasticsearch-custom
+        patterns: "*.json"
+      register: logfiles
+
+    - name: Assert log files exist in custom location
+      ansible.builtin.assert:
+        that:
+          - logfiles.files | length > 0
+        fail_msg: "No log files found in /var/log/elasticsearch-custom"
+
+    - name: Verify JVM custom parameters
+      ansible.builtin.slurp:
+        src: /etc/elasticsearch/jvm.options.d/90-custom.options
+      register: jvm_custom
+
+    - name: Assert custom JVM parameter is present
+      ansible.builtin.assert:
+        that:
+          - "'HeapDumpOnOutOfMemoryError' in jvm_custom.content | b64decode"
+          - "'formatMsgNoLookups' in jvm_custom.content | b64decode"
+        fail_msg: "Custom JVM parameters not found in 90-custom.options"
+
+    - name: Verify extra config in elasticsearch.yml
+      ansible.builtin.slurp:
+        src: /etc/elasticsearch/elasticsearch.yml
+      register: es_yml
+
+    - name: Assert extra config is present
+      ansible.builtin.assert:
+        that:
+          - "'auto_create_index' in es_yml.content | b64decode"
+          - "'max_bytes_per_sec' in es_yml.content | b64decode"
+          - "'/mnt/es-snapshots' in es_yml.content | b64decode"
+        fail_msg: "Extra config or snapshot repo path not found in elasticsearch.yml"
+
+    - name: Verify config backup was created
+      ansible.builtin.find:
+        paths: /etc/elasticsearch
+        patterns: "elasticsearch.yml.*"
+      register: backups
+
+    - name: Report backup status
+      ansible.builtin.debug:
+        msg: "Found {{ backups.files | length }} config backup(s)"

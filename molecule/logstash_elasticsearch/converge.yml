@@ -1,0 +1,33 @@
+---
+# Real-world scenario: Logstash sending data to Elasticsearch with full
+# security chain (TLS, authentication, dedicated user/role).
+# This tests the most important Logstash integration path.
+- name: Deploy Logstash with Elasticsearch backend
+  hosts: all
+  vars:
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    elasticstack_full_stack: true
+    elasticstack_no_log: false
+    elasticsearch_heap: "1"
+    logstash_pipeline_unsafe_shutdown: true
+    logstash_filters: |
+      grok {
+        match => { "message" => "%{SYSLOGLINE}" }
+      }
+      date {
+        match => [ "timestamp", "MMM  d HH:mm:ss", "MMM dd HH:mm:ss" ]
+      }
+  tasks:
+    - name: Include Elastic repos
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.repos
+
+    - name: Deploy Elasticsearch
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elasticsearch
+      when: "'elasticsearch' in group_names"
+
+    - name: Deploy Logstash
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.logstash
+      when: "'logstash' in group_names"

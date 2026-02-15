@@ -1,0 +1,79 @@
+---
+- name: Verify Logstash + ES integration
+  hosts: all
+  vars:
+    elasticstack_elasticsearch_http_port: 9200
+    elasticstack_elasticsearch_group_name: elasticsearch
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+  tasks:
+    - name: Set elasticsearch_ca variable
+      ansible.builtin.set_fact:
+        elasticsearch_ca: "{{ groups[elasticstack_elasticsearch_group_name][0] }}"
+      when: elasticsearch_ca is undefined
+
+    - name: Fetch Elastic password
+      ansible.builtin.shell: |
+        set -o pipefail
+        grep "PASSWORD elastic " /usr/share/elasticsearch/initial_passwords |
+        awk {' print $4 '}
+      args:
+        executable: /bin/bash
+      register: elastic_pass
+      changed_when: false
+      delegate_to: "{{ elasticsearch_ca }}"
+
+    - name: Elasticsearch health check
+      ansible.builtin.uri:
+        url: "https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health"
+        method: GET
+        force_basic_auth: true
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        return_content: true
+        status_code: 200
+        validate_certs: false
+      register: es_health
+      until: es_health.json.status in ["green", "yellow"]
+      retries: 6
+      delay: 10
+      when: "'elasticsearch' in group_names"
+
+    - name: Check Logstash is running
+      ansible.builtin.wait_for:
+        port: 5044
+      when: "'logstash' in group_names"
+
+    - name: Verify Logstash service is running
+      ansible.builtin.service_facts:
+      when: "'logstash' in group_names"
+
+    - name: Assert Logstash service is active
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.services['logstash.service'].state == 'running'
+        fail_msg: "Logstash service is not running"
+      when: "'logstash' in group_names"
+
+    - name: Verify Logstash certificates exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: cert_check
+      loop:
+        - /etc/logstash/certs/ca.crt
+        - /etc/logstash/certs/keystore.pfx
+      when: "'logstash' in group_names"
+
+    - name: Assert Logstash certs are present
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+        fail_msg: "Missing certificate: {{ item.item }}"
+      loop: "{{ cert_check.results }}"
+      when: "'logstash' in group_names"
+
+    - name: Verify Logstash output config has ES connection
+      ansible.builtin.command: grep -l "ssl_enabled" /etc/logstash/conf.d/main/90-output.conf
+      changed_when: false
+      when:
+        - "'logstash' in group_names"
+        - elasticstack_release | default(9) | int >= 9
