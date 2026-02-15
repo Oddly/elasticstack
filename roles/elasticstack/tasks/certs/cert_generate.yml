@@ -13,7 +13,7 @@
 # Optional variables:
 #   _cert_format:   "p12" (default) or "pem"
 
-- name: "Generate {{ _cert_format | default('p12') }} certificate for {{ _cert_name }}"
+- name: "Generate certificate - {{ _cert_name }}"
   ansible.builtin.command: >
     /usr/share/elasticsearch/bin/elasticsearch-certutil cert
     --ca {{ elasticstack_ca_dir }}/elastic-stack-ca.p12

@@ -37,7 +37,7 @@
           | to_datetime('%Y-%m-%d %H:%M:%S')) - (ansible_date_time.date
           | to_datetime('%Y-%m-%d'))).days }}
 
-    - name: "Set {{ _cert_expiry_fact }} fact"
+    - name: "Set certificate expiry fact - {{ _cert_expiry_fact }}"
       ansible.builtin.set_fact:
         "{{ _cert_expiry_fact }}": true
       when: _cert_expiration_days | int <= _cert_buffer_days | int
