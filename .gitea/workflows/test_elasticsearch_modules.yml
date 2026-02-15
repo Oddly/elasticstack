@@ -1,5 +1,5 @@
 ---
-name: Test Role Logstash
+name: Test Elasticsearch modules
 on:
   workflow_dispatch:
     inputs:
@@ -13,30 +13,18 @@ on:
           - warning
           - debug
   pull_request:
-    branches:
-      - main
-      - 'feature/**'
-      - 'fix/**'
-      - '!doc/**'
     paths:
-      - 'roles/logstash/**'
-      - '.gitea/workflows/test_role_logstash.yml'
-      - 'molecule/logstash_**'
+      - '.gitea/workflows/test_elasticsearch_modules.yml'
+      - 'molecule/elasticsearch_test_modules/*'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  lint_logstash:
-    uses: ./.gitea/workflows/test_linting.yml
-    with:
-      rolename: logstash
-
-  molecule_logstash:
+  molecule_elasticsearch_modules:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    needs: lint_logstash
+    timeout-minutes: 20
 
     env:
       COLLECTION_NAMESPACE: oddly
@@ -54,9 +42,7 @@ jobs:
           - debian12
           - debian13
         scenario:
-          - logstash_default
-          - logstash_ssl
-          - logstash_custom_pipeline
+          - elasticsearch_test_modules
         release:
           - 8
           - 9
@@ -65,20 +51,31 @@ jobs:
       - name: Check out code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
-      # Python 3.12 and uv are pre-installed in the runner environment
-      # (system Python in Docker image, uv bind-mounted from LXC host)
       - name: Install dependencies
         run: uv pip install --system --break-system-packages --python /usr/bin/python3 -r requirements-test.txt
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
-      - name: Install collection
+      - name: Install collection and dependencies
         run: |
           mkdir -p ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE
           cp -a ../ansible-collection-$COLLECTION_NAME ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+          ansible-galaxy collection install community.docker community.general ansible.posix
 
-      - name: Test with molecule
-        run: molecule test -s ${{ matrix.scenario }} --destroy=never
+      - name: Converge and verify
+        run: |
+          molecule converge -s ${{ matrix.scenario }}
+          molecule verify -s ${{ matrix.scenario }}
+        env:
+          MOLECULE_DISTRO: ${{ matrix.distro }}
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'
+          ANSIBLE_CALLBACKS_ENABLED: profile_tasks
+          ELASTIC_RELEASE: ${{ matrix.release }}
+
+      - name: Idempotence check
+        timeout-minutes: 20
+        run: molecule idempotence -s ${{ matrix.scenario }}
         env:
           MOLECULE_DISTRO: ${{ matrix.distro }}
           PY_COLORS: '1'

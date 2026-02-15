@@ -1,5 +1,5 @@
 ---
-name: Test Role Logstash
+name: Test ElasticStack
 on:
   workflow_dispatch:
     inputs:
@@ -12,31 +12,19 @@ on:
           - info
           - warning
           - debug
-  pull_request:
-    branches:
-      - main
-      - 'feature/**'
-      - 'fix/**'
-      - '!doc/**'
-    paths:
-      - 'roles/logstash/**'
-      - '.gitea/workflows/test_role_logstash.yml'
-      - 'molecule/logstash_**'
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  schedule:
+    - cron: "0 4 * * *"
 
 jobs:
-  lint_logstash:
+  lint_full:
     uses: ./.gitea/workflows/test_linting.yml
     with:
-      rolename: logstash
+      rolename: ''
 
-  molecule_logstash:
+  molecule_full_stack_every_os:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    needs: lint_logstash
+    needs: lint_full
+    timeout-minutes: 60
 
     env:
       COLLECTION_NAMESPACE: oddly
@@ -47,26 +35,25 @@ jobs:
       matrix:
         distro:
           - rockylinux9
-          - rockylinux10
           - ubuntu2204
           - ubuntu2404
           - debian11
           - debian12
           - debian13
         scenario:
-          - logstash_default
-          - logstash_ssl
-          - logstash_custom_pipeline
+          - elasticstack_default
+          - es_kibana
+          - logstash_elasticsearch
         release:
           - 8
           - 9
+        # Rocky 10 excluded: EPEL 10 does not ship Redis yet.
+        # Rocky 10 is still tested via the ES modules workflow.
 
     steps:
       - name: Check out code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
-      # Python 3.12 and uv are pre-installed in the runner environment
-      # (system Python in Docker image, uv bind-mounted from LXC host)
       - name: Install dependencies
         run: uv pip install --system --break-system-packages --python /usr/bin/python3 -r requirements-test.txt
         env:
