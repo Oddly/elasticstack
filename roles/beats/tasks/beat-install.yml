@@ -1,0 +1,75 @@
+---
+# Install a beat package. Handles versioned and latest installs across
+# RPM (full-stack and standalone) and Debian.
+#
+# Required variables:
+#   _beat_name: Beat name (e.g. "filebeat", "auditbeat", "metricbeat")
+
+- name: "Construct exact name of {{ _beat_name }} package"
+  ansible.builtin.set_fact:
+    _beat_package: >-
+      {{
+      _beat_name +
+      ((elasticstack_versionseparator +
+      elasticstack_version |
+      string ) if (elasticstack_version is defined and elasticstack_version | length > 0)) |
+      replace(' ', '') }}
+
+- name: "Install {{ _beat_name }} - rpm - full stack"
+  ansible.builtin.package:
+    name: "{{ _beat_package }}"
+    enablerepo:
+      - 'elastic-{{ elasticstack_release }}.x'
+  notify: "Restart {{ _beat_name | capitalize }}"
+  when:
+    - ansible_os_family == "RedHat"
+    - elasticstack_full_stack | bool
+
+- name: "Install {{ _beat_name }} - rpm - standalone"
+  ansible.builtin.package:
+    name: "{{ _beat_package }}"
+  notify: "Restart {{ _beat_name | capitalize }}"
+  when:
+    - ansible_os_family == "RedHat"
+    - not elasticstack_full_stack | bool
+
+- name: "Install {{ _beat_name }} - deb"
+  ansible.builtin.package:
+    name: "{{ _beat_package }}"
+  notify: "Restart {{ _beat_name | capitalize }}"
+  when:
+    - ansible_os_family == "Debian"
+
+- name: "Install {{ _beat_name }} latest version - rpm - full stack"
+  ansible.builtin.package:
+    name: "{{ _beat_name }}"
+    state: latest
+    enablerepo:
+      - "elastic-{{ elasticstack_release }}.x"
+  notify: "Restart {{ _beat_name | capitalize }}"
+  when:
+    - elasticstack_version is defined
+    - elasticstack_version == "latest"
+    - ansible_os_family == "RedHat"
+    - elasticstack_full_stack | bool
+
+- name: "Install {{ _beat_name }} latest version - rpm - standalone"
+  ansible.builtin.package:
+    name: "{{ _beat_name }}"
+    state: latest
+  notify: "Restart {{ _beat_name | capitalize }}"
+  when:
+    - elasticstack_version is defined
+    - elasticstack_version == "latest"
+    - ansible_os_family == "RedHat"
+    - not elasticstack_full_stack | bool
+
+- name: "Install {{ _beat_name }} latest version - deb"
+  ansible.builtin.package:
+    name: "{{ _beat_name }}"
+    state: latest
+  notify: "Restart {{ _beat_name | capitalize }}"
+  when:
+    - elasticstack_version is defined
+    - elasticstack_version == "latest"
+    - ansible_os_family == "Debian"

@@ -40,6 +40,7 @@
 
 - name: Install Python Modules as dependencies
   when:
+    - elasticstack_install_python_client | bool
     - not elasticstack_force_pip | bool
   block:
     - name: Install Python Modules via pip
@@ -69,5 +70,6 @@
     PIP_BREAK_SYSTEM_PACKAGES: "1"
   ignore_errors: true
   when:
+    - elasticstack_install_python_client | bool
     - elasticstack_force_pip | bool
   register: elasticstack_pip_installation_forced

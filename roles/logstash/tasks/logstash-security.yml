@@ -277,15 +277,11 @@
       when: logstash_user_password | length < 6
 
     - name: Fetch Elastic admin password
-      ansible.builtin.shell: >
-        set -o pipefail;
-        grep "PASSWORD elastic" {{ elasticstack_initial_passwords }} | awk '{print $4}'
-      args:
-        executable: /bin/bash
-      register: _logstash_elastic_password
-      changed_when: false
-      delegate_to: "{{ elasticstack_ca_host }}"
-      no_log: "{{ elasticstack_no_log }}"
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/fetch_password.yml"
+      vars:
+        _password_user: elastic
+        _password_fact: _logstash_elastic_password
 
     - name: Create logstash role
       oddly.elasticstack.elasticsearch_role:
