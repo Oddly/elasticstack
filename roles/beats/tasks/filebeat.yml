@@ -11,7 +11,7 @@
     dest: /etc/filebeat/filebeat.yml
     owner: root
     group: root
-    mode: 0640
+    mode: "0640"
   notify:
     - Restart Filebeat
   tags:
@@ -31,7 +31,7 @@
       ansible.builtin.command: "filebeat modules enable {{ item }}"
       args:
         creates: "/etc/filebeat/modules.d/{{ item }}.yml"
-      with_items: "{{ beats_filebeat_modules }}"
+      loop: "{{ beats_filebeat_modules }}"
 
     - name: Enable System module
       ansible.builtin.template:
@@ -39,7 +39,7 @@
         dest: /etc/filebeat/modules.d/system.yml
         owner: root
         group: root
-        mode: 0644
+        mode: "0644"
       when:
         - elasticstack_release | int > 7
 
@@ -49,7 +49,7 @@
         /usr/bin/filebeat version > /etc/filebeat/{{ item }}_pipeline_created
       args:
         creates: "/etc/filebeat/{{ item }}_pipeline_created"
-      with_items: "{{ beats_filebeat_modules }}"
+      loop: "{{ beats_filebeat_modules }}"
       notify:
         - Restart Filebeat
 

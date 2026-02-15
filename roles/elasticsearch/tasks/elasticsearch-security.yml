@@ -30,7 +30,7 @@
   ansible.builtin.service:
     name: logstash
     state: stopped
-  with_items: "{{ groups[elasticstack_logstash_group_name] | default([]) }}"
+  loop: "{{ groups[elasticstack_logstash_group_name] | default([]) }}"
   delegate_to: "{{ item }}"
   when:
     - "'renew_ca' in ansible_run_tags or elasticstack_ca_will_expire_soon | bool"
@@ -79,7 +79,7 @@
         - certificates
         - renew_es_cert
   vars:
-    _cert_path: "/etc/elasticsearch/certs/{{ ansible_hostname }}.p12"
+    _cert_path: "/etc/elasticsearch/certs/{{ ansible_facts.hostname }}.p12"
     _cert_pass: "{{ elasticsearch_tls_key_passphrase }}"
     _cert_buffer_days: "{{ elasticsearch_cert_expiration_buffer }}"
     _cert_expiry_fact: elasticsearch_cert_will_expire_soon
@@ -112,7 +112,7 @@
         - renew_ca
         - renew_es_cert
   vars:
-    _backup_path: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}.p12"
+    _backup_path: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}.p12"
     _backup_target: "{{ elasticstack_ca_host }}"
   when: "'renew_es_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or elasticsearch_cert_will_expire_soon | bool"
   tags:
@@ -128,7 +128,7 @@
         - renew_ca
         - renew_es_cert
   vars:
-    _backup_path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}.p12"
+    _backup_path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_facts.hostname }}.p12"
     _backup_target: localhost
     _backup_become: false
   when: "'renew_es_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or elasticsearch_cert_will_expire_soon | bool"
@@ -165,10 +165,10 @@
         - renew_ca
         - renew_es_cert
   vars:
-    _cert_name: "{{ hostvars[item].ansible_hostname }}"
-    _cert_ip: "{{ hostvars[item].ansible_default_ipv4.address | default(hostvars[item].ansible_all_ipv4_addresses[0]) }}"
-    _cert_dns: "{{ hostvars[item].ansible_hostname }},{{ hostvars[item].ansible_fqdn }},{{ hostvars[item].inventory_hostname }}"
-    _cert_out: "{{ elasticstack_ca_dir }}/{{ hostvars[item].ansible_hostname }}.p12"
+    _cert_name: "{{ hostvars[item].ansible_facts.hostname }}"
+    _cert_ip: "{{ hostvars[item].ansible_facts.default_ipv4.address | default(hostvars[item].ansible_facts.all_ipv4_addresses[0]) }}"
+    _cert_dns: "{{ hostvars[item].ansible_facts.hostname }},{{ hostvars[item].ansible_facts.fqdn }},{{ hostvars[item].inventory_hostname }}"
+    _cert_out: "{{ elasticstack_ca_dir }}/{{ hostvars[item].ansible_facts.hostname }}.p12"
     _cert_pass: "{{ (hostvars[item].elasticsearch_tls_key_passphrase is defined) | ternary(hostvars[item].elasticsearch_tls_key_passphrase, elasticsearch_tls_key_passphrase) }}"
     _cert_validity: "{{ elasticsearch_cert_validity_period }}"
   loop: "{{ groups[elasticstack_elasticsearch_group_name] }}"
@@ -187,7 +187,7 @@
         - certificates
         - renew_ca
   vars:
-    _cert_p12_path: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}.p12"
+    _cert_p12_path: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}.p12"
     _cert_ca_out: "{{ elasticstack_ca_dir }}/ca.crt"
     _cert_pass: "{{ elasticsearch_tls_key_passphrase }}"
   when: inventory_hostname == elasticstack_ca_host
@@ -202,7 +202,7 @@
     path: /etc/elasticsearch/certs
     owner: root
     group: elasticsearch
-    mode: 0750
+    mode: "0750"
   tags:
     - certificates
     - renew_ca
@@ -241,8 +241,8 @@
         - renew_ca
         - renew_es_cert
   vars:
-    _cert_src: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}.p12"
-    _cert_dest: "/etc/elasticsearch/certs/{{ ansible_hostname }}.p12"
+    _cert_src: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}.p12"
+    _cert_dest: "/etc/elasticsearch/certs/{{ ansible_facts.hostname }}.p12"
     _cert_owner: root
     _cert_group: elasticsearch
     _cert_mode: "0640"
@@ -258,7 +258,7 @@
   ansible.builtin.service:
     name: elasticsearch
     state: started
-    enabled: yes
+    enabled: true
   register: elasticsearch_freshstart_security
 
 - name: Wait for all instances to start
@@ -355,33 +355,29 @@
   retries: 20
   delay: 10
 
-- name: Work around low ressources on CI/CD nodes
-  when: ansible_virtualization_type == "container" or ansible_virtualization_type == "docker"
+- name: Work around low resources on CI/CD nodes
+  when: ansible_facts.virtualization_type == "container" or ansible_facts.virtualization_type == "docker"
   block:
-    # Free up some space to let elsticsearch allocate replica in GitHub Action
+    # Free up some space to let Elasticsearch allocate replica in GitHub Action
     - name: Remove cache
       ansible.builtin.command: >
         rm -rf /var/cache/*
       changed_when: false
 
-    - name: Set persistent watermarks to very high values in Docker # noqa: risky-shell-pipe
-      ansible.builtin.shell: >
-        if test -n "$(ps -p $$ | grep bash)"; then set -o pipefail; fi;
-        curl
-        -k
-        -X PUT
-        "{{ elasticsearch_http_protocol }}://elastic:{{ elasticstack_password.stdout }}@{{ elasticsearch_api_host }}:9200/_cluster/settings"
-        -H 'Content-Type: application/json' -d
-        '
-        {
-          "persistent": {
-            "cluster.routing.allocation.disk.watermark.low": "97%",
-            "cluster.routing.allocation.disk.watermark.high": "98%",
-            "cluster.routing.allocation.disk.watermark.flood_stage": "99%",
-            "cluster.routing.allocation.disk.watermark.flood_stage.frozen": "99%"
-          }
-        }
-        '
+    - name: Set persistent watermarks to very high values in Docker
+      ansible.builtin.uri:
+        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/settings"
+        method: PUT
+        body:
+          persistent:
+            cluster.routing.allocation.disk.watermark.low: "97%"
+            cluster.routing.allocation.disk.watermark.high: "98%"
+            cluster.routing.allocation.disk.watermark.flood_stage: "99%"
+            cluster.routing.allocation.disk.watermark.flood_stage.frozen: "99%"
+        body_format: json
+        user: elastic
+        password: "{{ elasticstack_password.stdout }}"
+        validate_certs: false
       changed_when: false
       no_log: "{{ elasticstack_no_log }}"
       when:
@@ -416,17 +412,18 @@
 
 - name: Set var that cluster is set up
   ansible.builtin.set_fact:
-    elaticsearch_cluster_set_up: true
+    elasticsearch_cluster_set_up: true
 
-- name: Create initial passwords # noqa: risky-shell-pipe
+- name: Create initial passwords
   ansible.builtin.shell: >
-    if test -n "$(ps -p $$ | grep bash)"; then set -o pipefail; fi;
+    set -o pipefail;
     /usr/share/elasticsearch/bin/elasticsearch-setup-passwords auto -b >
     {{ elasticstack_initial_passwords }}
+  args:
+    executable: /bin/bash
+    creates: "{{ elasticstack_initial_passwords }}"
   when: inventory_hostname == elasticstack_ca_host
   no_log: "{{ elasticstack_no_log }}"
-  args:
-    creates: "{{ elasticstack_initial_passwords }}"
 
 # It would be better to create and set the permissions before generating the passwords. But this would
 # break the logic that relies on the file being absent when no passwords are set
@@ -435,7 +432,7 @@
     path: "{{ elasticstack_initial_passwords }}"
     owner: root
     group: root
-    mode: 0600
+    mode: "0600"
   when: inventory_hostname == elasticstack_ca_host
 
 # Maybe make sure that Elasticsearch is using the right protocol http(s) to connect, even in newly setup clusters

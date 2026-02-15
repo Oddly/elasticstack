@@ -9,7 +9,7 @@
         - certificates
         - renew_kibana_cert
   vars:
-    _cert_path: "/etc/kibana/certs/{{ ansible_hostname }}-kibana.p12"
+    _cert_path: "/etc/kibana/certs/{{ ansible_facts.hostname }}-kibana.p12"
     _cert_pass: "{{ kibana_tls_key_passphrase }}"
     _cert_buffer_days: "{{ kibana_cert_expiration_buffer }}"
     _cert_expiry_fact: kibana_cert_will_expire_soon
@@ -42,7 +42,7 @@
         - renew_ca
         - renew_kibana_cert
   vars:
-    _backup_path: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-kibana.p12"
+    _backup_path: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}-kibana.p12"
     _backup_target: "{{ elasticstack_ca_host }}"
   when: "'renew_kibana_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or kibana_cert_will_expire_soon | bool"
   tags:
@@ -58,7 +58,7 @@
         - renew_ca
         - renew_kibana_cert
   vars:
-    _backup_path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}-kibana.p12"
+    _backup_path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_facts.hostname }}-kibana.p12"
     _backup_target: localhost
     _backup_become: false
   when: "'renew_kibana_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or kibana_cert_will_expire_soon | bool"
@@ -75,33 +75,34 @@
     - renew_ca
     - renew_kibana_cert
   block:
-    - name: Generate encryption key # noqa: risky-shell-pipe
+    - name: Generate encryption key
       ansible.builtin.shell: >
-        if test -n "$(ps -p $$ | grep bash)"; then set -o pipefail; fi;
+        set -o pipefail;
         openssl rand -base64 36 >
         {{ elasticstack_ca_dir }}/encryption_key
-      changed_when: false
       args:
+        executable: /bin/bash
         creates: "{{ elasticstack_ca_dir }}/encryption_key"
+      changed_when: false
 
     - name: Fetch encryption key
-      ansible.builtin.command: cat {{ elasticstack_ca_dir }}/encryption_key
-      changed_when: false
+      ansible.builtin.slurp:
+        src: "{{ elasticstack_ca_dir }}/encryption_key"
       register: kibana_encryption_key
 
-    - name: Generate saved objects encryption key # noqa: risky-shell-pipe
+    - name: Generate saved objects encryption key
       ansible.builtin.shell: >
-        if test -n "$(ps -p $$ | grep bash)"; then set -o pipefail; fi;
-        openssl rand
-        -base64 36 >
+        set -o pipefail;
+        openssl rand -base64 36 >
         {{ elasticstack_ca_dir }}/savedobjects_encryption_key
-      changed_when: false
       args:
+        executable: /bin/bash
         creates: "{{ elasticstack_ca_dir }}/savedobjects_encryption_key"
+      changed_when: false
 
     - name: Fetch saved objects encryption key
-      ansible.builtin.command: cat {{ elasticstack_ca_dir }}/savedobjects_encryption_key
-      changed_when: false
+      ansible.builtin.slurp:
+        src: "{{ elasticstack_ca_dir }}/savedobjects_encryption_key"
       register: kibana_savedobjects_encryption_key
 
 # -- Create Kibana certificate directory (Kibana-specific path/perms) --
@@ -111,7 +112,7 @@
     state: directory
     owner: root
     group: kibana
-    mode: 0750
+    mode: "0750"
   tags:
     - certificates
     - renew_ca
@@ -127,10 +128,10 @@
         - renew_ca
         - renew_kibana_cert
   vars:
-    _cert_name: "{{ ansible_hostname }}"
-    _cert_ip: "{{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}"
-    _cert_dns: "{{ ansible_hostname }},{{ ansible_fqdn }},{{ inventory_hostname }}"
-    _cert_out: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-kibana.p12"
+    _cert_name: "{{ ansible_facts.hostname }}"
+    _cert_ip: "{{ ansible_facts.default_ipv4.address | default(ansible_facts.all_ipv4_addresses[0]) }}"
+    _cert_dns: "{{ ansible_facts.hostname }},{{ ansible_facts.fqdn }},{{ inventory_hostname }}"
+    _cert_out: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}-kibana.p12"
     _cert_pass: "{{ kibana_tls_key_passphrase }}"
     _cert_validity: "{{ kibana_cert_validity_period }}"
   tags:
@@ -148,8 +149,8 @@
         - renew_ca
         - renew_kibana_cert
   vars:
-    _cert_src: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-kibana.p12"
-    _cert_dest: "/etc/kibana/certs/{{ ansible_hostname }}-kibana.p12"
+    _cert_src: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}-kibana.p12"
+    _cert_dest: "/etc/kibana/certs/{{ ansible_facts.hostname }}-kibana.p12"
     _cert_owner: root
     _cert_group: kibana
     _cert_mode: "0640"

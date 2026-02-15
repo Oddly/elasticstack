@@ -7,7 +7,7 @@
   hosts: all
   vars:
     elasticstack_full_stack: false
-    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | int}}"
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticstack_no_log: false
   collections:
     - oddly.elasticstack

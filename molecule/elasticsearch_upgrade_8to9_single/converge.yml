@@ -18,7 +18,6 @@
     elasticstack_release: 8
     elasticstack_version: "8.10.0"
     elasticsearch_jna_workaround: true
-    elasticsearch_disable_systemcallfilterchecks: true
     elasticsearch_heap: "1"
     elasticstack_no_log: false
     elasticsearch_seed_hosts: []
@@ -49,7 +48,7 @@
       ansible.builtin.uri:
         url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health
         method: GET
-        force_basic_auth: yes
+        force_basic_auth: true
         user: elastic
         password: "{{ elastic_pass.stdout }}"
         validate_certs: false
@@ -62,7 +61,7 @@
       ansible.builtin.uri:
         url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/
         method: GET
-        force_basic_auth: yes
+        force_basic_auth: true
         user: elastic
         password: "{{ elastic_pass.stdout }}"
         validate_certs: false
@@ -79,7 +78,7 @@
       ansible.builtin.uri:
         url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/upgrade-test/_doc/1
         method: PUT
-        force_basic_auth: yes
+        force_basic_auth: true
         user: elastic
         password: "{{ elastic_pass.stdout }}"
         body_format: json
@@ -93,7 +92,7 @@
       ansible.builtin.uri:
         url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/upgrade-test/_refresh
         method: POST
-        force_basic_auth: yes
+        force_basic_auth: true
         user: elastic
         password: "{{ elastic_pass.stdout }}"
         validate_certs: false
@@ -106,7 +105,6 @@
     elasticstack_full_stack: false
     elasticstack_release: 8
     elasticsearch_jna_workaround: true
-    elasticsearch_disable_systemcallfilterchecks: true
     elasticsearch_heap: "1"
     elasticstack_no_log: false
     elasticsearch_seed_hosts: []
@@ -120,7 +118,7 @@
       ansible.builtin.apt:
         name: elasticsearch
         state: latest
-        update_cache: yes
+        update_cache: true
 
     - name: Restart Elasticsearch after upgrade
       ansible.builtin.service:
@@ -131,7 +129,7 @@
       ansible.builtin.uri:
         url: https://localhost:9200/_cluster/health
         method: GET
-        force_basic_auth: yes
+        force_basic_auth: true
         user: elastic
         password: "{{ elastic_pass.stdout }}"
         validate_certs: false
@@ -149,7 +147,7 @@
       ansible.builtin.uri:
         url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/
         method: GET
-        force_basic_auth: yes
+        force_basic_auth: true
         user: elastic
         password: "{{ elastic_pass.stdout }}"
         validate_certs: false
@@ -175,7 +173,6 @@
     elasticstack_full_stack: false
     elasticstack_release: 9
     elasticsearch_jna_workaround: true
-    elasticsearch_disable_systemcallfilterchecks: true
     elasticsearch_heap: "1"
     elasticstack_no_log: false
     elasticsearch_seed_hosts: []
@@ -189,7 +186,7 @@
       ansible.builtin.apt:
         name: elasticsearch
         state: latest
-        update_cache: yes
+        update_cache: true
 
     - name: Restart Elasticsearch after 9.x upgrade
       ansible.builtin.service:
@@ -200,7 +197,7 @@
       ansible.builtin.uri:
         url: https://localhost:9200/_cluster/health
         method: GET
-        force_basic_auth: yes
+        force_basic_auth: true
         user: elastic
         password: "{{ elastic_pass.stdout }}"
         validate_certs: false

@@ -4,8 +4,8 @@
   tasks:
     - name: Refresh apt cache
       ansible.builtin.apt:
-        update_cache: yes
-      when: ansible_os_family == "Debian"
+        update_cache: true
+      when: ansible_facts.os_family == "Debian"
 
     - name: Install git
       ansible.builtin.package:
@@ -16,14 +16,14 @@
         name:
           - iproute
           - NetworkManager
-      when: ansible_os_family == "RedHat"
+      when: ansible_facts.os_family == "RedHat"
 
     - name: Start NetworkManager
       ansible.builtin.service:
         name: NetworkManager
         state: started
-        enabled: yes
-      when: ansible_os_family == "RedHat"
+        enabled: true
+      when: ansible_facts.os_family == "RedHat"
 
     - name: Install packages for Debian
       ansible.builtin.package:
@@ -33,4 +33,4 @@
           - procps
           - curl
           - iproute2
-      when: ansible_os_family == "Debian"
+      when: ansible_facts.os_family == "Debian"

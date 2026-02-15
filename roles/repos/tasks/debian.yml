@@ -16,7 +16,7 @@
   ansible.builtin.file:
     path: /etc/apt/sources.list.d/artifacts_elastic_co_packages_{{ item }}_x_apt.list
     state: absent
-  with_items:
+  loop:
     - "7"
     - "8"
     - "9"

@@ -11,26 +11,30 @@
     dest: /etc/metricbeat/metricbeat.yml
     owner: root
     group: root
-    mode: 0644
+    mode: "0640"
   notify:
     - Restart Metricbeat
+  tags:
+    - configuration
+    - beats_metricbeat_configuration
+    - beats_configuration
 
 - name: Enable modules
-  ansible.builtin.command: "metricbeat modules enable {{ item }}"
+  ansible.builtin.command: "/usr/bin/metricbeat modules enable {{ item }}"
   args:
     creates: "/etc/metricbeat/modules.d/{{ item }}.yml"
-  with_items: "{{ beats_metricbeat_modules }}"
+  loop: "{{ beats_metricbeat_modules }}"
   when: beats_metricbeat_modules is defined
 
 - name: Enable Ingest Pipelines
   ansible.builtin.command: >
-    metricbeat setup &&
-    metricbeat version > /etc/metricbeat/pipelines_created
+    /usr/bin/metricbeat setup &&
+    /usr/bin/metricbeat version > /etc/metricbeat/pipelines_created
+  run_once: true
   args:
     creates: "/etc/metricbeat/pipelines_created"
   notify:
     - Restart Metricbeat
-  with_items: "{{ beats_metricbeat_modules }}"
   when:
     - beats_metricbeat_modules is defined
     - beats_metricbeat_output == "elasticsearch"

@@ -3,7 +3,6 @@
 - name: Gather package facts for upgrade validation
   ansible.builtin.package_facts:
     manager: auto
-  when: elasticstack_release | int >= 9
 
 - name: Check upgrade path requirement for ES 9.x
   ansible.builtin.fail:
@@ -25,10 +24,10 @@
 
 - name: Update apt cache.
   ansible.builtin.apt:
-    update_cache: yes
+    update_cache: true
     cache_valid_time: 600
   changed_when: false
-  when: ansible_os_family == 'Debian'
+  when: ansible_facts.os_family == 'Debian'
 
 - name: Check-set-parameters
   ansible.builtin.include_tasks: elasticsearch-parameters.yml
@@ -36,12 +35,12 @@
 - name: Include OS specific vars
   ansible.builtin.include_vars: '{{ item }}'
   with_first_found:
-    - '{{ ansible_os_family }}_{{ ansible_distribution_major_version }}.yml'
-    - '{{ ansible_os_family }}.yml'
+    - '{{ ansible_facts.os_family }}_{{ ansible_facts.distribution_major_version }}.yml'
+    - '{{ ansible_facts.os_family }}.yml'
 
 - name: Set node name if not overriden by user
   ansible.builtin.set_fact:
-    elasticsearch_nodename: "{{ ansible_hostname }}"
+    elasticsearch_nodename: "{{ ansible_facts.hostname }}"
   when:
     - elasticsearch_nodename is undefined
 
@@ -63,14 +62,14 @@
 
 - name: Set var that cluster is set up
   ansible.builtin.set_fact:
-    elaticsearch_cluster_set_up: true
+    elasticsearch_cluster_set_up: true
   when:
     - cluster_setup_check.stat.exists | bool
     - cluster_setup_check is defined
 
 - name: Set var that cluster is not set up
   ansible.builtin.set_fact:
-    elaticsearch_cluster_set_up: false
+    elasticsearch_cluster_set_up: false
   when:
     - cluster_setup_check is undefined or
       not cluster_setup_check.stat.exists | bool
@@ -140,7 +139,7 @@
 
 - name: Construct exact name of Elasticsearch package
   ansible.builtin.set_fact:
-    elasticsearch_package: >
+    elasticsearch_package: >-
       {{
       'elasticsearch' +
       ((elasticstack_versionseparator +
@@ -166,7 +165,7 @@
         dest: /etc/elasticsearch/elasticsearch.yml
         owner: root
         group: root
-        mode: 0644
+        mode: "0644"
         backup: "{{ elasticsearch_config_backup }}"
       when: elasticsearch_manage_yaml | bool
 
@@ -177,7 +176,7 @@
         owner: root
         group: "{{ elasticsearch_group }}"
         mode: "660"
-        force: yes
+        force: true
       when: elasticsearch_heap is defined and (elasticsearch_heap | string | length > 0)
 
     - name: Set jvm paths (pre-upgrade)
@@ -187,7 +186,7 @@
         owner: root
         group: "{{ elasticsearch_group }}"
         mode: "660"
-        force: yes
+        force: true
 
     - name: Set jvm custom options (pre-upgrade)
       ansible.builtin.template:
@@ -196,12 +195,12 @@
         owner: root
         group: "{{ elasticsearch_group }}"
         mode: "660"
-        force: yes
+        force: true
       when: elasticsearch_jvm_custom_parameters is defined and (elasticsearch_jvm_custom_parameters | string | length > 0)
 
 - name: Update Elasticsearch if needed
   ansible.builtin.include_tasks: elasticsearch-rolling-upgrade.yml
-  with_items: "{{ groups[elasticstack_elasticsearch_group_name] }}"
+  loop: "{{ groups[elasticstack_elasticsearch_group_name] }}"
   when:
     - "hostvars[item].inventory_hostname == inventory_hostname"
     - elasticstack_version is defined
@@ -215,21 +214,21 @@
     enablerepo:
       - 'elastic-{{ elasticstack_release }}.x'
   when:
-    - ansible_os_family == "RedHat"
+    - ansible_facts.os_family == "RedHat"
     - elasticstack_full_stack | bool
 
 - name: Install Elasticsearch - rpm - standalone
   ansible.builtin.package:
     name: "{{ elasticsearch_package }}"
   when:
-    - ansible_os_family == "RedHat"
+    - ansible_facts.os_family == "RedHat"
     - not elasticstack_full_stack | bool
 
 - name: Install Elasticsearch - deb
   ansible.builtin.package:
     name: "{{ elasticsearch_package }}"
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts.os_family == "Debian"
 
 - name: Configure Elasticsearch
   ansible.builtin.template:
@@ -237,7 +236,7 @@
     dest: /etc/elasticsearch/elasticsearch.yml
     owner: root
     group: root
-    mode: 0644
+    mode: "0644"
     backup: "{{ elasticsearch_config_backup }}"
   notify:
     - Restart Elasticsearch
@@ -275,7 +274,7 @@
     owner: root
     group: "{{ elasticsearch_group }}"
     mode: "660"
-    force: yes
+    force: true
   notify: Restart Elasticsearch
   when: elasticsearch_heap is defined and (elasticsearch_heap | string | length > 0)
 
@@ -286,7 +285,7 @@
     owner: root
     group: "{{ elasticsearch_group }}"
     mode: "660"
-    force: yes
+    force: true
   notify: Restart Elasticsearch
 
 - name: Set jvm custom options
@@ -296,7 +295,7 @@
     owner: root
     group: "{{ elasticsearch_group }}"
     mode: "660"
-    force: yes
+    force: true
   notify: Restart Elasticsearch
   when: elasticsearch_jvm_custom_parameters is defined and (elasticsearch_jvm_custom_parameters | string | length > 0)
 
@@ -312,14 +311,14 @@
 - name: Force systemd to reread configs on container
   ansible.builtin.systemd:
     daemon_reload: true
-  when: ansible_virtualization_type == "container" or ansible_virtualization_type == "docker"
+  when: ansible_facts.virtualization_type == "container" or ansible_facts.virtualization_type == "docker"
 
-# Free up some space to let elsticsearch allocate replica in GitHub Action
+# Free up some space to let Elasticsearch allocate replica in GitHub Action
 - name: Remove cache
   ansible.builtin.command: >
     rm -rf /var/cache/*
   changed_when: false
-  when: ansible_virtualization_type == "container" or ansible_virtualization_type == "docker"
+  when: ansible_facts.virtualization_type == "container" or ansible_facts.virtualization_type == "docker"
 
 - name: Import Tasks elasticsearch-security.yml
   ansible.builtin.import_tasks: elasticsearch-security.yml
@@ -334,7 +333,7 @@
   ansible.builtin.service:
     name: elasticsearch
     state: started
-    enabled: yes
+    enabled: true
   register: elasticsearch_freshstart
 
 # The comment in the following task will disable KICS security checks for this
@@ -365,7 +364,7 @@
 
     - name: Set var that cluster is set up
       ansible.builtin.set_fact:
-        elaticsearch_cluster_set_up: true
+        elasticsearch_cluster_set_up: true
 
 # See https://github.com/Oddly/ansible-collection-elasticstack/issues/137
 # for details why we have this task again here
@@ -376,13 +375,13 @@
     dest: /etc/elasticsearch/elasticsearch.yml
     owner: root
     group: root
-    mode: 0644
+    mode: "0644"
     backup: "{{ elasticsearch_config_backup }}"
   when: elasticsearch_manage_yaml | bool
 
 - name: Show Info about heap
   ansible.builtin.debug:
-    msg: "Using {{ elasticsearch_heap | int * 1024 }} of {{ ansible_memtotal_mb }} MB as heap for Elasticsearch"
+    msg: "Using {{ elasticsearch_heap | int * 1024 }} of {{ ansible_facts.memtotal_mb }} MB as heap for Elasticsearch"
   when: elasticsearch_heap is defined and (elasticsearch_heap | string | length > 0)
 
 - name: Show hint about passwords

@@ -30,14 +30,14 @@
         enablerepo:
           - 'elastic-{{ elasticstack_release }}.x'
       when:
-        - ansible_os_family == "RedHat"
+        - ansible_facts.os_family == "RedHat"
         - elasticstack_full_stack | bool
 
     - name: Update stopped Elasticsearch - deb or unmanaged repositories rpm
       ansible.builtin.package:
         name: "{{ elasticsearch_package }}"
       when:
-        - ansible_os_family == "Debian" or
+        - ansible_facts.os_family == "Debian" or
           not elasticstack_full_stack | bool
 
 - name: Update single instances without extra caution
@@ -48,7 +48,7 @@
       ansible.builtin.package:
         name: "{{ elasticsearch_package }}"
       when:
-        - ansible_os_family == "Debian" or
+        - ansible_facts.os_family == "Debian" or
           not elasticstack_full_stack | bool
       notify:
         - Restart Elasticsearch
@@ -59,7 +59,7 @@
         enablerepo:
           - 'elastic-{{ elasticstack_release }}.x'
       when:
-        - ansible_os_family == "RedHat"
+        - ansible_facts.os_family == "RedHat"
         - elasticstack_full_stack | bool
       notify:
         - Restart Elasticsearch
@@ -71,6 +71,23 @@
     - groups[elasticstack_elasticsearch_group_name] | length > 1
   block:
 
+    # After a previous node's upgrade, the local ES instance may need time to
+    # re-discover the master (e.g. during 8.x→9.x rolling upgrades). Wait for
+    # the cluster API to respond with 200 before attempting any cluster operations.
+    - name: Wait for Elasticsearch cluster API to be responsive
+      ansible.builtin.uri:
+        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/health"
+        method: GET
+        user: elastic
+        password: "{{ elasticstack_password.stdout }}"
+        validate_certs: false
+        status_code: [200, 503]
+      register: _es_responsive
+      until: (_es_responsive.status | default(0)) == 200
+      retries: 30
+      delay: 10
+      no_log: "{{ elasticstack_no_log }}"
+
     # Usually we should not need this step. It's only there to recover from broken upgrade plays
     # Without this step the cluster would never recover and the play would always fail
     - name: Enable shard allocation for the cluster
@@ -81,10 +98,10 @@
         body_format: json
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: no
+        validate_certs: false
       register: response
       until: response.json.acknowledged | default(false)
-      retries: 5
+      retries: 10
       delay: 30
 
     # Relax disk watermarks so shards can allocate even on near-full disks
@@ -103,7 +120,7 @@
         body_format: json
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: no
+        validate_certs: false
       register: watermark_response
       until: watermark_response.json.acknowledged | default(false)
       retries: 5
@@ -117,7 +134,7 @@
         method: GET
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: no
+        validate_certs: false
       register: response
       until: (response.json.status | default('')) in ['green', 'yellow']
       retries: 50
@@ -132,7 +149,11 @@
         body_format: json
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: no
+        validate_certs: false
+      register: response
+      until: response.json.acknowledged | default(false)
+      retries: 5
+      delay: 10
 
     - name: Stop non essential indexing to speed up shard recovery
       ansible.builtin.uri:
@@ -140,13 +161,13 @@
         method: POST
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: no
+        validate_certs: false
       failed_when: false
 
     - name: Shutdown elasticsearch service
       ansible.builtin.service:
         name: elasticsearch
-        enabled: yes
+        enabled: true
         state: stopped
       when:
         - not elasticsearch_unsafe_upgrade_restart | bool
@@ -157,20 +178,20 @@
         enablerepo:
           - 'elastic-{{ elasticstack_release }}.x'
       when:
-        - ansible_os_family == "RedHat"
+        - ansible_facts.os_family == "RedHat"
         - elasticstack_full_stack | bool
 
     - name: Update Elasticsearch - deb or unmanaged repositories rpm
       ansible.builtin.package:
         name: "{{ elasticsearch_package }}"
       when:
-        - ansible_os_family == "Debian" or
+        - ansible_facts.os_family == "Debian" or
           not elasticstack_full_stack | bool
 
     - name: Start elasticsearch
       ansible.builtin.service:
         name: elasticsearch
-        enabled: yes
+        enabled: true
         state: started
       when:
         - elasticsearch_running.status.ActiveState == "active"
@@ -179,7 +200,7 @@
     - name: Restart elasticsearch (fast, for non-prod)
       ansible.builtin.service:
         name: elasticsearch
-        enabled: yes
+        enabled: true
         state: restarted
       when:
         - elasticsearch_running.status.ActiveState == "active"
@@ -191,23 +212,19 @@
         port: "{{ elasticstack_elasticsearch_http_port }}"
         delay: 30
 
-    - name: Confirm the node joins the cluster # noqa: risky-shell-pipe
-      ansible.builtin.shell: >
-        if test -n "$(ps -p $$ | grep bash)"; then set -o pipefail; fi;
-        curl
-        -k
-        -u elastic:{{ elasticstack_password.stdout }}
-        -s
-        -m 2
-        '{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cat/nodes?h=name'
-        | grep
-        -E
-        '^{{ elasticsearch_nodename }}$'
+    - name: Confirm the node joins the cluster
+      ansible.builtin.uri:
+        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cat/nodes?h=name"
+        method: GET
+        user: elastic
+        password: "{{ elasticstack_password.stdout }}"
+        validate_certs: false
+        return_content: true
       register: result
-      until: result.rc == 0
+      until: elasticsearch_nodename in (result.content | default('')).split()
       retries: 200
       delay: 3
-      changed_when: false
+      no_log: "{{ elasticstack_no_log }}"
 
     - name: Enable shard allocation for the cluster
       ansible.builtin.uri:
@@ -217,7 +234,7 @@
         body_format: json
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: no
+        validate_certs: false
       register: response
       until: response.json.acknowledged | default(false)
       retries: 5
@@ -229,7 +246,7 @@
         method: GET
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: no
+        validate_certs: false
       register: response
       until: (response.json.status | default('')) in ['green', 'yellow']
       retries: 5

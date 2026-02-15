@@ -11,9 +11,8 @@
   hosts: all
   vars:
     elasticsearch_jna_workaround: true
-    elasticsearch_disable_systemcallfilterchecks: true
     elasticsearch_monitoring_enabled: false
-    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | int}}"
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticsearch_heap: "1"
     elasticstack_full_stack: true
     elasticstack_no_log: false
@@ -29,7 +28,7 @@
     - name: Enable Elastic installation on RHEL 9
       ansible.builtin.set_fact:
         elasticstack_rpm_workaround: true
-      when: ansible_os_family == 'RedHat' and ansible_distribution_major_version >= "9"
+      when: ansible_facts.os_family == 'RedHat' and ansible_facts.distribution_major_version >= "9"
     - name: Include Elastic Repos
       ansible.builtin.include_role:
         name: repos

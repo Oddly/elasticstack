@@ -166,5 +166,3 @@ logstash_plugins: []
 # === Internal Use ===
 logstash_freshstart:
   changed: false
-
-# CI test trigger - can be removed after tests pass

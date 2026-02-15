@@ -42,7 +42,7 @@
         - renew_ca
         - renew_beats_cert
   vars:
-    _backup_path: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-beats.zip"
+    _backup_path: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}-beats.zip"
     _backup_target: "{{ elasticstack_ca_host }}"
   when: "'renew_beats_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or beats_cert_will_expire_soon | bool"
   tags:
@@ -58,7 +58,7 @@
         - renew_ca
         - renew_beats_cert
   vars:
-    _backup_path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}-beats.zip"
+    _backup_path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_facts.hostname }}-beats.zip"
     _backup_target: localhost
     _backup_become: false
   when: "'renew_beats_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or beats_cert_will_expire_soon | bool"
@@ -73,7 +73,7 @@
     state: directory
     owner: root
     group: root
-    mode: 0700
+    mode: "0700"
   tags:
     - certificates
     - renew_ca
@@ -89,10 +89,10 @@
         - renew_ca
         - renew_beats_cert
   vars:
-    _cert_name: "{{ ansible_hostname }}"
-    _cert_ip: "{{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}"
-    _cert_dns: "{{ ansible_hostname }},{{ ansible_fqdn }},{{ inventory_hostname }}"
-    _cert_out: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-beats.zip"
+    _cert_name: "{{ ansible_facts.hostname }}"
+    _cert_ip: "{{ ansible_facts.default_ipv4.address | default(ansible_facts.all_ipv4_addresses[0]) }}"
+    _cert_dns: "{{ ansible_facts.hostname }},{{ ansible_facts.fqdn }},{{ inventory_hostname }}"
+    _cert_out: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}-beats.zip"
     _cert_pass: "{{ beats_tls_key_passphrase }}"
     _cert_validity: "{{ beats_cert_validity_period }}"
     _cert_format: pem
@@ -104,9 +104,9 @@
 # -- Distribute PEM cert (zip) to Beats node (kept inline, zip requires unarchive) --
 - name: Fetch certificate zip from CA host to controller
   ansible.builtin.fetch:
-    src: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-beats.zip"
-    dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}-beats.zip"
-    flat: yes
+    src: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}-beats.zip"
+    dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_facts.hostname }}-beats.zip"
+    flat: true
   delegate_to: "{{ elasticstack_ca_host }}"
   tags:
     - certificates
@@ -115,11 +115,11 @@
 
 - name: Extract certificate on Beats node
   ansible.builtin.unarchive:
-    src: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}-beats.zip"
+    src: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_facts.hostname }}-beats.zip"
     dest: "/etc/beats/certs/"
     owner: root
     group: root
-    mode: 0640
+    mode: "0640"
   tags:
     - certificates
     - renew_ca
@@ -127,11 +127,11 @@
 
 - name: Copy certificate to standard location
   ansible.builtin.copy:
-    src: "/etc/beats/certs/{{ ansible_hostname }}/{{ ansible_hostname }}.crt"
+    src: "/etc/beats/certs/{{ ansible_facts.hostname }}/{{ ansible_facts.hostname }}.crt"
     dest: "/etc/beats/certs/{{ inventory_hostname }}-beats.crt"
     owner: root
     group: root
-    mode: 0640
+    mode: "0640"
     remote_src: true
   notify:
     - Restart Filebeat
@@ -144,11 +144,11 @@
 
 - name: Copy key to standard location
   ansible.builtin.copy:
-    src: "/etc/beats/certs/{{ ansible_hostname }}/{{ ansible_hostname }}.key"
+    src: "/etc/beats/certs/{{ ansible_facts.hostname }}/{{ ansible_facts.hostname }}.key"
     dest: "/etc/beats/certs/{{ inventory_hostname }}-beats.key"
     owner: root
     group: root
-    mode: 0640
+    mode: "0640"
     remote_src: true
   notify:
     - Restart Filebeat

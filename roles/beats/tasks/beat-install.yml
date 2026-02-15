@@ -22,7 +22,7 @@
       - 'elastic-{{ elasticstack_release }}.x'
   notify: "Restart {{ _beat_name | capitalize }}"
   when:
-    - ansible_os_family == "RedHat"
+    - ansible_facts.os_family == "RedHat"
     - elasticstack_full_stack | bool
 
 - name: "Install {{ _beat_name }} - rpm - standalone"
@@ -30,7 +30,7 @@
     name: "{{ _beat_package }}"
   notify: "Restart {{ _beat_name | capitalize }}"
   when:
-    - ansible_os_family == "RedHat"
+    - ansible_facts.os_family == "RedHat"
     - not elasticstack_full_stack | bool
 
 - name: "Install {{ _beat_name }} - deb"
@@ -38,7 +38,7 @@
     name: "{{ _beat_package }}"
   notify: "Restart {{ _beat_name | capitalize }}"
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts.os_family == "Debian"
 
 - name: "Install {{ _beat_name }} latest version - rpm - full stack"
   ansible.builtin.package:
@@ -50,7 +50,7 @@
   when:
     - elasticstack_version is defined
     - elasticstack_version == "latest"
-    - ansible_os_family == "RedHat"
+    - ansible_facts.os_family == "RedHat"
     - elasticstack_full_stack | bool
 
 - name: "Install {{ _beat_name }} latest version - rpm - standalone"
@@ -61,7 +61,7 @@
   when:
     - elasticstack_version is defined
     - elasticstack_version == "latest"
-    - ansible_os_family == "RedHat"
+    - ansible_facts.os_family == "RedHat"
     - not elasticstack_full_stack | bool
 
 - name: "Install {{ _beat_name }} latest version - deb"
@@ -72,4 +72,4 @@
   when:
     - elasticstack_version is defined
     - elasticstack_version == "latest"
-    - ansible_os_family == "Debian"
+    - ansible_facts.os_family == "Debian"

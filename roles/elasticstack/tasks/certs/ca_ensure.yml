@@ -12,7 +12,7 @@
     path: "{{ elasticstack_ca_dir }}"
     owner: root
     group: elasticsearch
-    mode: 0700
+    mode: "0700"
     state: directory
   tags:
     - certificates

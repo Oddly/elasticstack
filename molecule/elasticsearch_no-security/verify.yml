@@ -15,7 +15,7 @@
 # kics-scan ignore-line
         url: http://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health
         method: GET
-        return_content: yes
+        return_content: true
         status_code: 200
         validate_certs: false
       register: result
@@ -29,7 +29,7 @@
 # kics-scan ignore-line
         url: http://localhost:{{ elasticstack_elasticsearch_http_port }}/_cat/nodes
         method: GET
-        return_content: yes
+        return_content: true
         status_code: 200
         validate_certs: false
       register: nodes
@@ -41,5 +41,5 @@
           - "'{{ item }}' in nodes.content"
         fail_msg: "'{{ item }}' was not found in nodes.content"
         success_msg: "'{{ item }}' was found in nodes.content"
-      with_inventory_hostnames: all
+      loop: "{{ groups['all'] }}"
       when: groups[elasticstack_elasticsearch_group_name] | length > 1

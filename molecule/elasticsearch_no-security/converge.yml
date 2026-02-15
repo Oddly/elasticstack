@@ -9,9 +9,8 @@
     elasticsearch_security: false
     elasticstack_security: false
     elasticsearch_jna_workaround: true
-    elasticsearch_disable_systemcallfilterchecks: true
     elasticsearch_heap: "1"
-    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('8') | int }}"
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticstack_no_log: false
     elasticstack_elasticsearch_group_name: elasticsearchXYZ
   tasks:

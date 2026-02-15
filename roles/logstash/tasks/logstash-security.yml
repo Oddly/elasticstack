@@ -66,7 +66,7 @@
           tags:
             - certificates
       vars:
-        _cert_path: "{{ logstash_certs_dir }}/{{ ansible_hostname }}-ls.p12"
+        _cert_path: "{{ logstash_certs_dir }}/{{ ansible_facts.hostname }}-ls.p12"
         _cert_pass: "{{ logstash_tls_key_passphrase }}"
         _cert_buffer_days: "{{ logstash_cert_expiration_buffer }}"
         _cert_expiry_fact: logstash_cert_will_expire_soon
@@ -94,7 +94,7 @@
 
     - name: Remove old certificate on CA host
       ansible.builtin.file:
-        path: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-ls.p12"
+        path: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}-ls.p12"
         state: absent
       delegate_to: "{{ elasticstack_ca_host }}"
       when:
@@ -103,7 +103,7 @@
 
     - name: Remove old PEM certificate zip on CA host
       ansible.builtin.file:
-        path: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-ls.zip"
+        path: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}-ls.zip"
         state: absent
       delegate_to: "{{ elasticstack_ca_host }}"
       when:
@@ -132,10 +132,10 @@
               tags:
                 - certificates
           vars:
-            _cert_name: "{{ ansible_hostname }}"
-            _cert_ip: "{{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}"
-            _cert_dns: "{{ ansible_hostname }},{{ ansible_fqdn }},{{ inventory_hostname }}"
-            _cert_out: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-ls.p12"
+            _cert_name: "{{ ansible_facts.hostname }}"
+            _cert_ip: "{{ ansible_facts.default_ipv4.address | default(ansible_facts.all_ipv4_addresses[0]) }}"
+            _cert_dns: "{{ ansible_facts.hostname }},{{ ansible_facts.fqdn }},{{ inventory_hostname }}"
+            _cert_out: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}-ls.p12"
             _cert_pass: "{{ logstash_tls_key_passphrase }}"
             _cert_validity: "{{ logstash_cert_validity_period }}"
           tags:
@@ -148,8 +148,8 @@
               tags:
                 - certificates
           vars:
-            _cert_src: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-ls.p12"
-            _cert_dest: "{{ logstash_certs_dir }}/{{ ansible_hostname }}-ls.p12"
+            _cert_src: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}-ls.p12"
+            _cert_dest: "{{ logstash_certs_dir }}/{{ ansible_facts.hostname }}-ls.p12"
             _cert_owner: root
             _cert_group: logstash
             _cert_mode: "0640"
@@ -158,7 +158,7 @@
 
         - name: Copy P12 as keystore
           ansible.builtin.copy:
-            src: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}-ls.p12"
+            src: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_facts.hostname }}-ls.p12"
             dest: "{{ logstash_certs_dir }}/keystore.pfx"
             owner: root
             group: logstash
@@ -176,10 +176,10 @@
               tags:
                 - certificates
           vars:
-            _cert_name: "{{ ansible_hostname }}"
-            _cert_ip: "{{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}"
-            _cert_dns: "{{ ansible_hostname }},{{ ansible_fqdn }},{{ inventory_hostname }}"
-            _cert_out: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-ls.zip"
+            _cert_name: "{{ ansible_facts.hostname }}"
+            _cert_ip: "{{ ansible_facts.default_ipv4.address | default(ansible_facts.all_ipv4_addresses[0]) }}"
+            _cert_dns: "{{ ansible_facts.hostname }},{{ ansible_facts.fqdn }},{{ inventory_hostname }}"
+            _cert_out: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}-ls.zip"
             _cert_pass: "{{ logstash_tls_key_passphrase }}"
             _cert_validity: "{{ logstash_cert_validity_period }}"
             _cert_format: pem
@@ -188,8 +188,8 @@
 
         - name: Fetch PEM certificate zip to controller
           ansible.builtin.fetch:
-            src: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-ls.zip"
-            dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}-ls.zip"
+            src: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}-ls.zip"
+            dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_facts.hostname }}-ls.zip"
             flat: true
           delegate_to: "{{ elasticstack_ca_host }}"
           tags:
@@ -197,7 +197,7 @@
 
         - name: Extract PEM certificate on Logstash host
           ansible.builtin.unarchive:
-            src: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}-ls.zip"
+            src: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_facts.hostname }}-ls.zip"
             dest: "{{ logstash_certs_dir }}/"
             owner: root
             group: logstash
@@ -207,7 +207,7 @@
 
         - name: Copy server certificate to standard location
           ansible.builtin.copy:
-            src: "{{ logstash_certs_dir }}/{{ ansible_hostname }}/{{ ansible_hostname }}.crt"
+            src: "{{ logstash_certs_dir }}/{{ ansible_facts.hostname }}/{{ ansible_facts.hostname }}.crt"
             dest: "{{ logstash_certs_dir }}/{{ inventory_hostname }}-server.crt"
             owner: root
             group: logstash
@@ -218,7 +218,7 @@
 
         - name: Copy encrypted key
           ansible.builtin.copy:
-            src: "{{ logstash_certs_dir }}/{{ ansible_hostname }}/{{ ansible_hostname }}.key"
+            src: "{{ logstash_certs_dir }}/{{ ansible_facts.hostname }}/{{ ansible_facts.hostname }}.key"
             dest: "{{ logstash_certs_dir }}/{{ inventory_hostname }}.key"
             owner: root
             group: root
@@ -246,7 +246,7 @@
             path: "{{ logstash_certs_dir }}/{{ inventory_hostname }}-pkcs8.key"
             owner: root
             group: logstash
-            mode: "0660"
+            mode: "0640"
           tags:
             - certificates
 
@@ -291,7 +291,7 @@
           - names: "{{ logstash_role_indicies_names }}"
             privileges: "{{ logstash_role_indicies_privileges }}"
         state: present
-        host: "https://{{ hostvars[elasticstack_ca_host].ansible_default_ipv4.address }}:{{ elasticstack_elasticsearch_http_port }}"
+        host: "https://{{ hostvars[elasticstack_ca_host].ansible_facts.default_ipv4.address }}:{{ elasticstack_elasticsearch_http_port }}"
         auth_user: elastic
         auth_pass: "{{ _logstash_elastic_password.stdout }}"
         verify_certs: true
@@ -308,7 +308,7 @@
           - "{{ logstash_role_name }}"
         enabled: true
         state: present
-        host: "https://{{ hostvars[elasticstack_ca_host].ansible_default_ipv4.address }}:{{ elasticstack_elasticsearch_http_port }}"
+        host: "https://{{ hostvars[elasticstack_ca_host].ansible_facts.default_ipv4.address }}:{{ elasticstack_elasticsearch_http_port }}"
         auth_user: elastic
         auth_pass: "{{ _logstash_elastic_password.stdout }}"
         verify_certs: true
