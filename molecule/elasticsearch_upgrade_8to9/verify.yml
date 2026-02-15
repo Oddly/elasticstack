@@ -1,0 +1,128 @@
+---
+# Verify Elasticsearch 8.x to 9.x upgrade was successful
+
+- name: Verify ES 9.x upgrade
+  hosts: all
+  vars:
+    elasticstack_elasticsearch_http_port: 9200
+    elasticstack_initial_passwords: /usr/share/elasticsearch/initial_passwords
+    elasticstack_elasticsearch_group_name: elasticsearch
+  tasks:
+    - name: Set elasticsearch_ca variable if not already done
+      ansible.builtin.set_fact:
+        elasticsearch_ca: "{{ groups[elasticstack_elasticsearch_group_name][0] }}"
+      when: elasticsearch_ca is undefined
+
+    - name: Fetch Elastic password
+      ansible.builtin.shell: |
+        grep "PASSWORD elastic " {{ elasticstack_initial_passwords }} |
+        awk {' print $4 '}
+      register: elastic_pass
+      changed_when: false
+      delegate_to: "{{ elasticsearch_ca }}"
+
+    - name: Check ES version is 9.x
+      ansible.builtin.uri:
+        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/
+        method: GET
+        force_basic_auth: yes
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        return_content: yes
+        validate_certs: false
+      register: es_info
+
+    - name: Display ES version info
+      ansible.builtin.debug:
+        msg: "ES version: {{ es_info.json.version.number }}"
+
+    - name: Verify ES 9.x is running
+      ansible.builtin.assert:
+        that:
+          - es_info.json.version.number is version('9.0.0', '>=')
+        fail_msg: "Expected ES 9.x but got {{ es_info.json.version.number }}"
+        success_msg: "ES 9.x ({{ es_info.json.version.number }}) is running - upgrade successful!"
+
+    - name: Wait for cluster to be healthy (green or yellow acceptable post-upgrade)
+      ansible.builtin.uri:
+        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health
+        method: GET
+        force_basic_auth: yes
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        return_content: yes
+        status_code: 200
+        validate_certs: false
+      register: cluster_health
+      retries: 12
+      delay: 10
+      until: cluster_health.json.status in ['green', 'yellow']
+
+    - name: Display cluster health
+      ansible.builtin.debug:
+        var: cluster_health.json
+
+    - name: Verify cluster is healthy
+      ansible.builtin.assert:
+        that:
+          - cluster_health.json.status in ['green', 'yellow']
+          - cluster_health.json.number_of_nodes >= 2
+        fail_msg: "Cluster is unhealthy: {{ cluster_health.json.status }}"
+        success_msg: "Cluster is {{ cluster_health.json.status }} with {{ cluster_health.json.number_of_nodes }} nodes"
+
+    - name: Check all nodes are visible
+      ansible.builtin.uri:
+        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cat/nodes?format=json
+        method: GET
+        force_basic_auth: yes
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        return_content: yes
+        validate_certs: false
+      register: nodes_info
+      when: groups[elasticstack_elasticsearch_group_name] | length > 1
+
+    - name: Display nodes
+      ansible.builtin.debug:
+        var: nodes_info.json
+      when: groups[elasticstack_elasticsearch_group_name] | length > 1
+
+    - name: Verify test data survived the upgrade
+      ansible.builtin.uri:
+        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/upgrade-test-index/_doc/1
+        method: GET
+        force_basic_auth: yes
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        return_content: yes
+        validate_certs: false
+        status_code: 200
+      register: test_doc
+      delegate_to: "{{ elasticsearch_ca }}"
+      run_once: true
+
+    - name: Display test document
+      ansible.builtin.debug:
+        var: test_doc.json
+      run_once: true
+
+    - name: Verify test data is intact
+      ansible.builtin.assert:
+        that:
+          - test_doc.json._source.test_field == "pre-upgrade-data"
+        fail_msg: "Test data was lost during upgrade!"
+        success_msg: "Test data survived upgrade: {{ test_doc.json._source.test_field }}"
+      run_once: true
+
+    - name: Final upgrade verification summary
+      ansible.builtin.debug:
+        msg: |
+          ===========================================
+          UPGRADE VERIFICATION COMPLETE
+          ===========================================
+          ES Version: {{ es_info.json.version.number }}
+          Cluster Status: {{ cluster_health.json.status }}
+          Number of Nodes: {{ cluster_health.json.number_of_nodes }}
+          Data Preserved: YES
+          ===========================================
+      run_once: true

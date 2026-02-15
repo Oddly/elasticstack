@@ -1,0 +1,102 @@
+---
+name: Collect diagnostic logs
+description: >
+  Collects comprehensive diagnostics from molecule Docker containers
+  on test failure: service logs, journal, systemctl status, ES cluster
+  health, and runner system info. Uploads as a Gitea artifact.
+
+inputs:
+  artifact-name:
+    description: Name for the uploaded artifact
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Collect diagnostic logs
+      shell: bash
+      run: |
+        diag="/tmp/molecule-diagnostics"
+        mkdir -p "$diag"/{docker-logs,service-logs}
+
+        # Docker container stdout/stderr
+        for cid in $(docker ps -aq); do
+          name=$(docker inspect --format '{{.Name}}' "$cid" | sed 's|^/||')
+          docker logs "$cid" > "$diag/docker-logs/${name}.log" 2>&1 || true
+        done
+
+        # Per-container service logs, journal, and status
+        for cid in $(docker ps -aq); do
+          name=$(docker inspect --format '{{.Name}}' "$cid" | sed 's|^/||')
+          dir="$diag/service-logs/$name"
+          mkdir -p "$dir"
+
+          # System journal (last 1000 lines)
+          docker exec "$cid" bash -c 'journalctl --no-pager -n 1000 2>/dev/null' \
+            > "$dir/journal.log" 2>&1 || true
+
+          # Service status
+          for svc in elasticsearch logstash kibana redis filebeat auditbeat metricbeat; do
+            docker exec "$cid" bash -c "systemctl status $svc 2>/dev/null" \
+              > "$dir/${svc}-status.txt" 2>&1 || true
+          done
+
+          # Elasticsearch logs
+          docker exec "$cid" bash -c 'cat /var/log/elasticsearch/*.log 2>/dev/null' \
+            > "$dir/elasticsearch.log" 2>&1 || true
+
+          # Logstash logs (plain + slow log)
+          docker exec "$cid" bash -c \
+            'cat /var/log/logstash/logstash-plain.log /var/log/logstash/logstash-slowlog-plain.log 2>/dev/null' \
+            > "$dir/logstash.log" 2>&1 || true
+
+          # Kibana logs
+          docker exec "$cid" bash -c 'cat /var/log/kibana/kibana.log 2>/dev/null' \
+            > "$dir/kibana.log" 2>&1 || true
+
+          # Filebeat logs
+          docker exec "$cid" bash -c 'cat /var/log/filebeat/filebeat* 2>/dev/null' \
+            > "$dir/filebeat.log" 2>&1 || true
+
+          # Redis logs (Debian: redis-server.log, RHEL: redis.log)
+          docker exec "$cid" bash -c 'cat /var/log/redis/*.log 2>/dev/null' \
+            > "$dir/redis.log" 2>&1 || true
+
+          # Elasticsearch cluster health (try with keystore bootstrap password)
+          docker exec "$cid" bash -c '
+            pw=$(/usr/share/elasticsearch/bin/elasticsearch-keystore show bootstrap.password 2>/dev/null || true)
+            if [ -n "$pw" ]; then
+              curl -sk --max-time 5 -u "elastic:$pw" https://localhost:9200/_cluster/health?pretty 2>/dev/null
+            else
+              curl -sk --max-time 5 https://localhost:9200/_cluster/health?pretty 2>/dev/null
+            fi
+          ' > "$dir/es-cluster-health.json" 2>&1 || true
+
+          docker exec "$cid" bash -c '
+            pw=$(/usr/share/elasticsearch/bin/elasticsearch-keystore show bootstrap.password 2>/dev/null || true)
+            if [ -n "$pw" ]; then
+              curl -sk --max-time 5 -u "elastic:$pw" https://localhost:9200/_cat/indices?v 2>/dev/null
+            else
+              curl -sk --max-time 5 https://localhost:9200/_cat/indices?v 2>/dev/null
+            fi
+          ' > "$dir/es-indices.txt" 2>&1 || true
+        done
+
+        # Runner system info
+        {
+          echo "=== Memory ===" ; free -h
+          echo "=== Disk ===" ; df -h
+          echo "=== Docker stats ===" ; docker stats --no-stream
+          echo "=== Python ===" ; python3 --version ; pip3 list 2>/dev/null
+          echo "=== Ansible ===" ; ansible --version 2>/dev/null
+        } > "$diag/runner-info.txt" 2>&1 || true
+
+    - name: Upload diagnostic logs
+      uses: christopherhx/gitea-upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: |
+          /tmp/molecule-diagnostics/
+          ~/.cache/molecule/
+        retention-days: 7
+        if-no-files-found: ignore

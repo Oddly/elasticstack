@@ -1,0 +1,144 @@
+---
+- name: Verify api.py functionality through modules
+  hosts: all
+  tasks:
+    - name: Fetch Elastic password
+      ansible.builtin.shell: |
+        grep "PASSWORD elastic " /usr/share/elasticsearch/initial_passwords |
+        awk {' print $4 '}
+      register: elastic_pass
+      changed_when: false
+
+    - name: Get ES version to confirm ES 9.x client works
+      ansible.builtin.uri:
+        url: https://localhost:9200/
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        force_basic_auth: true
+        validate_certs: false
+        return_content: true
+      register: es_info
+
+    - name: Test 1 - Create role via elasticsearch_role module
+      oddly.elasticstack.elasticsearch_role:
+        name: api-test-role
+        cluster:
+          - monitor
+          - manage_own_api_key
+        indicies:
+          - names:
+              - test-index-*
+            privileges:
+              - read
+              - write
+        state: present
+        host: https://localhost:9200
+        auth_user: elastic
+        auth_pass: "{{ elastic_pass.stdout }}"
+        verify_certs: false
+      register: role_create
+
+    - name: Verify role creation succeeded
+      ansible.builtin.assert:
+        that:
+          - role_create is success
+        success_msg: "elasticsearch_role module works with ES {{ es_info.json.version.number }}"
+
+    - name: Test 2 - Create user via elasticsearch_user module
+      oddly.elasticstack.elasticsearch_user:
+        name: api-test-user
+        fullname: API Test User
+        password: "TestPassword123!"
+        email: test@example.com
+        roles:
+          - api-test-role
+        enabled: true
+        state: present
+        host: https://localhost:9200
+        auth_user: elastic
+        auth_pass: "{{ elastic_pass.stdout }}"
+        verify_certs: false
+      register: user_create
+
+    - name: Verify user creation succeeded
+      ansible.builtin.assert:
+        that:
+          - user_create is success
+        success_msg: "elasticsearch_user module works with ES {{ es_info.json.version.number }}"
+
+    - name: Test 3 - Update role (add privilege)
+      oddly.elasticstack.elasticsearch_role:
+        name: api-test-role
+        cluster:
+          - monitor
+          - manage_own_api_key
+          - read_ccr
+        indicies:
+          - names:
+              - test-index-*
+            privileges:
+              - read
+              - write
+        state: present
+        host: https://localhost:9200
+        auth_user: elastic
+        auth_pass: "{{ elastic_pass.stdout }}"
+        verify_certs: false
+      register: role_update
+
+    - name: Verify role update succeeded
+      ansible.builtin.assert:
+        that:
+          - role_update is success
+        success_msg: "Role update works with ES {{ es_info.json.version.number }}"
+
+    - name: Test 4 - Delete user
+      oddly.elasticstack.elasticsearch_user:
+        name: api-test-user
+        password: "dummy"
+        roles:
+          - api-test-role
+        state: absent
+        host: https://localhost:9200
+        auth_user: elastic
+        auth_pass: "{{ elastic_pass.stdout }}"
+        verify_certs: false
+      register: user_delete
+
+    - name: Verify user deletion succeeded
+      ansible.builtin.assert:
+        that:
+          - user_delete is success
+        success_msg: "User deletion works with ES {{ es_info.json.version.number }}"
+
+    - name: Test 5 - Delete role
+      oddly.elasticstack.elasticsearch_role:
+        name: api-test-role
+        state: absent
+        host: https://localhost:9200
+        auth_user: elastic
+        auth_pass: "{{ elastic_pass.stdout }}"
+        verify_certs: false
+      register: role_delete
+
+    - name: Verify role deletion succeeded
+      ansible.builtin.assert:
+        that:
+          - role_delete is success
+        success_msg: "Role deletion works with ES {{ es_info.json.version.number }}"
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          API.PY FUNCTIONAL TESTS PASSED
+          ==========================================
+          Elasticsearch Version: {{ es_info.json.version.number }}
+
+          All api.py code paths tested via modules:
+            - Version detection (ES {{ es_info.json.version.number[0] }}.x client)
+            - new_client_basic_auth() - used by all tests
+            - SSL context creation
+            - Role CRUD operations
+            - User CRUD operations
+          ==========================================

@@ -1,0 +1,19 @@
+---
+- name: Converge
+  hosts: all
+  collections:
+    - oddly.elasticstack
+  vars:
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default(9, true) | int }}"
+    elasticstack_full_stack: false
+    elasticstack_no_log: false
+    logstash_pipeline_unsafe_shutdown: true
+    logstash_output_elasticsearch: false
+  tasks:
+    - name: Include Elastic repos role
+      ansible.builtin.include_role:
+        name: repos
+
+    - name: Include Logstash role with defaults
+      ansible.builtin.include_role:
+        name: logstash

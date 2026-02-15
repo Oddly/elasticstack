@@ -1,0 +1,14 @@
+---
+
+- name: Ensure gpg exists, for signing keys
+  community.general.zypper:
+    name: gpg2
+    state: present
+
+- name: Ensure Elastic Stack yum repository is configured (SuSE)
+  community.general.zypper_repository:
+    name: elastic-{{ elasticstack_release }}.x
+    description: Elastic Release {{ elasticstack_release }}.x
+    repo: https://artifacts.elastic.co/packages/{{ elasticstack_release }}.x/yum
+    auto_import_keys: true
+    enabled: "{{ elasticstack_enable_repos | bool }}"

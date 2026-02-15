@@ -1,0 +1,41 @@
+---
+- name: Prepare
+  hosts: all
+  tasks:
+    - name: Install EPEL for RHEL
+      ansible.builtin.package:
+        name: epel-release
+      when: ansible_os_family == "RedHat"
+
+    - name: Install packages for RHEL
+      ansible.builtin.package:
+        name:
+          - iproute
+          - NetworkManager
+      when: ansible_os_family == "RedHat"
+
+    - name: Start NetworkManager
+      ansible.builtin.service:
+        name: NetworkManager
+        state: started
+        enabled: yes
+      when: ansible_os_family == "RedHat"
+
+    - name: Install packages for Debian
+      ansible.builtin.apt:
+        name:
+          - gpg
+          - gpg-agent
+          - procps
+          - curl
+          - iproute2
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Install common packages
+      ansible.builtin.package:
+        name:
+          - git
+          - openssl
+          - unzip
+          - systemd

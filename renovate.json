@@ -1,0 +1,19 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "github-actions": {
+    "enabled": true,
+    "fileMatch": [
+      "^\\.github/workflows/[^/]+\\.yml$"
+    ]
+  },
+  "packageRules": [
+    {
+      "matchManagers": ["github-actions"],
+      "pinDigests": true,
+      "automerge": false
+    }
+  ]
+}

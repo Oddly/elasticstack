@@ -1,0 +1,25 @@
+galaxy_info:
+  author: Netways GmbH
+  description: Elasticsearch Ansible role
+  role_name: elasticsearch
+  company: Netways GmbH
+  namespace: oddly
+  license: GPL-3.0-or-later
+  min_ansible_version: "2.18"
+  platforms:
+    - name: EL
+      versions:
+        - "8"
+        - "9"
+        - "10"
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+        - trixie
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+  galaxy_tags: []
+dependencies: []

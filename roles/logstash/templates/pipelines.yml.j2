@@ -1,0 +1,5 @@
+---
+- pipeline.id: main
+  path.config: "/etc/logstash/conf.d/main/*.conf"
+  queue.type: {{ logstash_queue_type }}
+  queue.max_bytes: {{ logstash_queue_max_bytes }}

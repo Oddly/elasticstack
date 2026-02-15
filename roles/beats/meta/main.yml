@@ -1,0 +1,30 @@
+---
+galaxy_info:
+  role_name: beats
+  namespace: oddly
+  author: Thomas Widhalm <thomas.widhalm@netways.de>
+  description: Beats for Linux
+  company: "Netways GmbH"
+  license: GPL-3.0-or-later
+  min_ansible_version: "2.18"
+  platforms:
+    - name: EL
+      versions:
+        - "8"
+        - "9"
+        - "10"
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+        - trixie
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+  galaxy_tags:
+    - elk
+    - beats
+    - logging
+    - system
+dependencies: []

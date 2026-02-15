@@ -1,0 +1,11 @@
+ansible-core>=2.18,<2.21
+ansible-lint
+molecule
+molecule-plugins[docker]
+pytest
+passlib
+# elasticsearch-py client: support both 8.x (for ES 8.x) and 9.x (for ES 9.x)
+# The client version should match the target ES server version
+# For testing with ES 9.x, install: pip install 'elasticsearch>=9,<10'
+# For testing with ES 8.x, install: pip install 'elasticsearch>=8,<9'
+elasticsearch>=8,<10

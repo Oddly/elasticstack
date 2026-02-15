@@ -1,0 +1,170 @@
+---
+# defaults file for logstash
+
+# === Service Management ===
+logstash_enable: true
+logstash_config_backup: false
+logstash_manage_yaml: true
+logstash_manage_logging: false
+
+# === Logstash.yml Configuration ===
+logstash_config_autoreload: true
+# logstash_config_autoreload_interval: 3s
+logstash_config_path_data: /var/lib/logstash
+logstash_config_path_logs: /var/log/logstash
+# logstash_http_host: "127.0.0.1"
+# logstash_http_port: 9600-9700
+
+# === Pipeline Management ===
+logstash_manage_pipelines: true
+logstash_no_pipelines: false
+logstash_queue_type: persisted
+logstash_queue_max_bytes: 1gb
+
+# === Input Configuration ===
+
+# Beats input (Filebeat, Metricbeat, etc.)
+logstash_input_beats: true
+logstash_input_beats_port: 5044
+logstash_input_beats_ssl: "{{ logstash_beats_tls | default(omit) }}"
+# logstash_input_beats_client_auth: required  # required | optional | none
+# logstash_input_beats_timeout: 60s
+
+# Elastic Agent input
+logstash_input_elastic_agent: false
+logstash_input_elastic_agent_port: 5044
+logstash_input_elastic_agent_ssl: true
+
+# Extra inputs (raw Logstash config, appended to input section)
+# Example:
+#   logstash_extra_inputs: |
+#     http {
+#       port => 8080
+#     }
+logstash_extra_inputs: ""
+
+# === Filter Configuration ===
+
+# Inline filters (raw Logstash filter config)
+# Example:
+#   logstash_filters: |
+#     grok {
+#       match => { "message" => "%{SYSLOGLINE}" }
+#     }
+logstash_filters: ""
+
+# Filter files to copy (list of paths relative to playbook)
+# Example:
+#   logstash_filter_files:
+#     - files/logstash/syslog-filter.conf
+#     - files/logstash/nginx-filter.conf
+logstash_filter_files: []
+
+# === Output Configuration ===
+
+# Elasticsearch output
+logstash_output_elasticsearch: true
+logstash_elasticsearch_hosts: []  # Empty = auto-discover from inventory
+logstash_elasticsearch_index: ""  # Empty = default (logstash-%{+YYYY.MM.dd})
+logstash_elasticsearch_ssl: true
+logstash_elasticsearch_ssl_verification: true
+logstash_validate_after_inactivity: 300
+logstash_sniffing: false
+# logstash_sniffing_delay: 5
+# logstash_sniffing_path: "/_nodes/http"
+
+# Extra outputs (raw Logstash config, appended to output section)
+# Example:
+#   logstash_extra_outputs: |
+#     file {
+#       path => "/var/log/logstash/debug.log"
+#     }
+logstash_extra_outputs: ""
+
+# === Custom Pipeline (Full Control) ===
+# If set, ignores all input/filter/output settings above
+# and uses this as the complete pipeline configuration
+# Example:
+#   logstash_custom_pipeline: |
+#     input { stdin {} }
+#     filter { ... }
+#     output { stdout {} }
+logstash_custom_pipeline: ""
+
+# === Event Enrichment ===
+logstash_ident: true
+logstash_ident_field_name: "[logstash][instance]"
+logstash_pipeline_identifier: true
+logstash_pipeline_identifier_field_name: "[logstash][pipeline]"
+logstash_pipeline_identifier_defaults: false
+
+# === Elasticsearch User/Role Management ===
+logstash_create_role: true
+logstash_role_name: logstash_writer
+logstash_role_cluster_privileges:
+  - manage_index_templates
+  - monitor
+  - manage_ilm
+logstash_role_indicies_names:
+  - "ecs-logstash*"
+  - "logstash*"
+  - "logs*"
+logstash_role_indicies_privileges:
+  - write
+  - create
+  - delete
+  - create_index
+  - manage
+  - manage_ilm
+logstash_create_user: true
+logstash_user_name: logstash_writer
+logstash_user_password: password
+logstash_user_email: ""
+logstash_user_fullname: "Internal Logstash User"
+logstash_reset_writer_role: true
+
+# === Certificate Configuration ===
+
+# Certificate source: elasticsearch_ca | standalone | external
+logstash_cert_source: elasticsearch_ca
+
+# For external certificates (when logstash_cert_source: external)
+# logstash_tls_certificate_file: "/path/to/server.crt"
+# logstash_tls_key_file: "/path/to/server.key"
+# logstash_tls_ca_file: "/path/to/ca.crt"
+
+# Certificate directory on Logstash host
+logstash_certs_dir: /etc/logstash/certs
+
+# Certificate validity and renewal
+logstash_cert_validity_period: 1095  # days (3 years)
+logstash_cert_expiration_buffer: 30  # Renew when this many days left
+logstash_cert_will_expire_soon: false
+logstash_cert_force_regenerate: false  # Force certificate regeneration
+logstash_tls_key_passphrase: LogstashChangeMe
+
+# === Logging Configuration ===
+logstash_logging_console: true
+logstash_logging_file: true
+logstash_logging_slow_console: true
+logstash_logging_slow_file: true
+
+# === Monitoring ===
+logstash_legacy_monitoring: true
+
+# === Plugins ===
+# List of plugins to install
+# Example:
+#   logstash_plugins:
+#     - logstash-filter-translate
+logstash_plugins: []
+
+# === Backwards Compatibility ===
+# These are deprecated but still work for now
+# logstash_beats_input: "{{ logstash_input_beats }}"  # Use logstash_input_beats
+# logstash_elasticsearch_output: "{{ logstash_output_elasticsearch }}"  # Use logstash_output_elasticsearch
+# logstash_beats_tls: "{{ logstash_input_beats_ssl }}"  # Use logstash_input_beats_ssl
+
+# === Internal Use ===
+logstash_freshstart:
+  changed: false

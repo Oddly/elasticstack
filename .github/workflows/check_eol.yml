@@ -1,0 +1,117 @@
+---
+name: Check EOL dependencies
+on:
+  schedule:
+    - cron: "0 9 1 * *"  # First of each month at 09:00 UTC
+  workflow_dispatch:
+
+jobs:
+  check-eol:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Check EOL status of dependencies
+        env:
+          API: https://endoflife.date/api
+        run: |
+          set +e
+          issues=""
+
+          check_eol() {
+            local product="$1"
+            local version="$2"
+            local label="$3"
+            local response
+            response=$(curl -sf "${API}/${product}/${version}.json")
+            if [ $? -ne 0 ]; then
+              echo "WARNING: Could not fetch EOL data for ${label}"
+              return
+            fi
+
+            local eol
+            eol=$(echo "$response" | jq -r '.eol')
+            if [ "$eol" = "true" ]; then
+              issues="${issues}- **${label}** is EOL\n"
+              echo "ALERT: ${label} is EOL"
+            elif [ "$eol" != "false" ]; then
+              # eol is a date string
+              local eol_epoch
+              eol_epoch=$(date -d "$eol" +%s 2>/dev/null)
+              local now_epoch
+              now_epoch=$(date +%s)
+              local days_left=$(( (eol_epoch - now_epoch) / 86400 ))
+              if [ "$days_left" -lt 0 ]; then
+                issues="${issues}- **${label}** is EOL (since ${eol})\n"
+                echo "ALERT: ${label} is EOL since ${eol}"
+              elif [ "$days_left" -lt 180 ]; then
+                issues="${issues}- **${label}** reaches EOL on ${eol} (${days_left} days)\n"
+                echo "WARNING: ${label} reaches EOL on ${eol} (${days_left} days)"
+              else
+                echo "OK: ${label} supported until ${eol} (${days_left} days)"
+              fi
+            else
+              echo "OK: ${label} is supported"
+            fi
+          }
+
+          echo "=== Checking OS distributions ==="
+          check_eol "rocky-linux" "8" "Rocky Linux 8"
+          check_eol "rocky-linux" "9" "Rocky Linux 9"
+          check_eol "rocky-linux" "10" "Rocky Linux 10"
+          check_eol "debian" "11" "Debian 11 (Bullseye)"
+          check_eol "debian" "12" "Debian 12 (Bookworm)"
+          check_eol "debian" "13" "Debian 13 (Trixie)"
+          check_eol "ubuntu" "22.04" "Ubuntu 22.04 (Jammy)"
+          check_eol "ubuntu" "24.04" "Ubuntu 24.04 (Noble)"
+
+          echo ""
+          echo "=== Checking Python versions ==="
+          check_eol "python" "3.11" "Python 3.11"
+          check_eol "python" "3.12" "Python 3.12"
+          check_eol "python" "3.13" "Python 3.13"
+
+          echo ""
+          echo "=== Checking Ansible versions ==="
+          check_eol "ansible-core" "2.18" "ansible-core 2.18"
+          check_eol "ansible-core" "2.19" "ansible-core 2.19"
+          check_eol "ansible-core" "2.20" "ansible-core 2.20"
+
+          echo ""
+          if [ -n "$issues" ]; then
+            echo "::warning::EOL dependencies detected"
+            echo "ISSUES<<EOF" >> "$GITHUB_ENV"
+            echo -e "$issues" >> "$GITHUB_ENV"
+            echo "EOF" >> "$GITHUB_ENV"
+            echo "HAS_ISSUES=true" >> "$GITHUB_ENV"
+          else
+            echo "All dependencies are within support window."
+            echo "HAS_ISSUES=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Create or update issue
+        if: env.HAS_ISSUES == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="EOL dependencies detected"
+          body="The following dependencies are EOL or approaching EOL:
+
+          ${{ env.ISSUES }}
+
+          **Action required**: Update the CI test matrix and dependency versions.
+
+          _This issue is automatically created by the EOL check workflow._"
+
+          # Check if an open issue with this title already exists
+          existing=$(gh issue list --search "is:open \"${title}\"" --json number --jq '.[0].number' 2>/dev/null)
+
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --body "$body"
+            echo "Updated existing issue #${existing}"
+          else
+            gh issue create --title "$title" --body "$body" --label "maintenance"
+            echo "Created new issue"
+          fi

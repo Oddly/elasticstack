@@ -1,0 +1,30 @@
+---
+- name: Converge
+  hosts: all
+  collections:
+    - oddly.elasticstack
+  vars:
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default(9, true) | int }}"
+    elasticstack_full_stack: false
+    elasticstack_no_log: false
+    logstash_pipeline_unsafe_shutdown: true
+    logstash_output_elasticsearch: false
+    logstash_input_beats_ssl: false
+    logstash_create_user: false
+    logstash_create_role: false
+    logstash_filters: |
+      mutate {
+        add_field => { "standalone_mode" => "true" }
+      }
+    logstash_extra_outputs: |
+      file {
+        path => "/var/log/logstash/standalone-output.log"
+      }
+  tasks:
+    - name: Include Elastic repos role
+      ansible.builtin.include_role:
+        name: repos
+
+    - name: Include Logstash role in standalone mode
+      ansible.builtin.include_role:
+        name: logstash

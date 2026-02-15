@@ -1,0 +1,118 @@
+---
+
+- name: Include global role
+  ansible.builtin.import_role:
+    name: oddly.elasticstack.elasticstack
+  when: not hostvars[inventory_hostname]._elasticstack_role_imported | default(false)
+
+- name: Update apt cache.
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 600
+  changed_when: false
+  when: ansible_os_family == 'Debian'
+
+- name: Set common password for common certificates
+  ansible.builtin.set_fact:
+    kibana_tls_key_passphrase: "{{ elasticstack_cert_pass }}"
+  when:
+    - elasticstack_cert_pass is defined
+
+- name: Set Elasticsearch hosts if used with other roles
+  ansible.builtin.set_fact:
+    kibana_elasticsearch_hosts: "{{ groups[elasticstack_elasticsearch_group_name] }}"
+  when:
+    - kibana_elasticsearch_hosts is undefined
+    - groups[elasticstack_elasticsearch_group_name] is defined
+
+- name: Set Elasticsearch hosts to localhost if no other info is available
+  ansible.builtin.set_fact:
+    kibana_elasticsearch_hosts:
+      - localhost
+  when:
+    - kibana_elasticsearch_hosts is undefined
+    - groups[elasticstack_elasticsearch_group_name] is undefined
+
+- name: Construct exact name of Kibana package
+  ansible.builtin.set_fact:
+    kibana_package: >-
+      {{
+      'kibana' +
+      ((elasticstack_versionseparator +
+      elasticstack_version |
+      string ) if (elasticstack_version is defined and elasticstack_version | length > 0)) |
+      replace(' ', '') }}
+
+- name: Install Kibana - rpm - full stack
+  ansible.builtin.package:
+    name: "{{ kibana_package }}"
+    enablerepo:
+      - 'elastic-{{ elasticstack_release }}.x'
+  notify:
+    - Restart Kibana
+  when:
+    - ansible_os_family == "RedHat"
+    - elasticstack_full_stack | bool
+
+- name: Install Kibana - rpm - standalone
+  ansible.builtin.package:
+    name: "{{ kibana_package }}"
+  notify:
+    - Restart Kibana
+  when:
+    - ansible_os_family == "RedHat"
+    - not elasticstack_full_stack | bool
+
+- name: Install Kibana - deb
+  ansible.builtin.package:
+    name: "{{ kibana_package }}"
+  notify:
+    - Restart Kibana
+  when:
+    - ansible_os_family == "Debian"
+
+- name: Import security related tasks
+  ansible.builtin.import_tasks: kibana-security.yml
+  when:
+    - elasticstack_full_stack is defined
+    - elasticstack_full_stack | bool
+    - kibana_security | bool
+  tags:
+    - certificates
+    - renew_ca
+    - renew_kibana_cert
+
+- name: Configure Kibana
+  ansible.builtin.template:
+    src: kibana.yml.j2
+    dest: /etc/kibana/kibana.yml
+    owner: root
+    group: root
+    mode: 0644
+    backup: "{{ kibana_config_backup }}"
+  notify:
+    - Restart Kibana
+  when: kibana_manage_yaml | bool
+
+- name: Start Kibana
+  ansible.builtin.service:
+    name: kibana
+    state: started
+    enabled: yes
+  when: kibana_enable | bool
+  register: kibana_freshstart
+
+# the following is useful when running tests or extra tasks that need to
+# have Kibana running. Escape it on Rocky8, because it gets time out with Elastic 8
+
+- name: Wait for Kibana to start
+  ansible.builtin.wait_for:
+    host: localhost
+    port: 5601
+
+# Free up some space to let elsticsearch allocate replica in GitHub Action
+- name: Remove cache
+  ansible.builtin.command: >
+    rm -rf /var/cache/*
+  changed_when: false
+  when: ansible_virtualization_type == "container" or ansible_virtualization_type == "docker"

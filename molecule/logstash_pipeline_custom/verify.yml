@@ -1,0 +1,55 @@
+---
+- name: Verify Logstash custom pipeline configuration
+  hosts: all
+  tasks:
+    - name: Check Logstash service is running
+      ansible.builtin.service:
+        name: logstash
+        state: started
+      check_mode: true
+      register: logstash_service
+      failed_when: logstash_service.changed
+
+    - name: Check custom pipeline file exists
+      ansible.builtin.stat:
+        path: /etc/logstash/conf.d/main/pipeline.conf
+      register: custom_conf
+      failed_when: not custom_conf.stat.exists
+
+    - name: Check default input file does NOT exist
+      ansible.builtin.stat:
+        path: /etc/logstash/conf.d/main/10-input.conf
+      register: input_conf
+      failed_when: input_conf.stat.exists
+
+    - name: Check default filter file does NOT exist
+      ansible.builtin.stat:
+        path: /etc/logstash/conf.d/main/50-filter.conf
+      register: filter_conf
+      failed_when: filter_conf.stat.exists
+
+    - name: Check default output file does NOT exist
+      ansible.builtin.stat:
+        path: /etc/logstash/conf.d/main/90-output.conf
+      register: output_conf
+      failed_when: output_conf.stat.exists
+
+    - name: Read custom pipeline configuration
+      ansible.builtin.slurp:
+        src: /etc/logstash/conf.d/main/pipeline.conf
+      register: custom_content
+
+    - name: Verify custom pipeline content
+      ansible.builtin.assert:
+        that:
+          - "'generator {' in (custom_content.content | b64decode)"
+          - "'custom pipeline test' in (custom_content.content | b64decode)"
+          - "'custom_field' in (custom_content.content | b64decode)"
+          - "'custom_value' in (custom_content.content | b64decode)"
+        fail_msg: "Custom pipeline not properly configured"
+
+    - name: Verify Logstash config syntax
+      ansible.builtin.command: /usr/share/logstash/bin/logstash --config.test_and_exit -f /etc/logstash/conf.d/main/
+      register: config_test
+      changed_when: false
+      failed_when: config_test.rc != 0

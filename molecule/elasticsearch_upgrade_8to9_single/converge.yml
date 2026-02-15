@@ -1,0 +1,210 @@
+---
+# Single-node Elasticsearch 8.x to 9.x upgrade test
+#
+# This scenario tests the required upgrade path for ES 9.x:
+# 1. Install ES 8.x with an older version (e.g., 8.10.0)
+# 2. Upgrade to 8.19.x first (REQUIRED before 9.x)
+# 3. Then upgrade to ES 9.x
+# 4. Verify data preserved throughout
+#
+# ES upgrade requirement: must be on 8.19.x before upgrading to any 9.x
+
+- name: Install Elasticsearch 8.10.0 (older 8.x version)
+  collections:
+    - oddly.elasticstack
+  hosts: all
+  vars:
+    elasticstack_full_stack: false
+    elasticstack_release: 8
+    elasticstack_version: "8.10.0"
+    elasticsearch_jna_workaround: true
+    elasticsearch_disable_systemcallfilterchecks: true
+    elasticsearch_heap: "1"
+    elasticstack_no_log: false
+    elasticsearch_seed_hosts: []
+    elasticsearch_initial_master_nodes: []
+  tasks:
+    - name: Include Elastic repos role (8.x)
+      ansible.builtin.include_role:
+        name: repos
+
+    - name: Include Elasticsearch role (8.10.0)
+      ansible.builtin.include_role:
+        name: elasticsearch
+
+- name: Verify ES 8.10.0 is running and index test data
+  hosts: all
+  vars:
+    elasticstack_elasticsearch_http_port: 9200
+    elasticstack_initial_passwords: /usr/share/elasticsearch/initial_passwords
+  tasks:
+    - name: Fetch Elastic password
+      ansible.builtin.shell: |
+        grep "PASSWORD elastic " {{ elasticstack_initial_passwords }} |
+        awk {' print $4 '}
+      register: elastic_pass
+      changed_when: false
+
+    - name: Wait for ES to be ready
+      ansible.builtin.uri:
+        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health
+        method: GET
+        force_basic_auth: yes
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        validate_certs: false
+      register: health
+      retries: 30
+      delay: 10
+      until: health.status == 200
+
+    - name: Check ES version
+      ansible.builtin.uri:
+        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/
+        method: GET
+        force_basic_auth: yes
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        validate_certs: false
+      register: es_info
+
+    - name: Verify ES 8.10.x is running
+      ansible.builtin.assert:
+        that:
+          - es_info.json.version.number is version('8.10.0', '>=')
+          - es_info.json.version.number is version('8.11.0', '<')
+        success_msg: "ES 8.10.x ({{ es_info.json.version.number }}) running"
+
+    - name: Create test index with data
+      ansible.builtin.uri:
+        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/upgrade-test/_doc/1
+        method: PUT
+        force_basic_auth: yes
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        body_format: json
+        body:
+          message: "pre-upgrade-test-data"
+          version: "8.10"
+        validate_certs: false
+        status_code: [200, 201]
+
+    - name: Refresh index
+      ansible.builtin.uri:
+        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/upgrade-test/_refresh
+        method: POST
+        force_basic_auth: yes
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        validate_certs: false
+
+- name: Upgrade to latest Elasticsearch 8.x (required before 9.x)
+  collections:
+    - oddly.elasticstack
+  hosts: all
+  vars:
+    elasticstack_full_stack: false
+    elasticstack_release: 8
+    elasticsearch_jna_workaround: true
+    elasticsearch_disable_systemcallfilterchecks: true
+    elasticsearch_heap: "1"
+    elasticstack_no_log: false
+    elasticsearch_seed_hosts: []
+    elasticsearch_initial_master_nodes: []
+  tasks:
+    - name: Include Elastic repos role (8.x)
+      ansible.builtin.include_role:
+        name: repos
+
+    - name: Upgrade to latest 8.x
+      ansible.builtin.apt:
+        name: elasticsearch
+        state: latest
+        update_cache: yes
+
+    - name: Restart Elasticsearch after upgrade
+      ansible.builtin.service:
+        name: elasticsearch
+        state: restarted
+
+    - name: Wait for ES to be ready after 8.x upgrade
+      ansible.builtin.uri:
+        url: https://localhost:9200/_cluster/health
+        method: GET
+        force_basic_auth: yes
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        validate_certs: false
+      register: health
+      retries: 30
+      delay: 10
+      until: health.status == 200
+
+- name: Verify latest 8.x before 9.x upgrade
+  hosts: all
+  vars:
+    elasticstack_elasticsearch_http_port: 9200
+  tasks:
+    - name: Check ES version is latest 8.x
+      ansible.builtin.uri:
+        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/
+        method: GET
+        force_basic_auth: yes
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        validate_certs: false
+      register: es_info
+
+    - name: Display current ES version
+      ansible.builtin.debug:
+        msg: "ES version before 9.x upgrade: {{ es_info.json.version.number }}"
+
+    - name: Verify on 8.19.x (required for 9.x upgrade)
+      ansible.builtin.assert:
+        that:
+          - es_info.json.version.number is version('8.19.0', '>=')
+          - es_info.json.version.number is version('9.0.0', '<')
+        fail_msg: "Must be on 8.19.x before upgrading to 9.x. Current: {{ es_info.json.version.number }}"
+        success_msg: "On 8.19.x ({{ es_info.json.version.number }}), ready for 9.x upgrade"
+
+- name: Upgrade to Elasticsearch 9.x
+  collections:
+    - oddly.elasticstack
+  hosts: all
+  vars:
+    elasticstack_full_stack: false
+    elasticstack_release: 9
+    elasticsearch_jna_workaround: true
+    elasticsearch_disable_systemcallfilterchecks: true
+    elasticsearch_heap: "1"
+    elasticstack_no_log: false
+    elasticsearch_seed_hosts: []
+    elasticsearch_initial_master_nodes: []
+  tasks:
+    - name: Include Elastic repos role (9.x)
+      ansible.builtin.include_role:
+        name: repos
+
+    - name: Upgrade to 9.x
+      ansible.builtin.apt:
+        name: elasticsearch
+        state: latest
+        update_cache: yes
+
+    - name: Restart Elasticsearch after 9.x upgrade
+      ansible.builtin.service:
+        name: elasticsearch
+        state: restarted
+
+    - name: Wait for ES 9.x to be ready
+      ansible.builtin.uri:
+        url: https://localhost:9200/_cluster/health
+        method: GET
+        force_basic_auth: yes
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        validate_certs: false
+      register: health
+      retries: 30
+      delay: 10
+      until: health.status == 200

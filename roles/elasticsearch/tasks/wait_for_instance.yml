@@ -1,0 +1,11 @@
+---
+
+- name: Wait for instance
+  ansible.builtin.wait_for:
+    host: "{{ elasticsearch_api_host }}"
+    port: "{{ elasticstack_elasticsearch_http_port }}"
+    timeout: 600
+  tags:
+    - certificates
+    - renew_ca
+    - renew_es_cert

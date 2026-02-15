@@ -1,0 +1,65 @@
+---
+- name: Verify Logstash default pipeline configuration
+  hosts: all
+  tasks:
+    - name: Check Logstash service is running
+      ansible.builtin.service:
+        name: logstash
+        state: started
+      check_mode: true
+      register: logstash_service
+      failed_when: logstash_service.changed
+
+    - name: Check pipeline directory exists
+      ansible.builtin.stat:
+        path: /etc/logstash/conf.d/main
+      register: pipeline_dir
+      failed_when: not pipeline_dir.stat.exists
+
+    - name: Check input configuration exists
+      ansible.builtin.stat:
+        path: /etc/logstash/conf.d/main/10-input.conf
+      register: input_conf
+      failed_when: not input_conf.stat.exists
+
+    - name: Read input configuration
+      ansible.builtin.slurp:
+        src: /etc/logstash/conf.d/main/10-input.conf
+      register: input_content
+
+    - name: Verify beats input is configured
+      ansible.builtin.assert:
+        that:
+          - "'beats {' in (input_content.content | b64decode)"
+          - "'port => 5044' in (input_content.content | b64decode)"
+        fail_msg: "Beats input not properly configured"
+
+    - name: Check pipelines.yml exists
+      ansible.builtin.stat:
+        path: /etc/logstash/pipelines.yml
+      register: pipelines_yml
+      failed_when: not pipelines_yml.stat.exists
+
+    - name: Read pipelines.yml
+      ansible.builtin.slurp:
+        src: /etc/logstash/pipelines.yml
+      register: pipelines_content
+
+    - name: Verify pipeline configuration
+      ansible.builtin.assert:
+        that:
+          - "'pipeline.id: main' in (pipelines_content.content | b64decode)"
+          - "'/etc/logstash/conf.d/main/*.conf' in (pipelines_content.content | b64decode)"
+        fail_msg: "Pipeline not properly configured"
+
+    - name: Check Logstash is listening on port 5044
+      ansible.builtin.wait_for:
+        port: 5044
+        timeout: 60
+        state: started
+
+    - name: Verify Logstash config syntax
+      ansible.builtin.command: /usr/share/logstash/bin/logstash --config.test_and_exit -f /etc/logstash/conf.d/main/
+      register: config_test
+      changed_when: false
+      failed_when: config_test.rc != 0

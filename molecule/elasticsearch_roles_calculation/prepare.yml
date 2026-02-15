@@ -1,0 +1,36 @@
+---
+- name: Prepare
+  hosts: all
+  tasks:
+    - name: Refresh apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Install git
+      ansible.builtin.package:
+        name: git
+
+    - name: Install packages for RHEL
+      ansible.builtin.package:
+        name:
+          - iproute
+          - NetworkManager
+      when: ansible_os_family == "RedHat"
+
+    - name: Start NetworkManager
+      ansible.builtin.service:
+        name: NetworkManager
+        state: started
+        enabled: yes
+      when: ansible_os_family == "RedHat"
+
+    - name: Install packages for Debian
+      ansible.builtin.package:
+        name:
+          - gpg
+          - gpg-agent
+          - procps
+          - curl
+          - iproute2
+      when: ansible_os_family == "Debian"

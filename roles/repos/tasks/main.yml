@@ -1,0 +1,18 @@
+---
+
+- name: Include global role
+  ansible.builtin.import_role:
+    name: oddly.elasticstack.elasticstack
+  when: not hostvars[inventory_hostname]._elasticstack_role_imported | default(false)
+
+- name: Import RedHat tasks
+  ansible.builtin.import_tasks: redhat.yml
+  when: ansible_os_family == 'RedHat'
+
+- name: Import Debian tasks
+  ansible.builtin.import_tasks: debian.yml
+  when: ansible_os_family == 'Debian'
+
+- name: Import SuSE tasks
+  ansible.builtin.import_tasks: suse.yml
+  when: ansible_os_family|lower == 'suse'

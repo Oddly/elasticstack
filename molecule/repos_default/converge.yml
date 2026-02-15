@@ -1,0 +1,14 @@
+---
+- name: Converge
+  hosts: all
+  collections:
+    - oddly.elasticstack
+  vars:
+    elasticstack_rpm_workaround: true
+    elasticstack_full_stack: false
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | int}}"
+    elasticstack_no_log: false
+  tasks:
+    - name: Include Elastic Repos
+      ansible.builtin.include_role:
+        name: repos

@@ -1,0 +1,48 @@
+{% if logstash_ident | default(true) | bool %}
+filter {
+  mutate {
+    add_field => {
+      "{{ logstash_ident_field_name | default('[logstash][instance]') }}" => "{{ ansible_hostname }}"
+    }
+  }
+}
+
+{% endif %}
+output {
+{% if logstash_output_elasticsearch | default(true) | bool %}
+  elasticsearch {
+    hosts => [{% for host in _logstash_es_hosts %}"{{ host }}:{{ elasticstack_elasticsearch_http_port | default(9200) }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+{% if logstash_elasticsearch_index | default('') | length > 0 %}
+    index => "{{ logstash_elasticsearch_index }}"
+{% endif %}
+    validate_after_inactivity => {{ logstash_validate_after_inactivity | default(300) }}
+{% if logstash_sniffing | default(false) | bool %}
+    sniffing => true
+{% if logstash_sniffing_delay is defined %}
+    sniffing_delay => {{ logstash_sniffing_delay }}
+{% endif %}
+{% if logstash_sniffing_path is defined %}
+    sniffing_path => "{{ logstash_sniffing_path }}"
+{% endif %}
+{% endif %}
+{% if _logstash_security | default(false) | bool %}
+{% if elasticstack_release | int >= 9 %}
+    ssl_enabled => true
+    ssl_keystore_path => "{{ logstash_certs_dir }}/keystore.pfx"
+    ssl_keystore_password => "{{ logstash_tls_key_passphrase }}"
+    ssl_certificate_authorities => ["{{ logstash_certs_dir }}/ca.crt"]
+{% else %}
+    ssl => true
+    keystore => "{{ logstash_certs_dir }}/keystore.pfx"
+    keystore_password => "{{ logstash_tls_key_passphrase }}"
+    cacert => "{{ logstash_certs_dir }}/ca.crt"
+{% endif %}
+    user => "{{ logstash_user_name }}"
+    password => "{{ logstash_user_password }}"
+{% endif %}
+  }
+{% endif %}
+{% if logstash_extra_outputs | default('') | length > 0 %}
+{{ logstash_extra_outputs | indent(2, first=true) }}
+{% endif %}
+}

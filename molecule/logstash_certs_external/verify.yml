@@ -1,0 +1,66 @@
+---
+- name: Verify external certificate configuration
+  hosts: all
+  tasks:
+    - name: Check Logstash service is running
+      ansible.builtin.service:
+        name: logstash
+        state: started
+      check_mode: true
+      register: logstash_service
+      failed_when: logstash_service.changed
+
+    - name: Check certificate directory exists
+      ansible.builtin.stat:
+        path: /etc/logstash/certs
+      register: certs_dir
+      failed_when: not certs_dir.stat.exists
+
+    - name: Check server certificate exists
+      ansible.builtin.stat:
+        path: /etc/logstash/certs/{{ inventory_hostname }}-server.crt
+      register: server_cert
+      failed_when: not server_cert.stat.exists
+
+    - name: Check server key exists
+      ansible.builtin.stat:
+        path: /etc/logstash/certs/{{ inventory_hostname }}-pkcs8.key
+      register: server_key
+      failed_when: not server_key.stat.exists
+
+    - name: Check CA certificate exists
+      ansible.builtin.stat:
+        path: /etc/logstash/certs/ca.crt
+      register: ca_cert
+      failed_when: not ca_cert.stat.exists
+
+    - name: Verify certificate permissions
+      ansible.builtin.stat:
+        path: /etc/logstash/certs/{{ inventory_hostname }}-server.crt
+      register: cert_perms
+      failed_when: cert_perms.stat.mode != "0640"
+
+    - name: Verify key permissions
+      ansible.builtin.stat:
+        path: /etc/logstash/certs/{{ inventory_hostname }}-pkcs8.key
+      register: key_perms
+      failed_when: key_perms.stat.mode != "0640"
+
+    - name: Read input configuration
+      ansible.builtin.slurp:
+        src: /etc/logstash/conf.d/main/10-input.conf
+      register: input_content
+
+    - name: Verify SSL is enabled in beats input
+      ansible.builtin.assert:
+        that:
+          - "'ssl_enabled => true' in (input_content.content | b64decode)"
+          - "'ssl_certificate' in (input_content.content | b64decode)"
+          - "'ssl_key' in (input_content.content | b64decode)"
+        fail_msg: "SSL not properly configured in beats input"
+
+    - name: Check Logstash is listening on port 5044
+      ansible.builtin.wait_for:
+        port: 5044
+        timeout: 60
+        state: started

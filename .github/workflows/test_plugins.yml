@@ -1,0 +1,278 @@
+---
+name: Test Plugins
+on:
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'
+        required: true
+        default: 'warning'
+        type: choice
+        options:
+          - info
+          - warning
+          - debug
+  pull_request:
+    branches:
+      - 'feature/**'
+      - 'fix/**'
+      - '!doc/**'
+    paths:
+      - 'plugins/**'
+      - '.github/workflows/test_plugins.yml'
+      - 'molecule/plugins/**'
+      - '.config/pycodestyle.cfg'
+      - 'tests/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pycodestyle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the codebase.
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Python 3.
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.x'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install test dependencies.
+        run: uv pip install --system pycodestyle
+        env:
+          SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+
+      - name: Lint code.
+        run: |
+          pycodestyle plugins/ --config=.config/pycodestyle.cfg --statistics --count
+
+  sanity:
+    needs: pycodestyle
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ansible_core: ["2.18", "2.19", "2.20"]
+
+    env:
+      COLLECTION_NAMESPACE: oddly
+      COLLECTION_NAME: elasticstack
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install ansible-core
+        run: uv pip install --system ansible-core~=${{ matrix.ansible_core }}.0
+        env:
+          SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+
+      - name: Install collection
+        run: |
+          mkdir -p ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE
+          cp -a ../ansible-collection-$COLLECTION_NAME ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+
+      - name: Run ansible-test sanity
+        run: |
+          cd ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+          ansible-test sanity --python 3.12 --color yes \
+            --skip-test validate-modules \
+            plugins/
+        env:
+          PY_COLORS: '1'
+
+  unit-test:
+    needs: [pycodestyle, sanity]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      COLLECTION_NAMESPACE: oddly
+      COLLECTION_NAME: elasticstack
+
+    strategy:
+      fail-fast: false
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv pip install --system ansible
+        env:
+          SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+
+      - name: Install collection
+        run: |
+          mkdir -p ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE
+          cp -a ../ansible-collection-$COLLECTION_NAME ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+
+      - name: Test `cert_info` module
+        run: |
+          python tests/unit/plugins/modules/test_cert_info.py
+        env:
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'
+
+      - name: Test `certs` module util
+        run: |
+          python tests/unit/plugins/module_utils/test_certs.py
+        env:
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'
+
+  python:
+    needs: unit-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      COLLECTION_NAMESPACE: oddly
+      COLLECTION_NAME: elasticstack
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python_version: [ 3.11.11, 3.12.8, 3.13.1 ]
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Python ${{ matrix.python_version }}
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ matrix.python_version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv pip install --system ansible
+        env:
+          SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+
+      - name: Install collection
+        run: |
+          mkdir -p ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE
+          cp -a ../ansible-collection-$COLLECTION_NAME ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+
+      - name: Test with ansible-playbook
+        run: |
+          ansible-playbook molecule/plugins/converge.yml
+        env:
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'
+
+  ansible-core:
+    needs: python
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      COLLECTION_NAMESPACE: oddly
+      COLLECTION_NAME: elasticstack
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ansible_core_version: [ 2.18.12, 2.19.5, 2.20.1 ]
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv pip install --system ansible-core==${{ matrix.ansible_core_version }}
+        env:
+          SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+
+      - name: Install collection
+        run: |
+          mkdir -p ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE
+          cp -a ../ansible-collection-$COLLECTION_NAME ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+
+      - name: Test with ansible-playbook
+        run: |
+          ansible-playbook molecule/plugins/converge.yml
+        env:
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'
+
+  python-cryptography:
+    needs: ansible-core
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      COLLECTION_NAMESPACE: oddly
+      COLLECTION_NAME: elasticstack
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python_cryptography_version: [ 41.0.7, 42.0.8, 43.0.3, 44.0.3, 45.0.7, 46.0.4 ]
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: |
+          uv pip install --system cryptography==${{ matrix.python_cryptography_version }}
+          uv pip install --system ansible
+        env:
+          SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+
+      - name: Install collection
+        run: |
+          mkdir -p ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE
+          cp -a ../ansible-collection-$COLLECTION_NAME ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+
+      - name: Test with ansible-playbook
+        run: |
+          ansible-playbook molecule/plugins/converge.yml
+        env:
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'

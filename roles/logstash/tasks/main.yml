@@ -1,0 +1,328 @@
+---
+
+- name: Include global role
+  ansible.builtin.import_role:
+    name: oddly.elasticstack.elasticstack
+  when: not hostvars[inventory_hostname]._elasticstack_role_imported | default(false)
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 600
+  changed_when: false
+  when: ansible_os_family == 'Debian'
+
+- name: Set up Elasticsearch hosts from inventory
+  ansible.builtin.set_fact:
+    _logstash_es_hosts: "{{ logstash_elasticsearch_hosts }}"
+  when: logstash_elasticsearch_hosts | default([]) | length > 0
+  tags:
+    - configuration
+    - logstash_configuration
+
+- name: Auto-discover Elasticsearch hosts from inventory
+  ansible.builtin.set_fact:
+    _logstash_es_hosts: "{{ groups[elasticstack_elasticsearch_group_name] }}"
+  when:
+    - logstash_elasticsearch_hosts | default([]) | length == 0
+    - groups[elasticstack_elasticsearch_group_name] is defined
+  tags:
+    - configuration
+    - logstash_configuration
+
+- name: Fall back to localhost for Elasticsearch
+  ansible.builtin.set_fact:
+    _logstash_es_hosts:
+      - localhost
+  when:
+    - _logstash_es_hosts is undefined
+  tags:
+    - configuration
+    - logstash_configuration
+
+- name: Set up security flag
+  ansible.builtin.set_fact:
+    _logstash_security: "{{ logstash_security | default(elasticstack_full_stack | default(false)) }}"
+  tags:
+    - certificates
+    - renew_ca
+    - renew_logstash_cert
+
+- name: Activate TLS for Beats input in full stack mode
+  ansible.builtin.set_fact:
+    logstash_input_beats_ssl: true
+  when:
+    - logstash_input_beats_ssl is undefined
+    - logstash_beats_tls is undefined
+    - elasticstack_full_stack | default(false) | bool
+    - not elasticstack_override_beats_tls | default(false) | bool
+
+- name: Handle backwards compatibility for logstash_beats_tls
+  ansible.builtin.set_fact:
+    logstash_input_beats_ssl: "{{ logstash_beats_tls }}"
+  when:
+    - logstash_beats_tls is defined
+    - logstash_input_beats_ssl is undefined
+
+- name: Handle backwards compatibility for logstash_beats_input
+  ansible.builtin.set_fact:
+    logstash_input_beats: "{{ logstash_beats_input }}"
+  when:
+    - logstash_beats_input is defined
+    - logstash_input_beats is undefined
+
+- name: Handle backwards compatibility for logstash_elasticsearch_output
+  ansible.builtin.set_fact:
+    logstash_output_elasticsearch: "{{ logstash_elasticsearch_output }}"
+  when:
+    - logstash_elasticsearch_output is defined
+    - logstash_output_elasticsearch is undefined
+
+- name: Construct exact name of Logstash package (RedHat)
+  ansible.builtin.set_fact:
+    logstash_package: >-
+      {{
+      'logstash' +
+      ((elasticstack_versionseparator +
+      elasticstack_version |
+      string ) if (elasticstack_version is defined and elasticstack_version | length > 0)) |
+      replace(' ', '')
+      }}
+  when:
+    - ansible_os_family != "Debian"
+
+- name: Construct exact name of Logstash package (Debian)
+  ansible.builtin.set_fact:
+    logstash_package: >-
+      {{
+      'logstash' +
+      ((elasticstack_versionseparator + '1:' + elasticstack_version + '-1')
+      if (elasticstack_version is defined and elasticstack_version | length > 0) else '') |
+      replace(' ', '')
+      }}
+  when:
+    - ansible_os_family == "Debian"
+
+- name: Install Logstash (RedHat - full stack)
+  ansible.builtin.package:
+    name: "{{ logstash_package }}"
+    enablerepo:
+      - 'elastic-{{ elasticstack_release }}.x'
+  notify:
+    - Restart Logstash
+  when:
+    - ansible_os_family == "RedHat"
+    - elasticstack_full_stack | default(false) | bool
+
+- name: Install Logstash (RedHat - standalone)
+  ansible.builtin.package:
+    name: "{{ logstash_package }}"
+  notify:
+    - Restart Logstash
+  when:
+    - ansible_os_family == "RedHat"
+    - not elasticstack_full_stack | default(false) | bool
+
+- name: Install Logstash (Debian)
+  ansible.builtin.package:
+    name: "{{ logstash_package }}"
+  notify:
+    - Restart Logstash
+  when:
+    - ansible_os_family == "Debian"
+
+- name: Import Logstash Security tasks
+  ansible.builtin.import_tasks: logstash-security.yml
+  when:
+    - elasticstack_full_stack | default(false) | bool
+    - _logstash_security | bool
+  tags:
+    - certificates
+    - renew_ca
+    - renew_logstash_cert
+
+- name: Configure Logstash
+  ansible.builtin.template:
+    src: logstash.yml.j2
+    dest: /etc/logstash/logstash.yml
+    owner: root
+    group: root
+    mode: "0644"
+    backup: "{{ logstash_config_backup }}"
+  notify:
+    - Restart Logstash
+  when: logstash_manage_yaml | bool
+  tags:
+    - configuration
+    - logstash_configuration
+
+- name: Configure Logstash logging
+  ansible.builtin.template:
+    src: log4j2.properties.j2
+    dest: /etc/logstash/log4j2.properties
+    owner: root
+    group: root
+    mode: "0644"
+    backup: "{{ logstash_config_backup }}"
+  notify:
+    - Restart Logstash
+  when: logstash_manage_logging | bool
+  tags:
+    - configuration
+    - logstash_configuration
+
+- name: Create main pipeline directory
+  ansible.builtin.file:
+    path: "/etc/logstash/conf.d/main"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - not logstash_no_pipelines | bool
+  tags:
+    - configuration
+    - logstash_configuration
+
+- name: Deploy custom pipeline (full control mode)
+  when:
+    - logstash_custom_pipeline | default('') | length > 0
+    - not logstash_no_pipelines | bool
+  block:
+    - name: Create custom pipeline configuration
+      ansible.builtin.template:
+        src: custom-pipeline.conf.j2
+        dest: "/etc/logstash/conf.d/main/pipeline.conf"
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Restart Logstash noauto
+      tags:
+        - configuration
+        - logstash_configuration
+
+    - name: Remove default pipeline files when using custom
+      ansible.builtin.file:
+        path: "/etc/logstash/conf.d/main/{{ item }}"
+        state: absent
+      loop:
+        - 10-input.conf
+        - 50-filter.conf
+        - 90-output.conf
+      tags:
+        - configuration
+        - logstash_configuration
+
+- name: Deploy standard pipeline configuration
+  when:
+    - logstash_custom_pipeline | default('') | length == 0
+    - not logstash_no_pipelines | bool
+  block:
+    - name: Remove custom pipeline file if exists
+      ansible.builtin.file:
+        path: "/etc/logstash/conf.d/main/pipeline.conf"
+        state: absent
+      tags:
+        - configuration
+        - logstash_configuration
+
+    - name: Create input configuration
+      ansible.builtin.template:
+        src: 10-input.conf.j2
+        dest: "/etc/logstash/conf.d/main/10-input.conf"
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Restart Logstash noauto
+      when:
+        - logstash_input_beats | default(true) | bool or
+          logstash_input_elastic_agent | default(false) | bool or
+          logstash_extra_inputs | default('') | length > 0
+      tags:
+        - configuration
+        - logstash_configuration
+
+    - name: Create filter configuration
+      ansible.builtin.template:
+        src: 50-filter.conf.j2
+        dest: "/etc/logstash/conf.d/main/50-filter.conf"
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Restart Logstash noauto
+      when:
+        - logstash_filters | default('') | length > 0 or
+          logstash_filter_files | default([]) | length > 0
+      tags:
+        - configuration
+        - logstash_configuration
+
+    - name: Copy filter files
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "/etc/logstash/conf.d/main/"
+        owner: root
+        group: root
+        mode: "0644"
+      loop: "{{ logstash_filter_files | default([]) }}"
+      notify:
+        - Restart Logstash noauto
+      when:
+        - logstash_filter_files | default([]) | length > 0
+      tags:
+        - configuration
+        - logstash_configuration
+
+    - name: Create output configuration
+      ansible.builtin.template:
+        src: 90-output.conf.j2
+        dest: "/etc/logstash/conf.d/main/90-output.conf"
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Restart Logstash noauto
+      when:
+        - logstash_output_elasticsearch | default(true) | bool or
+          logstash_extra_outputs | default('') | length > 0
+      tags:
+        - configuration
+        - logstash_configuration
+
+- name: Configure Logstash pipelines
+  ansible.builtin.template:
+    src: pipelines.yml.j2
+    dest: /etc/logstash/pipelines.yml
+    owner: root
+    group: root
+    mode: "0644"
+    backup: "{{ logstash_config_backup }}"
+  when:
+    - logstash_manage_pipelines | bool
+    - not logstash_no_pipelines | bool
+  tags:
+    - configuration
+    - logstash_configuration
+
+- name: Install Logstash plugins
+  community.general.logstash_plugin:
+    state: present
+    name: "{{ item }}"
+  loop: "{{ logstash_plugins | default([]) }}"
+  when: logstash_plugins | default([]) | length > 0
+
+- name: Start Logstash
+  ansible.builtin.service:
+    name: logstash
+    state: started
+    enabled: true
+  when: logstash_enable | bool
+  register: logstash_freshstart
+
+- name: Remove cache in container environments
+  ansible.builtin.command: rm -rf /var/cache/*
+  changed_when: false
+  when: ansible_virtualization_type == "container" or ansible_virtualization_type == "docker"

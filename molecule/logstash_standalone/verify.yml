@@ -1,0 +1,82 @@
+---
+- name: Verify standalone Logstash configuration
+  hosts: all
+  tasks:
+    - name: Check Logstash service is running
+      ansible.builtin.service:
+        name: logstash
+        state: started
+      check_mode: true
+      register: logstash_service
+      failed_when: logstash_service.changed
+
+    - name: Check input configuration exists
+      ansible.builtin.stat:
+        path: /etc/logstash/conf.d/main/10-input.conf
+      register: input_conf
+      failed_when: not input_conf.stat.exists
+
+    - name: Read input configuration
+      ansible.builtin.slurp:
+        src: /etc/logstash/conf.d/main/10-input.conf
+      register: input_content
+
+    - name: Verify beats input without SSL
+      ansible.builtin.assert:
+        that:
+          - "'beats {' in (input_content.content | b64decode)"
+          - "'ssl_enabled' not in (input_content.content | b64decode)"
+        fail_msg: "Beats input should not have SSL in standalone mode"
+
+    - name: Check filter configuration exists
+      ansible.builtin.stat:
+        path: /etc/logstash/conf.d/main/50-filter.conf
+      register: filter_conf
+      failed_when: not filter_conf.stat.exists
+
+    - name: Read filter configuration
+      ansible.builtin.slurp:
+        src: /etc/logstash/conf.d/main/50-filter.conf
+      register: filter_content
+
+    - name: Verify standalone filter is present
+      ansible.builtin.assert:
+        that:
+          - "'standalone_mode' in (filter_content.content | b64decode)"
+        fail_msg: "Standalone filter not configured"
+
+    - name: Check output configuration exists
+      ansible.builtin.stat:
+        path: /etc/logstash/conf.d/main/90-output.conf
+      register: output_conf
+      failed_when: not output_conf.stat.exists
+
+    - name: Read output configuration
+      ansible.builtin.slurp:
+        src: /etc/logstash/conf.d/main/90-output.conf
+      register: output_content
+
+    - name: Verify no elasticsearch output
+      ansible.builtin.assert:
+        that:
+          - "'elasticsearch {' not in (output_content.content | b64decode)"
+        fail_msg: "Elasticsearch output should not be present in standalone mode"
+
+    - name: Verify file output is configured
+      ansible.builtin.assert:
+        that:
+          - "'file {' in (output_content.content | b64decode)"
+          - "'standalone-output.log' in (output_content.content | b64decode)"
+        fail_msg: "File output not properly configured"
+
+    - name: Check Logstash is listening on port 5044
+      ansible.builtin.wait_for:
+        port: 5044
+        timeout: 60
+        state: started
+
+    - name: Verify Logstash config syntax
+      ansible.builtin.command: /usr/share/logstash/bin/logstash --config.test_and_exit -f /etc/logstash/conf.d/main/
+      register: config_test
+      changed_when: false
+      failed_when: config_test.rc != 0

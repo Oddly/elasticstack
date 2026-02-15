@@ -1,0 +1,20 @@
+---
+# The workaround for arbitrarily named role directory is important because
+# the git repo has one name and the role within it another
+# Found at:
+# https://github.com/ansible-community/molecule/issues/1567#issuecomment-436876722
+- name: Converge
+  hosts: all
+  vars:
+    elasticstack_full_stack: false
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | int}}"
+    elasticstack_no_log: false
+  collections:
+    - oddly.elasticstack
+  tasks:
+    - name: Include Elastic Repos
+      ansible.builtin.include_role:
+        name: repos
+    - name: Include Kibana
+      ansible.builtin.include_role:
+        name: kibana

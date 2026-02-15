@@ -1,0 +1,15 @@
+---
+- name: Prepare
+  hosts: all
+  tasks:
+    - name: Install packages needed for Debian
+      ansible.builtin.apt:
+        name:
+          - gpg
+          - curl
+          - procps
+          - gpg-agent
+          - git
+          - iproute2
+        update_cache: yes
+      when: ansible_os_family == "Debian"
