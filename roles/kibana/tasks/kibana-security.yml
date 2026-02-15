@@ -75,29 +75,30 @@
     - renew_ca
     - renew_kibana_cert
   block:
-    - name: Generate encryption key # noqa: risky-shell-pipe
+    - name: Generate encryption key
       ansible.builtin.shell: >
-        if test -n "$(ps -p $$ | grep bash)"; then set -o pipefail; fi;
+        set -o pipefail;
         openssl rand -base64 36 >
         {{ elasticstack_ca_dir }}/encryption_key
-      changed_when: false
       args:
+        executable: /bin/bash
         creates: "{{ elasticstack_ca_dir }}/encryption_key"
+      changed_when: false
 
     - name: Fetch encryption key
       ansible.builtin.command: cat {{ elasticstack_ca_dir }}/encryption_key
       changed_when: false
       register: kibana_encryption_key
 
-    - name: Generate saved objects encryption key # noqa: risky-shell-pipe
+    - name: Generate saved objects encryption key
       ansible.builtin.shell: >
-        if test -n "$(ps -p $$ | grep bash)"; then set -o pipefail; fi;
-        openssl rand
-        -base64 36 >
+        set -o pipefail;
+        openssl rand -base64 36 >
         {{ elasticstack_ca_dir }}/savedobjects_encryption_key
-      changed_when: false
       args:
+        executable: /bin/bash
         creates: "{{ elasticstack_ca_dir }}/savedobjects_encryption_key"
+      changed_when: false
 
     - name: Fetch saved objects encryption key
       ansible.builtin.command: cat {{ elasticstack_ca_dir }}/savedobjects_encryption_key

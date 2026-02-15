@@ -197,7 +197,7 @@
 
     - name: Confirm the node joins the cluster # noqa: risky-shell-pipe
       ansible.builtin.shell: >
-        if test -n "$(ps -p $$ | grep bash)"; then set -o pipefail; fi;
+        set -o pipefail;
         curl
         -k
         -u elastic:{{ elasticstack_password.stdout }}
@@ -207,6 +207,8 @@
         | grep
         -E
         '^{{ elasticsearch_nodename }}$'
+      args:
+        executable: /bin/bash
       register: result
       until: result.rc == 0
       retries: 200

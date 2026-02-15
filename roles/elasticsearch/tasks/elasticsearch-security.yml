@@ -364,24 +364,20 @@
         rm -rf /var/cache/*
       changed_when: false
 
-    - name: Set persistent watermarks to very high values in Docker # noqa: risky-shell-pipe
-      ansible.builtin.shell: >
-        if test -n "$(ps -p $$ | grep bash)"; then set -o pipefail; fi;
-        curl
-        -k
-        -X PUT
-        "{{ elasticsearch_http_protocol }}://elastic:{{ elasticstack_password.stdout }}@{{ elasticsearch_api_host }}:9200/_cluster/settings"
-        -H 'Content-Type: application/json' -d
-        '
-        {
-          "persistent": {
-            "cluster.routing.allocation.disk.watermark.low": "97%",
-            "cluster.routing.allocation.disk.watermark.high": "98%",
-            "cluster.routing.allocation.disk.watermark.flood_stage": "99%",
-            "cluster.routing.allocation.disk.watermark.flood_stage.frozen": "99%"
-          }
-        }
-        '
+    - name: Set persistent watermarks to very high values in Docker
+      ansible.builtin.uri:
+        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/settings"
+        method: PUT
+        body:
+          persistent:
+            cluster.routing.allocation.disk.watermark.low: "97%"
+            cluster.routing.allocation.disk.watermark.high: "98%"
+            cluster.routing.allocation.disk.watermark.flood_stage: "99%"
+            cluster.routing.allocation.disk.watermark.flood_stage.frozen: "99%"
+        body_format: json
+        user: elastic
+        password: "{{ elasticstack_password.stdout }}"
+        validate_certs: false
       changed_when: false
       no_log: "{{ elasticstack_no_log }}"
       when:
@@ -418,15 +414,16 @@
   ansible.builtin.set_fact:
     elasticsearch_cluster_set_up: true
 
-- name: Create initial passwords # noqa: risky-shell-pipe
+- name: Create initial passwords
   ansible.builtin.shell: >
-    if test -n "$(ps -p $$ | grep bash)"; then set -o pipefail; fi;
+    set -o pipefail;
     /usr/share/elasticsearch/bin/elasticsearch-setup-passwords auto -b >
     {{ elasticstack_initial_passwords }}
+  args:
+    executable: /bin/bash
+    creates: "{{ elasticstack_initial_passwords }}"
   when: inventory_hostname == elasticstack_ca_host
   no_log: "{{ elasticstack_no_log }}"
-  args:
-    creates: "{{ elasticstack_initial_passwords }}"
 
 # It would be better to create and set the permissions before generating the passwords. But this would
 # break the logic that relies on the file being absent when no passwords are set
