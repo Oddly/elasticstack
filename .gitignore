@@ -1,5 +1,11 @@
+.ansible/
 .cache
-*.swp
-__pycache__*
+.molecule/
+.sisyphus/
 .vscode
+*.retry
+*.swp
+*.tar.gz
+__pycache__/
 roles/geerlingguy.redis/
+venv*/

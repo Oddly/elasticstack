@@ -1,11 +1,21 @@
 # Requirements
 
-There are some requirements that the user have to fulfill while using the collection. Some of them will be refactored and disappear from the list soon.
+There are some requirements to keep in mind when using this collection.
 
-**Inventory names**
+**Inventory groups**
 
-The collection provides roles for several tools (elasticsearch, kibana, ...). In some tasks hosts from the specific inventory group are fetched. The group names are customizable via variables. But using different inventory names than provided inside the variables will result in errors.
+The collection uses inventory group names to discover which hosts run which services. The default group names are `elasticsearch`, `logstash`, and `kibana`. You can override them with these variables:
+
+- `elasticstack_elasticsearch_group_name` (default: `elasticsearch`)
+- `elasticstack_logstash_group_name` (default: `logstash`)
+- `elasticstack_kibana_group_name` (default: `kibana`)
+
+Hosts must be in the correct groups for cross-role features like certificate generation and password distribution to work.
 
 **elasticstack_ca_host**
 
-This is a mandatory variable. It is used to define the host that will be used as "CA host". Per default it is already defined (first host inside the group `elasticstack_elasticsearch_group_name`). In case you are using different group names, this variable wont be set with a defualt value.
+This variable defines which host acts as the Certificate Authority for TLS certificates. It defaults to the first host in the `elasticsearch` group. If no `elasticsearch` group exists (e.g. standalone Kibana or Beats deployments), it falls back to `inventory_hostname`. You can override it explicitly if needed.
+
+**Supported versions**
+
+The collection supports Elastic Stack 8.x and 9.x. Set `elasticstack_release` to `8` or `9` (default: `8`). See the [Elasticsearch 9.x Upgrade Guide](./elasticsearch-9x-upgrade.md) for upgrade instructions.

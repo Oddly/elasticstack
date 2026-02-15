@@ -4,7 +4,7 @@ galaxy_info:
   namespace: oddly
   author: Thomas Widhalm <thomas.widhalm@netways.de>
   description: Beats for Linux
-  company: "Netways GmbH"
+  company: oddly
   license: GPL-3.0-or-later
   min_ansible_version: "2.18"
   platforms:

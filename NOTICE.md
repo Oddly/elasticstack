@@ -1,7 +1,9 @@
-# Notice and Acknowledgements #
+# Notice and Acknowledgements
 
-## Sponsoring ##
+## Origins
 
-Here's a list of sponsors who contributed by having the collection improved via outsourcing to NETWAYS.
+This collection is derived from [netways.elasticstack](https://github.com/NETWAYS/ansible-collection-elasticstack), originally developed by NETWAYS GmbH and contributors. Licensed under GPL-3.0-or-later. See the [AUTHORS](AUTHORS) file for the full list of contributors.
 
-* CID GmbH : Thank you so much for sponsoring. Especially the feature to have different types of Elasticsearch nodes in the cluster and the ingetration of rolling upgrades.
+## Sponsoring
+
+CID GmbH sponsored the development of differentiated Elasticsearch node types and rolling upgrade integration in the original collection.

@@ -1,7 +1,7 @@
 ELASTICSEARCH
 =========
 
-![Test Role Elasticsearch](https://github.com/Oddly/ansible-collection-elasticstack/actions/workflows/test_role_elasticsearch.yml/badge.svg)
+![Test Role Elasticsearch](https://github.com/Oddly/elasticstack/actions/workflows/test_role_elasticsearch.yml/badge.svg)
 
 This role installs manages Elasticsearch on your hosts. Optionally it can configure Elastics Security components, too.
 
@@ -15,7 +15,7 @@ Role Variables
 * *elasticsearch_node_types*: List of types of this very node. Please refer to [official docs](https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-node.html) for details. (default: not set. allowed value: array of types)
 + *elasticsearch_nodename*': Node name of the Elasticsearch node. (default: value of `ansible_hostname`)
 * *elasticsearch_clustername*: Name the Elasticsearch Cluster (default: `elasticsearch`)
-* *elasticsearch_heap*: Heapsize for Elasticsearch. Set to `false` to follow Elastic recommendations for elasticsearch 8.x (default: Half of hosts memory. Min 1GB, Max 30GB)
+* *elasticsearch_heap*: Heapsize for Elasticsearch. Set to `false` to let Elasticsearch auto-detect heap size, which is recommended for 8.x and 9.x. (default: Half of hosts memory. Min 1GB, Max 30GB)
 * *elasticsearch_tls_key_passphrase*: Passphrase for elasticsearch certificates (default: `PleaseChangeMeIndividually`)
 * *elasticsearch_cert_validity_period*: number of days that the generated certificates are valid (default: 1095).
 * *elasticsearch_cert_expiration_buffer*: Ansible will renew the elasticsearch certificate if its validity is shorter than this value, which should be number of days. (default: 30)
@@ -68,14 +68,13 @@ These variables are identical over all our elastic related roles, hence the diff
 * *elasticstack_release*: Major release version of Elastic stack to configure. (default: `8`). Supported values: `8`, `9`. For upgrading to 9.x, see the [Elasticsearch 9.x Upgrade Guide](./elasticsearch-9x-upgrade.md).
 * *elasticstack_elasticsearch_http_port*: Port of Elasticsearch http (Default: `9200`)
 
-```
+```yaml
 - name: Install Elasticsearch
-  collections:
-    - oddly.elasticstack
   hosts: elasticsearch-hosts
   vars:
     elasticsearch_jna_workaround: true
+    elasticstack_release: 9
   roles:
-    - repos
-    - elasticsearch
+    - oddly.elasticstack.repos
+    - oddly.elasticstack.elasticsearch
 ```
