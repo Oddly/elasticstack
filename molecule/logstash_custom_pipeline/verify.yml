@@ -1,0 +1,76 @@
+---
+- name: Verify custom pipeline Logstash deployment
+  hosts: all
+  tasks:
+    - name: Check Logstash is listening
+      ansible.builtin.wait_for:
+        port: 9600
+        timeout: 120
+        msg: "Logstash API port 9600 did not become available"
+
+    - name: Verify Logstash service is running
+      ansible.builtin.service_facts:
+
+    - name: Assert Logstash service is active
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.services['logstash.service'].state == 'running'
+        fail_msg: "Logstash service is not running"
+
+    - name: Verify custom pipeline.conf exists
+      ansible.builtin.stat:
+        path: /etc/logstash/conf.d/main/pipeline.conf
+      register: pipeline_conf
+
+    - name: Assert custom pipeline file exists
+      ansible.builtin.assert:
+        that:
+          - pipeline_conf.stat.exists
+        fail_msg: "Custom pipeline.conf not found"
+
+    - name: Verify default template files were removed
+      ansible.builtin.stat:
+        path: "/etc/logstash/conf.d/main/{{ item }}"
+      register: default_files
+      loop:
+        - 10-input.conf
+        - 50-filter.conf
+        - 90-output.conf
+
+    - name: Assert default template files are absent
+      ansible.builtin.assert:
+        that:
+          - not item.stat.exists
+        fail_msg: "Default template file {{ item.item }} should not exist when using custom pipeline"
+      loop: "{{ default_files.results }}"
+
+    - name: Verify pipeline content has custom elements
+      ansible.builtin.slurp:
+        src: /etc/logstash/conf.d/main/pipeline.conf
+      register: pipeline_content
+
+    - name: Assert custom pipeline content
+      ansible.builtin.assert:
+        that:
+          - "'generator' in pipeline_content.content | b64decode"
+          - "'processed_by' in pipeline_content.content | b64decode"
+          - "'custom-output.log' in pipeline_content.content | b64decode"
+        fail_msg: "Custom pipeline content not found in pipeline.conf"
+
+    - name: Wait for Logstash to process events
+      ansible.builtin.wait_for:
+        path: /var/log/logstash/custom-output.log
+        timeout: 60
+        msg: "Logstash custom output file not created"
+
+    - name: Check output file has data
+      ansible.builtin.slurp:
+        src: /var/log/logstash/custom-output.log
+      register: output_content
+
+    - name: Verify output contains processed events
+      ansible.builtin.assert:
+        that:
+          - "'processed_by' in output_content.content | b64decode"
+          - "'logstash-custom' in output_content.content | b64decode"
+        fail_msg: "Custom pipeline output does not contain expected enrichment fields"

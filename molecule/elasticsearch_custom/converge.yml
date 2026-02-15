@@ -1,0 +1,39 @@
+---
+# Real-world scenario: Single-node Elasticsearch with customized configuration.
+# Tests non-default paths, heap, JVM options, extra config, and snapshot repos.
+- name: Deploy Elasticsearch with custom configuration
+  hosts: all
+  vars:
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    elasticstack_full_stack: false
+    elasticstack_no_log: false
+    # Custom paths
+    elasticsearch_datapath: /data/elasticsearch
+    elasticsearch_create_datapath: true
+    elasticsearch_logpath: /var/log/elasticsearch-custom
+    elasticsearch_create_logpath: true
+    # Custom heap and JVM
+    elasticsearch_heap: "1"
+    elasticsearch_jvm_custom_parameters:
+      - "-XX:+HeapDumpOnOutOfMemoryError"
+      - "-Dlog4j2.formatMsgNoLookups=true"
+    elasticsearch_heap_dump_path: /data/elasticsearch
+    # Snapshot repository
+    elasticsearch_fs_repo:
+      - /mnt/es-snapshots
+    # Extra configuration via elasticsearch_extra_config
+    elasticsearch_extra_config:
+      action.auto_create_index: ".monitoring*,.watches,.triggered_watches,.watcher-history*,.ml*"
+      indices.recovery.max_bytes_per_sec: "100mb"
+    # Cluster name
+    elasticsearch_clustername: custom-test-cluster
+    # Config backup
+    elasticsearch_config_backup: true
+  tasks:
+    - name: Include Elastic repos
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.repos
+
+    - name: Deploy Elasticsearch
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elasticsearch

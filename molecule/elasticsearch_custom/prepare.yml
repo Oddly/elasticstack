@@ -1,0 +1,40 @@
+---
+- name: Prepare
+  hosts: all
+  tasks:
+    - name: Install packages for Debian
+      ansible.builtin.apt:
+        name:
+          - gpg
+          - gpg-agent
+          - procps
+          - curl
+          - iproute2
+          - git
+          - openssl
+        update_cache: true
+      when: ansible_facts.os_family == "Debian"
+
+    - name: Create custom data directory
+      ansible.builtin.file:
+        path: /data/elasticsearch
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Create custom log directory
+      ansible.builtin.file:
+        path: /var/log/elasticsearch-custom
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Create snapshot repository directory
+      ansible.builtin.file:
+        path: /mnt/es-snapshots
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
