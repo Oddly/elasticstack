@@ -1,0 +1,21 @@
+---
+# Extract CA public certificate from a P12 file.
+# Delegates to elasticstack_ca_host.
+#
+# Required variables:
+#   _cert_p12_path: Path to P12 file on CA host
+#   _cert_ca_out:   Output path for CA cert (PEM)
+#   _cert_pass:     Passphrase for the P12 file
+
+- name: "Extract CA public certificate - {{ _cert_p12_path | basename }}"
+  ansible.builtin.command: >
+    openssl pkcs12 -in {{ _cert_p12_path }}
+    -cacerts -nokeys -out {{ _cert_ca_out }}
+    -password pass:{{ _cert_pass }}
+  args:
+    creates: "{{ _cert_ca_out }}"
+  delegate_to: "{{ elasticstack_ca_host }}"
+  no_log: "{{ elasticstack_no_log }}"
+  tags:
+    - certificates
+    - renew_ca

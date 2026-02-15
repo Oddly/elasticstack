@@ -1,0 +1,35 @@
+---
+# Ensure Elasticsearch CA exists on elasticstack_ca_host.
+# This creates the CA directory and P12 file if they don't exist.
+# Must run on (or delegate to) elasticstack_ca_host.
+#
+# Required variables:
+#   elasticstack_ca_dir, elasticstack_ca_name, elasticstack_ca_validity_period,
+#   elasticstack_ca_pass, elasticstack_no_log
+
+- name: Create CA directory
+  ansible.builtin.file:
+    path: "{{ elasticstack_ca_dir }}"
+    owner: root
+    group: elasticsearch
+    mode: 0700
+    state: directory
+  tags:
+    - certificates
+    - renew_ca
+    - renew_es_cert
+
+- name: Create CA
+  ansible.builtin.command: >
+    /usr/share/elasticsearch/bin/elasticsearch-certutil ca
+    --ca-dn {{ elasticstack_ca_name }}
+    --days {{ elasticstack_ca_validity_period }}
+    --pass {{ elasticstack_ca_pass }}
+    --out {{ elasticstack_ca_dir }}/elastic-stack-ca.p12
+    --silent
+  args:
+    creates: "{{ elasticstack_ca_dir }}/elastic-stack-ca.p12"
+  no_log: "{{ elasticstack_no_log }}"
+  tags:
+    - certificates
+    - renew_ca

@@ -1,0 +1,33 @@
+---
+# Distribute a certificate file from CA host to target node via controller.
+#
+# Required variables:
+#   _cert_src:   Source path on CA host
+#   _cert_dest:  Destination path on target node
+#   _cert_owner: File owner on target
+#   _cert_group: File group on target
+#   _cert_mode:  File mode on target (e.g. "0640")
+#
+# Optional variables:
+#   _cert_notify: Handler name(s) to notify on change (list or string)
+
+- name: "Fetch certificate from CA host - {{ _cert_src | basename }}"
+  ansible.builtin.fetch:
+    src: "{{ _cert_src }}"
+    dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ _cert_src | basename }}"
+    flat: yes
+  delegate_to: "{{ elasticstack_ca_host }}"
+  tags:
+    - certificates
+
+- name: "Copy certificate to target node - {{ _cert_src | basename }}"
+  ansible.builtin.copy:
+    src: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ _cert_src | basename }}"
+    dest: "{{ _cert_dest }}"
+    owner: "{{ _cert_owner }}"
+    group: "{{ _cert_group }}"
+    mode: "{{ _cert_mode }}"
+  notify: "{{ _cert_notify | default(omit) }}"
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags:
+    - certificates

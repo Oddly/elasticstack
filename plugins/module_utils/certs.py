@@ -17,10 +17,11 @@ from ansible.module_utils.basic import (
 
 try:
     from cryptography.hazmat.primitives.serialization import pkcs12
+    from cryptography import x509
     from cryptography.x509.oid import NameOID
-    HAS_CRYPTOGRAPHY_PKCS12 = True
+    HAS_CRYPTOGRAPHY = True
 except ImportError:
-    HAS_CRYPTOGRAPHY_PKCS12 = False
+    HAS_CRYPTOGRAPHY = False
 
 SUPPORTED_EXTENSIONS = {
     'basicConstraints': [
@@ -59,6 +60,7 @@ class AnalyzeCertificate():
         self.result = result
         self.__passphrase = self.module.params['passphrase']
         self.__path = self.module.params['path']
+        self.__format = self.module.params.get('format', 'p12')
         self.__cert = None
         self.__private_key = None
         self.__additional_certs = None
@@ -66,22 +68,28 @@ class AnalyzeCertificate():
         self.load_info()
 
     def load_certificate(self):
-        if not HAS_CRYPTOGRAPHY_PKCS12:
+        if not HAS_CRYPTOGRAPHY:
             self.module.fail_json(
                 msg=missing_required_lib('cryptography >= 36.0')
             )
 
         try:
             with open(self.__path, 'rb') as f:
-                pkcs12_data = f.read()
+                cert_data = f.read()
         except IOError as e:
             self.module.fail_json(
                 msg='IOError: %s' % (to_native(e))
             )
 
+        if self.__format == 'pem':
+            self._load_pem(cert_data)
+        else:
+            self._load_pkcs12(cert_data)
+
+    def _load_pkcs12(self, data):
         try:
             pkcs12_tuple = pkcs12.load_key_and_certificates(
-                pkcs12_data,
+                data,
                 to_bytes(self.__passphrase),
             )
         except ValueError as e:
@@ -92,6 +100,14 @@ class AnalyzeCertificate():
         self.__private_key = pkcs12_tuple[0]
         self.__cert = pkcs12_tuple[1]
         self.__additional_certs = pkcs12_tuple[2]
+
+    def _load_pem(self, data):
+        try:
+            self.__cert = x509.load_pem_x509_certificate(data)
+        except ValueError as e:
+            self.module.fail_json(
+                msg='Failed to load PEM certificate: %s' % (to_native(e))
+            )
 
     def load_info(self):
         self.general_info()
