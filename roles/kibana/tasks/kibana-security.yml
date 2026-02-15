@@ -112,7 +112,7 @@
     state: directory
     owner: root
     group: kibana
-    mode: 0750
+    mode: "0750"
   tags:
     - certificates
     - renew_ca

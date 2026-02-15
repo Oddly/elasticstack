@@ -88,7 +88,7 @@
     dest: /etc/kibana/kibana.yml
     owner: root
     group: root
-    mode: 0644
+    mode: "0644"
     backup: "{{ kibana_config_backup }}"
   notify:
     - Restart Kibana

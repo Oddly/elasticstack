@@ -50,7 +50,7 @@
     state: directory
     owner: root
     group: root
-    mode: 0750
+    mode: "0750"
   when: beats_logging == "file"
 
 - name: Import security tasks

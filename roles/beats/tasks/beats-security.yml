@@ -73,7 +73,7 @@
     state: directory
     owner: root
     group: root
-    mode: 0700
+    mode: "0700"
   tags:
     - certificates
     - renew_ca
@@ -119,7 +119,7 @@
     dest: "/etc/beats/certs/"
     owner: root
     group: root
-    mode: 0640
+    mode: "0640"
   tags:
     - certificates
     - renew_ca
@@ -131,7 +131,7 @@
     dest: "/etc/beats/certs/{{ inventory_hostname }}-beats.crt"
     owner: root
     group: root
-    mode: 0640
+    mode: "0640"
     remote_src: true
   notify:
     - Restart Filebeat
@@ -148,7 +148,7 @@
     dest: "/etc/beats/certs/{{ inventory_hostname }}-beats.key"
     owner: root
     group: root
-    mode: 0640
+    mode: "0640"
     remote_src: true
   notify:
     - Restart Filebeat
