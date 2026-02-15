@@ -10,6 +10,25 @@
           This collection requires ansible-core >= 2.18.0 (found {{ ansible_version.full }}).
           Please upgrade: pip install 'ansible-core>=2.18'
 
+    - name: Validate elasticstack_release is set
+      ansible.builtin.assert:
+        that:
+          - elasticstack_release is defined
+          - elasticstack_release | int > 0
+        fail_msg: >-
+          elasticstack_release must be set to a valid major version (e.g. 8 or 9).
+          Found: {{ elasticstack_release | default('undefined') }}
+
+    - name: Validate elasticsearch group exists for full stack deployment
+      ansible.builtin.assert:
+        that:
+          - groups[elasticstack_elasticsearch_group_name] is defined
+          - groups[elasticstack_elasticsearch_group_name] | length > 0
+        fail_msg: >-
+          Full stack deployment requires at least one host in the
+          '{{ elasticstack_elasticsearch_group_name }}' inventory group.
+      when: elasticstack_full_stack | bool
+
     - name: Include OS specific vars
       ansible.builtin.include_vars: '{{ item }}'
       with_first_found:
@@ -18,7 +37,7 @@
 
     - name: Set elasticstack_ca_host variable if not already done by user
       ansible.builtin.set_fact:
-        elasticstack_ca: "{{ groups[elasticstack_elasticsearch_group_name][0] }}"
+        elasticstack_ca_host: "{{ groups[elasticstack_elasticsearch_group_name][0] }}"
       when:
         - elasticstack_ca_host is undefined
         - groups[elasticstack_elasticsearch_group_name][0] is defined
