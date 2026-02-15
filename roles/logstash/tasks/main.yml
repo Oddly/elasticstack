@@ -34,7 +34,7 @@
     update_cache: true
     cache_valid_time: 600
   changed_when: false
-  when: ansible_os_family == 'Debian'
+  when: ansible_facts.os_family == 'Debian'
 
 - name: Set up Elasticsearch hosts from inventory
   ansible.builtin.set_fact:
@@ -113,7 +113,7 @@
       replace(' ', '')
       }}
   when:
-    - ansible_os_family != "Debian"
+    - ansible_facts.os_family != "Debian"
 
 - name: Construct exact name of Logstash package (Debian)
   ansible.builtin.set_fact:
@@ -125,7 +125,7 @@
       replace(' ', '')
       }}
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts.os_family == "Debian"
 
 - name: Install Logstash (RedHat - full stack)
   ansible.builtin.package:
@@ -135,7 +135,7 @@
   notify:
     - Restart Logstash
   when:
-    - ansible_os_family == "RedHat"
+    - ansible_facts.os_family == "RedHat"
     - elasticstack_full_stack | default(false) | bool
 
 - name: Install Logstash (RedHat - standalone)
@@ -144,7 +144,7 @@
   notify:
     - Restart Logstash
   when:
-    - ansible_os_family == "RedHat"
+    - ansible_facts.os_family == "RedHat"
     - not elasticstack_full_stack | default(false) | bool
 
 - name: Install Logstash (Debian)
@@ -153,7 +153,7 @@
   notify:
     - Restart Logstash
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts.os_family == "Debian"
 
 - name: Import Logstash Security tasks
   ansible.builtin.import_tasks: logstash-security.yml
@@ -349,4 +349,4 @@
 - name: Remove cache in container environments
   ansible.builtin.command: rm -rf /var/cache/*
   changed_when: false
-  when: ansible_virtualization_type == "container" or ansible_virtualization_type == "docker"
+  when: ansible_facts.virtualization_type == "container" or ansible_facts.virtualization_type == "docker"

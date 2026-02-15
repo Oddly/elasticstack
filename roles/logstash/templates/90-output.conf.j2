@@ -2,7 +2,7 @@
 filter {
   mutate {
     add_field => {
-      "{{ logstash_ident_field_name | default('[logstash][instance]') }}" => "{{ ansible_hostname }}"
+      "{{ logstash_ident_field_name | default('[logstash][instance]') }}" => "{{ ansible_facts.hostname }}"
     }
   }
 }

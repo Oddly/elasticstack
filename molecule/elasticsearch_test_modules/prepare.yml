@@ -18,14 +18,14 @@
           - python3-pip
           - python3-setuptools
         update_cache: true
-      when: ansible_os_family == "Debian"
+      when: ansible_facts.os_family == "Debian"
 
     - name: Install packages for RedHat
       ansible.builtin.yum:
         name:
           - python3-pip
           - python3-setuptools
-      when: ansible_os_family == "RedHat"
+      when: ansible_facts.os_family == "RedHat"
 
     - name: Remove PEP 668 marker (test containers only)
       ansible.builtin.file:

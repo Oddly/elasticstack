@@ -10,7 +10,7 @@
     update_cache: true
     cache_valid_time: 600
   changed_when: false
-  when: ansible_os_family == 'Debian'
+  when: ansible_facts.os_family == 'Debian'
 
 - name: Prepare for whole stack roles if used
   when:
@@ -80,4 +80,4 @@
   ansible.builtin.command: >
     rm -rf /var/cache/*
   changed_when: false
-  when: ansible_virtualization_type == "container" or ansible_virtualization_type == "docker"
+  when: ansible_facts.virtualization_type == "container" or ansible_facts.virtualization_type == "docker"

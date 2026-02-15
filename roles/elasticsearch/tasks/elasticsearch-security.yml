@@ -79,7 +79,7 @@
         - certificates
         - renew_es_cert
   vars:
-    _cert_path: "/etc/elasticsearch/certs/{{ ansible_hostname }}.p12"
+    _cert_path: "/etc/elasticsearch/certs/{{ ansible_facts.hostname }}.p12"
     _cert_pass: "{{ elasticsearch_tls_key_passphrase }}"
     _cert_buffer_days: "{{ elasticsearch_cert_expiration_buffer }}"
     _cert_expiry_fact: elasticsearch_cert_will_expire_soon
@@ -112,7 +112,7 @@
         - renew_ca
         - renew_es_cert
   vars:
-    _backup_path: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}.p12"
+    _backup_path: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}.p12"
     _backup_target: "{{ elasticstack_ca_host }}"
   when: "'renew_es_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or elasticsearch_cert_will_expire_soon | bool"
   tags:
@@ -128,7 +128,7 @@
         - renew_ca
         - renew_es_cert
   vars:
-    _backup_path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}.p12"
+    _backup_path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_facts.hostname }}.p12"
     _backup_target: localhost
     _backup_become: false
   when: "'renew_es_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or elasticsearch_cert_will_expire_soon | bool"
@@ -165,10 +165,10 @@
         - renew_ca
         - renew_es_cert
   vars:
-    _cert_name: "{{ hostvars[item].ansible_hostname }}"
-    _cert_ip: "{{ hostvars[item].ansible_default_ipv4.address | default(hostvars[item].ansible_all_ipv4_addresses[0]) }}"
-    _cert_dns: "{{ hostvars[item].ansible_hostname }},{{ hostvars[item].ansible_fqdn }},{{ hostvars[item].inventory_hostname }}"
-    _cert_out: "{{ elasticstack_ca_dir }}/{{ hostvars[item].ansible_hostname }}.p12"
+    _cert_name: "{{ hostvars[item].ansible_facts.hostname }}"
+    _cert_ip: "{{ hostvars[item].ansible_facts.default_ipv4.address | default(hostvars[item].ansible_facts.all_ipv4_addresses[0]) }}"
+    _cert_dns: "{{ hostvars[item].ansible_facts.hostname }},{{ hostvars[item].ansible_facts.fqdn }},{{ hostvars[item].inventory_hostname }}"
+    _cert_out: "{{ elasticstack_ca_dir }}/{{ hostvars[item].ansible_facts.hostname }}.p12"
     _cert_pass: "{{ (hostvars[item].elasticsearch_tls_key_passphrase is defined) | ternary(hostvars[item].elasticsearch_tls_key_passphrase, elasticsearch_tls_key_passphrase) }}"
     _cert_validity: "{{ elasticsearch_cert_validity_period }}"
   loop: "{{ groups[elasticstack_elasticsearch_group_name] }}"
@@ -187,7 +187,7 @@
         - certificates
         - renew_ca
   vars:
-    _cert_p12_path: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}.p12"
+    _cert_p12_path: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}.p12"
     _cert_ca_out: "{{ elasticstack_ca_dir }}/ca.crt"
     _cert_pass: "{{ elasticsearch_tls_key_passphrase }}"
   when: inventory_hostname == elasticstack_ca_host
@@ -241,8 +241,8 @@
         - renew_ca
         - renew_es_cert
   vars:
-    _cert_src: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}.p12"
-    _cert_dest: "/etc/elasticsearch/certs/{{ ansible_hostname }}.p12"
+    _cert_src: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}.p12"
+    _cert_dest: "/etc/elasticsearch/certs/{{ ansible_facts.hostname }}.p12"
     _cert_owner: root
     _cert_group: elasticsearch
     _cert_mode: "0640"
@@ -356,7 +356,7 @@
   delay: 10
 
 - name: Work around low resources on CI/CD nodes
-  when: ansible_virtualization_type == "container" or ansible_virtualization_type == "docker"
+  when: ansible_facts.virtualization_type == "container" or ansible_facts.virtualization_type == "docker"
   block:
     # Free up some space to let Elasticsearch allocate replica in GitHub Action
     - name: Remove cache

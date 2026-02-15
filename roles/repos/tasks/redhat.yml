@@ -10,7 +10,7 @@
 
 - name: Workaround for EL > 8
   when:
-    - ansible_distribution_major_version >= "9"
+    - ansible_facts.distribution_major_version >= "9"
   block:
 
     - name: Show a warning

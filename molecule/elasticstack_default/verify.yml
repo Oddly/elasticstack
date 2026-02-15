@@ -77,7 +77,7 @@
 
         - name: Connect to Kibana
           ansible.builtin.uri:
-            url: "http://{{ ansible_hostname }}:5601/api/status"
+            url: "http://{{ ansible_facts.hostname }}:5601/api/status"
             method: GET
             force_basic_auth: true
             user: elastic

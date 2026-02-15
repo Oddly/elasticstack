@@ -10,7 +10,7 @@
     update_cache: true
     cache_valid_time: 600
   changed_when: false
-  when: ansible_os_family == 'Debian'
+  when: ansible_facts.os_family == 'Debian'
 
 - name: Set common password for common certificates
   ansible.builtin.set_fact:
@@ -51,7 +51,7 @@
   notify:
     - Restart Kibana
   when:
-    - ansible_os_family == "RedHat"
+    - ansible_facts.os_family == "RedHat"
     - elasticstack_full_stack | bool
 
 - name: Install Kibana - rpm - standalone
@@ -60,7 +60,7 @@
   notify:
     - Restart Kibana
   when:
-    - ansible_os_family == "RedHat"
+    - ansible_facts.os_family == "RedHat"
     - not elasticstack_full_stack | bool
 
 - name: Install Kibana - deb
@@ -69,7 +69,7 @@
   notify:
     - Restart Kibana
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts.os_family == "Debian"
 
 - name: Import security related tasks
   ansible.builtin.import_tasks: kibana-security.yml
@@ -115,4 +115,4 @@
   ansible.builtin.command: >
     rm -rf /var/cache/*
   changed_when: false
-  when: ansible_virtualization_type == "container" or ansible_virtualization_type == "docker"
+  when: ansible_facts.virtualization_type == "container" or ansible_facts.virtualization_type == "docker"

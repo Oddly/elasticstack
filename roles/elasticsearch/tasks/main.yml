@@ -27,7 +27,7 @@
     update_cache: true
     cache_valid_time: 600
   changed_when: false
-  when: ansible_os_family == 'Debian'
+  when: ansible_facts.os_family == 'Debian'
 
 - name: Check-set-parameters
   ansible.builtin.include_tasks: elasticsearch-parameters.yml
@@ -35,12 +35,12 @@
 - name: Include OS specific vars
   ansible.builtin.include_vars: '{{ item }}'
   with_first_found:
-    - '{{ ansible_os_family }}_{{ ansible_distribution_major_version }}.yml'
-    - '{{ ansible_os_family }}.yml'
+    - '{{ ansible_facts.os_family }}_{{ ansible_facts.distribution_major_version }}.yml'
+    - '{{ ansible_facts.os_family }}.yml'
 
 - name: Set node name if not overriden by user
   ansible.builtin.set_fact:
-    elasticsearch_nodename: "{{ ansible_hostname }}"
+    elasticsearch_nodename: "{{ ansible_facts.hostname }}"
   when:
     - elasticsearch_nodename is undefined
 
@@ -214,21 +214,21 @@
     enablerepo:
       - 'elastic-{{ elasticstack_release }}.x'
   when:
-    - ansible_os_family == "RedHat"
+    - ansible_facts.os_family == "RedHat"
     - elasticstack_full_stack | bool
 
 - name: Install Elasticsearch - rpm - standalone
   ansible.builtin.package:
     name: "{{ elasticsearch_package }}"
   when:
-    - ansible_os_family == "RedHat"
+    - ansible_facts.os_family == "RedHat"
     - not elasticstack_full_stack | bool
 
 - name: Install Elasticsearch - deb
   ansible.builtin.package:
     name: "{{ elasticsearch_package }}"
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts.os_family == "Debian"
 
 - name: Configure Elasticsearch
   ansible.builtin.template:
@@ -311,14 +311,14 @@
 - name: Force systemd to reread configs on container
   ansible.builtin.systemd:
     daemon_reload: true
-  when: ansible_virtualization_type == "container" or ansible_virtualization_type == "docker"
+  when: ansible_facts.virtualization_type == "container" or ansible_facts.virtualization_type == "docker"
 
 # Free up some space to let Elasticsearch allocate replica in GitHub Action
 - name: Remove cache
   ansible.builtin.command: >
     rm -rf /var/cache/*
   changed_when: false
-  when: ansible_virtualization_type == "container" or ansible_virtualization_type == "docker"
+  when: ansible_facts.virtualization_type == "container" or ansible_facts.virtualization_type == "docker"
 
 - name: Import Tasks elasticsearch-security.yml
   ansible.builtin.import_tasks: elasticsearch-security.yml
@@ -381,7 +381,7 @@
 
 - name: Show Info about heap
   ansible.builtin.debug:
-    msg: "Using {{ elasticsearch_heap | int * 1024 }} of {{ ansible_memtotal_mb }} MB as heap for Elasticsearch"
+    msg: "Using {{ elasticsearch_heap | int * 1024 }} of {{ ansible_facts.memtotal_mb }} MB as heap for Elasticsearch"
   when: elasticsearch_heap is defined and (elasticsearch_heap | string | length > 0)
 
 - name: Show hint about passwords

@@ -5,21 +5,21 @@
     - name: Install EPEL for RHEL
       ansible.builtin.package:
         name: epel-release
-      when: ansible_os_family == "RedHat"
+      when: ansible_facts.os_family == "RedHat"
 
     - name: Install packages for RHEL
       ansible.builtin.package:
         name:
           - iproute
           - NetworkManager
-      when: ansible_os_family == "RedHat"
+      when: ansible_facts.os_family == "RedHat"
 
     - name: Start NetworkManager
       ansible.builtin.service:
         name: NetworkManager
         state: started
         enabled: true
-      when: ansible_os_family == "RedHat"
+      when: ansible_facts.os_family == "RedHat"
 
     - name: Install packages for Debian
       ansible.builtin.apt:
@@ -30,7 +30,7 @@
           - curl
           - iproute2
         update_cache: true
-      when: ansible_os_family == "Debian"
+      when: ansible_facts.os_family == "Debian"
 
     - name: Install common packages
       ansible.builtin.package:

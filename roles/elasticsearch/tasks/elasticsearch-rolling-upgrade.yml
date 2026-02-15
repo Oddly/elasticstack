@@ -30,14 +30,14 @@
         enablerepo:
           - 'elastic-{{ elasticstack_release }}.x'
       when:
-        - ansible_os_family == "RedHat"
+        - ansible_facts.os_family == "RedHat"
         - elasticstack_full_stack | bool
 
     - name: Update stopped Elasticsearch - deb or unmanaged repositories rpm
       ansible.builtin.package:
         name: "{{ elasticsearch_package }}"
       when:
-        - ansible_os_family == "Debian" or
+        - ansible_facts.os_family == "Debian" or
           not elasticstack_full_stack | bool
 
 - name: Update single instances without extra caution
@@ -48,7 +48,7 @@
       ansible.builtin.package:
         name: "{{ elasticsearch_package }}"
       when:
-        - ansible_os_family == "Debian" or
+        - ansible_facts.os_family == "Debian" or
           not elasticstack_full_stack | bool
       notify:
         - Restart Elasticsearch
@@ -59,7 +59,7 @@
         enablerepo:
           - 'elastic-{{ elasticstack_release }}.x'
       when:
-        - ansible_os_family == "RedHat"
+        - ansible_facts.os_family == "RedHat"
         - elasticstack_full_stack | bool
       notify:
         - Restart Elasticsearch
@@ -178,14 +178,14 @@
         enablerepo:
           - 'elastic-{{ elasticstack_release }}.x'
       when:
-        - ansible_os_family == "RedHat"
+        - ansible_facts.os_family == "RedHat"
         - elasticstack_full_stack | bool
 
     - name: Update Elasticsearch - deb or unmanaged repositories rpm
       ansible.builtin.package:
         name: "{{ elasticsearch_package }}"
       when:
-        - ansible_os_family == "Debian" or
+        - ansible_facts.os_family == "Debian" or
           not elasticstack_full_stack | bool
 
     - name: Start elasticsearch

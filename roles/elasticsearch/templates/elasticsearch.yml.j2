@@ -36,7 +36,7 @@ discovery.seed_hosts: {{ elasticsearch_seed_hosts }}
 {% else %}
 {% if groups[elasticstack_elasticsearch_group_name] | length > 1 %}
 discovery.seed_hosts: [ {% for host in groups[elasticstack_elasticsearch_group_name]  %}
-"{{ hostvars[host].ansible_default_ipv4.address | default(hostvars[host].ansible_all_ipv4_addresses[0]) }}"{% if not loop.last %},{% endif %}
+"{{ hostvars[host].ansible_facts.default_ipv4.address | default(hostvars[host].ansible_facts.all_ipv4_addresses[0]) }}"{% if not loop.last %},{% endif %}
 {% endfor %} ]
 {% endif %}
 {% endif %}
@@ -64,12 +64,12 @@ xpack.security.enrollment.enabled: {{ elasticsearch_security_enrollment }}
 {% endif %}
 xpack.security.transport.ssl.enabled: true
 xpack.security.transport.ssl.verification_mode: {{ elasticsearch_ssl_verification_mode }}
-xpack.security.transport.ssl.keystore.path: certs/{{ ansible_hostname }}.p12
-xpack.security.transport.ssl.truststore.path: certs/{{ ansible_hostname }}.p12
+xpack.security.transport.ssl.keystore.path: certs/{{ ansible_facts.hostname }}.p12
+xpack.security.transport.ssl.truststore.path: certs/{{ ansible_facts.hostname }}.p12
 {% if elasticsearch_http_security | bool %}
 xpack.security.http.ssl.enabled: true
-xpack.security.http.ssl.keystore.path: certs/{{ ansible_hostname }}.p12
-xpack.security.http.ssl.truststore.path: certs/{{ ansible_hostname }}.p12
+xpack.security.http.ssl.keystore.path: certs/{{ ansible_facts.hostname }}.p12
+xpack.security.http.ssl.truststore.path: certs/{{ ansible_facts.hostname }}.p12
 {% endif %}
 {% endif %}
 {% if not elasticsearch_security | bool %}

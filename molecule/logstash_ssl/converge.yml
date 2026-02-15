@@ -72,9 +72,9 @@
       community.crypto.openssl_csr:
         path: /tmp/test-certs/server.csr
         privatekey_path: /tmp/test-certs/server.key
-        common_name: "{{ ansible_hostname }}"
+        common_name: "{{ ansible_facts.hostname }}"
         subject_alt_name:
-          - "DNS:{{ ansible_hostname }}"
+          - "DNS:{{ ansible_facts.hostname }}"
           - "DNS:localhost"
           - "IP:127.0.0.1"
 

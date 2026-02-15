@@ -9,7 +9,7 @@
         - certificates
         - renew_kibana_cert
   vars:
-    _cert_path: "/etc/kibana/certs/{{ ansible_hostname }}-kibana.p12"
+    _cert_path: "/etc/kibana/certs/{{ ansible_facts.hostname }}-kibana.p12"
     _cert_pass: "{{ kibana_tls_key_passphrase }}"
     _cert_buffer_days: "{{ kibana_cert_expiration_buffer }}"
     _cert_expiry_fact: kibana_cert_will_expire_soon
@@ -42,7 +42,7 @@
         - renew_ca
         - renew_kibana_cert
   vars:
-    _backup_path: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-kibana.p12"
+    _backup_path: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}-kibana.p12"
     _backup_target: "{{ elasticstack_ca_host }}"
   when: "'renew_kibana_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or kibana_cert_will_expire_soon | bool"
   tags:
@@ -58,7 +58,7 @@
         - renew_ca
         - renew_kibana_cert
   vars:
-    _backup_path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_hostname }}-kibana.p12"
+    _backup_path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_facts.hostname }}-kibana.p12"
     _backup_target: localhost
     _backup_become: false
   when: "'renew_kibana_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or kibana_cert_will_expire_soon | bool"
@@ -128,10 +128,10 @@
         - renew_ca
         - renew_kibana_cert
   vars:
-    _cert_name: "{{ ansible_hostname }}"
-    _cert_ip: "{{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}"
-    _cert_dns: "{{ ansible_hostname }},{{ ansible_fqdn }},{{ inventory_hostname }}"
-    _cert_out: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-kibana.p12"
+    _cert_name: "{{ ansible_facts.hostname }}"
+    _cert_ip: "{{ ansible_facts.default_ipv4.address | default(ansible_facts.all_ipv4_addresses[0]) }}"
+    _cert_dns: "{{ ansible_facts.hostname }},{{ ansible_facts.fqdn }},{{ inventory_hostname }}"
+    _cert_out: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}-kibana.p12"
     _cert_pass: "{{ kibana_tls_key_passphrase }}"
     _cert_validity: "{{ kibana_cert_validity_period }}"
   tags:
@@ -149,8 +149,8 @@
         - renew_ca
         - renew_kibana_cert
   vars:
-    _cert_src: "{{ elasticstack_ca_dir }}/{{ ansible_hostname }}-kibana.p12"
-    _cert_dest: "/etc/kibana/certs/{{ ansible_hostname }}-kibana.p12"
+    _cert_src: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}-kibana.p12"
+    _cert_dest: "/etc/kibana/certs/{{ ansible_facts.hostname }}-kibana.p12"
     _cert_owner: root
     _cert_group: kibana
     _cert_mode: "0640"

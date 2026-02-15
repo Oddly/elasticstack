@@ -11,4 +11,4 @@
           - curl
           - git
         update_cache: true
-      when: ansible_os_family == "Debian"
+      when: ansible_facts.os_family == "Debian"
