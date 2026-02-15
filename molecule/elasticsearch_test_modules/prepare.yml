@@ -2,7 +2,7 @@
 - name: Prepare
   hosts: all
   vars:
-    es_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('8') | int }}"
+    es_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
   tasks:
     - name: Install packages for Debian
       ansible.builtin.apt:

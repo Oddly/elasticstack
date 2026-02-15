@@ -13,7 +13,7 @@
     elasticsearch_jna_workaround: true
     elasticsearch_disable_systemcallfilterchecks: true
     elasticsearch_monitoring_enabled: false
-    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | int}}"
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticsearch_heap: "1"
     elasticstack_full_stack: true
     elasticstack_no_log: false

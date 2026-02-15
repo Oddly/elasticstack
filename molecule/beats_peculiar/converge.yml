@@ -37,7 +37,7 @@
     beats_metricbeat: true
     beats_metricbeat_output: logstash
     #beats_filebeat_docker: true
-    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | int}}"
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
   tasks:
 
     - name: Set Filebeat version for 8.x
