@@ -62,8 +62,6 @@ class AnalyzeCertificate():
         self.__path = self.module.params['path']
         self.__format = self.module.params.get('format', 'p12')
         self.__cert = None
-        self.__private_key = None
-        self.__additional_certs = None
         self.load_certificate()
         self.load_info()
 
@@ -97,9 +95,7 @@ class AnalyzeCertificate():
                 msg='Failed to load PKCS12 certificate: %s' % (to_native(e))
             )
 
-        self.__private_key = pkcs12_tuple[0]
         self.__cert = pkcs12_tuple[1]
-        self.__additional_certs = pkcs12_tuple[2]
 
     def _load_pem(self, data):
         try:

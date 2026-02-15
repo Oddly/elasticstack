@@ -5,7 +5,7 @@
 # Required variables:
 #   _beat_name: Beat name (e.g. "filebeat", "auditbeat", "metricbeat")
 
-- name: "Construct exact name of {{ _beat_name }} package"
+- name: "Construct exact package name - {{ _beat_name }}"
   ansible.builtin.set_fact:
     _beat_package: >-
       {{
@@ -15,7 +15,7 @@
       string ) if (elasticstack_version is defined and elasticstack_version | length > 0)) |
       replace(' ', '') }}
 
-- name: "Install {{ _beat_name }} - rpm - full stack"
+- name: "Install rpm full stack - {{ _beat_name }}"
   ansible.builtin.package:
     name: "{{ _beat_package }}"
     enablerepo:
@@ -25,7 +25,7 @@
     - ansible_facts.os_family == "RedHat"
     - elasticstack_full_stack | bool
 
-- name: "Install {{ _beat_name }} - rpm - standalone"
+- name: "Install rpm standalone - {{ _beat_name }}"
   ansible.builtin.package:
     name: "{{ _beat_package }}"
   notify: "Restart {{ _beat_name | capitalize }}"
@@ -33,14 +33,14 @@
     - ansible_facts.os_family == "RedHat"
     - not elasticstack_full_stack | bool
 
-- name: "Install {{ _beat_name }} - deb"
+- name: "Install deb - {{ _beat_name }}"
   ansible.builtin.package:
     name: "{{ _beat_package }}"
   notify: "Restart {{ _beat_name | capitalize }}"
   when:
     - ansible_facts.os_family == "Debian"
 
-- name: "Install {{ _beat_name }} latest version - rpm - full stack"
+- name: "Install latest rpm full stack - {{ _beat_name }}"
   ansible.builtin.package:
     name: "{{ _beat_name }}"
     state: latest
@@ -53,7 +53,7 @@
     - ansible_facts.os_family == "RedHat"
     - elasticstack_full_stack | bool
 
-- name: "Install {{ _beat_name }} latest version - rpm - standalone"
+- name: "Install latest rpm standalone - {{ _beat_name }}"
   ansible.builtin.package:
     name: "{{ _beat_name }}"
     state: latest
@@ -64,7 +64,7 @@
     - ansible_facts.os_family == "RedHat"
     - not elasticstack_full_stack | bool
 
-- name: "Install {{ _beat_name }} latest version - deb"
+- name: "Install latest deb - {{ _beat_name }}"
   ansible.builtin.package:
     name: "{{ _beat_name }}"
     state: latest

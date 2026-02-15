@@ -304,11 +304,10 @@ class TestApiModuleConstants(unittest.TestCase):
         else:
             self.assertEqual(ES_CLIENT_VERSION, 0)
 
-    def test_current_client_version_is_9(self):
-        """Test that current installed client is version 9."""
+    def test_current_client_version_is_supported(self):
+        """Test that current installed client is a supported version (8 or 9)."""
         if HAS_ELASTICSEARCH:
-            # We expect ES 9.x client based on our requirements
-            self.assertEqual(ES_CLIENT_VERSION, 9)
+            self.assertIn(ES_CLIENT_VERSION, (8, 9))
         else:
             self.skipTest("elasticsearch library not installed")
 

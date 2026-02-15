@@ -9,6 +9,84 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
+DOCUMENTATION = r'''
+---
+module: cert_info
+short_description: Retrieve information from a certificate file
+description:
+  - Reads a PKCS#12 or PEM certificate and returns metadata such as
+    issuer, subject, validity dates, serial number, and supported X.509
+    extensions.
+options:
+  path:
+    description:
+      - Path to the certificate file.
+    type: str
+    required: true
+  passphrase:
+    description:
+      - Passphrase used to decrypt the certificate (required for PKCS#12).
+    type: str
+    required: false
+    default: null
+  format:
+    description:
+      - Format of the certificate file.
+    type: str
+    required: false
+    default: p12
+    choices: ['p12', 'pem']
+author:
+  - Daniel Patrick (@dpatrick-netways)
+requirements:
+  - cryptography >= 36.0
+'''
+
+EXAMPLES = r'''
+- name: Get info from a PKCS#12 certificate
+  oddly.elasticstack.cert_info:
+    path: /etc/elasticsearch/certs/http.p12
+    passphrase: changeme
+  register: cert
+
+- name: Get info from a PEM certificate
+  oddly.elasticstack.cert_info:
+    path: /etc/elasticsearch/certs/ca.pem
+    format: pem
+  register: cert
+'''
+
+RETURN = r'''
+issuer:
+  description: Common name of the certificate issuer.
+  type: str
+  returned: always
+subject:
+  description: Common name of the certificate subject.
+  type: str
+  returned: always
+not_valid_after:
+  description: Certificate expiry date.
+  type: str
+  returned: always
+not_valid_before:
+  description: Certificate start date.
+  type: str
+  returned: always
+serial_number:
+  description: Certificate serial number.
+  type: str
+  returned: always
+version:
+  description: Certificate version.
+  type: str
+  returned: always
+extensions:
+  description: Parsed X.509 extensions.
+  type: dict
+  returned: always
+'''
+
 from ansible.module_utils.basic import (
     AnsibleModule,
     to_native

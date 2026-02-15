@@ -27,7 +27,7 @@ def parse_version(version):
     """
     if isinstance(version, tuple):
         return version[0]
-    return int(str(version).split('.')[0])
+    return int(str(version).split('.', 1)[0])
 
 
 try:
