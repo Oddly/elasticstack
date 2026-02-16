@@ -52,7 +52,7 @@ jobs:
           - debian11
           - debian12
           - debian13
-        scenario: [kibana_default]
+        scenario: [kibana_default, kibana_custom]
         release: [8, 9]
 
     steps:

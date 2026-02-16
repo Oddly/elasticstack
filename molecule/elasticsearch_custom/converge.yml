@@ -29,6 +29,10 @@
     elasticsearch_clustername: custom-test-cluster
     # Config backup
     elasticsearch_config_backup: true
+    # ML (enabled by default, verify it's in config)
+    elasticsearch_ml_enabled: true
+    # PAM limits
+    elasticsearch_pamlimits: true
   tasks:
     - name: Include Elastic repos
       ansible.builtin.include_role:

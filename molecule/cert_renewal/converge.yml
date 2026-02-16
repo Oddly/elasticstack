@@ -1,0 +1,146 @@
+---
+# Certificate renewal test:
+# 1. Deploy full stack (ES 2-node + Kibana + Logstash)
+# 2. Record original certificate fingerprints
+# 3. Re-run with *_cert_will_expire_soon: true to trigger renewal
+# 4. Verify new certificates are different from originals
+
+# --- Phase 1: Initial deployment ---
+
+- name: Deploy full stack
+  collections:
+    - oddly.elasticstack
+  hosts: all
+  vars:
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    elasticstack_full_stack: true
+    elasticstack_no_log: false
+    elasticsearch_heap: "1"
+    logstash_pipeline_unsafe_shutdown: true
+  tasks:
+    - name: Include Elastic repos
+      ansible.builtin.include_role:
+        name: repos
+
+    - name: Deploy Elasticsearch
+      ansible.builtin.include_role:
+        name: elasticsearch
+      when: "'elasticsearch' in group_names"
+
+    - name: Fetch elastic password for watermark setup
+      ansible.builtin.shell: |
+        set -o pipefail
+        grep "PASSWORD elastic " /usr/share/elasticsearch/initial_passwords |
+        awk {' print $4 '}
+      args:
+        executable: /bin/bash
+      register: _es_pass
+      changed_when: false
+      when:
+        - "'elasticsearch' in group_names"
+        - "inventory_hostname == groups['elasticsearch'][0]"
+
+    - name: Set lenient disk watermarks for Docker
+      ansible.builtin.uri:
+        url: "https://localhost:9200/_cluster/settings"
+        method: PUT
+        body_format: json
+        body:
+          persistent:
+            cluster.routing.allocation.disk.watermark.low: "97%"
+            cluster.routing.allocation.disk.watermark.high: "98%"
+            cluster.routing.allocation.disk.watermark.flood_stage: "99%"
+        user: elastic
+        password: "{{ _es_pass.stdout }}"
+        validate_certs: false
+        force_basic_auth: true
+      when:
+        - "'elasticsearch' in group_names"
+        - "inventory_hostname == groups['elasticsearch'][0]"
+
+    - name: Deploy Logstash
+      ansible.builtin.include_role:
+        name: logstash
+      when: "'logstash' in group_names"
+
+    - name: Deploy Kibana
+      ansible.builtin.include_role:
+        name: kibana
+      when: "'kibana' in group_names"
+
+# --- Phase 2: Record original certificate fingerprints ---
+
+- name: Record original certificate fingerprints
+  hosts: all
+  tasks:
+    - name: Get ES transport cert fingerprint
+      ansible.builtin.shell: >-
+        openssl pkcs12 -in /etc/elasticsearch/certs/{{ ansible_facts.hostname }}-es.p12
+        -nokeys -passin pass:PleaseChangeMeIndividually 2>/dev/null |
+        openssl x509 -fingerprint -sha256 -noout 2>/dev/null || echo "NONE"
+      register: _es_cert_fp_before
+      changed_when: false
+      when: "'elasticsearch' in group_names"
+
+    - name: Get Logstash cert fingerprint
+      ansible.builtin.shell: >-
+        openssl pkcs12 -in /etc/logstash/certs/{{ ansible_facts.hostname }}-ls.p12
+        -nokeys -passin pass:LogstashChangeMe 2>/dev/null |
+        openssl x509 -fingerprint -sha256 -noout 2>/dev/null || echo "NONE"
+      register: _ls_cert_fp_before
+      changed_when: false
+      when: "'logstash' in group_names"
+
+    - name: Get Kibana cert fingerprint
+      ansible.builtin.shell: >-
+        openssl pkcs12 -in /etc/kibana/certs/{{ ansible_facts.hostname }}-kibana.p12
+        -nokeys -passin pass:PleaseChangeMe 2>/dev/null |
+        openssl x509 -fingerprint -sha256 -noout 2>/dev/null || echo "NONE"
+      register: _kb_cert_fp_before
+      changed_when: false
+      when: "'kibana' in group_names"
+
+    - name: Display original fingerprints
+      ansible.builtin.debug:
+        msg: >-
+          ES: {{ _es_cert_fp_before.stdout | default('N/A') }},
+          LS: {{ _ls_cert_fp_before.stdout | default('N/A') }},
+          KB: {{ _kb_cert_fp_before.stdout | default('N/A') }}
+
+# --- Phase 3: Re-run with cert renewal flags ---
+
+- name: Renew all certificates
+  collections:
+    - oddly.elasticstack
+  hosts: all
+  vars:
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    elasticstack_full_stack: true
+    elasticstack_no_log: false
+    elasticsearch_heap: "1"
+    logstash_pipeline_unsafe_shutdown: true
+    # Force certificate renewal
+    elasticstack_ca_will_expire_soon: true
+    elasticsearch_cert_will_expire_soon: true
+    kibana_cert_will_expire_soon: true
+    logstash_cert_will_expire_soon: true
+    logstash_cert_force_regenerate: true
+  tasks:
+    - name: Reset shared role import guard for re-run
+      ansible.builtin.set_fact:
+        _elasticstack_role_imported: false
+
+    - name: Re-run Elasticsearch (triggers cert renewal)
+      ansible.builtin.include_role:
+        name: elasticsearch
+      when: "'elasticsearch' in group_names"
+
+    - name: Re-run Logstash (triggers cert renewal)
+      ansible.builtin.include_role:
+        name: logstash
+      when: "'logstash' in group_names"
+
+    - name: Re-run Kibana (triggers cert renewal)
+      ansible.builtin.include_role:
+        name: kibana
+      when: "'kibana' in group_names"

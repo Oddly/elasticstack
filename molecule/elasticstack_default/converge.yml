@@ -20,6 +20,9 @@
     beats_filebeat_journald: true
     beats_filebeat_modules:
       - system
+    beats_auditbeat: true
+    beats_auditbeat_enable: false  # can't run in Docker (permissions)
+    beats_metricbeat: true
     beats_fields:
       - "testbed: molecule"
     kibana_extra_config: |-

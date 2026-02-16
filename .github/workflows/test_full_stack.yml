@@ -44,6 +44,7 @@ jobs:
           - elasticstack_default
           - es_kibana
           - logstash_elasticsearch
+          - cert_renewal
         release:
           - 8
           - 9

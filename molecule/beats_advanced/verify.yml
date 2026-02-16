@@ -1,0 +1,112 @@
+---
+- name: Verify advanced Beats configuration
+  hosts: all
+  tasks:
+    # --- Filebeat service check ---
+
+    - name: Check filebeat service is running
+      ansible.builtin.service:
+        name: filebeat
+        state: started
+      check_mode: true
+      register: filebeat_svc
+      failed_when: filebeat_svc.changed
+
+    # --- Filebeat config verification ---
+
+    - name: Read filebeat.yml
+      ansible.builtin.slurp:
+        src: /etc/filebeat/filebeat.yml
+      register: filebeat_yml
+
+    - name: Verify syslog UDP input is configured
+      ansible.builtin.assert:
+        that:
+          - "'syslog' in (filebeat_yml.content | b64decode)"
+          - "'udp' in (filebeat_yml.content | b64decode)"
+          - "'5514' in (filebeat_yml.content | b64decode)"
+        fail_msg: "Syslog UDP input not found in filebeat.yml"
+
+    - name: Verify syslog TCP input is configured
+      ansible.builtin.assert:
+        that:
+          - "'tcp' in (filebeat_yml.content | b64decode)"
+          - "'5515' in (filebeat_yml.content | b64decode)"
+        fail_msg: "Syslog TCP input not found in filebeat.yml"
+
+    - name: Verify journald input is configured
+      ansible.builtin.assert:
+        that:
+          - "'journald' in (filebeat_yml.content | b64decode)"
+        fail_msg: "Journald input not found in filebeat.yml"
+
+    - name: Verify file output is configured
+      ansible.builtin.assert:
+        that:
+          - "'output.file' in (filebeat_yml.content | b64decode)"
+        fail_msg: "File output not configured in filebeat.yml"
+
+    # --- Filebeat syslog ports ---
+
+    - name: Wait for syslog UDP port 5514
+      ansible.builtin.wait_for:
+        port: 5514
+        timeout: 60
+      ignore_errors: true
+      register: udp_port
+
+    - name: Wait for syslog TCP port 5515
+      ansible.builtin.wait_for:
+        port: 5515
+        timeout: 60
+      ignore_errors: true
+      register: tcp_port
+
+    - name: Report syslog port status
+      ansible.builtin.debug:
+        msg: "UDP 5514: {{ 'open' if udp_port is success else 'closed' }}, TCP 5515: {{ 'open' if tcp_port is success else 'closed' }}"
+
+    # --- Metricbeat verification ---
+
+    - name: Check metricbeat service is running
+      ansible.builtin.service:
+        name: metricbeat
+        state: started
+      check_mode: true
+      register: metricbeat_svc
+      failed_when: metricbeat_svc.changed
+
+    - name: Read metricbeat.yml
+      ansible.builtin.slurp:
+        src: /etc/metricbeat/metricbeat.yml
+      register: metricbeat_yml
+
+    - name: Verify metricbeat system module reference
+      ansible.builtin.assert:
+        that:
+          - "'system' in (metricbeat_yml.content | b64decode)"
+        fail_msg: "System module not referenced in metricbeat.yml"
+
+    # --- Auditbeat verification (installed but not enabled) ---
+
+    - name: Check auditbeat package is installed
+      ansible.builtin.package:
+        name: auditbeat
+        state: present
+      check_mode: true
+      register: auditbeat_pkg
+      failed_when: auditbeat_pkg.changed
+
+    # --- Logging verification ---
+
+    - name: Check beats log directory exists
+      ansible.builtin.stat:
+        path: /var/log/beats
+      register: log_dir
+
+    - name: Assert log directory exists
+      ansible.builtin.assert:
+        that:
+          - log_dir.stat.exists
+          - log_dir.stat.isdir
+        fail_msg: "Beats log directory /var/log/beats not found"

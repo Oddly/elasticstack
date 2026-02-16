@@ -1,0 +1,61 @@
+---
+# Tests advanced Logstash features: config backup, logging management,
+# plugins, filter files, extra inputs, persistent queue, ident, and
+# pipeline identifier settings.
+- name: Deploy Logstash with advanced configuration
+  hosts: all
+  collections:
+    - oddly.elasticstack
+  vars:
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    elasticstack_full_stack: false
+    elasticstack_no_log: false
+    logstash_output_elasticsearch: false
+    logstash_create_user: false
+    logstash_create_role: false
+    logstash_input_beats_ssl: false
+    logstash_pipeline_unsafe_shutdown: true
+    # Config backup
+    logstash_config_backup: true
+    # Logging management
+    logstash_manage_logging: true
+    # Persistent queue (default, but explicit)
+    logstash_queue_type: persisted
+    logstash_queue_max_bytes: 512mb
+    # Auto-reload (default, but explicit)
+    logstash_config_autoreload: true
+    # Ident and pipeline identifier
+    logstash_ident: true
+    logstash_ident_field_name: "[logstash][instance]"
+    logstash_pipeline_identifier: true
+    logstash_pipeline_identifier_field_name: "[logstash][pipeline]"
+    # Extra inputs
+    logstash_extra_inputs: |
+      http {
+        port => 8080
+        codec => json
+      }
+    # Inline filters
+    logstash_filters: |
+      grok {
+        match => { "message" => "%{SYSLOGLINE}" }
+      }
+    # Filter files
+    logstash_filter_files:
+      - /tmp/logstash-filters/20-custom-filter.conf
+    # Extra outputs
+    logstash_extra_outputs: |
+      file {
+        path => "/var/log/logstash/advanced-output.log"
+      }
+    # Plugins
+    logstash_plugins:
+      - logstash-filter-translate
+  tasks:
+    - name: Include Elastic repos role
+      ansible.builtin.include_role:
+        name: repos
+
+    - name: Include Logstash role
+      ansible.builtin.include_role:
+        name: logstash

@@ -1,0 +1,54 @@
+---
+# Tests advanced Beats features: syslog UDP/TCP inputs, journald,
+# metricbeat with system module, and custom logging.
+- name: Deploy Beats with advanced configuration
+  hosts: all
+  collections:
+    - oddly.elasticstack
+  vars:
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    elasticstack_full_stack: false
+    elasticstack_no_log: false
+    # Filebeat configuration
+    beats_filebeat: true
+    beats_filebeat_log_input: true
+    beats_filebeat_log_inputs:
+      messages:
+        name: messages
+        paths:
+          - /var/log/messages
+          - /var/log/syslog
+    # Syslog UDP input
+    beats_filebeat_syslog_udp: true
+    beats_filebeat_syslog_udp_port: 5514
+    # Syslog TCP input
+    beats_filebeat_syslog_tcp: true
+    beats_filebeat_syslog_tcp_port: 5515
+    # Journald input
+    beats_filebeat_journald: true
+    beats_filebeat_journald_inputs:
+      everything:
+        id: everything
+    # Filebeat output to file (no ES/Logstash)
+    beats_filebeat_output: file
+    # Metricbeat
+    beats_metricbeat: true
+    beats_metricbeat_output: file
+    beats_metricbeat_modules:
+      - system
+    # Auditbeat (install only, don't enable in Docker)
+    beats_auditbeat: true
+    beats_auditbeat_enable: false
+    beats_auditbeat_output: file
+    # Logging
+    beats_logging: file
+    beats_logpath: /var/log/beats
+    beats_loglevel: debug
+  tasks:
+    - name: Include Elastic repos role
+      ansible.builtin.include_role:
+        name: repos
+
+    - name: Include Beats role
+      ansible.builtin.include_role:
+        name: beats

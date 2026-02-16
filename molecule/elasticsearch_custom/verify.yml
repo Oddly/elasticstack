@@ -90,3 +90,32 @@
     - name: Report backup status
       ansible.builtin.debug:
         msg: "Found {{ backups.files | length }} config backup(s)"
+
+    - name: Verify ML is enabled in elasticsearch.yml
+      ansible.builtin.assert:
+        that:
+          - "'xpack.ml.enabled' in es_yml.content | b64decode"
+        fail_msg: "ML setting not found in elasticsearch.yml"
+
+    - name: Verify PAM limits file exists
+      ansible.builtin.stat:
+        path: /etc/security/limits.d/elasticsearch.conf
+      register: pam_limits
+
+    - name: Assert PAM limits file is present
+      ansible.builtin.assert:
+        that:
+          - pam_limits.stat.exists
+        fail_msg: "PAM limits file /etc/security/limits.d/elasticsearch.conf not found"
+
+    - name: Read PAM limits content
+      ansible.builtin.slurp:
+        src: /etc/security/limits.d/elasticsearch.conf
+      register: pam_content
+
+    - name: Verify PAM limits contain expected settings
+      ansible.builtin.assert:
+        that:
+          - "'nofile' in pam_content.content | b64decode"
+          - "'memlock' in pam_content.content | b64decode"
+        fail_msg: "PAM limits missing nofile or memlock settings"

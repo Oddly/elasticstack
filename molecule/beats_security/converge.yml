@@ -1,0 +1,68 @@
+---
+# Tests Beats with TLS security enabled (full stack mode).
+# ES generates the CA and Beats gets its own PEM certificates.
+# Filebeat outputs directly to Elasticsearch over HTTPS.
+- name: Deploy ES + Beats with TLS security
+  hosts: all
+  collections:
+    - oddly.elasticstack
+  vars:
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    elasticstack_full_stack: true
+    elasticstack_no_log: false
+    elasticsearch_heap: "1"
+    # Filebeat with ES output (uses TLS automatically in full_stack)
+    beats_filebeat: true
+    beats_filebeat_output: elasticsearch
+    beats_filebeat_log_input: true
+    beats_filebeat_log_inputs:
+      messages:
+        name: messages
+        paths:
+          - /var/log/messages
+          - /var/log/syslog
+  tasks:
+    - name: Include Elastic repos
+      ansible.builtin.include_role:
+        name: repos
+
+    - name: Deploy Elasticsearch
+      ansible.builtin.include_role:
+        name: elasticsearch
+      when: "'elasticsearch' in group_names"
+
+    - name: Fetch elastic password for watermark setup
+      ansible.builtin.shell: |
+        set -o pipefail
+        grep "PASSWORD elastic " /usr/share/elasticsearch/initial_passwords |
+        awk {' print $4 '}
+      args:
+        executable: /bin/bash
+      register: _es_pass
+      changed_when: false
+      when:
+        - "'elasticsearch' in group_names"
+        - "inventory_hostname == groups['elasticsearch'][0]"
+
+    - name: Set lenient disk watermarks for Docker
+      ansible.builtin.uri:
+        url: "https://localhost:9200/_cluster/settings"
+        method: PUT
+        body_format: json
+        body:
+          persistent:
+            cluster.routing.allocation.disk.watermark.low: "97%"
+            cluster.routing.allocation.disk.watermark.high: "98%"
+            cluster.routing.allocation.disk.watermark.flood_stage: "99%"
+        user: elastic
+        password: "{{ _es_pass.stdout }}"
+        validate_certs: false
+        force_basic_auth: true
+      when:
+        - "'elasticsearch' in group_names"
+        - "inventory_hostname == groups['elasticsearch'][0]"
+
+    - name: Deploy Beats with TLS
+      ansible.builtin.include_role:
+        name: beats
+      when: "'beats' in group_names"

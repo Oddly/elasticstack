@@ -179,3 +179,43 @@
       register: config_test
       changed_when: false
       failed_when: config_test.rc != 0
+
+    # --- Ident / pipeline identifier verification ---
+
+    - name: Read filter configuration for ident check
+      ansible.builtin.slurp:
+        src: /etc/logstash/conf.d/main/50-filter.conf
+      register: filter_ident
+
+    - name: Verify ident mutate filter is present
+      ansible.builtin.assert:
+        that:
+          - "'mutate' in (filter_ident.content | b64decode)"
+          - "'logstash' in (filter_ident.content | b64decode)"
+          - "'instance' in (filter_ident.content | b64decode)"
+        fail_msg: "Logstash ident filter not found in 50-filter.conf"
+
+    - name: Verify pipeline identifier is present
+      ansible.builtin.assert:
+        that:
+          - "'pipeline' in (filter_ident.content | b64decode)"
+        fail_msg: "Pipeline identifier not found in 50-filter.conf"
+
+    # --- Logstash.yml verification ---
+
+    - name: Read logstash.yml
+      ansible.builtin.slurp:
+        src: /etc/logstash/logstash.yml
+      register: logstash_yml
+
+    - name: Verify queue type is persisted
+      ansible.builtin.assert:
+        that:
+          - "'queue.type: persisted' in (logstash_yml.content | b64decode)"
+        fail_msg: "Queue type 'persisted' not found in logstash.yml"
+
+    - name: Verify autoreload is enabled
+      ansible.builtin.assert:
+        that:
+          - "'config.reload.automatic: true' in (logstash_yml.content | b64decode)"
+        fail_msg: "Config autoreload not found in logstash.yml"

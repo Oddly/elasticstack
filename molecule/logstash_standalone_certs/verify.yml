@@ -1,0 +1,126 @@
+---
+- name: Verify Logstash with beats SSL and external certs
+  hosts: all
+  tasks:
+    - name: Check Logstash service is running
+      ansible.builtin.service:
+        name: logstash
+        state: started
+      check_mode: true
+      register: logstash_service
+      failed_when: logstash_service.changed
+
+    # --- Certificate verification ---
+
+    - name: Check certificate directory exists
+      ansible.builtin.stat:
+        path: /etc/logstash/certs
+      register: certs_dir
+
+    - name: Assert certificate directory exists
+      ansible.builtin.assert:
+        that:
+          - certs_dir.stat.exists
+          - certs_dir.stat.isdir
+        fail_msg: "Certificate directory /etc/logstash/certs not found"
+
+    - name: Check server certificate was copied
+      ansible.builtin.stat:
+        path: "/etc/logstash/certs/{{ ansible_facts.hostname }}-server.crt"
+      register: server_cert
+
+    - name: Assert server certificate exists
+      ansible.builtin.assert:
+        that:
+          - server_cert.stat.exists
+        fail_msg: "Server certificate not found in /etc/logstash/certs/"
+
+    - name: Check server key was copied
+      ansible.builtin.stat:
+        path: "/etc/logstash/certs/{{ ansible_facts.hostname }}-pkcs8.key"
+      register: server_key
+
+    - name: Assert server key exists
+      ansible.builtin.assert:
+        that:
+          - server_key.stat.exists
+        fail_msg: "Server key not found in /etc/logstash/certs/"
+
+    - name: Check CA certificate was copied
+      ansible.builtin.stat:
+        path: /etc/logstash/certs/ca.crt
+      register: ca_cert
+
+    - name: Assert CA certificate exists
+      ansible.builtin.assert:
+        that:
+          - ca_cert.stat.exists
+        fail_msg: "CA certificate not found in /etc/logstash/certs/"
+
+    # --- Input SSL verification ---
+
+    - name: Read input configuration
+      ansible.builtin.slurp:
+        src: /etc/logstash/conf.d/main/10-input.conf
+      register: input_content
+
+    - name: Verify beats input with SSL is configured
+      ansible.builtin.assert:
+        that:
+          - "'beats {' in (input_content.content | b64decode)"
+          - "'port => 5044' in (input_content.content | b64decode)"
+          - "'ssl_enabled' in (input_content.content | b64decode) or 'ssl => true' in (input_content.content | b64decode)"
+        fail_msg: "Beats input with SSL not properly configured"
+
+    # --- Port check ---
+
+    - name: Check Logstash is listening on port 5044
+      ansible.builtin.wait_for:
+        port: 5044
+        timeout: 120
+        state: started
+      register: port_check
+      ignore_errors: true
+
+    - name: Show diagnostics on port check failure
+      when: port_check is failed
+      block:
+        - name: Show Logstash log after failure
+          ansible.builtin.shell: >-
+            journalctl -u logstash --no-pager -n 100 2>/dev/null ||
+            tail -100 /var/log/logstash/logstash-plain.log 2>/dev/null ||
+            echo "No logs found"
+          register: logstash_log
+          changed_when: false
+
+        - name: Display failure log  # noqa: no-handler
+          ansible.builtin.debug:
+            var: logstash_log.stdout_lines
+
+        - name: Fail with context
+          ansible.builtin.fail:
+            msg: "Logstash port 5044 did not open within timeout."
+
+    # --- Config syntax validation ---
+
+    - name: Get installed Logstash version
+      ansible.builtin.shell: >-
+        (v=$(dpkg-query -W -f='${Version}' logstash 2>/dev/null) &&
+        echo "${v}" | sed 's/^[0-9]*://;s/-.*$//') ||
+        rpm -q --qf '%{VERSION}' logstash 2>/dev/null
+      register: logstash_version
+      changed_when: false
+
+    - name: Verify Logstash config syntax
+      ansible.builtin.command: >-
+        /usr/share/logstash/bin/logstash
+        --path.settings=/etc/logstash
+        --config.test_and_exit
+        -f /etc/logstash/conf.d/main/
+      become: "{{ logstash_version.stdout is version('9.0.0', '>=', version_type='loose') }}"
+      become_method: su
+      become_user: "{{ 'logstash' if logstash_version.stdout is version('9.0.0', '>=', version_type='loose') else omit }}"
+      become_flags: '-s /bin/sh'
+      register: config_test
+      changed_when: false
+      failed_when: config_test.rc != 0

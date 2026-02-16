@@ -1,0 +1,89 @@
+---
+- name: Verify Kibana custom configuration
+  hosts: all
+  vars:
+    elasticstack_elasticsearch_http_port: 9200
+    elasticstack_elasticsearch_group_name: elasticsearch
+  tasks:
+    - name: Set elasticsearch_ca variable
+      ansible.builtin.set_fact:
+        elasticsearch_ca: "{{ groups[elasticstack_elasticsearch_group_name][0] }}"
+      when: elasticsearch_ca is undefined
+
+    - name: Fetch Elastic password
+      ansible.builtin.shell: |
+        set -o pipefail
+        grep "PASSWORD elastic " /usr/share/elasticsearch/initial_passwords |
+        awk {' print $4 '}
+      args:
+        executable: /bin/bash
+      register: elastic_pass
+      changed_when: false
+      delegate_to: "{{ elasticsearch_ca }}"
+
+    - name: Elasticsearch health check
+      ansible.builtin.uri:
+        url: "https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health?wait_for_status=yellow&timeout=30s"
+        method: GET
+        force_basic_auth: true
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        return_content: true
+        status_code: 200
+        validate_certs: false
+      register: result
+      until: result.json.status | default('red') in ['green', 'yellow']
+      retries: 6
+      delay: 10
+      when: "'elasticsearch' in group_names"
+
+    - name: Run Kibana checks
+      when: "'kibana' in group_names"
+      block:
+        - name: Connect to Kibana
+          ansible.builtin.uri:
+            url: "http://localhost:5601/api/status"
+            method: GET
+            force_basic_auth: true
+            user: elastic
+            password: "{{ elastic_pass.stdout }}"
+            return_content: true
+            status_code: [200, 503]
+          register: kibana_status
+          retries: 18
+          delay: 10
+          until: (kibana_status.json.status.overall.level | default('')) == 'available'
+
+        - name: Verify Kibana is available
+          ansible.builtin.assert:
+            that:
+              - kibana_status.json.status.overall.level == 'available'
+            fail_msg: "Kibana status: {{ kibana_status.json.status.overall.level | default('unknown') }}"
+
+        - name: Read kibana.yml
+          ansible.builtin.slurp:
+            src: /etc/kibana/kibana.yml
+          register: kibana_yml
+
+        - name: Verify extra config is present
+          ansible.builtin.assert:
+            that:
+              - "'ops.interval: 10000' in (kibana_yml.content | b64decode)"
+              - "'logging.root.level: warn' in (kibana_yml.content | b64decode)"
+            fail_msg: "Extra config not found in kibana.yml"
+
+        - name: Verify sniff on start is enabled
+          ansible.builtin.assert:
+            that:
+              - "'sniffOnStart: true' in (kibana_yml.content | b64decode)"
+            fail_msg: "Sniff on start not found in kibana.yml"
+
+        - name: Check for kibana.yml backup files
+          ansible.builtin.find:
+            paths: /etc/kibana
+            patterns: "kibana.yml.*"
+          register: backups
+
+        - name: Report backup status
+          ansible.builtin.debug:
+            msg: "Found {{ backups.files | length }} kibana.yml backup(s)"

@@ -91,6 +91,33 @@
             - "'green' not in (kibana_status.content | default(''))"
             - "'Elasticsearch is available' not in (kibana_status.content | default(''))"
 
+    - name: Run Beats checks
+      when: "'beats' in group_names"
+      block:
+        - name: Check filebeat service is running
+          ansible.builtin.service:
+            name: filebeat
+            state: started
+          check_mode: true
+          register: filebeat_svc
+          failed_when: filebeat_svc.changed
+
+        - name: Check metricbeat service is running
+          ansible.builtin.service:
+            name: metricbeat
+            state: started
+          check_mode: true
+          register: metricbeat_svc
+          failed_when: metricbeat_svc.changed
+
+        - name: Check auditbeat package is installed
+          ansible.builtin.package:
+            name: auditbeat
+            state: present
+          check_mode: true
+          register: auditbeat_pkg
+          failed_when: auditbeat_pkg.changed
+
     - name: Elasticsearch health check
       ansible.builtin.uri:
         url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health

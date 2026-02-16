@@ -1,0 +1,131 @@
+---
+- name: Verify certificate renewal
+  hosts: all
+  vars:
+    elasticstack_elasticsearch_http_port: 9200
+    elasticstack_elasticsearch_group_name: elasticsearch
+  tasks:
+    - name: Set elasticsearch_ca variable
+      ansible.builtin.set_fact:
+        elasticsearch_ca: "{{ groups[elasticstack_elasticsearch_group_name][0] }}"
+      when: elasticsearch_ca is undefined
+
+    - name: Fetch Elastic password
+      ansible.builtin.shell: |
+        set -o pipefail
+        grep "PASSWORD elastic " /usr/share/elasticsearch/initial_passwords |
+        awk {' print $4 '}
+      args:
+        executable: /bin/bash
+      register: elastic_pass
+      changed_when: false
+      delegate_to: "{{ elasticsearch_ca }}"
+
+    # --- Elasticsearch verification ---
+
+    - name: Elasticsearch health check
+      ansible.builtin.uri:
+        url: "https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health?wait_for_status=yellow&timeout=30s"
+        method: GET
+        force_basic_auth: true
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        return_content: true
+        status_code: 200
+        validate_certs: false
+      register: result
+      until: result.json.status | default('red') in ['green', 'yellow']
+      retries: 12
+      delay: 10
+      when: "'elasticsearch' in group_names"
+
+    - name: Verify cluster has 2 nodes
+      ansible.builtin.assert:
+        that:
+          - result.json.number_of_nodes == 2
+        fail_msg: "Expected 2 nodes, got {{ result.json.number_of_nodes }}"
+      when:
+        - "'elasticsearch' in group_names"
+        - "inventory_hostname == groups['elasticsearch'][0]"
+
+    - name: Verify ES certificates exist after renewal
+      ansible.builtin.stat:
+        path: "/etc/elasticsearch/certs/{{ ansible_facts.hostname }}-es.p12"
+      register: es_cert_after
+      when: "'elasticsearch' in group_names"
+
+    - name: Assert ES certificate exists
+      ansible.builtin.assert:
+        that:
+          - es_cert_after.stat.exists
+        fail_msg: "ES certificate missing after renewal"
+      when: "'elasticsearch' in group_names"
+
+    # --- Logstash verification ---
+
+    - name: Run Logstash checks
+      when: "'logstash' in group_names"
+      block:
+        - name: Check Logstash is listening on port 5044
+          ansible.builtin.wait_for:
+            port: 5044
+            timeout: 120
+
+        - name: Verify Logstash certificate exists after renewal
+          ansible.builtin.stat:
+            path: "/etc/logstash/certs/{{ ansible_facts.hostname }}-ls.p12"
+          register: ls_cert_after
+
+        - name: Assert Logstash certificate exists
+          ansible.builtin.assert:
+            that:
+              - ls_cert_after.stat.exists
+            fail_msg: "Logstash certificate missing after renewal"
+
+    # --- Kibana verification ---
+
+    - name: Run Kibana checks
+      when: "'kibana' in group_names"
+      block:
+        - name: Connect to Kibana
+          ansible.builtin.uri:
+            url: "http://localhost:5601/api/status"
+            method: GET
+            force_basic_auth: true
+            user: elastic
+            password: "{{ elastic_pass.stdout }}"
+            return_content: true
+            status_code: [200, 503]
+          register: kibana_status
+          retries: 18
+          delay: 10
+          until: (kibana_status.json.status.overall.level | default('')) == 'available'
+
+        - name: Verify Kibana is available after renewal
+          ansible.builtin.assert:
+            that:
+              - kibana_status.json.status.overall.level == 'available'
+            fail_msg: "Kibana not available after cert renewal"
+
+        - name: Verify Kibana certificate exists after renewal
+          ansible.builtin.stat:
+            path: "/etc/kibana/certs/{{ ansible_facts.hostname }}-kibana.p12"
+          register: kb_cert_after
+
+        - name: Assert Kibana certificate exists
+          ansible.builtin.assert:
+            that:
+              - kb_cert_after.stat.exists
+            fail_msg: "Kibana certificate missing after renewal"
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          CERTIFICATE RENEWAL TEST COMPLETE
+          ==========================================
+          ES cluster: {{ result.json.status | default('N/A') }}
+          Logstash port 5044: OK
+          Kibana status: {{ kibana_status.json.status.overall.level | default('N/A') }}
+          ==========================================
+      when: "inventory_hostname == groups['all'][0]"

@@ -52,7 +52,7 @@ jobs:
           - debian11
           - debian12
           - debian13
-        scenario: [beats_default, beats_peculiar]
+        scenario: [beats_default, beats_peculiar, beats_advanced, beats_security]
         release: [ 8, 9 ]
 
     steps:

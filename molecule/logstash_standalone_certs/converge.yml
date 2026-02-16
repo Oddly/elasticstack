@@ -1,0 +1,111 @@
+---
+# Tests Logstash with beats input SSL using external certificates.
+# This validates the logstash_cert_source: external path with beats input
+# (as opposed to logstash_ssl which tests elastic_agent input).
+- name: Deploy Logstash with beats SSL using external certs
+  hosts: all
+  collections:
+    - oddly.elasticstack
+  vars:
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    elasticstack_full_stack: false
+    elasticstack_no_log: false
+    logstash_output_elasticsearch: false
+    logstash_create_user: false
+    logstash_create_role: false
+    logstash_pipeline_unsafe_shutdown: true
+    # Beats input with SSL enabled
+    logstash_input_beats: true
+    logstash_input_beats_ssl: true
+    logstash_input_beats_port: 5044
+    # External certificate configuration
+    logstash_cert_source: external
+    logstash_tls_certificate_file: /tmp/test-certs/server.crt
+    logstash_tls_key_file: /tmp/test-certs/server-pkcs8.key
+    logstash_tls_ca_file: /tmp/test-certs/ca.crt
+    logstash_tls_remote_src: true
+    logstash_extra_outputs: |
+      stdout { codec => rubydebug }
+  tasks:
+    - name: Install openssl for certificate generation
+      ansible.builtin.package:
+        name: openssl
+        state: present
+
+    - name: Create test certificate directory
+      ansible.builtin.file:
+        path: /tmp/test-certs
+        state: directory
+        mode: "0755"
+
+    - name: Generate CA private key
+      community.crypto.openssl_privatekey:
+        path: /tmp/test-certs/ca.key
+        size: 2048
+
+    - name: Generate CA CSR
+      community.crypto.openssl_csr:
+        path: /tmp/test-certs/ca.csr
+        privatekey_path: /tmp/test-certs/ca.key
+        common_name: Test CA
+        organization_name: Test
+        basic_constraints:
+          - "CA:TRUE"
+        basic_constraints_critical: true
+        key_usage:
+          - keyCertSign
+          - cRLSign
+        key_usage_critical: true
+
+    - name: Generate CA certificate
+      community.crypto.x509_certificate:
+        path: /tmp/test-certs/ca.crt
+        privatekey_path: /tmp/test-certs/ca.key
+        csr_path: /tmp/test-certs/ca.csr
+        provider: selfsigned
+        selfsigned_not_after: "+365d"
+
+    - name: Generate server private key
+      community.crypto.openssl_privatekey:
+        path: /tmp/test-certs/server.key
+        size: 2048
+
+    - name: Generate server CSR
+      community.crypto.openssl_csr:
+        path: /tmp/test-certs/server.csr
+        privatekey_path: /tmp/test-certs/server.key
+        common_name: "{{ ansible_facts.hostname }}"
+        subject_alt_name:
+          - "DNS:{{ ansible_facts.hostname }}"
+          - "DNS:localhost"
+          - "IP:127.0.0.1"
+
+    - name: Sign server certificate with CA
+      community.crypto.x509_certificate:
+        path: /tmp/test-certs/server.crt
+        csr_path: /tmp/test-certs/server.csr
+        ownca_path: /tmp/test-certs/ca.crt
+        ownca_privatekey_path: /tmp/test-certs/ca.key
+        provider: ownca
+        ownca_not_after: "+365d"
+
+    - name: Create unencrypted PKCS8 key
+      ansible.builtin.command: >-
+        openssl pkcs8 -topk8 -nocrypt
+        -in /tmp/test-certs/server.key
+        -out /tmp/test-certs/server-pkcs8.key
+      args:
+        creates: /tmp/test-certs/server-pkcs8.key
+
+    - name: Set key permissions
+      ansible.builtin.file:
+        path: /tmp/test-certs/server-pkcs8.key
+        mode: "0640"
+
+    - name: Include Elastic repos role
+      ansible.builtin.include_role:
+        name: repos
+
+    - name: Include Logstash role
+      ansible.builtin.include_role:
+        name: logstash
