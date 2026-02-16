@@ -119,19 +119,19 @@ jobs:
           cp -a $GITHUB_WORKSPACE ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
 
       - name: Test `cert_info` module
-        run: python tests/unit/plugins/modules/test_cert_info.py
+        run: python3 tests/unit/plugins/modules/test_cert_info.py
         env:
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
 
       - name: Test `certs` module util
-        run: python tests/unit/plugins/module_utils/test_certs.py
+        run: python3 tests/unit/plugins/module_utils/test_certs.py
         env:
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
 
       - name: Test `api` module util
-        run: python tests/unit/plugins/module_utils/test_api.py
+        run: python3 tests/unit/plugins/module_utils/test_api.py
         env:
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
