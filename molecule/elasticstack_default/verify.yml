@@ -8,13 +8,27 @@
     elasticstack_elasticsearch_group_name: elasticsearch
   tasks:
 
-    - name: Run Logstash syntax check
-      ansible.builtin.command: "/usr/share/logstash/bin/logstash --path.settings=/etc/logstash -t"
-      become: true
-      become_method: su
-      become_user: logstash
-      become_flags: '-s /bin/sh'
+    - name: Run Logstash checks
       when: "'logstash' in group_names"
+      block:
+        - name: Get installed Logstash version
+          ansible.builtin.shell: >-
+            (v=$(dpkg-query -W -f='${Version}' logstash 2>/dev/null) &&
+            echo "${v}" | sed 's/^[0-9]*://;s/-.*$//') ||
+            rpm -q --qf '%{VERSION}' logstash 2>/dev/null
+          register: logstash_version
+          changed_when: false
+
+        - name: Run Logstash syntax check
+          ansible.builtin.command: >-
+            /usr/share/logstash/bin/logstash
+            --path.settings=/etc/logstash
+            --config.test_and_exit
+          become: "{{ logstash_version.stdout is version('9.0.0', '>=', version_type='loose') }}"
+          become_method: su
+          become_user: "{{ 'logstash' if logstash_version.stdout is version('9.0.0', '>=', version_type='loose') else omit }}"
+          become_flags: '-s /bin/sh'
+          changed_when: false
 
     - name: Check for open port 5044/tcp
       ansible.builtin.wait_for:
