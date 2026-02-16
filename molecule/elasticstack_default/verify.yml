@@ -13,6 +13,7 @@
       become: true
       become_method: su
       become_user: logstash
+      become_flags: '-s /bin/sh'
       when: "'logstash' in group_names"
 
     - name: Check for open port 5044/tcp
