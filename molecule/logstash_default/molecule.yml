@@ -6,7 +6,7 @@ dependency:
 driver:
   name: docker
 platforms:
-  - name: logstash-default
+  - name: "ls-default-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}"
     groups:
       - logstash
     image: "geerlingguy/docker-${MOLECULE_DISTRO:-debian12}-ansible:latest"

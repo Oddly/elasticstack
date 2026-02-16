@@ -6,7 +6,7 @@ dependency:
 driver:
   name: docker
 platforms:
-  - name: es-kibana-node1
+  - name: "eskib-es1-${MOLECULE_DISTRO:-debian11}-r${ELASTIC_RELEASE:-9}"
     groups:
       - elasticsearch
     image: "geerlingguy/docker-${MOLECULE_DISTRO:-debian11}-ansible:latest"
@@ -17,8 +17,8 @@ platforms:
     privileged: true
     pre_build_image: true
     networks:
-      - name: es-kibana
-  - name: es-kibana-node2
+      - name: "eskib-net-${MOLECULE_DISTRO:-debian11}-r${ELASTIC_RELEASE:-9}"
+  - name: "eskib-es2-${MOLECULE_DISTRO:-debian11}-r${ELASTIC_RELEASE:-9}"
     groups:
       - elasticsearch
     image: "geerlingguy/docker-${MOLECULE_DISTRO:-debian11}-ansible:latest"
@@ -29,8 +29,8 @@ platforms:
     privileged: true
     pre_build_image: true
     networks:
-      - name: es-kibana
-  - name: es-kibana-kibana1
+      - name: "eskib-net-${MOLECULE_DISTRO:-debian11}-r${ELASTIC_RELEASE:-9}"
+  - name: "eskib-kb1-${MOLECULE_DISTRO:-debian11}-r${ELASTIC_RELEASE:-9}"
     groups:
       - kibana
     image: "geerlingguy/docker-${MOLECULE_DISTRO:-debian11}-ansible:latest"
@@ -41,7 +41,7 @@ platforms:
     privileged: true
     pre_build_image: true
     networks:
-      - name: es-kibana
+      - name: "eskib-net-${MOLECULE_DISTRO:-debian11}-r${ELASTIC_RELEASE:-9}"
 provisioner:
   name: ansible
   inventory:

@@ -6,7 +6,7 @@ dependency:
 driver:
   name: docker
 platforms:
-  - name: ls-es-elasticsearch1
+  - name: "lses-es1-${MOLECULE_DISTRO:-debian11}-r${ELASTIC_RELEASE:-9}"
     groups:
       - elasticsearch
     image: "geerlingguy/docker-${MOLECULE_DISTRO:-debian11}-ansible:latest"
@@ -17,8 +17,8 @@ platforms:
     privileged: true
     pre_build_image: true
     networks:
-      - name: ls-es
-  - name: ls-es-logstash1
+      - name: "lses-net-${MOLECULE_DISTRO:-debian11}-r${ELASTIC_RELEASE:-9}"
+  - name: "lses-ls1-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}"
     groups:
       - logstash
     image: "geerlingguy/docker-${MOLECULE_DISTRO:-debian12}-ansible:latest"
@@ -29,7 +29,7 @@ platforms:
     privileged: true
     pre_build_image: true
     networks:
-      - name: ls-es
+      - name: "lses-net-${MOLECULE_DISTRO:-debian11}-r${ELASTIC_RELEASE:-9}"
 provisioner:
   name: ansible
   inventory:

@@ -4,7 +4,7 @@ dependency:
 driver:
   name: docker
 platforms:
-  - name: kibana_default
+  - name: "kibana-${MOLECULE_DISTRO:-debian11}-r${ELASTIC_RELEASE:-9}"
     image: "geerlingguy/docker-${MOLECULE_DISTRO:-debian11}-ansible:latest"
     command: ${MOLECULE_DOCKER_COMMAND:-""}
     volumes:
