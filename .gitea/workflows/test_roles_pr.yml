@@ -64,7 +64,7 @@ jobs:
       - name: Install collection and dependencies
         run: |
           mkdir -p ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE
-          cp -a ../ansible-collection-$COLLECTION_NAME ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+          cp -a "$GITHUB_WORKSPACE" ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
           ansible-galaxy collection install community.docker community.general ansible.posix
 
       - name: Converge and verify
