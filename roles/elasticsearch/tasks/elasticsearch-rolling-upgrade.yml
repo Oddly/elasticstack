@@ -82,8 +82,8 @@
         password: "{{ elasticstack_password.stdout }}"
         validate_certs: false
         status_code: [200, 503]
-      register: _es_responsive
-      until: (_es_responsive.status | default(0)) == 200
+      register: elasticsearch_responsive
+      until: (elasticsearch_responsive.status | default(0)) == 200
       retries: 30
       delay: 10
       no_log: "{{ elasticstack_no_log }}"
@@ -99,8 +99,8 @@
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
         validate_certs: false
-      register: response
-      until: response.json.acknowledged | default(false)
+      register: elasticsearch_response
+      until: elasticsearch_response.json.acknowledged | default(false)
       retries: 10
       delay: 30
 
@@ -121,8 +121,8 @@
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
         validate_certs: false
-      register: watermark_response
-      until: watermark_response.json.acknowledged | default(false)
+      register: elasticsearch_watermark_response
+      until: elasticsearch_watermark_elasticsearch_response.json.acknowledged | default(false)
       retries: 5
       delay: 10
 
@@ -135,8 +135,8 @@
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
         validate_certs: false
-      register: response
-      until: (response.json.status | default('')) in ['green', 'yellow']
+      register: elasticsearch_response
+      until: (elasticsearch_response.json.status | default('')) in ['green', 'yellow']
       retries: 50
       delay: 30
 
@@ -150,8 +150,8 @@
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
         validate_certs: false
-      register: response
-      until: response.json.acknowledged | default(false)
+      register: elasticsearch_response
+      until: elasticsearch_response.json.acknowledged | default(false)
       retries: 5
       delay: 10
 
@@ -220,8 +220,8 @@
         password: "{{ elasticstack_password.stdout }}"
         validate_certs: false
         return_content: true
-      register: result
-      until: elasticsearch_nodename in (result.content | default('')).split()
+      register: elasticsearch_result
+      until: elasticsearch_nodename in (elasticsearch_result.content | default('')).split()
       retries: 200
       delay: 3
       no_log: "{{ elasticstack_no_log }}"
@@ -235,8 +235,8 @@
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
         validate_certs: false
-      register: response
-      until: response.json.acknowledged | default(false)
+      register: elasticsearch_response
+      until: elasticsearch_response.json.acknowledged | default(false)
       retries: 5
       delay: 30
 
@@ -247,8 +247,8 @@
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
         validate_certs: false
-      register: response
-      until: (response.json.status | default('')) in ['green', 'yellow']
+      register: elasticsearch_response
+      until: (elasticsearch_response.json.status | default('')) in ['green', 'yellow']
       retries: 5
       delay: 30
 

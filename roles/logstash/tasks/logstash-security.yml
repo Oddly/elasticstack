@@ -77,7 +77,7 @@
     - name: Determine if certificate renewal is needed
       ansible.builtin.set_fact:
         _logstash_needs_cert_renewal: >-
-          {{ (not (_cert_stat.stat.exists | default(false))) or
+          {{ (not (elasticstack_cert_stat.stat.exists | default(false))) or
              (logstash_cert_force_regenerate | default(false) | bool) or
              (logstash_cert_will_expire_soon | default(false) | bool) }}
 
@@ -90,7 +90,7 @@
         _backup_target: "{{ inventory_hostname }}"
       when:
         - _logstash_needs_cert_renewal | bool
-        - _cert_stat.stat.exists | default(false)
+        - elasticstack_cert_stat.stat.exists | default(false)
 
     - name: Remove old certificate on CA host
       ansible.builtin.file:
@@ -99,7 +99,7 @@
       delegate_to: "{{ elasticstack_ca_host }}"
       when:
         - _logstash_needs_cert_renewal | bool
-        - _cert_stat.stat.exists | default(false)
+        - elasticstack_cert_stat.stat.exists | default(false)
 
     - name: Remove old PEM certificate zip on CA host
       ansible.builtin.file:
@@ -108,7 +108,7 @@
       delegate_to: "{{ elasticstack_ca_host }}"
       when:
         - _logstash_needs_cert_renewal | bool
-        - _cert_stat.stat.exists | default(false)
+        - elasticstack_cert_stat.stat.exists | default(false)
 
     # -- Generate and distribute certificates --
     - name: Generate and distribute certificates

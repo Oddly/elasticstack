@@ -44,6 +44,12 @@ jobs:
           yamllint roles/${{ inputs.rolename }}
         if: ${{ inputs.rolename != '' }}
 
+      - name: Lint code (ansible-lint).
+        run: |
+          ansible-lint
+        if: ${{ inputs.rolename == '' }}
+
       - name: Lint Role (ansible-lint).
         run: |
           ansible-lint roles/${{ inputs.rolename }}
+        if: ${{ inputs.rolename != '' }}

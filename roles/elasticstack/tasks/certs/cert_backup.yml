@@ -12,7 +12,7 @@
 - name: "Check backup path exists - {{ _backup_path }}"
   ansible.builtin.stat:
     path: "{{ _backup_path }}"
-  register: _backup_stat
+  register: elasticstack_backup_stat
   delegate_to: "{{ _backup_target if _backup_target != inventory_hostname else omit }}"
   become: "{{ _backup_become | default(_backup_target != 'localhost') }}"
 
@@ -22,15 +22,15 @@
     dest: "{{ _backup_path }}_{{ ansible_date_time.iso8601_micro }}"
     mode: preserve
     remote_src: "{{ _backup_target != 'localhost' }}"
-  when: _backup_stat.stat.exists
+  when: elasticstack_backup_stat.stat.exists
   delegate_to: "{{ _backup_target if _backup_target != inventory_hostname else omit }}"
   become: "{{ _backup_become | default(_backup_target != 'localhost') }}"
-  register: _backup_result
+  register: elasticstack_backup_result
 
 - name: "Remove original after backup - {{ _backup_path }}"
   ansible.builtin.file:
     path: "{{ _backup_path }}"
     state: absent
-  when: _backup_result.changed | default(false)
+  when: elasticstack_backup_result.changed | default(false)
   delegate_to: "{{ _backup_target if _backup_target != inventory_hostname else omit }}"
   become: "{{ _backup_become | default(_backup_target != 'localhost') }}"

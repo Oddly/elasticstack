@@ -57,22 +57,22 @@
 - name: Check if cluster is already set up
   ansible.builtin.stat:
     path: "{{ elasticsearch_initialized_file }}"
-  register: cluster_setup_check
+  register: elasticsearch_cluster_setup_check
   failed_when: false
 
 - name: Set var that cluster is set up
   ansible.builtin.set_fact:
     elasticsearch_cluster_set_up: true
   when:
-    - cluster_setup_check.stat.exists | bool
-    - cluster_setup_check is defined
+    - elasticsearch_cluster_setup_check.stat.exists | bool
+    - elasticsearch_cluster_setup_check is defined
 
 - name: Set var that cluster is not set up
   ansible.builtin.set_fact:
     elasticsearch_cluster_set_up: false
   when:
-    - cluster_setup_check is undefined or
-      not cluster_setup_check.stat.exists | bool
+    - elasticsearch_cluster_setup_check is undefined or
+      not elasticsearch_cluster_setup_check.stat.exists | bool
 
 - name: Check if master node count is correct
   when:
@@ -110,13 +110,13 @@
 
     - name: Count master nodes
       ansible.builtin.set_fact:
-        count_of_master_nodes: "{{ groups['elasticsearch_role_master'] | length }}"
+        elasticsearch_count_of_master_nodes: "{{ groups['elasticsearch_role_master'] | length }}"
 
     - name: Check count of master nodes
       ansible.builtin.fail:
-        msg: "There must be an odd count of master nodes. You have {{ count_of_master_nodes }}"
+        msg: "There must be an odd count of master nodes. You have {{ elasticsearch_count_of_master_nodes }}"
       when:
-        - count_of_master_nodes | int % 2  == 0
+        - elasticsearch_count_of_master_nodes | int % 2  == 0
 
     - name: End play in checks
       ansible.builtin.meta: end_host
