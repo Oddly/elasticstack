@@ -213,6 +213,10 @@
     name: "{{ elasticsearch_package }}"
     enablerepo:
       - 'elastic-{{ elasticstack_release }}.x'
+  register: _elasticsearch_install_rpm_full
+  until: _elasticsearch_install_rpm_full is success
+  retries: 3
+  delay: 10
   when:
     - ansible_facts.os_family == "RedHat"
     - elasticstack_full_stack | bool
@@ -220,6 +224,10 @@
 - name: Install Elasticsearch - rpm - standalone
   ansible.builtin.package:
     name: "{{ elasticsearch_package }}"
+  register: _elasticsearch_install_rpm
+  until: _elasticsearch_install_rpm is success
+  retries: 3
+  delay: 10
   when:
     - ansible_facts.os_family == "RedHat"
     - not elasticstack_full_stack | bool
@@ -227,6 +235,10 @@
 - name: Install Elasticsearch - deb
   ansible.builtin.package:
     name: "{{ elasticsearch_package }}"
+  register: _elasticsearch_install_deb
+  until: _elasticsearch_install_deb is success
+  retries: 3
+  delay: 10
   when:
     - ansible_facts.os_family == "Debian"
 

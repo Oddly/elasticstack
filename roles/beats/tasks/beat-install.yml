@@ -20,6 +20,10 @@
     name: "{{ beats_package }}"
     enablerepo:
       - 'elastic-{{ elasticstack_release }}.x'
+  register: _beat_install_rpm_full
+  until: _beat_install_rpm_full is success
+  retries: 3
+  delay: 10
   notify: "Restart {{ _beat_name | capitalize }}"
   when:
     - ansible_facts.os_family == "RedHat"
@@ -28,6 +32,10 @@
 - name: "Install rpm standalone package for {{ _beat_name }}"
   ansible.builtin.package:
     name: "{{ beats_package }}"
+  register: _beat_install_rpm
+  until: _beat_install_rpm is success
+  retries: 3
+  delay: 10
   notify: "Restart {{ _beat_name | capitalize }}"
   when:
     - ansible_facts.os_family == "RedHat"
@@ -36,6 +44,10 @@
 - name: "Install deb package for {{ _beat_name }}"
   ansible.builtin.package:
     name: "{{ beats_package }}"
+  register: _beat_install_deb
+  until: _beat_install_deb is success
+  retries: 3
+  delay: 10
   notify: "Restart {{ _beat_name | capitalize }}"
   when:
     - ansible_facts.os_family == "Debian"
@@ -46,6 +58,10 @@
     state: latest
     enablerepo:
       - "elastic-{{ elasticstack_release }}.x"
+  register: _beat_install_latest_rpm_full
+  until: _beat_install_latest_rpm_full is success
+  retries: 3
+  delay: 10
   notify: "Restart {{ _beat_name | capitalize }}"
   when:
     - elasticstack_version is defined
@@ -57,6 +73,10 @@
   ansible.builtin.package:
     name: "{{ _beat_name }}"
     state: latest
+  register: _beat_install_latest_rpm
+  until: _beat_install_latest_rpm is success
+  retries: 3
+  delay: 10
   notify: "Restart {{ _beat_name | capitalize }}"
   when:
     - elasticstack_version is defined
@@ -68,6 +88,10 @@
   ansible.builtin.package:
     name: "{{ _beat_name }}"
     state: latest
+  register: _beat_install_latest_deb
+  until: _beat_install_latest_deb is success
+  retries: 3
+  delay: 10
   notify: "Restart {{ _beat_name | capitalize }}"
   when:
     - elasticstack_version is defined

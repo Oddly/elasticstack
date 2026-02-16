@@ -64,6 +64,7 @@ jobs:
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
           ANSIBLE_DIFF_ALWAYS: 'true'
+          ELASTICSTACK_REPO_BASE_URL: http://elastic-cache.chiark.dev:8080
           ANSIBLE_CALLBACKS_ENABLED: profile_tasks
 
       - name: Collect and upload diagnostics
@@ -117,6 +118,7 @@ jobs:
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
           ANSIBLE_DIFF_ALWAYS: 'true'
+          ELASTICSTACK_REPO_BASE_URL: http://elastic-cache.chiark.dev:8080
           ANSIBLE_CALLBACKS_ENABLED: profile_tasks
 
       - name: Collect and upload diagnostics

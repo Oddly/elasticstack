@@ -79,6 +79,7 @@ jobs:
         env:
           MOLECULE_DISTRO: ${{ matrix.distro }}
           ELASTIC_RELEASE: ${{ matrix.release }}
+          ELASTICSTACK_REPO_BASE_URL: http://elastic-cache.chiark.dev:8080
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
           ANSIBLE_DIFF_ALWAYS: 'true'

@@ -9,6 +9,6 @@
   community.general.zypper_repository:
     name: elastic-{{ elasticstack_release }}.x
     description: Elastic Release {{ elasticstack_release }}.x
-    repo: https://artifacts.elastic.co/packages/{{ elasticstack_release }}.x/yum
+    repo: {{ elasticstack_repo_base_url }}/packages/{{ elasticstack_release }}.x/yum
     auto_import_keys: true
     enabled: "{{ elasticstack_enable_repos | bool }}"
