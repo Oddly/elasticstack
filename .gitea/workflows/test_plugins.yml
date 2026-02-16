@@ -36,6 +36,9 @@ jobs:
       - name: Check out the codebase.
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh && echo "$HOME/.local/bin" >> $GITHUB_PATH
       - name: Install test dependencies.
         run: uv pip install --system --break-system-packages --python /usr/bin/python3 pycodestyle
         env:
@@ -63,6 +66,9 @@ jobs:
       - name: Check out code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh && echo "$HOME/.local/bin" >> $GITHUB_PATH
       - name: Install ansible-core
         run: uv pip install --system --break-system-packages --python /usr/bin/python3 ansible-core~=${{ matrix.ansible_core }}.0
         env:
@@ -98,6 +104,9 @@ jobs:
       - name: Check out code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh && echo "$HOME/.local/bin" >> $GITHUB_PATH
       - name: Install dependencies
         run: uv pip install --system --break-system-packages --python /usr/bin/python3 ansible
         env:
@@ -135,6 +144,9 @@ jobs:
       - name: Check out code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh && echo "$HOME/.local/bin" >> $GITHUB_PATH
       - name: Install dependencies
         run: uv pip install --system --break-system-packages --python /usr/bin/python3 ansible
         env:
@@ -170,6 +182,9 @@ jobs:
       - name: Check out code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh && echo "$HOME/.local/bin" >> $GITHUB_PATH
       - name: Install dependencies
         run: uv pip install --system --break-system-packages --python /usr/bin/python3 ansible-core==${{ matrix.ansible_core_version }}
         env:
@@ -205,6 +220,9 @@ jobs:
       - name: Check out code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh && echo "$HOME/.local/bin" >> $GITHUB_PATH
       - name: Install dependencies
         run: |
           uv pip install --system --break-system-packages --python /usr/bin/python3 cryptography==${{ matrix.python_cryptography_version }}
