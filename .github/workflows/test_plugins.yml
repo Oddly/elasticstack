@@ -30,19 +30,14 @@ concurrency:
 
 jobs:
   pycodestyle:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 15
     steps:
       - name: Check out the codebase.
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
-      - name: Set up Python 3.
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: '3.x'
-
       - name: Install test dependencies.
-        run: uv pip install --system pycodestyle
+        run: uv pip install --system --break-system-packages --python /usr/bin/python3 pycodestyle
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
@@ -52,7 +47,7 @@ jobs:
 
   sanity:
     needs: pycodestyle
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 15
 
     strategy:
@@ -68,20 +63,15 @@ jobs:
       - name: Check out code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: "3.12"
-
       - name: Install ansible-core
-        run: uv pip install --system ansible-core~=${{ matrix.ansible_core }}.0
+        run: uv pip install --system --break-system-packages --python /usr/bin/python3 ansible-core~=${{ matrix.ansible_core }}.0
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
       - name: Install collection
         run: |
           mkdir -p ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE
-          cp -a ../ansible-collection-$COLLECTION_NAME ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+          cp -a "$GITHUB_WORKSPACE" ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
 
       - name: Run ansible-test sanity
         run: |
@@ -94,7 +84,7 @@ jobs:
 
   unit-test:
     needs: [pycodestyle, sanity]
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 15
 
     env:
@@ -108,20 +98,15 @@ jobs:
       - name: Check out code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: "3.12"
-
       - name: Install dependencies
-        run: uv pip install --system ansible
+        run: uv pip install --system --break-system-packages --python /usr/bin/python3 ansible
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
       - name: Install collection
         run: |
           mkdir -p ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE
-          cp -a ../ansible-collection-$COLLECTION_NAME ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+          cp -a "$GITHUB_WORKSPACE" ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
 
       - name: Test `cert_info` module
         run: |
@@ -139,36 +124,26 @@ jobs:
 
   python:
     needs: unit-test
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 15
 
     env:
       COLLECTION_NAMESPACE: oddly
       COLLECTION_NAME: elasticstack
 
-    strategy:
-      fail-fast: false
-      matrix:
-        python_version: [ 3.11.11, 3.12.8, 3.13.1 ]
-
     steps:
       - name: Check out code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
-      - name: Set up Python ${{ matrix.python_version }}
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: ${{ matrix.python_version }}
-
       - name: Install dependencies
-        run: uv pip install --system ansible
+        run: uv pip install --system --break-system-packages --python /usr/bin/python3 ansible
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
       - name: Install collection
         run: |
           mkdir -p ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE
-          cp -a ../ansible-collection-$COLLECTION_NAME ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+          cp -a "$GITHUB_WORKSPACE" ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
 
       - name: Test with ansible-playbook
         run: |
@@ -179,7 +154,7 @@ jobs:
 
   ansible-core:
     needs: python
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 15
 
     env:
@@ -189,26 +164,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ansible_core_version: [ 2.18.12, 2.19.5, 2.20.1 ]
+        ansible_core_version: [2.18.12, 2.19.5, 2.20.1]
 
     steps:
       - name: Check out code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: "3.12"
-
       - name: Install dependencies
-        run: uv pip install --system ansible-core==${{ matrix.ansible_core_version }}
+        run: uv pip install --system --break-system-packages --python /usr/bin/python3 ansible-core==${{ matrix.ansible_core_version }}
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
       - name: Install collection
         run: |
           mkdir -p ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE
-          cp -a ../ansible-collection-$COLLECTION_NAME ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+          cp -a "$GITHUB_WORKSPACE" ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
 
       - name: Test with ansible-playbook
         run: |
@@ -219,7 +189,7 @@ jobs:
 
   python-cryptography:
     needs: ansible-core
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 15
 
     env:
@@ -229,28 +199,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python_cryptography_version: [ 41.0.7, 42.0.8, 43.0.3, 44.0.3, 45.0.7, 46.0.4 ]
+        python_cryptography_version: [41.0.7, 42.0.8, 43.0.3, 44.0.3, 45.0.7, 46.0.4]
 
     steps:
       - name: Check out code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: "3.12"
-
       - name: Install dependencies
         run: |
-          uv pip install --system cryptography==${{ matrix.python_cryptography_version }}
-          uv pip install --system ansible
+          uv pip install --system --break-system-packages --python /usr/bin/python3 cryptography==${{ matrix.python_cryptography_version }}
+          uv pip install --system --break-system-packages --python /usr/bin/python3 ansible
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
       - name: Install collection
         run: |
           mkdir -p ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE
-          cp -a ../ansible-collection-$COLLECTION_NAME ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+          cp -a "$GITHUB_WORKSPACE" ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
 
       - name: Test with ansible-playbook
         run: |
