@@ -115,6 +115,14 @@ filebeat.inputs:
   enabled: true
   max_message_size: 10MiB
   host: "0.0.0.0:{{ beats_filebeat_syslog_tcp_port }}"
+{% if beats_filebeat_syslog_tcp_ssl | bool %}
+  ssl.enabled: true
+  ssl.certificate_authorities: ["{{ beats_tls_cacert }}"]
+  ssl.certificate: {{ beats_tls_cert }}
+  ssl.key: {{ beats_tls_key }}
+  ssl.key_passphrase: {{ beats_tls_key_passphrase }}
+  ssl.verification_mode: full
+{% endif %}
 {% if beats_fields is defined %}
   fields:
 {% for field in beats_fields %}

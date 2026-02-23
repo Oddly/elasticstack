@@ -25,6 +25,7 @@ beats_filebeat_syslog_udp: false
 beats_filebeat_syslog_udp_port: 514
 beats_filebeat_syslog_tcp: false
 beats_filebeat_syslog_tcp_port: 514
+beats_filebeat_syslog_tcp_ssl: false
 beats_filebeat_log_input: true
 beats_filebeat_log_inputs:
   messages:
