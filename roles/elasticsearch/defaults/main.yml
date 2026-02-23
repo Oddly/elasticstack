@@ -1,43 +1,82 @@
 ---
-# defaults file for elasticsearch
+# @meta description: >
+# Ansible role for installing, configuring, and managing Elasticsearch.
+# Handles cluster formation, TLS certificate management, security setup
+# (users, passwords, HTTPS), rolling upgrades (8.x to 9.x), JVM tuning,
+# and systemd service management.
+# @end
+
+# @var elasticsearch_enable:description: Whether to enable and start the Elasticsearch service
 elasticsearch_enable: true
+# @var elasticsearch_ml_enabled:description: Enable machine learning features in the Elasticsearch node
 elasticsearch_ml_enabled: true
+# @var elasticsearch_config_backup:description: Create a backup of elasticsearch.yml before overwriting
 elasticsearch_config_backup: false
+# @var elasticsearch_manage_yaml:description: Let the role manage elasticsearch.yml. Set to false to manage it yourself
 elasticsearch_manage_yaml: true
+# @var elasticsearch_security:description: Enable Elasticsearch security features (TLS, authentication, RBAC)
 elasticsearch_security: true
+# @var elasticsearch_bootstrap_pw:description: Bootstrap password for the elastic superuser during initial cluster setup
 elasticsearch_bootstrap_pw: PleaseChangeMe
+# @var elasticsearch_http_security:description: Enable TLS on the Elasticsearch HTTP interface (port 9200)
 elasticsearch_http_security: true
+# @var elasticsearch_http_protocol:description: Protocol for Elasticsearch HTTP API. Automatically set to https when security is enabled
 elasticsearch_http_protocol: http
+# @var elasticsearch_datapath:description: Filesystem path for Elasticsearch data storage
 elasticsearch_datapath: /var/lib/elasticsearch
+# @var elasticsearch_create_datapath:description: Create the data directory if it does not exist
 elasticsearch_create_datapath: false
+# @var elasticsearch_logpath:description: Filesystem path for Elasticsearch log files
 elasticsearch_logpath: /var/log/elasticsearch
+# @var elasticsearch_create_logpath:description: Create the log directory if it does not exist
 elasticsearch_create_logpath: false
+# @var elasticsearch_heap:description: JVM heap size in GB. Auto-calculated as half of system RAM, capped at 30GB, minimum 1GB
 elasticsearch_heap: "{{ [[(ansible_facts.memtotal_mb // 1024) // 2, 30] | min, 1] | max }}"
+# @var elasticsearch_pamlimits:description: Configure PAM limits for the elasticsearch user (open files, max processes)
 elasticsearch_pamlimits: true
+# @var elasticsearch_check_calculation:description: Enable heap calculation verification and display debug output
 elasticsearch_check_calculation: false
+# @var elasticsearch_clustername:description: Name of the Elasticsearch cluster
 elasticsearch_clustername: elasticsearch
+# @var elasticsearch_conf_dir:description: Path to the Elasticsearch configuration directory
 elasticsearch_conf_dir: "/etc/elasticsearch/"
+# @var elasticsearch_group:description: Linux group that owns Elasticsearch files
 elasticsearch_group: elasticsearch
+# @var elasticsearch_api_host:description: Hostname or IP used for Elasticsearch API health checks
 elasticsearch_api_host: localhost
 
-# JVM custom parameters
+# @var elasticsearch_jvm_custom_parameters:description: Additional JVM parameters appended to jvm.options.d. Use for GC tuning, debug flags, etc
+# @var elasticsearch_jvm_custom_parameters:example: >
+# elasticsearch_jvm_custom_parameters: |
+#   -XX:+HeapDumpOnOutOfMemoryError
+#   -Djava.io.tmpdir=/var/tmp/elasticsearch
+# @end
 elasticsearch_jvm_custom_parameters: ''
+# @var elasticsearch_heap_dump_path:description: Directory for JVM heap dump files on OutOfMemoryError
 elasticsearch_heap_dump_path: "/var/lib/elasticsearch"
 
+# @var elasticsearch_jna_workaround:description: Apply JNA temporary directory workaround for systems with noexec /tmp
 elasticsearch_jna_workaround: false
 
+# @var elasticsearch_initialized_file:description: Marker file path that indicates the cluster has been initialized
 elasticsearch_initialized_file: "{{ elasticstack_initial_passwords | dirname }}/cluster_initialized"
+# @var elasticsearch_tls_key_passphrase:description: Passphrase for the Elasticsearch node TLS private key
 elasticsearch_tls_key_passphrase: PleaseChangeMeIndividually
+# @var elasticsearch_cert_validity_period:description: Validity period in days for generated TLS certificates
 elasticsearch_cert_validity_period: 1095
+# @var elasticsearch_cert_expiration_buffer:description: Days before certificate expiry to trigger renewal
 elasticsearch_cert_expiration_buffer: 30
+# @var elasticsearch_cert_will_expire_soon:description: Internal flag set when certificates are within the expiration buffer. Do not set manually
 elasticsearch_cert_will_expire_soon: false
+# @var elasticsearch_ssl_verification_mode:description: TLS verification mode for inter-node communication (full, certificate, or none)
 elasticsearch_ssl_verification_mode: full
 
-# use this only for non-prod environments and at your own risk!
+# @var elasticsearch_unsafe_upgrade_restart:description: Skip rolling upgrade safety checks and restart all nodes at once. Only for non-production environments
 elasticsearch_unsafe_upgrade_restart: false
 
-# only used internally
+# @var elasticsearch_freshstart:description: Internal flag tracking whether this is a fresh installation. Do not set manually
 elasticsearch_freshstart:
   changed: false
+# @var elasticsearch_freshstart_security:description: Internal flag tracking whether security was just initialized. Do not set manually
 elasticsearch_freshstart_security:
   changed: false

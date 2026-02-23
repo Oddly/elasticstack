@@ -1,113 +1,158 @@
 ---
-# defaults file for logstash
+# @meta description: >
+# Ansible role for installing, configuring, and managing Logstash.
+# Handles pipeline configuration (inputs, filters, outputs), TLS certificate
+# management, Elasticsearch user/role creation for the logstash_writer account,
+# queue management, and plugin installation.
+# @end
 
 # === Service Management ===
+
+# @var logstash_enable:description: Whether to enable and start the Logstash service
 logstash_enable: true
+# @var logstash_config_backup:description: Create a backup of logstash.yml before overwriting
 logstash_config_backup: false
+# @var logstash_manage_yaml:description: Let the role manage logstash.yml. Set to false to manage it yourself
 logstash_manage_yaml: true
+# @var logstash_manage_logging:description: Let the role manage log4j2.properties for Logstash logging
 logstash_manage_logging: false
 
 # === Logstash.yml Configuration ===
+
+# @var logstash_config_autoreload:description: Automatically reload pipeline configuration when files change
 logstash_config_autoreload: true
 # logstash_config_autoreload_interval: 3s
+# @var logstash_config_path_data:description: Filesystem path for Logstash persistent data (queue, dead letter queue)
 logstash_config_path_data: /var/lib/logstash
+# @var logstash_config_path_logs:description: Filesystem path for Logstash log files
 logstash_config_path_logs: /var/log/logstash
 # logstash_http_host: "127.0.0.1"
 # logstash_http_port: 9600-9700
 
 # === Pipeline Management ===
+
+# @var logstash_manage_pipelines:description: Let the role manage pipelines.yml and pipeline config files
 logstash_manage_pipelines: true
+# @var logstash_no_pipelines:description: Remove all pipeline configuration. Useful when Logstash is managed externally
 logstash_no_pipelines: false
+# @var logstash_queue_type:description: Queue type for pipeline buffering. Use 'persisted' for disk-backed queues that survive restarts
 logstash_queue_type: persisted
+# @var logstash_queue_max_bytes:description: Maximum size of the persisted queue before Logstash applies backpressure
 logstash_queue_max_bytes: 1gb
 
 # === Input Configuration ===
 
-# Beats input (Filebeat, Metricbeat, etc.)
+# @var logstash_input_beats:description: Enable the Beats input plugin (receives from Filebeat, Metricbeat, etc.)
 logstash_input_beats: true
+# @var logstash_input_beats_port:description: Port for the Beats input listener
 logstash_input_beats_port: 5044
+# @var logstash_input_beats_ssl:description: Enable TLS on the Beats input. Inherits from logstash_beats_tls for backwards compatibility
 logstash_input_beats_ssl: "{{ logstash_beats_tls | default(omit) }}"
 # logstash_input_beats_client_auth: required  # required | optional | none
 # logstash_input_beats_timeout: 60s
 
-# Elastic Agent input
+# @var logstash_input_elastic_agent:description: Enable the Elastic Agent input plugin
 logstash_input_elastic_agent: false
+# @var logstash_input_elastic_agent_port:description: Port for the Elastic Agent input listener
 logstash_input_elastic_agent_port: 5044
+# @var logstash_input_elastic_agent_ssl:description: Enable TLS on the Elastic Agent input
 logstash_input_elastic_agent_ssl: true
 
-# Extra inputs (raw Logstash config, appended to input section)
-# Example:
-#   logstash_extra_inputs: |
-#     http {
-#       port => 8080
-#     }
+# @var logstash_extra_inputs:description: Raw Logstash input config appended to the input section of the pipeline
+# @var logstash_extra_inputs:example: >
+# logstash_extra_inputs: |
+#   http {
+#     port => 8080
+#   }
+# @end
 logstash_extra_inputs: ""
 
 # === Filter Configuration ===
 
-# Inline filters (raw Logstash filter config)
-# Example:
-#   logstash_filters: |
-#     grok {
-#       match => { "message" => "%{SYSLOGLINE}" }
-#     }
+# @var logstash_filters:description: Raw Logstash filter config inserted into the filter section of the pipeline
+# @var logstash_filters:example: >
+# logstash_filters: |
+#   grok {
+#     match => { "message" => "%{SYSLOGLINE}" }
+#   }
+# @end
 logstash_filters: ""
 
-# Filter files to copy (list of paths relative to playbook)
-# Example:
-#   logstash_filter_files:
-#     - files/logstash/syslog-filter.conf
-#     - files/logstash/nginx-filter.conf
+# @var logstash_filter_files:description: List of filter config files to copy to the Logstash pipeline directory
+# @var logstash_filter_files:example: >
+# logstash_filter_files:
+#   - files/logstash/syslog-filter.conf
+#   - files/logstash/nginx-filter.conf
+# @end
 logstash_filter_files: []
 
 # === Output Configuration ===
 
-# Elasticsearch output
+# @var logstash_output_elasticsearch:description: Enable the Elasticsearch output plugin
 logstash_output_elasticsearch: true
-logstash_elasticsearch_hosts: []  # Empty = auto-discover from inventory
-logstash_elasticsearch_index: ""  # Empty = default (logstash-%{+YYYY.MM.dd})
+# @var logstash_elasticsearch_hosts:description: List of Elasticsearch hosts. Leave empty to auto-discover from inventory
+logstash_elasticsearch_hosts: []
+# @var logstash_elasticsearch_index:description: Index name pattern. Leave empty for the default (logstash-%{+YYYY.MM.dd})
+logstash_elasticsearch_index: ""
+# @var logstash_elasticsearch_ssl:description: Connect to Elasticsearch over TLS
 logstash_elasticsearch_ssl: true
+# @var logstash_elasticsearch_ssl_verification:description: Verify the Elasticsearch TLS certificate
 logstash_elasticsearch_ssl_verification: true
+# @var logstash_validate_after_inactivity:description: Seconds before re-validating an idle Elasticsearch connection
 logstash_validate_after_inactivity: 300
+# @var logstash_sniffing:description: Enable Elasticsearch node sniffing to discover all cluster members
 logstash_sniffing: false
 # logstash_sniffing_delay: 5
 # logstash_sniffing_path: "/_nodes/http"
 
-# Extra outputs (raw Logstash config, appended to output section)
-# Example:
-#   logstash_extra_outputs: |
-#     file {
-#       path => "/var/log/logstash/debug.log"
-#     }
+# @var logstash_extra_outputs:description: Raw Logstash output config appended to the output section of the pipeline
+# @var logstash_extra_outputs:example: >
+# logstash_extra_outputs: |
+#   file {
+#     path => "/var/log/logstash/debug.log"
+#   }
+# @end
 logstash_extra_outputs: ""
 
 # === Custom Pipeline (Full Control) ===
-# If set, ignores all input/filter/output settings above
-# and uses this as the complete pipeline configuration
-# Example:
-#   logstash_custom_pipeline: |
-#     input { stdin {} }
-#     filter { ... }
-#     output { stdout {} }
+
+# @var logstash_custom_pipeline:description: Complete pipeline config that replaces all input/filter/output settings above
+# @var logstash_custom_pipeline:example: >
+# logstash_custom_pipeline: |
+#   input { stdin {} }
+#   filter { mutate { add_field => { "env" => "test" } } }
+#   output { stdout { codec => rubydebug } }
+# @end
 logstash_custom_pipeline: ""
 
 # === Event Enrichment ===
+
+# @var logstash_ident:description: Add a mutate filter that stamps each event with the Logstash instance hostname
 logstash_ident: true
+# @var logstash_ident_field_name:description: Field name for the Logstash instance identifier stamp
 logstash_ident_field_name: "[logstash][instance]"
+# @var logstash_pipeline_identifier:description: Add a mutate filter that stamps each event with the pipeline name
 logstash_pipeline_identifier: true
+# @var logstash_pipeline_identifier_field_name:description: Field name for the pipeline identifier stamp
 logstash_pipeline_identifier_field_name: "[logstash][pipeline]"
 
 # === Elasticsearch User/Role Management ===
+
+# @var logstash_create_role:description: Create an Elasticsearch role for Logstash to write indices
 logstash_create_role: true
+# @var logstash_role_name:description: Name of the Elasticsearch role created for Logstash
 logstash_role_name: logstash_writer
+# @var logstash_role_cluster_privileges:description: Cluster-level privileges granted to the Logstash writer role
 logstash_role_cluster_privileges:
   - manage_index_templates
   - monitor
   - manage_ilm
+# @var logstash_role_indicies_names:description: Index patterns the Logstash writer role is allowed to write to
 logstash_role_indicies_names:
   - "ecs-logstash*"
   - "logstash*"
   - "logs*"
+# @var logstash_role_indicies_privileges:description: Index-level privileges granted to the Logstash writer role
 logstash_role_indicies_privileges:
   - write
   - create
@@ -115,16 +160,22 @@ logstash_role_indicies_privileges:
   - create_index
   - manage
   - manage_ilm
+# @var logstash_create_user:description: Create an Elasticsearch user for Logstash
 logstash_create_user: true
+# @var logstash_user_name:description: Username for the Logstash Elasticsearch user
 logstash_user_name: logstash_writer
+# @var logstash_user_password:description: Password for the Logstash Elasticsearch user. Change this in production
 logstash_user_password: password
+# @var logstash_user_email:description: Email address for the Logstash Elasticsearch user
 logstash_user_email: ""
+# @var logstash_user_fullname:description: Full name for the Logstash Elasticsearch user
 logstash_user_fullname: "Internal Logstash User"
+# @var logstash_reset_writer_role:description: Reset the writer role definition on every run (ensures privileges stay current)
 logstash_reset_writer_role: true
 
 # === Certificate Configuration ===
 
-# Certificate source: elasticsearch_ca | standalone | external
+# @var logstash_cert_source:description: Where to get TLS certificates. 'elasticsearch_ca' fetches from ES CA, 'standalone' generates its own, 'external' uses provided files
 logstash_cert_source: elasticsearch_ca
 
 # For external certificates (when logstash_cert_source: external)
@@ -133,35 +184,43 @@ logstash_cert_source: elasticsearch_ca
 # logstash_tls_ca_file: "/path/to/ca.crt"
 # logstash_tls_remote_src: false  # Set true if cert files are on remote host
 
-# Certificate directory on Logstash host
+# @var logstash_certs_dir:description: Directory on the Logstash host where TLS certificates are stored
 logstash_certs_dir: /etc/logstash/certs
 
-# Certificate validity and renewal
-logstash_cert_validity_period: 1095  # days (3 years)
-logstash_cert_expiration_buffer: 30  # Renew when this many days left
+# @var logstash_cert_validity_period:description: Validity period in days for generated TLS certificates
+logstash_cert_validity_period: 1095
+# @var logstash_cert_expiration_buffer:description: Days before certificate expiry to trigger renewal
+logstash_cert_expiration_buffer: 30
+# @var logstash_cert_will_expire_soon:description: Internal flag set when certificates are within the expiration buffer. Do not set manually
 logstash_cert_will_expire_soon: false
-logstash_cert_force_regenerate: false  # Force certificate regeneration
+# @var logstash_cert_force_regenerate:description: Force TLS certificate regeneration even if current certificates are valid
+logstash_cert_force_regenerate: false
+# @var logstash_tls_key_passphrase:description: Passphrase for the Logstash TLS private key
 logstash_tls_key_passphrase: LogstashChangeMe
 
 # === Logging Configuration ===
+
+# @var logstash_logging_console:description: Enable Logstash console (stdout) logging
 logstash_logging_console: true
+# @var logstash_logging_file:description: Enable Logstash file-based logging
 logstash_logging_file: true
+# @var logstash_logging_slow_console:description: Enable slow log output to console
 logstash_logging_slow_console: true
+# @var logstash_logging_slow_file:description: Enable slow log output to file
 logstash_logging_slow_file: true
 
 # === Plugins ===
-# List of plugins to install
-# Example:
-#   logstash_plugins:
-#     - logstash-filter-translate
+
+# @var logstash_plugins:description: List of Logstash plugins to install
+# @var logstash_plugins:example: >
+# logstash_plugins:
+#   - logstash-filter-translate
+#   - logstash-input-s3
+# @end
 logstash_plugins: []
 
-# === Backwards Compatibility ===
-# These are deprecated but still work for now
-# logstash_beats_input: "{{ logstash_input_beats }}"  # Use logstash_input_beats
-# logstash_elasticsearch_output: "{{ logstash_output_elasticsearch }}"  # Use logstash_output_elasticsearch
-# logstash_beats_tls: "{{ logstash_input_beats_ssl }}"  # Use logstash_input_beats_ssl
-
 # === Internal Use ===
+
+# @var logstash_freshstart:description: Internal flag tracking whether this is a fresh installation. Do not set manually
 logstash_freshstart:
   changed: false

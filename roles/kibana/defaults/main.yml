@@ -1,19 +1,38 @@
 ---
-# defaults file for kibana
+# @meta description: >
+# Ansible role for installing, configuring, and managing Kibana.
+# Handles service management, TLS encryption for the Kibana web UI,
+# Elasticsearch connection setup, and certificate management.
+# @end
+
+# @var kibana_enable:description: Whether to enable and start the Kibana service
 kibana_enable: true
+# @var kibana_config_backup:description: Create a backup of kibana.yml before overwriting
 kibana_config_backup: true
+# @var kibana_manage_yaml:description: Let the role manage kibana.yml. Set to false to manage it yourself
 kibana_manage_yaml: true
 
+# @var kibana_security:description: Enable security features (connect to Elasticsearch over HTTPS with authentication)
 kibana_security: true
+# @var kibana_tls:description: Enable TLS on the Kibana web interface itself (serve Kibana over HTTPS)
 kibana_tls: false
+# @var kibana_tls_cert:description: Path to the TLS certificate file for the Kibana web interface
 kibana_tls_cert: /etc/kibana/certs/cert.pem
+# @var kibana_tls_key:description: Path to the TLS private key file for the Kibana web interface
 kibana_tls_key: /etc/kibana/certs/key.pem
+# @var kibana_tls_key_passphrase:description: Passphrase for the Kibana TLS private key
 kibana_tls_key_passphrase: PleaseChangeMe
+# @var kibana_cert_expiration_buffer:description: Days before certificate expiry to trigger renewal
 kibana_cert_expiration_buffer: 30
+# @var kibana_cert_validity_period:description: Validity period in days for generated TLS certificates
 kibana_cert_validity_period: 1095
+# @var kibana_cert_will_expire_soon:description: Internal flag set when certificates are within the expiration buffer. Do not set manually
 kibana_cert_will_expire_soon: false
+# @var kibana_sniff_on_start:description: Discover all Elasticsearch nodes in the cluster on Kibana startup
 kibana_sniff_on_start: false
+# @var kibana_sniff_on_connection_fault:description: Re-discover Elasticsearch nodes when a connection fault is detected
 kibana_sniff_on_connection_fault: false
 
+# @var kibana_freshstart:description: Internal flag tracking whether this is a fresh installation. Do not set manually
 kibana_freshstart:
   changed: false
