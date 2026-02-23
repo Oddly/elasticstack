@@ -1,6 +1,13 @@
 {% if logstash_filters | default('') | length > 0 or logstash_filter_files | default([]) | length > 0 %}
 filter {
-{% if logstash_pipeline_identifier | default(true) | bool and logstash_pipeline_identifier_defaults | default(false) | bool %}
+{% if logstash_ident | default(true) | bool %}
+  mutate {
+    add_field => {
+      "{{ logstash_ident_field_name | default('[logstash][instance]') }}" => "{{ inventory_hostname }}"
+    }
+  }
+{% endif %}
+{% if logstash_pipeline_identifier | default(true) | bool %}
   mutate {
     add_field => {
       "{{ logstash_pipeline_identifier_field_name | default('[logstash][pipeline]') }}" => "main"

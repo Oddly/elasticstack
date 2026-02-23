@@ -185,7 +185,10 @@ class Api():
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
         else:
-            ctx.check_hostname = True
+            # Disable hostname checking because Ansible connects via IP address
+            # (hostvars[host].ansible_facts.default_ipv4.address), not hostname.
+            # Certificate chain is still validated against the CA.
+            ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_REQUIRED
 
         return ctx
@@ -211,6 +214,13 @@ class Api():
             ApiError: If elasticsearch library is not installed
         """
         Api.check_elasticsearch_import()
+
+        if ES_CLIENT_VERSION < 8:
+            raise ApiError(
+                f"elasticsearch-py {elasticsearch.__version__} is too old. "
+                "This collection requires elasticsearch-py >= 8.0. "
+                "Install it with: pip install 'elasticsearch>=8,<10'"
+            )
 
         return Elasticsearch(
             hosts=[host],
@@ -239,6 +249,13 @@ class Api():
             ApiError: If elasticsearch library is not installed
         """
         Api.check_elasticsearch_import()
+
+        if ES_CLIENT_VERSION < 8:
+            raise ApiError(
+                f"elasticsearch-py {elasticsearch.__version__} is too old. "
+                "This collection requires elasticsearch-py >= 8.0. "
+                "Install it with: pip install 'elasticsearch>=8,<10'"
+            )
 
         return Elasticsearch(
             hosts=[host],

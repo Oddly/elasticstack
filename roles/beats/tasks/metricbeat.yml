@@ -27,12 +27,13 @@
   when: beats_metricbeat_modules is defined
 
 - name: Enable Ingest Pipelines
-  ansible.builtin.command: >
+  ansible.builtin.shell: >
     /usr/bin/metricbeat setup &&
     /usr/bin/metricbeat version > /etc/metricbeat/pipelines_created
   run_once: true
   args:
     creates: "/etc/metricbeat/pipelines_created"
+    executable: /bin/bash
   notify:
     - Restart Metricbeat
   when:

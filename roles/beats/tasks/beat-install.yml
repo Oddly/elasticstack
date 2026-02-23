@@ -20,8 +20,8 @@
     name: "{{ beats_package }}"
     enablerepo:
       - 'elastic-{{ elasticstack_release }}.x'
-  register: _beat_install_rpm_full
-  until: _beat_install_rpm_full is success
+  register: beats_install_rpm_full
+  until: beats_install_rpm_full is success
   retries: 3
   delay: 10
   notify: "Restart {{ _beat_name | capitalize }}"
@@ -32,8 +32,8 @@
 - name: "Install rpm standalone package for {{ _beat_name }}"
   ansible.builtin.package:
     name: "{{ beats_package }}"
-  register: _beat_install_rpm
-  until: _beat_install_rpm is success
+  register: beats_install_rpm
+  until: beats_install_rpm is success
   retries: 3
   delay: 10
   notify: "Restart {{ _beat_name | capitalize }}"
@@ -44,22 +44,22 @@
 - name: "Install deb package for {{ _beat_name }}"
   ansible.builtin.package:
     name: "{{ beats_package }}"
-  register: _beat_install_deb
-  until: _beat_install_deb is success
+  register: beats_install_deb
+  until: beats_install_deb is success
   retries: 3
   delay: 10
   notify: "Restart {{ _beat_name | capitalize }}"
   when:
     - ansible_facts.os_family == "Debian"
 
-- name: "Install latest rpm full-stack package for {{ _beat_name }}"
+- name: "Install latest rpm full-stack package for {{ _beat_name }}"  # noqa: package-latest
   ansible.builtin.package:
     name: "{{ _beat_name }}"
     state: latest
     enablerepo:
       - "elastic-{{ elasticstack_release }}.x"
-  register: _beat_install_latest_rpm_full
-  until: _beat_install_latest_rpm_full is success
+  register: beats_install_latest_rpm_full
+  until: beats_install_latest_rpm_full is success
   retries: 3
   delay: 10
   notify: "Restart {{ _beat_name | capitalize }}"
@@ -69,12 +69,12 @@
     - ansible_facts.os_family == "RedHat"
     - elasticstack_full_stack | bool
 
-- name: "Install latest rpm standalone package for {{ _beat_name }}"
+- name: "Install latest rpm standalone package for {{ _beat_name }}"  # noqa: package-latest
   ansible.builtin.package:
     name: "{{ _beat_name }}"
     state: latest
-  register: _beat_install_latest_rpm
-  until: _beat_install_latest_rpm is success
+  register: beats_install_latest_rpm
+  until: beats_install_latest_rpm is success
   retries: 3
   delay: 10
   notify: "Restart {{ _beat_name | capitalize }}"
@@ -84,12 +84,12 @@
     - ansible_facts.os_family == "RedHat"
     - not elasticstack_full_stack | bool
 
-- name: "Install latest deb package for {{ _beat_name }}"
+- name: "Install latest deb package for {{ _beat_name }}"  # noqa: package-latest
   ansible.builtin.package:
     name: "{{ _beat_name }}"
     state: latest
-  register: _beat_install_latest_deb
-  until: _beat_install_latest_deb is success
+  register: beats_install_latest_deb
+  until: beats_install_latest_deb is success
   retries: 3
   delay: 10
   notify: "Restart {{ _beat_name | capitalize }}"

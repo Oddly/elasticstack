@@ -302,12 +302,12 @@
     user: elastic
     password: "{{ elasticsearch_bootstrap_pw }}"
     validate_certs: false
+    force_basic_auth: true
   register: elasticsearch_api_status_bootstrap
   changed_when: false
   no_log: "{{ elasticstack_no_log }}"
   when:
     - not elasticsearch_passwords_file.stat.exists | bool
-    - groups[elasticstack_elasticsearch_group_name] | length > 1
   until: elasticsearch_api_status_bootstrap.json.cluster_name is defined
   retries: 5
   delay: 10
@@ -321,12 +321,12 @@
     user: elastic
     password: "{{ elasticsearch_bootstrap_pw }}"
     validate_certs: false
+    force_basic_auth: true
   register: elasticsearch_cluster_status_bootstrap
   changed_when: false
   no_log: "{{ elasticstack_no_log }}"
   when:
     - not elasticsearch_passwords_file.stat.exists | bool
-    - groups[elasticstack_elasticsearch_group_name] | length > 1
   until: elasticsearch_cluster_status_bootstrap.json.status in ["green", "yellow"]
   retries: 5
   delay: 10
@@ -345,26 +345,25 @@
     user: elastic
     password: "{{ elasticstack_password.stdout }}"
     validate_certs: false
+    force_basic_auth: true
   register: elasticsearch_api_status
   changed_when: false
   no_log: "{{ elasticstack_no_log }}"
   when:
     - elasticsearch_passwords_file.stat.exists | bool
-    - groups[elasticstack_elasticsearch_group_name] | length > 1
   until: elasticsearch_api_status.json.cluster_name is defined
   retries: 20
   delay: 10
 
 - name: Work around low resources on CI/CD nodes
-  when: ansible_facts.virtualization_type == "container" or ansible_facts.virtualization_type == "docker"
+  when: ansible_facts.virtualization_type in ["container", "docker", "lxc"]
   block:
-    # Free up some space to let Elasticsearch allocate replica in GitHub Action
     - name: Remove cache
       ansible.builtin.command: >
         rm -rf /var/cache/*
       changed_when: false
 
-    - name: Set persistent watermarks to very high values in Docker
+    - name: Set lenient disk watermarks for CI containers
       ansible.builtin.uri:
         url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/settings"
         method: PUT
@@ -376,12 +375,15 @@
             cluster.routing.allocation.disk.watermark.flood_stage.frozen: "99%"
         body_format: json
         user: elastic
-        password: "{{ elasticstack_password.stdout }}"
+        password: "{{ elasticstack_password.stdout | default(elasticsearch_bootstrap_pw) }}"
         validate_certs: false
+        force_basic_auth: true
+      register: elasticsearch_watermark_response
+      until: elasticsearch_watermark_response.status | default(0) == 200
+      retries: 5
+      delay: 10
       changed_when: false
       no_log: "{{ elasticstack_no_log }}"
-      when:
-        - elasticstack_password.stdout is defined
 
 # We need this check twice. One to wait for the API to be actually available. And a second time to
 # check the actual return code. Should not cause a huge delay.
@@ -392,12 +394,12 @@
     user: elastic
     password: "{{ elasticstack_password.stdout }}"
     validate_certs: false
+    force_basic_auth: true
   register: elasticsearch_cluster_status
   changed_when: false
   no_log: "{{ elasticstack_no_log }}"
   when:
     - elasticsearch_passwords_file.stat.exists | bool
-    - groups[elasticstack_elasticsearch_group_name] | length > 1
   until: (elasticsearch_cluster_status.json.status | default('')) in ['green', 'yellow']
   retries: 20
   delay: 10

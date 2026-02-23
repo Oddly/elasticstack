@@ -96,7 +96,6 @@ logstash_ident: true
 logstash_ident_field_name: "[logstash][instance]"
 logstash_pipeline_identifier: true
 logstash_pipeline_identifier_field_name: "[logstash][pipeline]"
-logstash_pipeline_identifier_defaults: false
 
 # === Elasticsearch User/Role Management ===
 logstash_create_role: true

@@ -17,6 +17,7 @@
     dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ _cert_src | basename }}"
     flat: true
   delegate_to: "{{ elasticstack_ca_host }}"
+  throttle: 1
   tags:
     - certificates
 

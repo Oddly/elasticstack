@@ -20,12 +20,13 @@
     - beats_configuration
 
 - name: Setup Auditbeat in Elasticsearch
-  ansible.builtin.command: >
+  ansible.builtin.shell: >
     /usr/bin/auditbeat setup --pipelines --index-management &&
     /usr/bin/auditbeat version > /etc/auditbeat/pipeline_created
   run_once: true
   args:
     creates: "/etc/auditbeat/pipeline_created"
+    executable: /bin/bash
   notify:
     - Restart Auditbeat
   when:

@@ -81,6 +81,7 @@
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
         validate_certs: false
+        force_basic_auth: true
         status_code: [200, 503]
       register: elasticsearch_responsive
       until: (elasticsearch_responsive.status | default(0)) == 200
@@ -99,6 +100,7 @@
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
         validate_certs: false
+        force_basic_auth: true
       register: elasticsearch_response
       until: elasticsearch_response.json.acknowledged | default(false)
       retries: 10
@@ -121,8 +123,9 @@
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
         validate_certs: false
+        force_basic_auth: true
       register: elasticsearch_watermark_response
-      until: elasticsearch_watermark_elasticsearch_response.json.acknowledged | default(false)
+      until: elasticsearch_watermark_response.json.acknowledged | default(false)
       retries: 5
       delay: 10
 
@@ -135,6 +138,7 @@
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
         validate_certs: false
+        force_basic_auth: true
       register: elasticsearch_response
       until: (elasticsearch_response.json.status | default('')) in ['green', 'yellow']
       retries: 50
@@ -150,6 +154,7 @@
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
         validate_certs: false
+        force_basic_auth: true
       register: elasticsearch_response
       until: elasticsearch_response.json.acknowledged | default(false)
       retries: 5
@@ -162,6 +167,7 @@
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
         validate_certs: false
+        force_basic_auth: true
       failed_when: false
 
     - name: Shutdown elasticsearch service
@@ -219,6 +225,7 @@
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
         validate_certs: false
+        force_basic_auth: true
         return_content: true
       register: elasticsearch_result
       until: elasticsearch_nodename in (elasticsearch_result.content | default('')).split()
@@ -235,6 +242,7 @@
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
         validate_certs: false
+        force_basic_auth: true
       register: elasticsearch_response
       until: elasticsearch_response.json.acknowledged | default(false)
       retries: 5
@@ -247,6 +255,7 @@
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
         validate_certs: false
+        force_basic_auth: true
       register: elasticsearch_response
       until: (elasticsearch_response.json.status | default('')) in ['green', 'yellow']
       retries: 5

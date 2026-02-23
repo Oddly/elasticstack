@@ -27,7 +27,7 @@
   become: "{{ _backup_become | default(_backup_target != 'localhost') }}"
   register: elasticstack_backup_result
 
-- name: "Remove original after backup - {{ _backup_path }}"
+- name: "Remove original after backup - {{ _backup_path }}"  # noqa: no-handler
   ansible.builtin.file:
     path: "{{ _backup_path }}"
     state: absent

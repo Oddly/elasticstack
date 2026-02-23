@@ -80,4 +80,4 @@
   ansible.builtin.command: >
     rm -rf /var/cache/*
   changed_when: false
-  when: ansible_facts.virtualization_type == "container" or ansible_facts.virtualization_type == "docker"
+  when: ansible_facts.virtualization_type in ["container", "docker", "lxc"]

@@ -319,18 +319,36 @@
       suppressed to prevent a second uncontrolled restart.
   when: _elasticsearch_rolling_upgrade_performed | default(false) | bool
 
-# On containerized Debian 10 systemd will not recognize elasticsearch service
+# In Docker-in-Docker containers the sd_notify socket is not functional,
+# causing systemd to time out waiting for READY=1 and kill Elasticsearch.
+# Override to Type=exec so systemd considers the service started immediately.
+# Not needed for LXC containers where systemd works natively.
+- name: Create elasticsearch systemd override directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/elasticsearch.service.d
+    state: directory
+    mode: "0755"
+  when: ansible_facts.virtualization_type in ["container", "docker"]
+
+- name: Override elasticsearch service type for containers
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/elasticsearch.service.d/override.conf
+    content: |
+      [Service]
+      Type=exec
+    mode: "0644"
+  when: ansible_facts.virtualization_type in ["container", "docker"]
+
 - name: Force systemd to reread configs on container
   ansible.builtin.systemd:
     daemon_reload: true
-  when: ansible_facts.virtualization_type == "container" or ansible_facts.virtualization_type == "docker"
+  when: ansible_facts.virtualization_type in ["container", "docker"]
 
-# Free up some space to let Elasticsearch allocate replica in GitHub Action
-- name: Remove cache
+- name: Remove cache in CI containers
   ansible.builtin.command: >
     rm -rf /var/cache/*
   changed_when: false
-  when: ansible_facts.virtualization_type == "container" or ansible_facts.virtualization_type == "docker"
+  when: ansible_facts.virtualization_type in ["container", "docker", "lxc"]
 
 - name: Import Tasks elasticsearch-security.yml
   ansible.builtin.import_tasks: elasticsearch-security.yml

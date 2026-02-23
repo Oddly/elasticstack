@@ -1,4 +1,11 @@
 ---
+- name: Bootstrap python3-apt for Ansible apt module
+  ansible.builtin.raw: apt-get install -y python3-apt
+  changed_when: false
+  when:
+    - ansible_facts.os_family == 'Debian'
+    - ansible_facts.pkg_mgr == 'apt'
+
 - name: Update apt cache.
   ansible.builtin.apt:
     update_cache: true
@@ -11,6 +18,7 @@
     name:
       - unzip
       - python3-cryptography
+      - python3-packaging
       - openssl
   tags:
     - certificates
@@ -53,13 +61,32 @@
       ignore_errors: true
       register: elasticstack_pip_installation
 
-    - name: Install Python Module via package manager
+    - name: Install elasticsearch Python module via package manager
       ansible.builtin.package:
         name:
           - python3-elasticsearch
           - python3-cryptography
       when:
         - elasticstack_pip_installation is failed
+
+    - name: Check elasticsearch-py version from package manager
+      ansible.builtin.command: python3 -c "import elasticsearch; print(elasticsearch.__version__)"
+      changed_when: false
+      register: elasticstack_es_py_version_check
+      when:
+        - elasticstack_pip_installation is failed
+
+    - name: Fail if elasticsearch-py is too old
+      ansible.builtin.fail:
+        msg: >-
+          The system package python3-elasticsearch provides version {{ elasticstack_es_py_version_check.stdout }},
+          but this collection requires elasticsearch-py >= 8.0.
+          Either install python3-pip and set elasticstack_manage_pip: true,
+          or run: pip install 'elasticsearch>={{ elasticstack_release }},<{{ elasticstack_release | int + 1 }}'
+      when:
+        - elasticstack_pip_installation is failed
+        - elasticstack_es_py_version_check.stdout is defined
+        - elasticstack_es_py_version_check.stdout is version('8.0.0', '<')
 
 - name: Install Python Modules via pip  - forced
   ansible.builtin.pip:
