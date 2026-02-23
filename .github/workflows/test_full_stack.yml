@@ -12,8 +12,9 @@ on:
           - info
           - warning
           - debug
-  schedule:
-    - cron: "0 4 * * *"
+  # schedule disabled — molecule tests require Incus on Gitea CI
+  # schedule:
+  #   - cron: "0 4 * * *"
 
 jobs:
   lint_full:

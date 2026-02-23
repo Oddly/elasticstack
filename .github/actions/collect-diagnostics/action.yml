@@ -1,10 +1,10 @@
 ---
 name: Collect diagnostic logs
 description: >
-  Collects comprehensive diagnostics from molecule Docker containers
-  on test failure: service logs, journal, systemctl status, ES cluster
-  health, and runner system info. Uploads as an artifact on both
-  GitHub and Gitea runners.
+  Collects diagnostics from molecule Incus containers on test failure:
+  service logs, journal, systemctl status, ES cluster health, and
+  runner system info. Uploads as an artifact on both GitHub and Gitea
+  runners.
 
 inputs:
   artifact-name:
@@ -18,53 +18,59 @@ runs:
       shell: bash
       run: |
         diag="/tmp/molecule-diagnostics"
-        mkdir -p "$diag"/{docker-logs,service-logs}
+        mkdir -p "$diag"/service-logs
 
-        # Docker container stdout/stderr
-        for cid in $(docker ps -aq); do
-          name=$(docker inspect --format '{{.Name}}' "$cid" | sed 's|^/||')
-          docker logs "$cid" > "$diag/docker-logs/${name}.log" 2>&1 || true
-        done
+        INCUS_HOST="${INCUS_HOST:-172.30.0.172}"
+        SSH_KEY="${MOLECULE_SSH_KEY:-~/.ssh/molecule_id_ed25519}"
 
-        # Per-container service logs, journal, and status
-        for cid in $(docker ps -aq); do
-          name=$(docker inspect --format '{{.Name}}' "$cid" | sed 's|^/||')
+        # Discover running Incus containers managed by molecule
+        containers=$(ssh -o StrictHostKeyChecking=no -o BatchMode=yes \
+          -i "$SSH_KEY" "root@${INCUS_HOST}" \
+          "incus list --format csv -c n,s | grep ',RUNNING' | cut -d, -f1" 2>/dev/null || true)
+
+        for name in $containers; do
           dir="$diag/service-logs/$name"
           mkdir -p "$dir"
 
+          # Helper: run command inside Incus container via SSH
+          run_in() {
+            ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 \
+              -i "$SSH_KEY" "root@${INCUS_HOST}" \
+              "incus exec $name -- bash -c '$1'" 2>/dev/null || true
+          }
+
           # System journal (last 1000 lines)
-          docker exec "$cid" bash -c 'journalctl --no-pager -n 1000 2>/dev/null' \
+          run_in 'journalctl --no-pager -n 1000 2>/dev/null' \
             > "$dir/journal.log" 2>&1 || true
 
           # Service status
           for svc in elasticsearch logstash kibana redis filebeat auditbeat metricbeat; do
-            docker exec "$cid" bash -c "systemctl status $svc 2>/dev/null" \
+            run_in "systemctl status $svc 2>/dev/null" \
               > "$dir/${svc}-status.txt" 2>&1 || true
           done
 
           # Elasticsearch logs
-          docker exec "$cid" bash -c 'cat /var/log/elasticsearch/*.log 2>/dev/null' \
+          run_in 'cat /var/log/elasticsearch/*.log 2>/dev/null' \
             > "$dir/elasticsearch.log" 2>&1 || true
 
-          # Logstash logs (plain + slow log)
-          docker exec "$cid" bash -c \
-            'cat /var/log/logstash/logstash-plain.log /var/log/logstash/logstash-slowlog-plain.log 2>/dev/null' \
+          # Logstash logs
+          run_in 'cat /var/log/logstash/logstash-plain.log /var/log/logstash/logstash-slowlog-plain.log 2>/dev/null' \
             > "$dir/logstash.log" 2>&1 || true
 
           # Kibana logs
-          docker exec "$cid" bash -c 'cat /var/log/kibana/kibana.log 2>/dev/null' \
+          run_in 'cat /var/log/kibana/kibana.log 2>/dev/null' \
             > "$dir/kibana.log" 2>&1 || true
 
           # Filebeat logs
-          docker exec "$cid" bash -c 'cat /var/log/filebeat/filebeat* 2>/dev/null' \
+          run_in 'cat /var/log/filebeat/filebeat* 2>/dev/null' \
             > "$dir/filebeat.log" 2>&1 || true
 
-          # Redis logs (Debian: redis-server.log, RHEL: redis.log)
-          docker exec "$cid" bash -c 'cat /var/log/redis/*.log 2>/dev/null' \
+          # Redis logs
+          run_in 'cat /var/log/redis/*.log 2>/dev/null' \
             > "$dir/redis.log" 2>&1 || true
 
-          # Elasticsearch cluster health (try with keystore bootstrap password)
-          docker exec "$cid" bash -c '
+          # Elasticsearch cluster health
+          run_in '
             pw=$(/usr/share/elasticsearch/bin/elasticsearch-keystore show bootstrap.password 2>/dev/null || true)
             if [ -n "$pw" ]; then
               curl -sk --max-time 5 -u "elastic:$pw" https://localhost:9200/_cluster/health?pretty 2>/dev/null
@@ -73,7 +79,7 @@ runs:
             fi
           ' > "$dir/es-cluster-health.json" 2>&1 || true
 
-          docker exec "$cid" bash -c '
+          run_in '
             pw=$(/usr/share/elasticsearch/bin/elasticsearch-keystore show bootstrap.password 2>/dev/null || true)
             if [ -n "$pw" ]; then
               curl -sk --max-time 5 -u "elastic:$pw" https://localhost:9200/_cat/indices?v 2>/dev/null
@@ -81,16 +87,24 @@ runs:
               curl -sk --max-time 5 https://localhost:9200/_cat/indices?v 2>/dev/null
             fi
           ' > "$dir/es-indices.txt" 2>&1 || true
+
+          # Disk and memory inside container
+          {
+            echo "=== Memory ===" ; run_in 'free -h'
+            echo "=== Disk ===" ; run_in 'df -h'
+          } > "$dir/container-resources.txt" 2>&1 || true
         done
 
         # Runner system info
         {
           echo "=== Memory ===" ; free -h
           echo "=== Disk ===" ; df -h
-          echo "=== Docker stats ===" ; docker stats --no-stream
           echo "=== Python ===" ; python3 --version ; pip3 list 2>/dev/null
           echo "=== Ansible ===" ; ansible --version 2>/dev/null
         } > "$diag/runner-info.txt" 2>&1 || true
+
+        # Ansible log from molecule
+        cp /var/log/ansible.log "$diag/ansible.log" 2>/dev/null || true
 
     - name: Upload diagnostics (GitHub)
       if: github.server_url == 'https://github.com'

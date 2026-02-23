@@ -12,8 +12,9 @@ on:
           - info
           - warning
           - debug
-  schedule:
-    - cron: "0 2 * * 0"  # Every Sunday at 02:00 UTC
+  # schedule disabled — molecule tests require Incus on Gitea CI
+  # schedule:
+  #   - cron: "0 2 * * 0"  # Every Sunday at 02:00 UTC
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

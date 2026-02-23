@@ -39,6 +39,9 @@ jobs:
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
+      - name: Install Ansible collection dependencies.
+        run: ansible-galaxy collection install community.crypto community.general ansible.posix
+
       - name: Lint code (yamllint).
         run: |
           yamllint .
