@@ -22,7 +22,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lint_elasticsearch:
+    uses: ./.gitea/workflows/test_linting.yml
+    with:
+      rolename: elasticsearch
+
   molecule_elasticsearch_modules:
+    needs: lint_elasticsearch
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -32,6 +38,7 @@ jobs:
 
     strategy:
       fail-fast: false
+      max-parallel: 10
       matrix:
         distro:
           - rockylinux9
@@ -60,7 +67,14 @@ jobs:
         run: |
           mkdir -p ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE
           cp -a "$GITHUB_WORKSPACE" ~/.ansible/collections/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
-          ansible-galaxy collection install community.docker community.general ansible.posix
+          ansible-galaxy collection install http://172.30.0.172:8082/collections/community-general-12.3.0.tar.gz http://172.30.0.172:8082/collections/community-crypto-3.1.1.tar.gz http://172.30.0.172:8082/collections/ansible-posix-2.1.0.tar.gz
+
+      - name: Set up SSH key for molecule
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.MOLECULE_SSH_PRIVATE_KEY }}" > ~/.ssh/molecule_id_ed25519
+          chmod 600 ~/.ssh/molecule_id_ed25519
+          ssh-keyscan -t ed25519 ${{ secrets.INCUS_HOST || '172.30.0.172' }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Converge and verify
         run: |
@@ -72,7 +86,10 @@ jobs:
           ELASTICSTACK_REPO_BASE_URL: http://elastic-cache.chiark.dev:8080
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
+          ANSIBLE_DIFF_ALWAYS: 'true'
           ANSIBLE_CALLBACKS_ENABLED: profile_tasks
+          INCUS_HOST: ${{ secrets.INCUS_HOST }}
+          MOLECULE_SSH_KEY: ~/.ssh/molecule_id_ed25519
 
       - name: Idempotence check
         timeout-minutes: 20
@@ -85,6 +102,8 @@ jobs:
           ANSIBLE_FORCE_COLOR: '1'
           ANSIBLE_DIFF_ALWAYS: 'true'
           ANSIBLE_CALLBACKS_ENABLED: profile_tasks
+          INCUS_HOST: ${{ secrets.INCUS_HOST }}
+          MOLECULE_SSH_KEY: ~/.ssh/molecule_id_ed25519
 
       - name: Collect and upload diagnostics
         if: failure()
@@ -98,3 +117,6 @@ jobs:
         continue-on-error: true
         env:
           MOLECULE_DISTRO: ${{ matrix.distro }}
+          ELASTIC_RELEASE: ${{ matrix.release }}
+          INCUS_HOST: ${{ secrets.INCUS_HOST }}
+          MOLECULE_SSH_KEY: ~/.ssh/molecule_id_ed25519
