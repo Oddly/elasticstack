@@ -4,6 +4,31 @@
   vars:
     es_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
   tasks:
+    - name: Wait for systemd to finish booting
+      ansible.builtin.shell: |
+        set -o pipefail
+        for i in $(seq 1 15); do
+          state=$(systemctl is-system-running 2>/dev/null || true)
+          if [ "$state" = "running" ] || [ "$state" = "degraded" ]; then
+            echo "systemd ready: $state (after ${i}s)"
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "systemd not ready after 15s, state: $state"
+        echo "PID 1: $(cat /proc/1/cmdline | tr '\0' ' ')"
+        echo "D-Bus: $(ls /run/dbus/system_bus_socket 2>&1)"
+        echo "/run: $(ls /run/)"
+      args:
+        executable: /bin/bash
+      register: systemd_wait
+      changed_when: false
+      failed_when: false
+
+    - name: Show systemd status
+      ansible.builtin.debug:
+        var: systemd_wait.stdout_lines
+
     - name: Install packages for Debian
       ansible.builtin.apt:
         name:
@@ -21,7 +46,7 @@
       when: ansible_facts.os_family == "Debian"
 
     - name: Install packages for RedHat
-      ansible.builtin.yum:
+      ansible.builtin.dnf:
         name:
           - python3-pip
           - python3-setuptools

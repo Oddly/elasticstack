@@ -3,8 +3,6 @@
 # metricbeat with system module, and custom logging.
 - name: Deploy Beats with advanced configuration
   hosts: all
-  collections:
-    - oddly.elasticstack
   vars:
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticstack_full_stack: false
@@ -36,7 +34,7 @@
     beats_metricbeat_output: file
     beats_metricbeat_modules:
       - system
-    # Auditbeat (install only, don't enable in Docker)
+    # Auditbeat (install only, don't enable in containers)
     beats_auditbeat: true
     beats_auditbeat_enable: false
     beats_auditbeat_output: file
@@ -47,8 +45,8 @@
   tasks:
     - name: Include Elastic repos role
       ansible.builtin.include_role:
-        name: repos
+        name: oddly.elasticstack.repos
 
     - name: Include Beats role
       ansible.builtin.include_role:
-        name: beats
+        name: oddly.elasticstack.beats

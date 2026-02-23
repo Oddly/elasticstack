@@ -10,14 +10,11 @@
 # ES upgrade requirement: must be on 8.19.x before upgrading to any 9.x
 
 - name: Install Elasticsearch 8.10.0 (older 8.x version)
-  collections:
-    - oddly.elasticstack
   hosts: all
   vars:
     elasticstack_full_stack: false
     elasticstack_release: 8
     elasticstack_version: "8.10.0"
-    elasticsearch_jna_workaround: true
     elasticsearch_heap: "1"
     elasticstack_no_log: false
     elasticsearch_seed_hosts: []
@@ -25,11 +22,11 @@
   tasks:
     - name: Include Elastic repos role (8.x)
       ansible.builtin.include_role:
-        name: repos
+        name: oddly.elasticstack.repos
 
     - name: Include Elasticsearch role (8.10.0)
       ansible.builtin.include_role:
-        name: elasticsearch
+        name: oddly.elasticstack.elasticsearch
 
 - name: Verify ES 8.10.0 is running and index test data
   hosts: all
@@ -39,8 +36,11 @@
   tasks:
     - name: Fetch Elastic password
       ansible.builtin.shell: |
+        set -o pipefail
         grep "PASSWORD elastic " {{ elasticstack_initial_passwords }} |
         awk {' print $4 '}
+      args:
+        executable: /bin/bash
       register: elastic_pass
       changed_when: false
 
@@ -98,13 +98,10 @@
         validate_certs: false
 
 - name: Upgrade to latest Elasticsearch 8.x (required before 9.x)
-  collections:
-    - oddly.elasticstack
   hosts: all
   vars:
     elasticstack_full_stack: false
     elasticstack_release: 8
-    elasticsearch_jna_workaround: true
     elasticsearch_heap: "1"
     elasticstack_no_log: false
     elasticsearch_seed_hosts: []
@@ -112,9 +109,9 @@
   tasks:
     - name: Include Elastic repos role (8.x)
       ansible.builtin.include_role:
-        name: repos
+        name: oddly.elasticstack.repos
 
-    - name: Upgrade to latest 8.x
+    - name: Upgrade to latest 8.x  # noqa: package-latest
       ansible.builtin.apt:
         name: elasticsearch
         state: latest
@@ -166,13 +163,10 @@
         success_msg: "On 8.19.x ({{ es_info.json.version.number }}), ready for 9.x upgrade"
 
 - name: Upgrade to Elasticsearch 9.x
-  collections:
-    - oddly.elasticstack
   hosts: all
   vars:
     elasticstack_full_stack: false
     elasticstack_release: 9
-    elasticsearch_jna_workaround: true
     elasticsearch_heap: "1"
     elasticstack_no_log: false
     elasticsearch_seed_hosts: []
@@ -180,9 +174,9 @@
   tasks:
     - name: Include Elastic repos role (9.x)
       ansible.builtin.include_role:
-        name: repos
+        name: oddly.elasticstack.repos
 
-    - name: Upgrade to 9.x
+    - name: Upgrade to 9.x  # noqa: package-latest
       ansible.builtin.apt:
         name: elasticsearch
         state: latest

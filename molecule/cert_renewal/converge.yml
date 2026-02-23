@@ -8,8 +8,6 @@
 # --- Phase 1: Initial deployment ---
 
 - name: Deploy full stack
-  collections:
-    - oddly.elasticstack
   hosts: all
   vars:
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
@@ -20,11 +18,11 @@
   tasks:
     - name: Include Elastic repos
       ansible.builtin.include_role:
-        name: repos
+        name: oddly.elasticstack.repos
 
     - name: Deploy Elasticsearch
       ansible.builtin.include_role:
-        name: elasticsearch
+        name: oddly.elasticstack.elasticsearch
       when: "'elasticsearch' in group_names"
 
     - name: Fetch elastic password for watermark setup
@@ -40,7 +38,7 @@
         - "'elasticsearch' in group_names"
         - "inventory_hostname == groups['elasticsearch'][0]"
 
-    - name: Set lenient disk watermarks for Docker
+    - name: Set lenient disk watermarks for CI containers
       ansible.builtin.uri:
         url: "https://localhost:9200/_cluster/settings"
         method: PUT
@@ -60,12 +58,12 @@
 
     - name: Deploy Logstash
       ansible.builtin.include_role:
-        name: logstash
+        name: oddly.elasticstack.logstash
       when: "'logstash' in group_names"
 
     - name: Deploy Kibana
       ansible.builtin.include_role:
-        name: kibana
+        name: oddly.elasticstack.kibana
       when: "'kibana' in group_names"
 
 # --- Phase 2: Record original certificate fingerprints ---
@@ -75,27 +73,36 @@
   tasks:
     - name: Get ES transport cert fingerprint
       ansible.builtin.shell: >-
+        set -o pipefail &&
         openssl pkcs12 -in /etc/elasticsearch/certs/{{ ansible_facts.hostname }}-es.p12
         -nokeys -passin pass:PleaseChangeMeIndividually 2>/dev/null |
         openssl x509 -fingerprint -sha256 -noout 2>/dev/null || echo "NONE"
+      args:
+        executable: /bin/bash
       register: _es_cert_fp_before
       changed_when: false
       when: "'elasticsearch' in group_names"
 
     - name: Get Logstash cert fingerprint
       ansible.builtin.shell: >-
+        set -o pipefail &&
         openssl pkcs12 -in /etc/logstash/certs/{{ ansible_facts.hostname }}-ls.p12
         -nokeys -passin pass:LogstashChangeMe 2>/dev/null |
         openssl x509 -fingerprint -sha256 -noout 2>/dev/null || echo "NONE"
+      args:
+        executable: /bin/bash
       register: _ls_cert_fp_before
       changed_when: false
       when: "'logstash' in group_names"
 
     - name: Get Kibana cert fingerprint
       ansible.builtin.shell: >-
+        set -o pipefail &&
         openssl pkcs12 -in /etc/kibana/certs/{{ ansible_facts.hostname }}-kibana.p12
         -nokeys -passin pass:PleaseChangeMe 2>/dev/null |
         openssl x509 -fingerprint -sha256 -noout 2>/dev/null || echo "NONE"
+      args:
+        executable: /bin/bash
       register: _kb_cert_fp_before
       changed_when: false
       when: "'kibana' in group_names"
@@ -110,8 +117,6 @@
 # --- Phase 3: Re-run with cert renewal flags ---
 
 - name: Renew all certificates
-  collections:
-    - oddly.elasticstack
   hosts: all
   vars:
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
@@ -132,15 +137,15 @@
 
     - name: Re-run Elasticsearch (triggers cert renewal)
       ansible.builtin.include_role:
-        name: elasticsearch
+        name: oddly.elasticstack.elasticsearch
       when: "'elasticsearch' in group_names"
 
     - name: Re-run Logstash (triggers cert renewal)
       ansible.builtin.include_role:
-        name: logstash
+        name: oddly.elasticstack.logstash
       when: "'logstash' in group_names"
 
     - name: Re-run Kibana (triggers cert renewal)
       ansible.builtin.include_role:
-        name: kibana
+        name: oddly.elasticstack.kibana
       when: "'kibana' in group_names"

@@ -9,23 +9,20 @@
 # 5. Verify cluster is green and data preserved
 
 - name: Install Elasticsearch 8.x (initial deployment)
-  collections:
-    - oddly.elasticstack
   hosts: all
   vars:
     elasticstack_full_stack: false
     elasticstack_release: 8
-    elasticsearch_jna_workaround: true
     elasticsearch_heap: "1"
     elasticstack_no_log: false
   tasks:
     - name: Include Elastic repos role (8.x)
       ansible.builtin.include_role:
-        name: repos
+        name: oddly.elasticstack.repos
 
     - name: Include Elasticsearch role (8.x)
       ansible.builtin.include_role:
-        name: elasticsearch
+        name: oddly.elasticstack.elasticsearch
 
 - name: Verify ES 8.x cluster is healthy and index test data
   hosts: elasticsearch[0]
@@ -35,8 +32,11 @@
   tasks:
     - name: Fetch Elastic password
       ansible.builtin.shell: |
+        set -o pipefail
         grep "PASSWORD elastic " {{ elasticstack_initial_passwords }} |
         awk {' print $4 '}
+      args:
+        executable: /bin/bash
       register: elastic_pass
       changed_when: false
 
@@ -107,13 +107,10 @@
         validate_certs: false
 
 - name: Upgrade to Elasticsearch 9.x (with config change to exercise handler suppression)
-  collections:
-    - oddly.elasticstack
   hosts: all
   vars:
     elasticstack_full_stack: false
     elasticstack_release: 9
-    elasticsearch_jna_workaround: true
     elasticsearch_heap: "1"
     elasticstack_no_log: false
     # Add a JVM custom parameter during upgrade to trigger a config change.
@@ -125,7 +122,7 @@
   tasks:
     - name: Include Elastic repos role (9.x)
       ansible.builtin.include_role:
-        name: repos
+        name: oddly.elasticstack.repos
 
     # In a real upgrade, users run the role in a separate playbook execution
     # where _elasticstack_role_imported is not set. Since this test combines
@@ -142,7 +139,10 @@
 
     - name: Detect latest available Elasticsearch 9.x version
       ansible.builtin.shell: >
+        set -o pipefail &&
         apt-cache policy elasticsearch | grep 'Candidate:' | awk '{print $2}'
+      args:
+        executable: /bin/bash
       register: _es_candidate_version
       changed_when: false
 
@@ -156,4 +156,4 @@
 
     - name: Include Elasticsearch role (upgrade to 9.x)
       ansible.builtin.include_role:
-        name: elasticsearch
+        name: oddly.elasticstack.elasticsearch

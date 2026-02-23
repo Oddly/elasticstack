@@ -7,7 +7,6 @@
   hosts: all
   vars:
     elasticstack_full_stack: false
-    elasticsearch_jna_workaround: true
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticstack_no_log: false
   tasks:

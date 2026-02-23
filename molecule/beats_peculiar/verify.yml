@@ -5,9 +5,10 @@
   vars:
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
   tasks:
-    - name: fetch Filebeat version
+    - name: Fetch Filebeat version
       ansible.builtin.command: "filebeat version | grep ^filebeat"
       register: beats_filebeat_version
+      changed_when: false
 
     - name: DEBUG show filebeat version output
       ansible.builtin.debug:

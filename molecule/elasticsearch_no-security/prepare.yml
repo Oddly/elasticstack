@@ -2,6 +2,14 @@
 - name: Prepare
   hosts: all
   tasks:
+    - name: Populate /etc/hosts with molecule instances
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        regexp: ".*{{ item }}$"
+        line: "{{ hostvars[item]['ansible_host'] }} {{ item }}"
+      loop: "{{ groups['all'] }}"
+      when: groups['all'] | length > 1
+
     - name: Install packages for Debian
       ansible.builtin.apt:
         name:

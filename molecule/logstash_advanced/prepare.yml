@@ -12,13 +12,15 @@
         update_cache: true
       when: ansible_facts.os_family == "Debian"
 
-    - name: Create filter files directory
+    - name: Create filter files directory on controller
       ansible.builtin.file:
         path: /tmp/logstash-filters
         state: directory
         mode: "0755"
+      delegate_to: localhost
+      run_once: true  # noqa: run-once[task]
 
-    - name: Create a custom filter file
+    - name: Create a custom filter file on controller
       ansible.builtin.copy:
         dest: /tmp/logstash-filters/20-custom-filter.conf
         content: |
@@ -28,3 +30,5 @@
             }
           }
         mode: "0644"
+      delegate_to: localhost
+      run_once: true  # noqa: run-once[task]

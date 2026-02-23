@@ -2,22 +2,55 @@
 # The workaround for arbitrarily named role directory is important because the git repo has one name and the role within it another
 # Found at: https://github.com/ansible-community/molecule/issues/1567#issuecomment-436876722
 - name: Converge
-  collections:
-    - oddly.elasticstack
   hosts: all
   vars:
     elasticstack_full_stack: false
-    elasticsearch_jna_workaround: true
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticsearch_heap: "1"
     elasticstack_no_log: false
   tasks:
     - name: Include Elastics repos role
       ansible.builtin.include_role:
-        name: repos
+        name: oddly.elasticstack.repos
+
     - name: Include Elasticsearch
-      ansible.builtin.include_role:
-        name: elasticsearch
+      block:
+        - name: Run Elasticsearch role
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elasticsearch
+      rescue:
+        - name: Dump ES diagnostics on failure
+          ansible.builtin.shell: |
+            set -x
+            echo "=== systemctl status elasticsearch ==="
+            systemctl status elasticsearch.service --no-pager -l 2>&1 || true
+            echo "=== journalctl -u elasticsearch (last 50) ==="
+            journalctl -u elasticsearch.service --no-pager -n 50 2>&1 || true
+            echo "=== ES log files ==="
+            ls -la /var/log/elasticsearch/ 2>&1 || true
+            echo "=== ES startup log (first 80 lines) ==="
+            head -80 /var/log/elasticsearch/elasticsearch.log 2>/dev/null || echo "No ES log found"
+            echo "=== ES server JSON (last 50) ==="
+            tail -50 /var/log/elasticsearch/elasticsearch_server.json 2>/dev/null || echo "No server JSON"
+            echo "=== JVM custom options ==="
+            cat /etc/elasticsearch/jvm.options.d/90-custom.options 2>&1 || echo "No custom options"
+            echo "=== JVM options dir ==="
+            ls -la /etc/elasticsearch/jvm.options.d/ 2>&1 || true
+            echo "=== elasticsearch.yml ==="
+            cat /etc/elasticsearch/elasticsearch.yml 2>&1 || true
+          args:
+            executable: /bin/bash
+          register: es_diag
+          changed_when: false
+          failed_when: false
+
+        - name: Show ES diagnostics
+          ansible.builtin.debug:
+            var: es_diag.stdout_lines
+
+        - name: Fail after showing diagnostics
+          ansible.builtin.fail:
+            msg: "Elasticsearch role failed - see diagnostics above"
 
     - name: Fetch Elastic password # noqa: risky-shell-pipe
       ansible.builtin.shell: >

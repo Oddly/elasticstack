@@ -4,8 +4,6 @@
 # (as opposed to logstash_ssl which tests elastic_agent input).
 - name: Deploy Logstash with beats SSL using external certs
   hosts: all
-  collections:
-    - oddly.elasticstack
   vars:
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticstack_full_stack: false
@@ -27,9 +25,11 @@
     logstash_extra_outputs: |
       stdout { codec => rubydebug }
   tasks:
-    - name: Install openssl for certificate generation
+    - name: Install openssl and cryptography for certificate generation
       ansible.builtin.package:
-        name: openssl
+        name:
+          - openssl
+          - python3-cryptography
         state: present
 
     - name: Create test certificate directory
@@ -104,8 +104,8 @@
 
     - name: Include Elastic repos role
       ansible.builtin.include_role:
-        name: repos
+        name: oddly.elasticstack.repos
 
     - name: Include Logstash role
       ansible.builtin.include_role:
-        name: logstash
+        name: oddly.elasticstack.logstash

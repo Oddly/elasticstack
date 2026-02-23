@@ -15,8 +15,11 @@
 
     - name: Fetch Elastic password
       ansible.builtin.shell: |
+        set -o pipefail
         grep "PASSWORD elastic " {{ elasticstack_initial_passwords }} |
         awk {' print $4 '}
+      args:
+        executable: /bin/bash
       register: elastic_pass
       changed_when: false
       delegate_to: "{{ elasticsearch_ca }}"
@@ -87,7 +90,7 @@
         var: nodes_info.json
       when: groups[elasticstack_elasticsearch_group_name] | length > 1
 
-    - name: Verify test data survived the upgrade
+    - name: Verify test data survived the upgrade  # noqa: run-once[task]
       ansible.builtin.uri:
         url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/upgrade-test-index/_doc/1
         method: GET
@@ -101,12 +104,12 @@
       delegate_to: "{{ elasticsearch_ca }}"
       run_once: true
 
-    - name: Display test document
+    - name: Display test document  # noqa: run-once[task]
       ansible.builtin.debug:
         var: test_doc.json
       run_once: true
 
-    - name: Verify test data is intact
+    - name: Verify test data is intact  # noqa: run-once[task]
       ansible.builtin.assert:
         that:
           - test_doc.json._source.test_field == "pre-upgrade-data"
@@ -127,7 +130,7 @@
           JVM custom config not applied. Got: {{ custom_jvm_config.content | b64decode }}
         success_msg: "JVM custom parameter correctly applied during upgrade"
 
-    - name: Final upgrade verification summary
+    - name: Final upgrade verification summary  # noqa: run-once[task]
       ansible.builtin.debug:
         msg: |
           ===========================================

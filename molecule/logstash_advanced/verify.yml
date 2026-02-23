@@ -117,23 +117,30 @@
         src: /etc/logstash/logstash.yml
       register: logstash_yml
 
-    - name: Verify queue type is persisted
-      ansible.builtin.assert:
-        that:
-          - "'queue.type: persisted' in (logstash_yml.content | b64decode)"
-        fail_msg: "Queue type not set to persisted"
-
-    - name: Verify queue max bytes
-      ansible.builtin.assert:
-        that:
-          - "'queue.max_bytes: 512mb' in (logstash_yml.content | b64decode)"
-        fail_msg: "Queue max bytes not set to 512mb"
-
     - name: Verify autoreload is enabled
       ansible.builtin.assert:
         that:
           - "'config.reload.automatic: true' in (logstash_yml.content | b64decode)"
         fail_msg: "Config autoreload not enabled"
+
+    # --- Pipelines.yml verification (queue settings are per-pipeline) ---
+
+    - name: Read pipelines.yml
+      ansible.builtin.slurp:
+        src: /etc/logstash/pipelines.yml
+      register: pipelines_yml
+
+    - name: Verify queue type is persisted
+      ansible.builtin.assert:
+        that:
+          - "'queue.type: persisted' in (pipelines_yml.content | b64decode)"
+        fail_msg: "Queue type not set to persisted"
+
+    - name: Verify queue max bytes
+      ansible.builtin.assert:
+        that:
+          - "'queue.max_bytes: 512mb' in (pipelines_yml.content | b64decode)"
+        fail_msg: "Queue max bytes not set to 512mb"
 
     # --- Config backup verification ---
 
@@ -201,9 +208,12 @@
 
     - name: Get installed Logstash version
       ansible.builtin.shell: >-
+        set -o pipefail &&
         (v=$(dpkg-query -W -f='${Version}' logstash 2>/dev/null) &&
         echo "${v}" | sed 's/^[0-9]*://;s/-.*$//') ||
         rpm -q --qf '%{VERSION}' logstash 2>/dev/null
+      args:
+        executable: /bin/bash
       register: logstash_version
       changed_when: false
 
@@ -214,7 +224,7 @@
         --config.test_and_exit
         -f /etc/logstash/conf.d/main/
       become: "{{ logstash_version.stdout is version('9.0.0', '>=', version_type='loose') }}"
-      become_method: su
+      become_method: ansible.builtin.su
       become_user: "{{ 'logstash' if logstash_version.stdout is version('9.0.0', '>=', version_type='loose') else omit }}"
       become_flags: '-s /bin/sh'
       register: config_test

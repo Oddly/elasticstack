@@ -105,9 +105,12 @@
 
     - name: Get installed Logstash version
       ansible.builtin.shell: >-
+        set -o pipefail &&
         (v=$(dpkg-query -W -f='${Version}' logstash 2>/dev/null) &&
         echo "${v}" | sed 's/^[0-9]*://;s/-.*$//') ||
         rpm -q --qf '%{VERSION}' logstash 2>/dev/null
+      args:
+        executable: /bin/bash
       register: logstash_version
       changed_when: false
 
@@ -118,7 +121,7 @@
         --config.test_and_exit
         -f /etc/logstash/conf.d/main/
       become: "{{ logstash_version.stdout is version('9.0.0', '>=', version_type='loose') }}"
-      become_method: su
+      become_method: ansible.builtin.su
       become_user: "{{ 'logstash' if logstash_version.stdout is version('9.0.0', '>=', version_type='loose') else omit }}"
       become_flags: '-s /bin/sh'
       register: config_test

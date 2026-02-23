@@ -1,0 +1,41 @@
+---
+- name: Verify Elasticsearch default cluster
+  hosts: elasticsearch
+  tasks:
+    - name: Fetch Elastic password
+      ansible.builtin.shell: |
+        set -o pipefail
+        grep "PASSWORD elastic " /usr/share/elasticsearch/initial_passwords |
+        awk {' print $4 '}
+      args:
+        executable: /bin/bash
+      register: elastic_pass
+      changed_when: false
+      run_once: true  # noqa: run-once[task]
+
+    - name: Check cluster health
+      ansible.builtin.uri:
+        url: "https://localhost:9200/_cluster/health"
+        method: GET
+        force_basic_auth: true
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        return_content: true
+        status_code: 200
+        validate_certs: false
+      register: health
+      run_once: true  # noqa: run-once[task]
+
+    - name: Verify cluster is green or yellow
+      ansible.builtin.assert:
+        that:
+          - health.json.status in ["green", "yellow"]
+        fail_msg: "Cluster status is {{ health.json.status }}"
+      run_once: true  # noqa: run-once[task]
+
+    - name: Verify expected number of nodes
+      ansible.builtin.assert:
+        that:
+          - health.json.number_of_nodes == groups['elasticsearch'] | length
+        fail_msg: "Expected {{ groups['elasticsearch'] | length }} nodes, got {{ health.json.number_of_nodes }}"
+      run_once: true  # noqa: run-once[task]

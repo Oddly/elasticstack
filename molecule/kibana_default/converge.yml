@@ -9,12 +9,10 @@
     elasticstack_full_stack: false
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticstack_no_log: false
-  collections:
-    - oddly.elasticstack
   tasks:
     - name: Include Elastic Repos
       ansible.builtin.include_role:
-        name: repos
+        name: oddly.elasticstack.repos
     - name: Include Kibana
       ansible.builtin.include_role:
-        name: kibana
+        name: oddly.elasticstack.kibana

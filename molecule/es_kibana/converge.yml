@@ -31,7 +31,7 @@
         - "'elasticsearch' in group_names"
         - "inventory_hostname == groups['elasticsearch'][0]"
 
-    - name: Set lenient disk watermarks for Docker
+    - name: Set lenient disk watermarks for CI containers
       ansible.builtin.uri:
         url: "https://localhost:9200/_cluster/settings"
         method: PUT

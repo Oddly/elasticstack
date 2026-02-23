@@ -2,13 +2,10 @@
 # The workaround for arbitrarily named role directory is important because the git repo has one name and the role within it another
 # Found at: https://github.com/ansible-community/molecule/issues/1567#issuecomment-436876722
 - name: Converge
-  collections:
-    - oddly.elasticstack
   hosts: all
   vars:
     elasticsearch_security: false
     elasticstack_security: false
-    elasticsearch_jna_workaround: true
     elasticsearch_heap: "1"
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticstack_no_log: false
@@ -16,7 +13,7 @@
   tasks:
     - name: Include Elastics repos role
       ansible.builtin.include_role:
-        name: repos
+        name: oddly.elasticstack.repos
     - name: Include Elasticsearch
       ansible.builtin.include_role:
-        name: elasticsearch
+        name: oddly.elasticstack.elasticsearch

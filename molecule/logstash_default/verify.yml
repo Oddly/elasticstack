@@ -108,6 +108,12 @@
           - "'conf.d/main' in (pipelines_content.content | b64decode)"
         fail_msg: "pipelines.yml not properly configured"
 
+    - name: Verify queue type is persisted
+      ansible.builtin.assert:
+        that:
+          - "'queue.type: persisted' in (pipelines_content.content | b64decode)"
+        fail_msg: "Queue type not set to persisted in pipelines.yml"
+
     # --- Service health ---
 
     - name: Show Logstash log before port check
@@ -146,7 +152,9 @@
             var: logstash_log_after.stdout_lines
 
         - name: Show listening ports
-          ansible.builtin.shell: ss -tlnp | grep -E '5044|logstash|java' || echo "No matching ports"
+          ansible.builtin.shell: set -o pipefail && ss -tlnp | grep -E '5044|logstash|java' || echo "No matching ports"
+          args:
+            executable: /bin/bash
           register: listening_ports
           changed_when: false
 
@@ -162,9 +170,12 @@
 
     - name: Get installed Logstash version
       ansible.builtin.shell: >-
+        set -o pipefail &&
         (v=$(dpkg-query -W -f='${Version}' logstash 2>/dev/null) &&
         echo "${v}" | sed 's/^[0-9]*://;s/-.*$//') ||
         rpm -q --qf '%{VERSION}' logstash 2>/dev/null
+      args:
+        executable: /bin/bash
       register: logstash_version
       changed_when: false
 
@@ -175,7 +186,9 @@
         --config.test_and_exit
         -f /etc/logstash/conf.d/main/
       become: "{{ logstash_version.stdout is version('9.0.0', '>=', version_type='loose') }}"
+      become_method: ansible.builtin.su
       become_user: "{{ 'logstash' if logstash_version.stdout is version('9.0.0', '>=', version_type='loose') else omit }}"
+      become_flags: '-s /bin/sh'
       register: config_test
       changed_when: false
       failed_when: config_test.rc != 0
@@ -207,12 +220,6 @@
       ansible.builtin.slurp:
         src: /etc/logstash/logstash.yml
       register: logstash_yml
-
-    - name: Verify queue type is persisted
-      ansible.builtin.assert:
-        that:
-          - "'queue.type: persisted' in (logstash_yml.content | b64decode)"
-        fail_msg: "Queue type 'persisted' not found in logstash.yml"
 
     - name: Verify autoreload is enabled
       ansible.builtin.assert:

@@ -1,0 +1,10 @@
+---
+# The elasticsearch_check_calculation scenario only runs the node role
+# calculation logic, then exits via meta: end_host before installing ES.
+# The converge and idempotence phases already validate that the calculation
+# runs without error. There is no running cluster to verify.
+- name: Verify roles calculation completed
+  hosts: elasticsearch
+  tasks:
+    - name: Confirm hosts are reachable (calculation mode does not install ES)
+      ansible.builtin.ping:
