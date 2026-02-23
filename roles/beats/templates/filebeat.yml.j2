@@ -123,10 +123,15 @@ filebeat.inputs:
   ssl.key_passphrase: {{ beats_tls_key_passphrase }}
   ssl.verification_mode: full
 {% endif %}
-{% if beats_fields is defined %}
+{% if beats_fields is defined or beats_filebeat_syslog_tcp_fields %}
   fields:
+{% if beats_fields is defined %}
 {% for field in beats_fields %}
     {{ field }}
+{% endfor %}
+{% endif %}
+{% for field in beats_filebeat_syslog_tcp_fields %}
+    {{ field }}: {{ beats_filebeat_syslog_tcp_fields[field] }}
 {% endfor %}
 {% endif %}
 
@@ -136,10 +141,15 @@ filebeat.inputs:
   enabled: true
   max_message_size: 10MiB
   host: "0.0.0.0:{{ beats_filebeat_syslog_udp_port }}"
-{% if beats_fields is defined %}
+{% if beats_fields is defined or beats_filebeat_syslog_udp_fields %}
   fields:
+{% if beats_fields is defined %}
 {% for field in beats_fields %}
     {{ field }}
+{% endfor %}
+{% endif %}
+{% for field in beats_filebeat_syslog_udp_fields %}
+    {{ field }}: {{ beats_filebeat_syslog_udp_fields[field] }}
 {% endfor %}
 {% endif %}
 
@@ -215,8 +225,16 @@ logging.to_files: true
 logging.files:
   path: {{ beats_logpath }}/filebeat.log
   name: filebeat
-  keepfiles: 7
-  permissions: 0644
+  keepfiles: {{ beats_logging_keepfiles }}
+  permissions: {{ beats_logging_permissions }}
+{% endif %}
+
+queue.{{ beats_queue_type }}:
+{% if beats_queue_type == "disk" %}
+{% if beats_queue_disk_path %}
+  path: {{ beats_queue_disk_path }}
+{% endif %}
+  max_size: {{ beats_queue_disk_max_size }}
 {% endif %}
 
 processors:

@@ -34,6 +34,26 @@
           - "'5515' in (filebeat_yml.content | b64decode)"
         fail_msg: "Syslog TCP input not found in filebeat.yml"
 
+    # --- Issue #5: Per-input fields on TCP/UDP syslog ---
+
+    - name: Verify TCP input has per-input fields
+      ansible.builtin.assert:
+        that:
+          - "'source_protocol: tcp' in (filebeat_yml.content | b64decode)"
+        fail_msg: "TCP per-input field 'source_protocol: tcp' not found in filebeat.yml"
+
+    - name: Verify UDP input has per-input fields
+      ansible.builtin.assert:
+        that:
+          - "'source_protocol: udp' in (filebeat_yml.content | b64decode)"
+        fail_msg: "UDP per-input field 'source_protocol: udp' not found in filebeat.yml"
+
+    - name: Verify environment field appears in syslog inputs
+      ansible.builtin.assert:
+        that:
+          - "'environment: test' in (filebeat_yml.content | b64decode)"
+        fail_msg: "Per-input field 'environment: test' not found in filebeat.yml"
+
     - name: Verify journald input is configured
       ansible.builtin.assert:
         that:
@@ -68,24 +88,35 @@
 
     # --- Metricbeat verification ---
 
-    - name: Check metricbeat service is running
-      ansible.builtin.service:
+    - name: Check metricbeat package is installed
+      ansible.builtin.package:
         name: metricbeat
-        state: started
+        state: present
       check_mode: true
-      register: metricbeat_svc
-      failed_when: metricbeat_svc.changed
+      register: metricbeat_pkg
+      failed_when: metricbeat_pkg.changed
 
     - name: Read metricbeat.yml
       ansible.builtin.slurp:
         src: /etc/metricbeat/metricbeat.yml
       register: metricbeat_yml
 
-    - name: Verify metricbeat system module reference
+    - name: Verify metricbeat modules config path
       ansible.builtin.assert:
         that:
-          - "'system' in (metricbeat_yml.content | b64decode)"
-        fail_msg: "System module not referenced in metricbeat.yml"
+          - "'metricbeat.config.modules' in (metricbeat_yml.content | b64decode)"
+        fail_msg: "Module config path not found in metricbeat.yml"
+
+    - name: Verify system module is enabled
+      ansible.builtin.stat:
+        path: /etc/metricbeat/modules.d/system.yml
+      register: _mb_system_module
+
+    - name: Assert system module file exists
+      ansible.builtin.assert:
+        that:
+          - _mb_system_module.stat.exists
+        fail_msg: "System module not enabled in /etc/metricbeat/modules.d/"
 
     # --- Auditbeat verification (installed but not enabled) ---
 
@@ -97,7 +128,7 @@
       register: auditbeat_pkg
       failed_when: auditbeat_pkg.changed
 
-    # --- Logging verification ---
+    # --- Issue #4: Configurable logging keepfiles and permissions ---
 
     - name: Check beats log directory exists
       ansible.builtin.stat:
@@ -110,3 +141,53 @@
           - log_dir.stat.exists
           - log_dir.stat.isdir
         fail_msg: "Beats log directory /var/log/beats not found"
+
+    - name: Verify filebeat logging keepfiles is 14
+      ansible.builtin.lineinfile:
+        dest: /etc/filebeat/filebeat.yml
+        line: "  keepfiles: 14"
+      check_mode: true
+      register: _keepfiles_fb
+      failed_when: _keepfiles_fb.changed
+
+    - name: Verify filebeat logging permissions is 0640
+      ansible.builtin.lineinfile:
+        dest: /etc/filebeat/filebeat.yml
+        line: "  permissions: 0640"
+      check_mode: true
+      register: _permissions_fb
+      failed_when: _permissions_fb.changed
+
+    - name: Verify metricbeat logging keepfiles is 14
+      ansible.builtin.lineinfile:
+        dest: /etc/metricbeat/metricbeat.yml
+        line: "  keepfiles: 14"
+      check_mode: true
+      register: _keepfiles_mb
+      failed_when: _keepfiles_mb.changed
+
+    - name: Verify metricbeat logging permissions is 0640
+      ansible.builtin.lineinfile:
+        dest: /etc/metricbeat/metricbeat.yml
+        line: "  permissions: 0640"
+      check_mode: true
+      register: _permissions_mb
+      failed_when: _permissions_mb.changed
+
+    # --- Issue #7: Disk queue configuration ---
+
+    - name: Verify filebeat disk queue type
+      ansible.builtin.lineinfile:
+        dest: /etc/filebeat/filebeat.yml
+        line: "queue.disk:"
+      check_mode: true
+      register: _queue_type
+      failed_when: _queue_type.changed
+
+    - name: Verify filebeat disk queue max_size
+      ansible.builtin.lineinfile:
+        dest: /etc/filebeat/filebeat.yml
+        line: "  max_size: 512MB"
+      check_mode: true
+      register: _queue_size
+      failed_when: _queue_size.changed

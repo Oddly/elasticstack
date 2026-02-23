@@ -1,64 +1,182 @@
 ---
-# defaults file for beats
+# @meta description: >
+# Ansible role for installing, configuring, and managing Elastic Beats
+# (Filebeat, Metricbeat, Auditbeat). Handles syslog inputs (TCP/UDP),
+# log file inputs with multiline support, journald inputs, Docker container
+# logs, TLS certificate management, and output to Elasticsearch or Logstash.
+# @end
+
+# === General Settings ===
+
+# @var beats_security:description: Enable TLS security for Beats communication with Elasticsearch or Logstash
 beats_security: false
+# @var beats_filebeat:description: Install and configure Filebeat
 beats_filebeat: true
+# @var beats_auditbeat:description: Install and configure Auditbeat
 beats_auditbeat: false
+# @var beats_metricbeat:description: Install and configure Metricbeat
 beats_metricbeat: false
+# @var beats_target_hosts:description: List of Elasticsearch or Logstash hosts to send data to (used when not in full_stack mode)
 beats_target_hosts:
   - localhost
+
+# === Logging ===
+
+# @var beats_logging:description: Logging destination. Set to 'file' for file-based logging
 beats_logging: file
+# @var beats_logpath:description: Directory for Beat log files
 beats_logpath: /var/log/beats
+# @var beats_loglevel:description: Log level for all Beats (debug, info, warning, error, critical)
 beats_loglevel: info
+# @var beats_logging_keepfiles:description: Number of rotated log files to retain
+beats_logging_keepfiles: 7
+# @var beats_logging_permissions:description: File permissions for Beat log files
+beats_logging_permissions: "0644"
 
-# Use TLS without Elastic X-Pack #
+# === TLS Certificates ===
 
+# @var beats_tls_key:description: Path to the Beat TLS private key file
 beats_tls_key: "{{ beats_ca_dir }}/{{ inventory_hostname }}-beats.key"
+# @var beats_tls_cert:description: Path to the Beat TLS certificate file
 beats_tls_cert: "{{ beats_ca_dir }}/{{ inventory_hostname }}-beats.crt"
+# @var beats_tls_cacert:description: Path to the CA certificate for TLS verification
 beats_tls_cacert: "{{ beats_ca_dir }}/ca.crt"
+# @var beats_tls_key_passphrase:description: Passphrase for the Beat TLS private key
 beats_tls_key_passphrase: BeatsChangeMe
 
-# Filebeat specific #
+# === Filebeat Configuration ===
 
+# @var beats_filebeat_elastic_monitoring:description: Enable Elastic monitoring (X-Pack) for Filebeat
 beats_filebeat_elastic_monitoring: false
+# @var beats_filebeat_output:description: Output destination for Filebeat ('logstash' or 'elasticsearch')
 beats_filebeat_output: logstash
+# @var beats_filebeat_syslog_udp:description: Enable a UDP syslog input in Filebeat
 beats_filebeat_syslog_udp: false
+# @var beats_filebeat_syslog_udp_port:description: Port for the UDP syslog input
 beats_filebeat_syslog_udp_port: 514
+# @var beats_filebeat_syslog_tcp:description: Enable a TCP syslog input in Filebeat
 beats_filebeat_syslog_tcp: false
+# @var beats_filebeat_syslog_tcp_port:description: Port for the TCP syslog input
 beats_filebeat_syslog_tcp_port: 514
+# @var beats_filebeat_syslog_tcp_ssl:description: Enable TLS on the TCP syslog input
 beats_filebeat_syslog_tcp_ssl: false
+# @var beats_filebeat_syslog_tcp_fields:description: Custom fields added to events from the TCP syslog input
+# @var beats_filebeat_syslog_tcp_fields:example: >
+# beats_filebeat_syslog_tcp_fields:
+#   source_protocol: tcp
+#   environment: production
+# @end
+beats_filebeat_syslog_tcp_fields: {}
+# @var beats_filebeat_syslog_udp_fields:description: Custom fields added to events from the UDP syslog input
+# @var beats_filebeat_syslog_udp_fields:example: >
+# beats_filebeat_syslog_udp_fields:
+#   source_protocol: udp
+#   environment: production
+# @end
+beats_filebeat_syslog_udp_fields: {}
+# @var beats_filebeat_log_input:description: Enable file-based log inputs in Filebeat
 beats_filebeat_log_input: true
+# @var beats_filebeat_log_inputs:description: Dictionary of log inputs. Each key defines an input with paths, optional fields, and multiline settings
+# @var beats_filebeat_log_inputs:example: >
+# beats_filebeat_log_inputs:
+#   messages:
+#     name: messages
+#     paths:
+#       - /var/log/messages
+#       - /var/log/syslog
+#   nginx:
+#     name: nginx
+#     paths:
+#       - /var/log/nginx/access.log
+#     fields:
+#       app: nginx
+#       logtype: access
+# @end
 beats_filebeat_log_inputs:
   messages:
     name: messages
     paths:
       - /var/log/messages
       - /var/log/syslog
+# @var beats_filebeat_enable:description: Enable the Filebeat service after installation
 beats_filebeat_enable: true
+# @var beats_filebeat_journald:description: Enable journald input in Filebeat for reading systemd journal
 beats_filebeat_journald: false
+# @var beats_filebeat_journald_inputs:description: Dictionary of journald inputs. Each key defines an input with an id and optional include_matches filter
+# @var beats_filebeat_journald_inputs:example: >
+# beats_filebeat_journald_inputs:
+#   everything:
+#     id: everything
+#   vault:
+#     id: service-vault
+#     include_matches:
+#       - _SYSTEMD_UNIT=vault.service
+# @end
 beats_filebeat_journald_inputs:
   everything:
     id: everything
 
+# @var beats_filebeat_docker:description: Enable Docker container log input in Filebeat
 beats_filebeat_docker: false
+# @var beats_filebeat_docker_ids:description: Docker container IDs to collect logs from. Use '*' for all containers
 beats_filebeat_docker_ids: "*"
 
+# @var beats_filebeat_loadbalance:description: Load balance events across multiple Logstash hosts
 beats_filebeat_loadbalance: true
 
+# === Filebeat Queue ===
+
+# @var beats_queue_type:description: Filebeat internal queue type ('mem' for in-memory, 'disk' for disk-backed)
+beats_queue_type: mem
+# @var beats_queue_disk_path:description: Custom path for the disk queue. Leave empty to use the default data directory
+beats_queue_disk_path: ""
+# @var beats_queue_disk_max_size:description: Maximum size of the disk queue before Filebeat applies backpressure
+beats_queue_disk_max_size: 1GB
+
+# @var beats_filebeat_mysql_slowlog_input:description: Enable MySQL slow query log input with multiline parsing
 beats_filebeat_mysql_slowlog_input: false
+# @var beats_filebeat_modules:description: List of Filebeat modules to enable
+# @var beats_filebeat_modules:example: >
+# beats_filebeat_modules:
+#   - system
+#   - nginx
+# @end
 #beats_filebeat_modules:
 #  - system
 
+# === Auditbeat Configuration ===
+
+# @var beats_auditbeat_setup:description: Run Auditbeat setup (load dashboards, index templates) on first install
 beats_auditbeat_setup: true
+# @var beats_auditbeat_enable:description: Enable the Auditbeat service. Disable in containers where auditd has no permissions
 beats_auditbeat_enable: true
+# @var beats_auditbeat_output:description: Output destination for Auditbeat ('elasticsearch' or 'logstash')
 beats_auditbeat_output: elasticsearch
+# @var beats_auditbeat_loadbalance:description: Load balance events across multiple output hosts
 beats_auditbeat_loadbalance: true
 
+# === Metricbeat Configuration ===
+
+# @var beats_metricbeat_enable:description: Enable the Metricbeat service after installation
 beats_metricbeat_enable: true
+# @var beats_metricbeat_output:description: Output destination for Metricbeat ('elasticsearch' or 'logstash')
 beats_metricbeat_output: elasticsearch
+# @var beats_metricbeat_modules:description: List of Metricbeat modules to enable
+# @var beats_metricbeat_modules:example: >
+# beats_metricbeat_modules:
+#   - system
+#   - docker
+# @end
 beats_metricbeat_modules:
   - system
+# @var beats_metricbeat_loadbalance:description: Load balance events across multiple output hosts
 beats_metricbeat_loadbalance: true
 
+# === Certificate Management ===
+
+# @var beats_cert_validity_period:description: Validity period in days for generated Beat TLS certificates
 beats_cert_validity_period: 1095
+# @var beats_cert_expiration_buffer:description: Days before certificate expiry to trigger renewal
 beats_cert_expiration_buffer: 30
+# @var beats_cert_will_expire_soon:description: Internal flag set when certificates are within the expiration buffer. Do not set manually
 beats_cert_will_expire_soon: false

@@ -16,12 +16,18 @@
         paths:
           - /var/log/messages
           - /var/log/syslog
-    # Syslog UDP input
+    # Syslog UDP input with per-input fields
     beats_filebeat_syslog_udp: true
     beats_filebeat_syslog_udp_port: 5514
-    # Syslog TCP input
+    beats_filebeat_syslog_udp_fields:
+      source_protocol: udp
+      environment: test
+    # Syslog TCP input with per-input fields
     beats_filebeat_syslog_tcp: true
     beats_filebeat_syslog_tcp_port: 5515
+    beats_filebeat_syslog_tcp_fields:
+      source_protocol: tcp
+      environment: test
     # Journald input
     beats_filebeat_journald: true
     beats_filebeat_journald_inputs:
@@ -29,19 +35,25 @@
         id: everything
     # Filebeat output to file (no ES/Logstash)
     beats_filebeat_output: file
-    # Metricbeat
+    # Metricbeat (install + configure only, no ES/Logstash available)
     beats_metricbeat: true
-    beats_metricbeat_output: file
+    beats_metricbeat_enable: false
+    beats_metricbeat_output: logstash
     beats_metricbeat_modules:
       - system
     # Auditbeat (install only, don't enable in containers)
     beats_auditbeat: true
     beats_auditbeat_enable: false
-    beats_auditbeat_output: file
-    # Logging
+    beats_auditbeat_output: logstash
+    # Logging (non-default keepfiles and permissions)
     beats_logging: file
     beats_logpath: /var/log/beats
     beats_loglevel: debug
+    beats_logging_keepfiles: 14
+    beats_logging_permissions: "0640"
+    # Queue configuration (disk queue)
+    beats_queue_type: disk
+    beats_queue_disk_max_size: 512MB
   tasks:
     - name: Include Elastic repos role
       ansible.builtin.include_role:

@@ -74,8 +74,8 @@ logging.to_files: true
 logging.files:
   path: {{ beats_logpath }}/auditbeat.log
   name: auditbeat
-  keepfiles: 7
-  permissions: 0644
+  keepfiles: {{ beats_logging_keepfiles }}
+  permissions: {{ beats_logging_permissions }}
 {% endif %}
 
 processors:
