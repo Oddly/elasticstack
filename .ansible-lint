@@ -1,4 +1,25 @@
 ---
 exclude_paths:
   - .ansible/
+  - .venv/
   - venv/
+
+warn_list:
+  - experimental
+  - jinja[spacing]
+  - key-order[task]
+  - name[casing]
+  - name[missing]
+  - package-latest
+  - risky-shell-pipe
+  - schema[meta]
+  - var-naming[no-role-prefix]
+
+skip_list:
+  - command-instead-of-module
+  - galaxy[no-changelog]
+  - line-length
+  - no-handler
+  - package-latest
+  - role-name
+  - yaml

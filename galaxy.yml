@@ -30,15 +30,22 @@ dependencies:
   "community.general": "*"
   "ansible.posix": "*"
 repository: https://github.com/Oddly/elasticstack
-documentation: https://github.com/Oddly/elasticstack/blob/main/README.md
+documentation: https://github.com/Oddly/elasticstack/wiki
 homepage: https://github.com/Oddly/elasticstack
 issues: https://github.com/Oddly/elasticstack/issues
 build_ignore:
+  - .config
   - .gitea
   - .github
   - .cache
+  - .venv
   - molecule
+  - tests
+  - docs
+  - scripts
   - .gitignore
-  - .mailmap
+  - .pre-commit-config.yaml
+  - .yamllint
+  - requirements-test.txt
   - '*.tar.gz'
   - 'venv*'

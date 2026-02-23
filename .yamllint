@@ -2,4 +2,9 @@
 extends: relaxed
 
 rules:
+  comments:
+    min-spaces-from-content: 1
   line-length: disable
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true

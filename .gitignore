@@ -1,5 +1,9 @@
-.cache
+.ansible/
+.cache/
+.pytest_cache/
+.venv/
+.vscode/
+__pycache__/
 *.swp
-__pycache__*
-.vscode
-roles/geerlingguy.redis/
+*.tar.gz
+venv/
