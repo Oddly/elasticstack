@@ -1,28 +1,24 @@
-<p align="center">
-  <img src="https://images.contentstack.io/v3/assets/bltefdd0b53724fa2ce/blt280217a63b82a734/6202d3378b1f312528798412/elastic-logo.svg" alt="Elastic Stack" width="120">
-</p>
-
-<h3 align="center">oddly.elasticstack</h3>
-
-<p align="center">
-  Deploy and manage the Elastic Stack with Ansible.<br>
-  Elasticsearch, Kibana, Logstash, and Beats — from repos to rolling upgrades.
-</p>
-
-<p align="center">
-  <a href="https://github.com/Oddly/elasticstack/actions/workflows/test_full_stack.yml"><img src="https://github.com/Oddly/elasticstack/actions/workflows/test_full_stack.yml/badge.svg" alt="Full Stack Tests"></a>
-  <a href="https://github.com/Oddly/elasticstack/actions/workflows/test_elasticsearch_modules.yml"><img src="https://github.com/Oddly/elasticstack/actions/workflows/test_elasticsearch_modules.yml/badge.svg" alt="ES Module Tests"></a>
-  <a href="https://github.com/Oddly/elasticstack/actions/workflows/test_linting.yml"><img src="https://github.com/Oddly/elasticstack/actions/workflows/test_linting.yml/badge.svg" alt="Linting"></a>
-  <a href="https://github.com/Oddly/elasticstack/wiki"><img src="https://img.shields.io/badge/docs-wiki-blue" alt="Documentation"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-green" alt="License"></a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/Oddly/elasticstack/wiki/Getting-Started">Getting started</a> &middot;
-  <a href="https://github.com/Oddly/elasticstack/wiki/Architecture">Architecture</a> &middot;
-  <a href="https://github.com/Oddly/elasticstack/wiki">Documentation</a> &middot;
-  <a href="https://github.com/Oddly/elasticstack/issues">Issues</a>
-</p>
+<div align="center">
+  <img src="docs/elastic-logo.svg" alt="Elastic Stack" width="120">
+  <p><strong>oddly.elasticstack</strong></p>
+  <p>
+    Deploy and manage the Elastic Stack with Ansible.<br>
+    Elasticsearch, Kibana, Logstash, and Beats — from repos to rolling upgrades.
+  </p>
+  <p>
+    <a href="https://github.com/Oddly/elasticstack/actions/workflows/test_full_stack.yml"><img src="https://github.com/Oddly/elasticstack/actions/workflows/test_full_stack.yml/badge.svg" alt="Full Stack Tests"></a>
+    <a href="https://github.com/Oddly/elasticstack/actions/workflows/test_elasticsearch_modules.yml"><img src="https://github.com/Oddly/elasticstack/actions/workflows/test_elasticsearch_modules.yml/badge.svg" alt="ES Module Tests"></a>
+    <a href="https://github.com/Oddly/elasticstack/actions/workflows/test_linting.yml"><img src="https://github.com/Oddly/elasticstack/actions/workflows/test_linting.yml/badge.svg" alt="Linting"></a>
+    <a href="https://github.com/Oddly/elasticstack/wiki"><img src="https://img.shields.io/badge/docs-wiki-blue" alt="Documentation"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-green" alt="License"></a>
+  </p>
+  <p>
+    <a href="https://github.com/Oddly/elasticstack/wiki/Getting-Started">Getting started</a> &middot;
+    <a href="https://github.com/Oddly/elasticstack/wiki/Architecture">Architecture</a> &middot;
+    <a href="https://github.com/Oddly/elasticstack/wiki">Documentation</a> &middot;
+    <a href="https://github.com/Oddly/elasticstack/issues">Issues</a>
+  </p>
+</div>
 
 ---
 
