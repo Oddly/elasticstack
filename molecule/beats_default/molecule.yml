@@ -1,21 +1,27 @@
 ---
 dependency:
   name: galaxy
+  options:
+    requirements-file: requirements.yml
 driver:
-  name: docker
+  name: default
 platforms:
-  - name: beats_default_${MOLECULE_DISTRO:-debian11}
+  - name: beats-def-${MOLECULE_DISTRO:-debian11}-r${ELASTIC_RELEASE:-9}
     groups:
       - elasticsearch
-    image: "geerlingguy/docker-${MOLECULE_DISTRO:-debian11}-ansible:latest"
-    command: ${MOLECULE_DOCKER_COMMAND:-""}
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
-    cgroupns_mode: host
-    privileged: true
-    pre_build_image: true
+    distro: "${MOLECULE_DISTRO:-debian11}"
 provisioner:
   name: ansible
+  env:
+    ANSIBLE_LOG_PATH: /var/log/ansible.log
+  connection_options:
+    ansible_connection: ssh
+    ansible_user: root
+    ansible_ssh_common_args: >-
+      -o StrictHostKeyChecking=no
+      -o "ProxyCommand=ssh -o StrictHostKeyChecking=no -o BatchMode=yes
+      -i ${MOLECULE_SSH_KEY:-~/.ssh/molecule_id_ed25519}
+      -W %h:%p root@${INCUS_HOST:-172.30.0.172}"
   inventory:
     group_vars:
       all:

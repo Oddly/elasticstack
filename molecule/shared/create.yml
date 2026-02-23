@@ -1,0 +1,130 @@
+---
+# Molecule delegated driver: create containers on Incus.
+# Runs on localhost (the CI runner or developer machine).
+# Connects to the Incus host via SSH to run incus commands.
+# Containers use pre-baked images (molecule-*) with SSH, python3,
+# python3-cryptography, and the molecule SSH key already installed.
+- name: Create containers on Incus
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    incus_host: "{{ lookup('env', 'INCUS_HOST') | default('172.30.0.172', true) }}"
+    molecule_ssh_key: "{{ lookup('env', 'MOLECULE_SSH_KEY') | default(lookup('env', 'HOME') ~ '/.ssh/molecule_id_ed25519', true) }}"
+    molecule_yml: "{{ lookup('file', molecule_ephemeral_directory ~ '/molecule.yml') | from_yaml }}"
+    gitea_run_id: "{{ lookup('env', 'GITHUB_RUN_ID') | default('', true) }}"
+    gitea_repository: "{{ lookup('env', 'GITHUB_REPOSITORY') | default('', true) }}"
+    _ssh_cmd: >-
+      ssh -o StrictHostKeyChecking=no -o BatchMode=yes
+      -i {{ molecule_ssh_key }} root@{{ incus_host }}
+    # Max molecule containers allowed on the Incus host at once.
+    # 64GB host runs a mix of full-stack (~6.5GB) and single-role (~2-3GB)
+    # containers.  Concurrent workflows (e.g. ES-modules at max-parallel 10
+    # + full-stack at max-parallel 4) can need up to ~18 slots.  14 keeps
+    # peak memory under 64GB for the realistic worst case.
+    incus_max_containers: "{{ lookup('env', 'INCUS_MAX_CONTAINERS') | default(14, true) | int }}"
+    # Pre-baked local images with SSH + python3 + authorized_keys ready.
+    incus_images:
+      debian11: "molecule-debian-11"
+      debian12: "molecule-debian-12"
+      debian13: "molecule-debian-13"
+      rockylinux9: "molecule-rockylinux-9"
+      rockylinux10: "molecule-rockylinux-10"
+      ubuntu2204: "molecule-ubuntu-22.04"
+      ubuntu2404: "molecule-ubuntu-24.04"
+
+  tasks:
+    - name: Delete any existing containers with same names
+      ansible.builtin.command:
+        cmd: "{{ _ssh_cmd }} incus delete {{ item.name }} --force"
+      loop: "{{ molecule_yml.platforms }}"
+      loop_control:
+        label: "{{ item.name }}"
+      failed_when: false
+      changed_when: false
+
+    # Use flock on the Incus host to serialize capacity check + launch.
+    # Without this, all jobs check simultaneously, all see 0 containers,
+    # all pass the gate, and all launch — causing OOM on the host.
+    # The lock is acquired with a 60s wait, then capacity is checked.
+    # If no capacity, exit 1 releases the lock and Ansible retries.
+    - name: Wait for capacity and launch containers (locked)  # noqa: risky-shell-pipe
+      ansible.builtin.shell: |
+        {{ _ssh_cmd }} bash -s << 'REMOTE_SCRIPT'
+        set -o pipefail
+        exec 9>/var/lock/molecule-create.lock
+        flock -x -w 60 9 || exit 1
+        count=$(incus list -f csv -c n --project default < /dev/null | wc -l)
+        needed={{ molecule_yml.platforms | length }}
+        max={{ incus_max_containers }}
+        if [ $((count + needed)) -gt "$max" ]; then
+          echo "No capacity: ${count} existing + ${needed} needed > ${max} max"
+          exit 1
+        fi
+        {% for item in molecule_yml.platforms %}
+        incus launch {{ incus_images[item.distro | default("debian12")] }} {{ item.name }} \
+          -c limits.memory=6GB \
+          -c security.nesting=true \
+          -c user.managed-by=molecule \
+          -c user.created-at={{ now(utc=true).strftime("%Y-%m-%dT%H:%M:%SZ") }} \
+          {{ "-c user.gitea-run-id=" ~ gitea_run_id if gitea_run_id else "" }} \
+          {{ "-c user.gitea-repository=" ~ gitea_repository if gitea_repository else "" }} < /dev/null || exit 1
+        {% endfor %}
+        REMOTE_SCRIPT
+      changed_when: true
+      register: _launch_result
+      retries: 60
+      delay: 30
+      until: _launch_result.rc == 0
+
+    - name: Wait for containers to get IPv4 address
+      ansible.builtin.command:
+        cmd: "{{ _ssh_cmd }} incus list {{ item.name }} -f csv -c 4"
+      loop: "{{ molecule_yml.platforms }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: _ip_check
+      until: (_ip_check.stdout | default('')) is search('\\d+\\.\\d+\\.\\d+\\.\\d+')
+      retries: 30
+      delay: 2
+      changed_when: false
+
+    - name: Build instance address map
+      ansible.builtin.set_fact:
+        _instance_addresses: >-
+          {{ _instance_addresses | default({}) | combine({
+               item.item.name: item.stdout | regex_search('(\d+\.\d+\.\d+\.\d+)', '\1') | first
+             }) }}
+      loop: "{{ _ip_check.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+
+    - name: Wait for SSH to become available
+      ansible.builtin.command:
+        cmd: >-
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes
+          -o "ProxyCommand=ssh -o StrictHostKeyChecking=no -o BatchMode=yes -i {{ molecule_ssh_key }} -W %h:%p root@{{ incus_host }}"
+          -i {{ molecule_ssh_key }}
+          root@{{ _instance_addresses[item.name] }} true
+      loop: "{{ molecule_yml.platforms }}"
+      loop_control:
+        label: "{{ item.name }} ({{ _instance_addresses[item.name] }})"
+      register: _ssh_check
+      until: _ssh_check.rc == 0
+      retries: 30
+      delay: 2
+      changed_when: false
+
+    - name: Write molecule instance config
+      ansible.builtin.copy:
+        content: |
+          {% for platform in molecule_yml.platforms %}
+          - address: "{{ _instance_addresses[platform.name] }}"
+            identity_file: "{{ molecule_ssh_key }}"
+            instance: "{{ platform.name }}"
+            port: 22
+            user: root
+          {% endfor %}
+        dest: "{{ molecule_ephemeral_directory }}/instance_config.yml"
+        mode: "0600"
