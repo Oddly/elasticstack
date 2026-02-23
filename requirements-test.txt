@@ -1,7 +1,6 @@
 ansible-core>=2.18,<2.21
 ansible-lint
 molecule
-molecule-plugins[docker]
 pytest
 passlib
 # elasticsearch-py client: support both 8.x (for ES 8.x) and 9.x (for ES 9.x)

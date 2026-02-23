@@ -13,9 +13,8 @@ description: >-
   Ansible collection for the Elastic Stack with ES 9.x support.
   Installs and configures Elasticsearch, Kibana, Logstash, and Beats.
   Forked from netways.elasticstack.
-requires_ansible: ">=2.18.0"
 license:
-  - GPL-3.0
+  - GPL-3.0-or-later
 license_file: 'LICENSE'
 tags:
   - elastic
@@ -27,17 +26,19 @@ tags:
   - filebeat
   - monitoring
 dependencies:
+  "community.crypto": "*"
   "community.general": "*"
-repository: https://github.com/Oddly/ansible-collection-elasticstack
-documentation: https://github.com/Oddly/ansible-collection-elasticstack/blob/main/README.md
-homepage: https://github.com/Oddly/ansible-collection-elasticstack
-issues: https://github.com/Oddly/ansible-collection-elasticstack/issues
+  "ansible.posix": "*"
+repository: https://github.com/Oddly/elasticstack
+documentation: https://github.com/Oddly/elasticstack/blob/main/README.md
+homepage: https://github.com/Oddly/elasticstack
+issues: https://github.com/Oddly/elasticstack/issues
 build_ignore:
+  - .gitea
   - .github
   - .cache
   - molecule
   - .gitignore
-  - daemon.json
   - .mailmap
   - '*.tar.gz'
   - 'venv*'
