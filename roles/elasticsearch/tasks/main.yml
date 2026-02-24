@@ -397,27 +397,23 @@
       suppressed to prevent a second uncontrolled restart.
   when: _elasticsearch_rolling_upgrade_performed | default(false) | bool
 
-# In Docker-in-Docker containers the sd_notify socket is not functional,
-# causing systemd to time out waiting for READY=1 and kill Elasticsearch.
-# Override to Type=exec so systemd considers the service started immediately.
-# Not needed for LXC containers where systemd works natively.
 - name: Create elasticsearch systemd override directory
   ansible.builtin.file:
     path: /etc/systemd/system/elasticsearch.service.d
     state: directory
     mode: "0755"
   when: >-
-    ansible_facts.virtualization_type in ["container", "docker"]
+    elasticsearch_systemd_override_type_exec | bool
     or elasticsearch_memory_lock | bool
 
-- name: Override elasticsearch service type for containers
+- name: Override elasticsearch service type
   ansible.builtin.copy:
     dest: /etc/systemd/system/elasticsearch.service.d/override.conf
     content: |
       [Service]
       Type=exec
     mode: "0644"
-  when: ansible_facts.virtualization_type in ["container", "docker"]
+  when: elasticsearch_systemd_override_type_exec | bool
 
 - name: Set LimitMEMLOCK for memory locking
   ansible.builtin.copy:
@@ -433,15 +429,8 @@
   ansible.builtin.systemd:
     daemon_reload: true
   when: >-
-    ansible_facts.virtualization_type in ["container", "docker"]
+    elasticsearch_systemd_override_type_exec | bool
     or elasticsearch_memory_lock | bool
-
-- name: Remove cache in CI containers
-  ansible.builtin.shell:
-    cmd: rm -rf /var/cache/*
-    executable: /bin/bash
-  changed_when: false
-  when: ansible_facts.virtualization_type in ["container", "docker", "lxc"]
 
 - name: Import Tasks elasticsearch-security.yml
   ansible.builtin.import_tasks: elasticsearch-security.yml

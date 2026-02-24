@@ -60,6 +60,8 @@ elasticsearch_jna_workaround: false
 
 # @var elasticsearch_memory_lock:description: Lock JVM memory to prevent swapping. Requires systemd LimitMEMLOCK=infinity (set automatically)
 elasticsearch_memory_lock: false
+# @var elasticsearch_systemd_override_type_exec:description: Override systemd service Type to exec. Enable for Docker-in-Docker environments where sd_notify is non-functional
+elasticsearch_systemd_override_type_exec: false
 # @var elasticsearch_action_destructive_requires_name:description: Require explicit index names for destructive operations (prevents accidental wildcard deletes)
 elasticsearch_action_destructive_requires_name: false
 # @var elasticsearch_recovery_max_bytes_per_sec:description: Throttle shard recovery speed to prevent network saturation. Empty = Elasticsearch default

@@ -108,30 +108,6 @@
       delay: 30
       no_log: "{{ elasticstack_no_log }}"
 
-    # Relax disk watermarks so shards can allocate even on near-full disks
-    # (common in CI/Docker). Without this, .security-7 replicas stay
-    # unassigned and auth breaks after a node restart.
-    - name: Set lenient disk watermarks for rolling upgrade
-      ansible.builtin.uri:
-        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/settings"
-        method: PUT
-        body:
-          persistent:
-            cluster.routing.allocation.disk.watermark.low: "97%"
-            cluster.routing.allocation.disk.watermark.high: "98%"
-            cluster.routing.allocation.disk.watermark.flood_stage: "99%"
-            cluster.routing.allocation.disk.watermark.flood_stage.frozen: "99%"
-        body_format: json
-        user: elastic
-        password: "{{ elasticstack_password.stdout }}"
-        validate_certs: "{{ elasticsearch_validate_api_certs }}"
-        force_basic_auth: true
-      register: elasticsearch_watermark_response
-      until: elasticsearch_watermark_response.json.acknowledged | default(false)
-      retries: 5
-      delay: 10
-      no_log: "{{ elasticstack_no_log }}"
-
       # this step is key!!!  Don't restart more nodes
       # until all shards have completed recovery
     - name: Wait for cluster health to return to green

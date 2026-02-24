@@ -3,6 +3,8 @@ exclude_paths:
   - .ansible/
   - .venv/
   - venv/
+  - molecule/shared/cleanup_cache.yml
+  - molecule/shared/set_ci_watermarks.yml
 
 warn_list:
   - experimental

@@ -18,36 +18,12 @@
         name: oddly.elasticstack.elasticsearch
       when: "'elasticsearch' in group_names"
 
-    - name: Fetch elastic password for watermark setup
-      ansible.builtin.shell: |
-        set -o pipefail
-        grep "PASSWORD elastic " /usr/share/elasticsearch/initial_passwords |
-        awk {' print $4 '}
-      args:
-        executable: /bin/bash
-      register: _es_pass
-      changed_when: false
-      when:
-        - "'elasticsearch' in group_names"
-        - "inventory_hostname == groups['elasticsearch'][0]"
+    - name: CI — set lenient disk watermarks
+      ansible.builtin.include_tasks: ../shared/set_ci_watermarks.yml
+      when: "'elasticsearch' in group_names"
 
-    - name: Set lenient disk watermarks for CI containers
-      ansible.builtin.uri:
-        url: "https://localhost:9200/_cluster/settings"
-        method: PUT
-        body_format: json
-        body:
-          persistent:
-            cluster.routing.allocation.disk.watermark.low: "97%"
-            cluster.routing.allocation.disk.watermark.high: "98%"
-            cluster.routing.allocation.disk.watermark.flood_stage: "99%"
-        user: elastic
-        password: "{{ _es_pass.stdout }}"
-        validate_certs: false
-        force_basic_auth: true
-      when:
-        - "'elasticsearch' in group_names"
-        - "inventory_hostname == groups['elasticsearch'][0]"
+    - name: CI — clean cache after ES
+      ansible.builtin.include_tasks: ../shared/cleanup_cache.yml
 
     - name: Deploy Kibana
       ansible.builtin.include_role:

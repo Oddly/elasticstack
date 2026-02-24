@@ -135,3 +135,5 @@
     - name: Include Elasticsearch
       ansible.builtin.include_role:
         name: oddly.elasticstack.elasticsearch
+    - name: CI — set lenient disk watermarks
+      ansible.builtin.include_tasks: ../shared/set_ci_watermarks.yml

@@ -358,7 +358,3 @@
   when: logstash_enable | bool
   register: logstash_freshstart
 
-- name: Remove cache in container environments
-  ansible.builtin.command: rm -rf /var/cache/*
-  changed_when: false
-  when: ansible_facts.virtualization_type == "container" or ansible_facts.virtualization_type == "docker"

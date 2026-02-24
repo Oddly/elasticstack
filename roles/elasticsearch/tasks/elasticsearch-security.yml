@@ -684,37 +684,6 @@
   retries: 20
   delay: 10
 
-- name: Work around low resources on CI/CD nodes
-  when: ansible_facts.virtualization_type in ["container", "docker", "lxc"]
-  block:
-    - name: Remove cache
-      ansible.builtin.shell:
-        cmd: rm -rf /var/cache/*
-        executable: /bin/bash
-      changed_when: false
-
-    - name: Set lenient disk watermarks for CI containers
-      ansible.builtin.uri:
-        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/settings"
-        method: PUT
-        body:
-          persistent:
-            cluster.routing.allocation.disk.watermark.low: "97%"
-            cluster.routing.allocation.disk.watermark.high: "98%"
-            cluster.routing.allocation.disk.watermark.flood_stage: "99%"
-            cluster.routing.allocation.disk.watermark.flood_stage.frozen: "99%"
-        body_format: json
-        user: elastic
-        password: "{{ elasticstack_password.stdout | default(elasticsearch_bootstrap_pw) }}"
-        validate_certs: "{{ elasticsearch_validate_api_certs }}"
-        force_basic_auth: true
-      register: elasticsearch_watermark_response
-      until: elasticsearch_watermark_response.status | default(0) == 200
-      retries: 5
-      delay: 10
-      changed_when: false
-      no_log: "{{ elasticstack_no_log }}"
-
 # We need this check twice. One to wait for the API to be actually available. And a second time to
 # check the actual return code. Should not cause a huge delay.
 

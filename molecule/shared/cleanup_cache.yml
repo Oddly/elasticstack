@@ -1,0 +1,18 @@
+---
+# Clean package manager caches to free disk space in CI containers.
+# Include this from converge.yml between role installs in multi-service
+# scenarios to prevent disk pressure on constrained hosts.
+- name: Clean package cache (CI)
+  ansible.builtin.shell:
+    cmd: |
+      if command -v apt-get >/dev/null 2>&1; then
+        apt-get clean
+      fi
+      if command -v dnf >/dev/null 2>&1; then
+        dnf clean all
+      elif command -v yum >/dev/null 2>&1; then
+        yum clean all
+      fi
+      rm -rf /var/cache/apt/archives/* /var/cache/yum/* /var/cache/dnf/* 2>/dev/null || true
+    executable: /bin/bash
+  changed_when: false
