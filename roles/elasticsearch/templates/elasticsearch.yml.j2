@@ -36,7 +36,7 @@ discovery.seed_hosts: {{ elasticsearch_seed_hosts | to_json }}
 {% else %}
 {% if groups[elasticstack_elasticsearch_group_name] | length > 1 %}
 discovery.seed_hosts: [ {% for host in groups[elasticstack_elasticsearch_group_name]  %}
-"{{ hostvars[host].ansible_facts.default_ipv4.address | default(hostvars[host].ansible_facts.all_ipv4_addresses[0]) }}"{% if not loop.last %},{% endif %}
+"{{ hostvars[host].ansible_host | default(hostvars[host].inventory_hostname) }}"{% if not loop.last %},{% endif %}
 {% endfor %} ]
 {% endif %}
 {% endif %}
@@ -76,8 +76,8 @@ xpack.security.transport.ssl.keystore.path: certs/{{ inventory_hostname }}-trans
 xpack.security.transport.ssl.truststore.path: certs/{{ inventory_hostname }}-transport.p12
 {%   endif %}
 {% else %}
-xpack.security.transport.ssl.keystore.path: certs/{{ ansible_facts.hostname }}.p12
-xpack.security.transport.ssl.truststore.path: certs/{{ ansible_facts.hostname }}.p12
+xpack.security.transport.ssl.keystore.path: certs/{{ inventory_hostname_short }}.p12
+xpack.security.transport.ssl.truststore.path: certs/{{ inventory_hostname_short }}.p12
 {% endif %}
 {% if elasticsearch_http_security | bool %}
 xpack.security.http.ssl.enabled: true
@@ -96,9 +96,9 @@ xpack.security.http.ssl.truststore.path: certs/{{ inventory_hostname }}-http.p12
 {% if elasticsearch_http_ssl_keystore_path | default('', true) | length > 0 %}
 xpack.security.http.ssl.keystore.path: {{ elasticsearch_http_ssl_keystore_path }}
 {% else %}
-xpack.security.http.ssl.keystore.path: certs/{{ ansible_facts.hostname }}.p12
+xpack.security.http.ssl.keystore.path: certs/{{ inventory_hostname_short }}.p12
 {% endif %}
-xpack.security.http.ssl.truststore.path: certs/{{ ansible_facts.hostname }}.p12
+xpack.security.http.ssl.truststore.path: certs/{{ inventory_hostname_short }}.p12
 {% endif %}
 {% endif %}
 {% endif %}
