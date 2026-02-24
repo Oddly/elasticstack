@@ -70,8 +70,11 @@
         - elasticstack_pip_installation is failed
 
     - name: Check elasticsearch-py version from package manager
-      ansible.builtin.command: python3 -c "import elasticsearch; print(elasticsearch.__version__)"
+      ansible.builtin.command: >-
+        python3 -c "import elasticsearch; v=elasticsearch.__version__;
+        print('.'.join(map(str,v)) if isinstance(v,tuple) else str(v))"
       changed_when: false
+      failed_when: false
       register: elasticstack_es_py_version_check
       when:
         - elasticstack_pip_installation is failed
@@ -79,13 +82,14 @@
     - name: Fail if elasticsearch-py is too old
       ansible.builtin.fail:
         msg: >-
-          The system package python3-elasticsearch provides version {{ elasticstack_es_py_version_check.stdout }},
+          The system package python3-elasticsearch provides version {{ elasticstack_es_py_version_check.stdout | default('unknown') }},
           but this collection requires elasticsearch-py >= 8.0.
           Either install python3-pip and set elasticstack_manage_pip: true,
           or run: pip install 'elasticsearch>={{ elasticstack_release }},<{{ elasticstack_release | int + 1 }}'
       when:
         - elasticstack_pip_installation is failed
         - elasticstack_es_py_version_check.stdout is defined
+        - elasticstack_es_py_version_check.stdout | length > 0
         - elasticstack_es_py_version_check.stdout is version('8.0.0', '<')
 
 - name: Install Python Modules via pip  - forced
