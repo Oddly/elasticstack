@@ -8,7 +8,7 @@
     # Test modules
     #
     - name: Test
-      cert_info:
+      oddly.elasticstack.cert_info:
         path: files/es-ca/elastic-stack-ca.p12
         passphrase: PleaseChangeMe
       register: test
@@ -16,11 +16,11 @@
       ansible.builtin.debug:
         msg: "{{ test }}"
     - name: Test required parameters (missing path)
-      cert_info:
+      oddly.elasticstack.cert_info:
         passphrase: PleaseChangeMe
       failed_when: false
     - name: Test wrong path
-      cert_info:
+      oddly.elasticstack.cert_info:
         path: es-ca-wrong
         passphrase: PleaseChangeMe
       failed_when: false
@@ -29,14 +29,14 @@
         msg: >-
           "{{ ((test.not_valid_after | regex_replace('[+-]\d{2}:\d{2}$', '') | to_datetime('%Y-%m-%d %H:%M:%S')) - (ansible_date_time.date | to_datetime('%Y-%m-%d'))).days }}"
     - name: Test wrong passphrase
-      cert_info:
+      oddly.elasticstack.cert_info:
         path: files/es-ca/elastic-stack-ca.p12
         passphrase: PleaseChangeMe-wrong
       failed_when: false
     - name: Test no passphrase
-      cert_info:
+      oddly.elasticstack.cert_info:
         path: files/es-ca/elastic-stack-ca.p12
       failed_when: false
     - name: Test no parameters
-      cert_info:
+      oddly.elasticstack.cert_info:
       failed_when: false
