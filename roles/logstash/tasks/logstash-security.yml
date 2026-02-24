@@ -291,7 +291,7 @@
           - names: "{{ logstash_role_indicies_names }}"
             privileges: "{{ logstash_role_indicies_privileges }}"
         state: present
-        host: "https://{{ hostvars[elasticstack_ca_host].ansible_facts.default_ipv4.address }}:{{ elasticstack_elasticsearch_http_port }}"
+        host: "https://{{ hostvars[elasticstack_ca_host].ansible_host | default(hostvars[elasticstack_ca_host].inventory_hostname) }}:{{ elasticstack_elasticsearch_http_port }}"
         auth_user: elastic
         auth_pass: "{{ _logstash_elastic_password.stdout }}"
         verify_certs: true
@@ -308,7 +308,7 @@
           - "{{ logstash_role_name }}"
         enabled: true
         state: present
-        host: "https://{{ hostvars[elasticstack_ca_host].ansible_facts.default_ipv4.address }}:{{ elasticstack_elasticsearch_http_port }}"
+        host: "https://{{ hostvars[elasticstack_ca_host].ansible_host | default(hostvars[elasticstack_ca_host].inventory_hostname) }}:{{ elasticstack_elasticsearch_http_port }}"
         auth_user: elastic
         auth_pass: "{{ _logstash_elastic_password.stdout }}"
         verify_certs: true
