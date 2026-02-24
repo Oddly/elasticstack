@@ -86,9 +86,8 @@
 - name: Import security related tasks
   ansible.builtin.import_tasks: kibana-security.yml
   when:
-    - elasticstack_full_stack is defined
-    - elasticstack_full_stack | bool
-    - kibana_security | bool
+    - (elasticstack_full_stack | default(false) | bool and kibana_security | bool) or
+      kibana_cert_source | default('elasticsearch_ca') == 'external'
   tags:
     - certificates
     - renew_ca

@@ -64,8 +64,8 @@
   ansible.builtin.set_fact:
     elasticsearch_cluster_set_up: true
   when:
-    - elasticsearch_cluster_setup_check.stat.exists | bool
     - elasticsearch_cluster_setup_check is defined
+    - elasticsearch_cluster_setup_check.stat.exists | bool
 
 - name: Set var that cluster is not set up
   ansible.builtin.set_fact:
@@ -128,7 +128,16 @@
   when: elasticsearch_security | bool
 
 # the following should be done by the rpm but failed with 7.4
-- name: Set ulimits for Elasticsearch
+- name: Set ulimits for Elasticsearch (soft)
+  community.general.pam_limits:
+    limit_item: nofile
+    domain: elasticsearch
+    value: 65535
+    limit_type: soft
+  when:
+    - elasticsearch_pamlimits | bool
+
+- name: Set ulimits for Elasticsearch (hard)
   community.general.pam_limits:
     limit_item: nofile
     domain: elasticsearch
@@ -175,7 +184,7 @@
         dest: "{{ elasticsearch_conf_dir }}/jvm.options.d/10-heap.options"
         owner: root
         group: "{{ elasticsearch_group }}"
-        mode: "660"
+        mode: "0660"
         force: true
       when: elasticsearch_heap is defined and (elasticsearch_heap | string | length > 0)
 
@@ -185,7 +194,7 @@
         dest: "{{ elasticsearch_conf_dir }}/jvm.options.d/50-paths.options"
         owner: root
         group: "{{ elasticsearch_group }}"
-        mode: "660"
+        mode: "0660"
         force: true
 
     - name: Set jvm custom options (pre-upgrade)
@@ -194,7 +203,7 @@
         dest: "{{ elasticsearch_conf_dir }}/jvm.options.d/90-custom.options"
         owner: root
         group: "{{ elasticsearch_group }}"
-        mode: "660"
+        mode: "0660"
         force: true
       when: elasticsearch_jvm_custom_parameters is defined and (elasticsearch_jvm_custom_parameters | string | length > 0)
 
@@ -242,6 +251,75 @@
   when:
     - ansible_facts.os_family == "Debian"
 
+# Pre-detect external cert state so the template renders consistently
+# across first and subsequent runs (idempotency).
+- name: Detect existing external CA for template rendering
+  ansible.builtin.stat:
+    path: /etc/elasticsearch/certs/ca.crt
+  register: _existing_ca_cert
+  when: elasticsearch_cert_source == 'external'
+
+- name: Set external CA availability for initial template render
+  ansible.builtin.set_fact:
+    _elasticsearch_external_has_ca: true
+  when:
+    - elasticsearch_cert_source == 'external'
+    - _existing_ca_cert.stat.exists | default(false)
+
+- name: Warn about conflicting keys in elasticsearch_extra_config
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: The following keys in elasticsearch_extra_config are also
+      managed by dedicated role variables and will be filtered out to
+      prevent duplicate YAML keys: {{ _elasticsearch_extra_config_conflicts | join(', ') }}.
+      Remove them from elasticsearch_extra_config and use the dedicated
+      variables instead.
+  vars:
+    _elasticsearch_managed_keys:
+      - node.name
+      - path.data
+      - path.logs
+      - cluster.name
+      - network.host
+      - http.port
+      - transport.port
+      - http.publish_host
+      - http.publish_port
+      - node.roles
+      - discovery.type
+      - discovery.seed_hosts
+      - cluster.initial_master_nodes
+      - node.attr.temp
+      - xpack.ml.enabled
+      - xpack.security.enabled
+      - xpack.security.enrollment.enabled
+      - xpack.security.transport.ssl.enabled
+      - xpack.security.transport.ssl.verification_mode
+      - xpack.security.transport.ssl.certificate
+      - xpack.security.transport.ssl.key
+      - xpack.security.transport.ssl.certificate_authorities
+      - xpack.security.transport.ssl.keystore.path
+      - xpack.security.transport.ssl.truststore.path
+      - xpack.security.http.ssl.enabled
+      - xpack.security.http.ssl.certificate
+      - xpack.security.http.ssl.key
+      - xpack.security.http.ssl.certificate_authorities
+      - xpack.security.http.ssl.keystore.path
+      - xpack.security.http.ssl.truststore.path
+      - bootstrap.memory_lock
+      - action.destructive_requires_name
+      - indices.recovery.max_bytes_per_sec
+      - http.cors.enabled
+      - http.cors.allow-origin
+      - http.cors.allow-methods
+      - http.cors.allow-headers
+      - http.cors.allow-credentials
+    _elasticsearch_extra_config_conflicts: >-
+      {{ elasticsearch_extra_config.keys() | list | intersect(_elasticsearch_managed_keys) }}
+  when:
+    - elasticsearch_extra_config is defined
+    - _elasticsearch_extra_config_conflicts | length > 0
+
 - name: Configure Elasticsearch
   ansible.builtin.template:
     src: elasticsearch.yml.j2
@@ -285,7 +363,7 @@
     dest: "{{ elasticsearch_conf_dir }}/jvm.options.d/10-heap.options"
     owner: root
     group: "{{ elasticsearch_group }}"
-    mode: "660"
+    mode: "0660"
     force: true
   notify: Restart Elasticsearch
   when: elasticsearch_heap is defined and (elasticsearch_heap | string | length > 0)
@@ -296,7 +374,7 @@
     dest: "{{ elasticsearch_conf_dir }}/jvm.options.d/50-paths.options"
     owner: root
     group: "{{ elasticsearch_group }}"
-    mode: "660"
+    mode: "0660"
     force: true
   notify: Restart Elasticsearch
 
@@ -306,7 +384,7 @@
     dest: "{{ elasticsearch_conf_dir }}/jvm.options.d/90-custom.options"
     owner: root
     group: "{{ elasticsearch_group }}"
-    mode: "660"
+    mode: "0660"
     force: true
   notify: Restart Elasticsearch
   when: elasticsearch_jvm_custom_parameters is defined and (elasticsearch_jvm_custom_parameters | string | length > 0)
@@ -328,7 +406,9 @@
     path: /etc/systemd/system/elasticsearch.service.d
     state: directory
     mode: "0755"
-  when: ansible_facts.virtualization_type in ["container", "docker"]
+  when: >-
+    ansible_facts.virtualization_type in ["container", "docker"]
+    or elasticsearch_memory_lock | bool
 
 - name: Override elasticsearch service type for containers
   ansible.builtin.copy:
@@ -339,14 +419,27 @@
     mode: "0644"
   when: ansible_facts.virtualization_type in ["container", "docker"]
 
-- name: Force systemd to reread configs on container
+- name: Set LimitMEMLOCK for memory locking
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/elasticsearch.service.d/memlock.conf
+    content: |
+      [Service]
+      LimitMEMLOCK=infinity
+    mode: "0644"
+  when: elasticsearch_memory_lock | bool
+  notify: Restart Elasticsearch
+
+- name: Force systemd to reread configs
   ansible.builtin.systemd:
     daemon_reload: true
-  when: ansible_facts.virtualization_type in ["container", "docker"]
+  when: >-
+    ansible_facts.virtualization_type in ["container", "docker"]
+    or elasticsearch_memory_lock | bool
 
 - name: Remove cache in CI containers
-  ansible.builtin.command: >
-    rm -rf /var/cache/*
+  ansible.builtin.shell:
+    cmd: rm -rf /var/cache/*
+    executable: /bin/bash
   changed_when: false
   when: ansible_facts.virtualization_type in ["container", "docker", "lxc"]
 
@@ -397,7 +490,9 @@
         elasticsearch_cluster_set_up: true
 
 # See https://github.com/Oddly/ansible-collection-elasticstack/issues/137
-# for details why we have this task again here
+# for details why we have this task again here. After security setup,
+# facts like _elasticsearch_external_has_ca are now set, which may change
+# the rendered template. Notify handler for the config change.
 #
 - name: Configure Elasticsearch
   ansible.builtin.template:
@@ -407,6 +502,8 @@
     group: root
     mode: "0644"
     backup: "{{ elasticsearch_config_backup }}"
+  notify:
+    - Restart Elasticsearch
   when: elasticsearch_manage_yaml | bool
 
 - name: Show Info about heap

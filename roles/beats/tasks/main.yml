@@ -56,8 +56,8 @@
 - name: Import security tasks
   ansible.builtin.import_tasks: beats-security.yml
   when:
-    - beats_security | bool
-    - elasticstack_full_stack | bool
+    - (beats_security | bool and elasticstack_full_stack | default(false) | bool) or
+      beats_cert_source | default('elasticsearch_ca') == 'external'
   tags:
     - certificates
     - renew_ca

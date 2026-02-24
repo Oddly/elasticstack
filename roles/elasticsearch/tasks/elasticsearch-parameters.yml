@@ -1,7 +1,6 @@
 ---
-- name: Fail when security is not declared when elasticsearch >= 8
+- name: Fail when security is disabled
   ansible.builtin.fail:
-    msg: "Elasticsearch >= 8 requires enabled security. Set elasticsearch_security to true"
+    msg: "Elasticsearch requires enabled security. Set elasticsearch_security to true"
   when:
-    - elasticstack_release | int >= 8
     - elasticsearch_security is not defined or not elasticsearch_security

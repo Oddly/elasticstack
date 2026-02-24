@@ -1,0 +1,105 @@
+---
+# Test the "minimal config" path: only set the transport cert variable.
+# The role should auto-derive the key (.crt → .key), reuse transport
+# cert for HTTP, and auto-extract the CA from the PEM bundle.
+- name: Generate test certificates on nodes (minimal — bundled chain)
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: Install openssl
+      ansible.builtin.package:
+        name: openssl
+        state: present
+
+    - name: Create cert working directory
+      ansible.builtin.file:
+        path: /tmp/test-certs
+        state: directory
+        mode: "0700"
+
+    - name: Generate CA private key
+      ansible.builtin.command:
+        cmd: openssl genrsa -out /tmp/test-certs/ca.key 2048
+        creates: /tmp/test-certs/ca.key
+
+    - name: Generate CA certificate
+      ansible.builtin.command:
+        cmd: >-
+          openssl req -x509 -new -nodes
+          -key /tmp/test-certs/ca.key
+          -sha256 -days 365
+          -subj "/CN=Test CA"
+          -out /tmp/test-certs/ca.crt
+        creates: /tmp/test-certs/ca.crt
+
+    - name: Generate server key
+      ansible.builtin.command:
+        cmd: openssl genrsa -out /tmp/test-certs/server.key 2048
+        creates: /tmp/test-certs/server.key
+
+    - name: Create server CSR config
+      ansible.builtin.copy:
+        content: |
+          [req]
+          distinguished_name = req_dn
+          req_extensions = v3_req
+          prompt = no
+          [req_dn]
+          CN = {{ ansible_facts.hostname }}
+          [v3_req]
+          subjectAltName = DNS:{{ ansible_facts.hostname }},DNS:{{ ansible_facts.fqdn }},DNS:{{ inventory_hostname }},DNS:localhost,IP:{{ ansible_facts.default_ipv4.address | default(ansible_facts.all_ipv4_addresses[0]) }},IP:127.0.0.1
+        dest: /tmp/test-certs/server.cnf
+        mode: "0600"
+
+    - name: Generate server CSR
+      ansible.builtin.command:
+        cmd: >-
+          openssl req -new
+          -key /tmp/test-certs/server.key
+          -config /tmp/test-certs/server.cnf
+          -out /tmp/test-certs/server.csr
+        creates: /tmp/test-certs/server.csr
+
+    - name: Sign server certificate
+      ansible.builtin.command:
+        cmd: >-
+          openssl x509 -req
+          -in /tmp/test-certs/server.csr
+          -CA /tmp/test-certs/ca.crt
+          -CAkey /tmp/test-certs/ca.key
+          -CAcreateserial
+          -out /tmp/test-certs/server-only.crt
+          -days 365 -sha256
+          -extensions v3_req
+          -extfile /tmp/test-certs/server.cnf
+        creates: /tmp/test-certs/server-only.crt
+
+    # Build a PEM bundle: server cert + CA cert in one file.
+    # The role should auto-extract the CA from this bundle.
+    - name: Create PEM bundle (server + CA)
+      ansible.builtin.shell:
+        cmd: cat /tmp/test-certs/server-only.crt /tmp/test-certs/ca.crt > /tmp/test-certs/server.crt
+        creates: /tmp/test-certs/server.crt
+
+- name: Converge — Elasticsearch with minimal external cert config
+  hosts: all
+  vars:
+    elasticstack_full_stack: false
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    elasticsearch_heap: "1"
+    elasticstack_no_log: false
+    # Minimal config: only the transport cert. Everything else is auto-derived.
+    elasticsearch_cert_source: external
+    elasticsearch_transport_tls_certificate: /tmp/test-certs/server.crt
+    # Key: auto-derived from server.crt → server.key
+    # HTTP cert: falls back to transport cert
+    # CA: auto-extracted from the PEM bundle
+    elasticsearch_tls_remote_src: true
+    elasticsearch_ssl_verification_mode: certificate
+  tasks:
+    - name: Include Elastic repos role
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.repos
+    - name: Include Elasticsearch
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elasticsearch

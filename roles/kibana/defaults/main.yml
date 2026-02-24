@@ -28,6 +28,33 @@ kibana_cert_expiration_buffer: 30
 kibana_cert_validity_period: 1095
 # @var kibana_cert_will_expire_soon:description: Internal flag set when certificates are within the expiration buffer. Do not set manually
 kibana_cert_will_expire_soon: false
+
+# @var kibana_cert_source:description: Where to get TLS certificates. 'elasticsearch_ca' (default) auto-generates from the built-in CA; 'external' uses user-provided files
+kibana_cert_source: elasticsearch_ca
+
+# --- External certificate settings (only used when kibana_cert_source: external) ---
+
+# @var kibana_tls_certificate_file:description: Path to Kibana TLS certificate. Accepts PEM (.crt/.pem) or PKCS12 (.p12/.pfx) — format auto-detected
+kibana_tls_certificate_file: ""
+# @var kibana_tls_key_file:description: Path to Kibana TLS private key. Optional — auto-derived from cert path for PEM; ignored for P12
+kibana_tls_key_file: ""
+# @var kibana_tls_certificate_passphrase:description: Passphrase for encrypted PEM key or P12 file (empty = unencrypted)
+kibana_tls_certificate_passphrase: ""
+# @var kibana_tls_ca_file:description: CA certificate. Optional — auto-extracted from PEM chain if cert contains multiple blocks
+kibana_tls_ca_file: ""
+# --- External certificate content (PEM strings, alternative to file paths) ---
+# When set, these take precedence over the corresponding file path variables.
+# Only PEM format is supported (PKCS12 is binary and not suitable for YAML variables).
+
+# @var kibana_tls_certificate_content:description: Kibana certificate as inline PEM string. Takes precedence over file path
+kibana_tls_certificate_content: ""
+# @var kibana_tls_key_content:description: Kibana private key as inline PEM string. Takes precedence over file path
+kibana_tls_key_content: ""
+# @var kibana_tls_ca_content:description: CA certificate as inline PEM string. Takes precedence over file path
+kibana_tls_ca_content: ""
+
+# @var kibana_tls_remote_src:description: Source location for external cert files. false = files on Ansible controller, true = files already on managed node
+kibana_tls_remote_src: false
 # @var kibana_sniff_on_start:description: Discover all Elasticsearch nodes in the cluster on Kibana startup
 kibana_sniff_on_start: false
 # @var kibana_sniff_on_connection_fault:description: Re-discover Elasticsearch nodes when a connection fault is detected

@@ -35,6 +35,7 @@ Forked from [NETWAYS/ansible-collection-elasticstack](https://github.com/NETWAYS
 - **Elastic 8.x and 9.x** with automatic version-specific configuration
 - **Rolling upgrades** from 8.x to 9.x, one node at a time with shard allocation management
 - **Full TLS PKI** — CA generation, per-node certificates, automatic renewal before expiry
+- **Custom TLS certificates** — bring your own certs (PEM or P12) from any CA, with format auto-detection, separate transport/HTTP certs on ES, and built-in expiry warnings
 - **Security initialization** — bootstrap passwords, keystore management, user/role creation
 - **Multi-node orchestration** — roles discover each other through inventory groups
 - **Beats collection** — Filebeat (log, syslog TCP/UDP, journald, Docker), Metricbeat, Auditbeat

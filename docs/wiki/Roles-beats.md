@@ -509,6 +509,56 @@ Load balance events across multiple output hosts.
 beats_metricbeat_loadbalance: true  # default
 ```
 
+### Custom TLS Certificates
+
+#### beats_cert_source
+
+Certificate source: `elasticsearch_ca` (auto-generated, default) or `external` (bring your own).
+
+```yaml
+beats_cert_source: elasticsearch_ca  # default
+```
+
+#### beats_tls_certificate_file
+
+Path to the Beat TLS certificate (PEM format).
+
+```yaml
+beats_tls_certificate_file: ""  # default
+```
+
+#### beats_tls_key_file
+
+Path to the TLS private key. Auto-derived from cert path if left empty.
+
+```yaml
+beats_tls_key_file: ""  # default
+```
+
+#### beats_tls_ca_file
+
+Path to CA certificate. Auto-extracted from PEM chain if cert has multiple blocks.
+
+```yaml
+beats_tls_ca_file: ""  # default
+```
+
+#### beats_tls_remote_src
+
+Whether cert files are on the managed node (`true`) or Ansible controller (`false`).
+
+```yaml
+beats_tls_remote_src: false  # default
+```
+
+#### Inline PEM content variables
+
+| Variable | Description |
+|----------|-------------|
+| `beats_tls_certificate_content` | Certificate as inline PEM |
+| `beats_tls_key_content` | Key as inline PEM |
+| `beats_tls_ca_content` | CA cert as inline PEM |
+
 ### Certificate Lifecycle
 
 #### beats_cert_validity_period

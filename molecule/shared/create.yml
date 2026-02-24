@@ -72,6 +72,7 @@
         incus launch {{ incus_images[item.distro | default("debian12")] }} {{ item.name }} \
           -c limits.memory=6GB \
           -c security.nesting=true \
+          -c security.privileged=true \
           -c user.managed-by=molecule \
           -c user.created-at={{ now(utc=true).strftime("%Y-%m-%dT%H:%M:%SZ") }} \
           {{ "-c user.gitea-run-id=" ~ gitea_run_id if gitea_run_id else "" }} \

@@ -6,6 +6,10 @@
 # Required variables:
 #   elasticstack_ca_dir, elasticstack_ca_name, elasticstack_ca_validity_period,
 #   elasticstack_ca_pass, elasticstack_no_log
+#
+# Note: elasticsearch-certutil does not support reading --pass from stdin.
+# The passphrase is passed on the command line but the task uses no_log
+# to prevent Ansible from recording it, and the process lifetime is brief.
 
 - name: Create CA directory
   ansible.builtin.file:
@@ -22,7 +26,7 @@
 - name: Create CA
   ansible.builtin.command: >
     /usr/share/elasticsearch/bin/elasticsearch-certutil ca
-    --ca-dn {{ elasticstack_ca_name }}
+    --ca-dn "{{ elasticstack_ca_name }}"
     --days {{ elasticstack_ca_validity_period }}
     --pass {{ elasticstack_ca_pass }}
     --out {{ elasticstack_ca_dir }}/elastic-stack-ca.p12

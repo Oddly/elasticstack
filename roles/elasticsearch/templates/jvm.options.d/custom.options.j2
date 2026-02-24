@@ -1,5 +1,9 @@
 # {{ ansible_managed }}
 
-{% for item in elasticsearch_jvm_custom_parameters %}
-{{ item }}
+{% if elasticsearch_jvm_custom_parameters is string %}
+{{ elasticsearch_jvm_custom_parameters }}
+{% else %}
+{% for param in elasticsearch_jvm_custom_parameters %}
+{{ param }}
 {% endfor %}
+{% endif %}

@@ -22,6 +22,8 @@
     elasticsearch_fs_repo:
       - /mnt/es-snapshots
     # Extra configuration via elasticsearch_extra_config
+    # Deliberately includes indices.recovery.max_bytes_per_sec to test that the
+    # conflict detection filters it out (dedicated variable takes precedence)
     elasticsearch_extra_config:
       action.auto_create_index: ".monitoring*,.watches,.triggered_watches,.watcher-history*,.ml*"
       indices.recovery.max_bytes_per_sec: "100mb"
@@ -33,6 +35,15 @@
     elasticsearch_ml_enabled: true
     # PAM limits
     elasticsearch_pamlimits: true
+    # Memory lock
+    elasticsearch_memory_lock: true
+    # Destructive requires name
+    elasticsearch_action_destructive_requires_name: true
+    # Recovery throttle
+    elasticsearch_recovery_max_bytes_per_sec: "50mb"
+    # CORS
+    elasticsearch_http_cors_enabled: true
+    elasticsearch_http_cors_allow_origin: "'*'"
   tasks:
     - name: Include Elastic repos
       ansible.builtin.include_role:

@@ -16,6 +16,7 @@
     molecule_yml: "{{ lookup('pipe', _resolve_envsubst ~ ' ' ~ molecule_scenario_directory ~ '/molecule.yml') | from_yaml }}"
     _ssh_cmd: >-
       ssh -o StrictHostKeyChecking=no -o BatchMode=yes
+      -o ConnectTimeout=10
       -i {{ molecule_ssh_key }} root@{{ incus_host }}
 
   tasks:
@@ -25,8 +26,13 @@
       loop: "{{ molecule_yml.platforms }}"
       loop_control:
         label: "{{ item.name }}"
-      failed_when: false
-      changed_when: true
+      register: _destroy_result
+      # rc 0 = deleted, rc 255 = SSH failure, other = incus error (e.g. not found)
+      failed_when: _destroy_result.rc == 255
+      changed_when: _destroy_result.rc == 0
+      retries: 3
+      delay: 5
+      until: _destroy_result.rc != 255
 
     - name: Remove instance config
       ansible.builtin.file:

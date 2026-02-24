@@ -32,7 +32,7 @@ discovery.type: single-node
 
 {# Quickfix to override seed_hosts. Otherwise all nodes, not only master nodes are added to seed_hosts #}
 {% if elasticsearch_seed_hosts is defined %}
-discovery.seed_hosts: {{ elasticsearch_seed_hosts }}
+discovery.seed_hosts: {{ elasticsearch_seed_hosts | to_json }}
 {% else %}
 {% if groups[elasticstack_elasticsearch_group_name] | length > 1 %}
 discovery.seed_hosts: [ {% for host in groups[elasticstack_elasticsearch_group_name]  %}
@@ -64,16 +64,63 @@ xpack.security.enrollment.enabled: {{ elasticsearch_security_enrollment }}
 {% endif %}
 xpack.security.transport.ssl.enabled: true
 xpack.security.transport.ssl.verification_mode: {{ elasticsearch_ssl_verification_mode }}
+{% if elasticsearch_cert_source == 'external' %}
+{%   if _elasticsearch_transport_cert_format | default('pem') == 'pem' %}
+xpack.security.transport.ssl.certificate: certs/{{ inventory_hostname }}-transport.crt
+xpack.security.transport.ssl.key: certs/{{ inventory_hostname }}-transport.key
+{%     if _elasticsearch_external_has_ca | default(false) | bool %}
+xpack.security.transport.ssl.certificate_authorities: ["certs/ca.crt"]
+{%     endif %}
+{%   else %}
+xpack.security.transport.ssl.keystore.path: certs/{{ inventory_hostname }}-transport.p12
+xpack.security.transport.ssl.truststore.path: certs/{{ inventory_hostname }}-transport.p12
+{%   endif %}
+{% else %}
 xpack.security.transport.ssl.keystore.path: certs/{{ ansible_facts.hostname }}.p12
 xpack.security.transport.ssl.truststore.path: certs/{{ ansible_facts.hostname }}.p12
+{% endif %}
 {% if elasticsearch_http_security | bool %}
 xpack.security.http.ssl.enabled: true
+{% if elasticsearch_cert_source == 'external' %}
+{%   if _elasticsearch_http_cert_format | default('pem') == 'pem' %}
+xpack.security.http.ssl.certificate: certs/{{ inventory_hostname }}-http.crt
+xpack.security.http.ssl.key: certs/{{ inventory_hostname }}-http.key
+{%     if _elasticsearch_external_has_ca | default(false) | bool %}
+xpack.security.http.ssl.certificate_authorities: ["certs/ca.crt"]
+{%     endif %}
+{%   else %}
+xpack.security.http.ssl.keystore.path: certs/{{ inventory_hostname }}-http.p12
+xpack.security.http.ssl.truststore.path: certs/{{ inventory_hostname }}-http.p12
+{%   endif %}
+{% else %}
+{% if elasticsearch_http_ssl_keystore_path | default('', true) | length > 0 %}
+xpack.security.http.ssl.keystore.path: {{ elasticsearch_http_ssl_keystore_path }}
+{% else %}
 xpack.security.http.ssl.keystore.path: certs/{{ ansible_facts.hostname }}.p12
+{% endif %}
 xpack.security.http.ssl.truststore.path: certs/{{ ansible_facts.hostname }}.p12
+{% endif %}
 {% endif %}
 {% endif %}
 {% if not elasticsearch_security | bool %}
 xpack.security.enabled: false
+{% endif %}
+
+{% if elasticsearch_memory_lock | bool %}
+bootstrap.memory_lock: true
+{% endif %}
+{% if elasticsearch_action_destructive_requires_name | bool %}
+action.destructive_requires_name: true
+{% endif %}
+{% if elasticsearch_recovery_max_bytes_per_sec | default('', true) | length > 0 %}
+indices.recovery.max_bytes_per_sec: {{ elasticsearch_recovery_max_bytes_per_sec }}
+{% endif %}
+{% if elasticsearch_http_cors_enabled | bool %}
+http.cors.enabled: true
+http.cors.allow-origin: {{ elasticsearch_http_cors_allow_origin }}
+http.cors.allow-methods: {{ elasticsearch_http_cors_allow_methods }}
+http.cors.allow-headers: {{ elasticsearch_http_cors_allow_headers }}
+http.cors.allow-credentials: {{ elasticsearch_http_cors_allow_credentials | lower }}
 {% endif %}
 
 {% if elasticsearch_fs_repo is defined %}
@@ -85,6 +132,26 @@ path:
 {% endfor %}
 {% endif %}
 
+{# Filter elasticsearch_extra_config to remove keys already managed by dedicated role variables #}
 {% if elasticsearch_extra_config is defined %}
-{{ elasticsearch_extra_config | to_nice_yaml(indent=2, sort_keys=False) }}
+{%   set _managed_keys = [
+       'node.name', 'path.data', 'path.logs', 'cluster.name', 'network.host',
+       'http.port', 'transport.port', 'http.publish_host', 'http.publish_port',
+       'node.roles', 'discovery.type', 'discovery.seed_hosts', 'cluster.initial_master_nodes',
+       'node.attr.temp', 'xpack.ml.enabled', 'xpack.security.enabled',
+       'xpack.security.enrollment.enabled', 'xpack.security.transport.ssl.enabled',
+       'xpack.security.transport.ssl.verification_mode', 'xpack.security.transport.ssl.certificate',
+       'xpack.security.transport.ssl.key', 'xpack.security.transport.ssl.certificate_authorities',
+       'xpack.security.transport.ssl.keystore.path', 'xpack.security.transport.ssl.truststore.path',
+       'xpack.security.http.ssl.enabled', 'xpack.security.http.ssl.certificate',
+       'xpack.security.http.ssl.key', 'xpack.security.http.ssl.certificate_authorities',
+       'xpack.security.http.ssl.keystore.path', 'xpack.security.http.ssl.truststore.path',
+       'bootstrap.memory_lock', 'action.destructive_requires_name',
+       'indices.recovery.max_bytes_per_sec', 'http.cors.enabled', 'http.cors.allow-origin',
+       'http.cors.allow-methods', 'http.cors.allow-headers', 'http.cors.allow-credentials'
+     ] %}
+{%   set _filtered = elasticsearch_extra_config | dict2items | rejectattr('key', 'in', _managed_keys) | list | items2dict %}
+{%   if _filtered %}
+{{ _filtered | to_nice_yaml(indent=2, sort_keys=False) }}
+{%   endif %}
 {% endif %}

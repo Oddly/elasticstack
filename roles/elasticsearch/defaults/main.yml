@@ -58,6 +58,24 @@ elasticsearch_heap_dump_path: "/var/lib/elasticsearch"
 # @var elasticsearch_jna_workaround:description: Apply JNA temporary directory workaround for systems with noexec /tmp
 elasticsearch_jna_workaround: false
 
+# @var elasticsearch_memory_lock:description: Lock JVM memory to prevent swapping. Requires systemd LimitMEMLOCK=infinity (set automatically)
+elasticsearch_memory_lock: false
+# @var elasticsearch_action_destructive_requires_name:description: Require explicit index names for destructive operations (prevents accidental wildcard deletes)
+elasticsearch_action_destructive_requires_name: false
+# @var elasticsearch_recovery_max_bytes_per_sec:description: Throttle shard recovery speed to prevent network saturation. Empty = Elasticsearch default
+elasticsearch_recovery_max_bytes_per_sec: ""
+
+# @var elasticsearch_http_cors_enabled:description: Enable CORS on the HTTP interface
+elasticsearch_http_cors_enabled: false
+# @var elasticsearch_http_cors_allow_origin:description: CORS allowed origins. Must be set when CORS is enabled
+elasticsearch_http_cors_allow_origin: ""
+# @var elasticsearch_http_cors_allow_methods:description: CORS allowed HTTP methods
+elasticsearch_http_cors_allow_methods: "OPTIONS, HEAD, GET, POST, PUT, DELETE"
+# @var elasticsearch_http_cors_allow_headers:description: CORS allowed headers
+elasticsearch_http_cors_allow_headers: "X-Requested-With, Content-Type, Content-Length, Authorization, kbn-xsrf"
+# @var elasticsearch_http_cors_allow_credentials:description: Whether to send CORS credentials (cookies, auth headers)
+elasticsearch_http_cors_allow_credentials: false
+
 # @var elasticsearch_initialized_file:description: Marker file path that indicates the cluster has been initialized
 elasticsearch_initialized_file: "{{ elasticstack_initial_passwords | dirname }}/cluster_initialized"
 # @var elasticsearch_tls_key_passphrase:description: Passphrase for the Elasticsearch node TLS private key
@@ -71,7 +89,54 @@ elasticsearch_cert_will_expire_soon: false
 # @var elasticsearch_ssl_verification_mode:description: TLS verification mode for inter-node communication (full, certificate, or none)
 elasticsearch_ssl_verification_mode: full
 
+# @var elasticsearch_cert_source:description: Where to get TLS certificates. 'elasticsearch_ca' (default) auto-generates from the built-in CA; 'external' uses user-provided files
+elasticsearch_cert_source: elasticsearch_ca
+
+# --- External certificate settings (only used when elasticsearch_cert_source: external) ---
+
+# @var elasticsearch_transport_tls_certificate:description: Transport layer (port 9300) certificate. Accepts PEM (.crt/.pem) or PKCS12 (.p12/.pfx) — format auto-detected
+elasticsearch_transport_tls_certificate: ""
+# @var elasticsearch_transport_tls_key:description: Transport layer private key. Optional — auto-derived from cert path for PEM; ignored for P12
+elasticsearch_transport_tls_key: ""
+# @var elasticsearch_transport_tls_key_passphrase:description: Passphrase for encrypted PEM key or P12 file (empty = unencrypted)
+elasticsearch_transport_tls_key_passphrase: ""
+
+# @var elasticsearch_http_tls_certificate:description: HTTP layer (port 9200) certificate. Falls back to transport cert if empty
+elasticsearch_http_tls_certificate: ""
+# @var elasticsearch_http_tls_key:description: HTTP layer private key. Falls back to transport key if empty
+elasticsearch_http_tls_key: ""
+# @var elasticsearch_http_tls_key_passphrase:description: HTTP layer key passphrase. Falls back to transport passphrase if empty
+elasticsearch_http_tls_key_passphrase: ""
+
+# @var elasticsearch_tls_ca_certificate:description: CA certificate for external certs. Optional — auto-extracted from PEM chain if cert contains multiple blocks
+elasticsearch_tls_ca_certificate: ""
+
+# --- External certificate content (PEM strings, alternative to file paths) ---
+# When set, these take precedence over the corresponding file path variables.
+# Only PEM format is supported (PKCS12 is binary and not suitable for YAML variables).
+# Useful for per-host certs stored in Vault-encrypted host_vars.
+
+# @var elasticsearch_transport_tls_certificate_content:description: Transport certificate as inline PEM string. Takes precedence over file path
+elasticsearch_transport_tls_certificate_content: ""
+# @var elasticsearch_transport_tls_key_content:description: Transport private key as inline PEM string. Takes precedence over file path
+elasticsearch_transport_tls_key_content: ""
+# @var elasticsearch_http_tls_certificate_content:description: HTTP certificate as inline PEM string. Falls back to transport content if empty
+elasticsearch_http_tls_certificate_content: ""
+# @var elasticsearch_http_tls_key_content:description: HTTP private key as inline PEM string. Falls back to transport content if empty
+elasticsearch_http_tls_key_content: ""
+# @var elasticsearch_tls_ca_certificate_content:description: CA certificate as inline PEM string. Takes precedence over file path
+elasticsearch_tls_ca_certificate_content: ""
+
+# @var elasticsearch_tls_remote_src:description: Source location for external cert files. false = files on Ansible controller, true = files already on managed node
+elasticsearch_tls_remote_src: false
+
+# @var elasticsearch_http_ssl_keystore_path:description: Override the HTTP SSL keystore path in elasticsearch.yml. Empty = use the role default path
+elasticsearch_http_ssl_keystore_path: ""
+
 # @var elasticsearch_unsafe_upgrade_restart:description: Skip rolling upgrade safety checks and restart all nodes at once. Only for non-production environments
+# @var elasticsearch_validate_api_certs:description: Validate TLS certificates on API health checks. Set to true if using a trusted CA
+elasticsearch_validate_api_certs: false
+
 elasticsearch_unsafe_upgrade_restart: false
 
 # @var elasticsearch_freshstart:description: Internal flag tracking whether this is a fresh installation. Do not set manually

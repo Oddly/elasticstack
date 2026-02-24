@@ -1,0 +1,88 @@
+---
+- name: Verify Elasticsearch with certificate content variables
+  hosts: elasticsearch
+  tasks:
+    - name: Fetch Elastic password
+      ansible.builtin.shell: |
+        set -o pipefail
+        grep "PASSWORD elastic " /usr/share/elasticsearch/initial_passwords |
+        awk {' print $4 '}
+      args:
+        executable: /bin/bash
+      register: elastic_pass
+      changed_when: false
+      run_once: true  # noqa: run-once[task]
+
+    - name: Check cluster health
+      ansible.builtin.uri:
+        url: "https://localhost:9200/_cluster/health"
+        method: GET
+        force_basic_auth: true
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        return_content: true
+        status_code: 200
+        validate_certs: false
+      register: health
+      run_once: true  # noqa: run-once[task]
+
+    - name: Verify cluster is green or yellow
+      ansible.builtin.assert:
+        that:
+          - health.json.status in ["green", "yellow"]
+        fail_msg: "Cluster status is {{ health.json.status }}"
+      run_once: true  # noqa: run-once[task]
+
+    - name: Get HTTP certificate subject from Elasticsearch
+      ansible.builtin.shell: |
+        set -o pipefail
+        echo | openssl s_client -connect localhost:9200 -servername localhost 2>/dev/null |
+        openssl x509 -noout -subject
+      args:
+        executable: /bin/bash
+      register: es_http_cert_subject
+      changed_when: false
+
+    - name: Verify HTTP cert is the external cert (not auto-generated)
+      ansible.builtin.assert:
+        that:
+          - "'http' in es_http_cert_subject.stdout"
+        fail_msg: >-
+          Expected HTTP certificate subject to contain 'http' from our test cert.
+          Got: {{ es_http_cert_subject.stdout }}
+
+    - name: Verify transport cert file was deployed
+      ansible.builtin.stat:
+        path: "/etc/elasticsearch/certs/{{ inventory_hostname }}-transport.crt"
+      register: transport_cert_stat
+
+    - name: Assert transport cert exists
+      ansible.builtin.assert:
+        that:
+          - transport_cert_stat.stat.exists
+
+    - name: Verify no P12 files exist (content mode is always PEM)
+      ansible.builtin.find:
+        paths: /etc/elasticsearch/certs
+        patterns: "*.p12"
+      register: p12_files
+
+    - name: Assert no P12 files
+      ansible.builtin.assert:
+        that:
+          - p12_files.files | length == 0
+        fail_msg: "Found unexpected P12 files in content mode: {{ p12_files.files | map(attribute='path') | list }}"
+
+    - name: Verify elasticsearch.yml has PEM config
+      ansible.builtin.command:
+        cmd: grep 'xpack.security.transport.ssl.certificate' /etc/elasticsearch/elasticsearch.yml
+      register: es_yml_check
+      changed_when: false
+
+    - name: Assert PEM-style config (not keystore)
+      ansible.builtin.assert:
+        that:
+          - "'transport.crt' in es_yml_check.stdout"
+        fail_msg: >-
+          Expected PEM-style transport config in elasticsearch.yml.
+          Got: {{ es_yml_check.stdout }}

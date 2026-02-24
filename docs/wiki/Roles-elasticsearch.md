@@ -265,6 +265,100 @@ Marker file that indicates the cluster has been initialized. The role checks for
 elasticsearch_initialized_file: "{{ elasticstack_initial_passwords | dirname }}/cluster_initialized"  # default
 ```
 
+### Custom TLS Certificates
+
+#### elasticsearch_cert_source
+
+Certificate source: `elasticsearch_ca` (auto-generated from built-in CA, default) or `external` (bring your own certs from any CA).
+
+```yaml
+elasticsearch_cert_source: elasticsearch_ca  # default
+```
+
+#### elasticsearch_transport_tls_certificate
+
+Path to the transport layer (port 9300) TLS certificate. Accepts PEM (`.crt`, `.pem`) or PKCS12 (`.p12`, `.pfx`) — format auto-detected.
+
+```yaml
+elasticsearch_transport_tls_certificate: ""  # default
+```
+
+#### elasticsearch_transport_tls_key
+
+Path to the transport TLS private key. For PEM format, auto-derived from the certificate path (`.crt` → `.key`) if left empty. Ignored for P12 (key is bundled).
+
+```yaml
+elasticsearch_transport_tls_key: ""  # default
+```
+
+#### elasticsearch_transport_tls_key_passphrase
+
+Passphrase for an encrypted transport key or P12 file.
+
+```yaml
+elasticsearch_transport_tls_key_passphrase: ""  # default
+```
+
+#### elasticsearch_http_tls_certificate
+
+Path to the HTTP layer (port 9200) TLS certificate. Falls back to the transport certificate if empty.
+
+```yaml
+elasticsearch_http_tls_certificate: ""  # default
+```
+
+#### elasticsearch_http_tls_key
+
+Path to the HTTP TLS private key. Falls back to the transport key if empty.
+
+```yaml
+elasticsearch_http_tls_key: ""  # default
+```
+
+#### elasticsearch_http_tls_key_passphrase
+
+Passphrase for the HTTP key/P12. Falls back to the transport passphrase if empty.
+
+```yaml
+elasticsearch_http_tls_key_passphrase: ""  # default
+```
+
+#### elasticsearch_tls_ca_certificate
+
+Path to the CA certificate. If empty and the PEM cert file contains a chain (multiple certificate blocks), the CA is auto-extracted from the chain.
+
+```yaml
+elasticsearch_tls_ca_certificate: ""  # default
+```
+
+#### elasticsearch_tls_remote_src
+
+Whether certificate files are already on the managed node (`true`) or on the Ansible controller (`false`).
+
+```yaml
+elasticsearch_tls_remote_src: false  # default
+```
+
+#### elasticsearch_validate_api_certs
+
+Whether to validate TLS certificates when the role makes API calls to Elasticsearch during convergence. Set to `true` when using certificates trusted by the system CA store.
+
+```yaml
+elasticsearch_validate_api_certs: false  # default
+```
+
+#### Inline PEM content variables
+
+Alternative to file paths — pass PEM certificate content directly as Ansible variables. Content variables take precedence over file paths. Content mode is always PEM.
+
+| Variable | Description |
+|----------|-------------|
+| `elasticsearch_transport_tls_certificate_content` | Transport cert as inline PEM |
+| `elasticsearch_transport_tls_key_content` | Transport key as inline PEM |
+| `elasticsearch_http_tls_certificate_content` | HTTP cert as inline PEM (falls back to transport) |
+| `elasticsearch_http_tls_key_content` | HTTP key as inline PEM (falls back to transport) |
+| `elasticsearch_tls_ca_certificate_content` | CA cert as inline PEM |
+
 ### Certificate Lifecycle
 
 #### elasticsearch_cert_validity_period

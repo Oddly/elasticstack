@@ -89,6 +89,14 @@ graph TD
 
 Certificate renewal is handled automatically: each role checks certificate expiry against a configurable buffer (default 30 days) and regenerates when needed. Tags like `renew_es_cert`, `renew_logstash_cert`, etc. allow targeted renewal runs.
 
+### External certificates
+
+All roles support `*_cert_source: external` to use certificates from any CA (corporate, ACME, Vault PKI). External certs can be provided as file paths or as inline PEM content in variables. The format (PEM vs PKCS12) is auto-detected for file paths; content mode is always PEM.
+
+Elasticsearch supports separate transport and HTTP layer certificates — useful when transport uses an internal CA while HTTP uses a public ACME cert. HTTP falls back to transport if not specified.
+
+See each role's README for the full variable reference.
+
 ## Security initialization
 
 When Elasticsearch starts for the first time with security enabled:

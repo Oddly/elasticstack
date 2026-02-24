@@ -80,7 +80,7 @@
         method: GET
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: false
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
         force_basic_auth: true
         status_code: [200, 503]
       register: elasticsearch_responsive
@@ -88,6 +88,7 @@
       retries: 30
       delay: 10
       no_log: "{{ elasticstack_no_log }}"
+      changed_when: false
 
     # Usually we should not need this step. It's only there to recover from broken upgrade plays
     # Without this step the cluster would never recover and the play would always fail
@@ -99,12 +100,13 @@
         body_format: json
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: false
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
         force_basic_auth: true
       register: elasticsearch_response
       until: elasticsearch_response.json.acknowledged | default(false)
       retries: 10
       delay: 30
+      no_log: "{{ elasticstack_no_log }}"
 
     # Relax disk watermarks so shards can allocate even on near-full disks
     # (common in CI/Docker). Without this, .security-7 replicas stay
@@ -122,12 +124,13 @@
         body_format: json
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: false
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
         force_basic_auth: true
       register: elasticsearch_watermark_response
       until: elasticsearch_watermark_response.json.acknowledged | default(false)
       retries: 5
       delay: 10
+      no_log: "{{ elasticstack_no_log }}"
 
       # this step is key!!!  Don't restart more nodes
       # until all shards have completed recovery
@@ -137,12 +140,14 @@
         method: GET
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: false
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
         force_basic_auth: true
       register: elasticsearch_response
       until: (elasticsearch_response.json.status | default('')) in ['green', 'yellow']
       retries: 50
       delay: 30
+      no_log: "{{ elasticstack_no_log }}"
+      changed_when: false
 
     # Disabling shard allocation right after enabling it seems redundant. Please see above for details.
     - name: Disable shard allocation for the cluster
@@ -153,22 +158,30 @@
         body_format: json
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: false
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
         force_basic_auth: true
       register: elasticsearch_response
       until: elasticsearch_response.json.acknowledged | default(false)
       retries: 5
       delay: 10
+      no_log: "{{ elasticstack_no_log }}"
 
-    - name: Stop non essential indexing to speed up shard recovery
+    - name: Flush indices to speed up shard recovery
       ansible.builtin.uri:
         url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_flush"
         method: POST
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: false
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
         force_basic_auth: true
+      register: elasticsearch_flush_response
       failed_when: false
+      no_log: "{{ elasticstack_no_log }}"
+
+    - name: Warn if flush failed
+      ansible.builtin.debug:
+        msg: "Flush returned status {{ elasticsearch_flush_response.status | default('unknown') }}: {{ elasticsearch_flush_response.msg | default('') }}"
+      when: (elasticsearch_flush_response.status | default(0)) != 200
 
     - name: Shutdown elasticsearch service
       ansible.builtin.service:
@@ -224,7 +237,7 @@
         method: GET
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: false
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
         force_basic_auth: true
         return_content: true
       register: elasticsearch_result
@@ -232,6 +245,7 @@
       retries: 200
       delay: 3
       no_log: "{{ elasticstack_no_log }}"
+      changed_when: false
 
     - name: Enable shard allocation for the cluster
       ansible.builtin.uri:
@@ -241,12 +255,13 @@
         body_format: json
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: false
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
         force_basic_auth: true
       register: elasticsearch_response
       until: elasticsearch_response.json.acknowledged | default(false)
       retries: 5
       delay: 30
+      no_log: "{{ elasticstack_no_log }}"
 
     - name: Wait for cluster health to return to yellow or green
       ansible.builtin.uri:
@@ -254,12 +269,14 @@
         method: GET
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: false
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
         force_basic_auth: true
       register: elasticsearch_response
       until: (elasticsearch_response.json.status | default('')) in ['green', 'yellow']
       retries: 5
       delay: 30
+      no_log: "{{ elasticstack_no_log }}"
+      changed_when: false
 
     - name: Record that rolling upgrade performed its own restart
       ansible.builtin.set_fact:

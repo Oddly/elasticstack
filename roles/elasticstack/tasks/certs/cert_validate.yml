@@ -1,0 +1,256 @@
+---
+# Validate an external certificate file, auto-detect PEM vs P12 format,
+# derive key path for PEM, extract CA chain from PEM bundles, check expiry,
+# verify key matches cert, and warn on SAN mismatch.
+#
+# Required variables:
+#   _validate_cert_path          Path to certificate file
+#   _validate_key_path           Path to key file (empty string = auto-detect)
+#   _validate_pass               Passphrase (empty string = unencrypted)
+#   _validate_remote_src         bool — files on managed node (true) or controller (false)
+#   _validate_service            Display name for error messages
+#   _validate_format_fact        Fact name to store detected format ('pem' or 'p12')
+#   _validate_key_fact           Fact name to store resolved key path
+#   _validate_ca_extracted_fact  Fact name for whether CA was auto-extracted from chain
+
+- name: "Check certificate file exists — {{ _validate_service }}"
+  ansible.builtin.stat:
+    path: "{{ _validate_cert_path }}"
+  register: _validate_cert_stat
+  delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
+  become: false
+
+- name: "Fail if certificate file missing — {{ _validate_service }}"
+  ansible.builtin.fail:
+    msg: >-
+      Certificate file not found: {{ _validate_cert_path }}
+      (looked on {{ 'managed node' if (_validate_remote_src | bool) else 'Ansible controller' }})
+  when: not _validate_cert_stat.stat.exists
+
+# --- Format detection ---
+
+- name: "Probe for PEM format — {{ _validate_service }}"
+  ansible.builtin.command:
+    cmd: openssl x509 -in {{ _validate_cert_path }} -noout
+  register: _validate_pem_probe
+  failed_when: false
+  changed_when: false
+  delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
+  become: false
+
+- name: "Probe for P12 format — {{ _validate_service }}"
+  ansible.builtin.command:
+    cmd: >-
+      openssl pkcs12 -in {{ _validate_cert_path }} -noout
+      {{ ('-passin pass:' ~ _validate_pass) if (_validate_pass | default('', true) | length > 0) else '-passin pass:' }}
+  register: _validate_p12_probe
+  failed_when: false
+  changed_when: false
+  delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
+  become: false
+  no_log: true
+  when: _validate_pem_probe.rc != 0
+
+- name: "Fail if format unrecognised — {{ _validate_service }}"
+  ansible.builtin.fail:
+    msg: >-
+      Unsupported certificate format for {{ _validate_service }}.
+      File {{ _validate_cert_path }} is neither valid PEM nor PKCS12.
+  when:
+    - _validate_pem_probe.rc != 0
+    - (_validate_p12_probe.rc | default(1)) != 0
+
+- name: "Set detected format fact — {{ _validate_service }}"
+  ansible.builtin.set_fact:
+    "{{ _validate_format_fact }}": "{{ 'pem' if _validate_pem_probe.rc == 0 else 'p12' }}"
+
+# --- PEM key auto-detection ---
+
+- name: "Derive key path from certificate path — {{ _validate_service }}"
+  when:
+    - (_validate_key_path | default('', true)) | length == 0
+    - _validate_pem_probe.rc == 0
+  block:
+    - name: "Compute derived key path — {{ _validate_service }}"
+      ansible.builtin.set_fact:
+        _validate_derived_key: "{{ _validate_cert_path | regex_replace('\\.(crt|pem|cert)$', '.key') }}"
+
+    - name: "Check derived key exists — {{ _validate_service }}"
+      ansible.builtin.stat:
+        path: "{{ _validate_derived_key }}"
+      register: _validate_derived_key_stat
+      delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
+      become: false
+
+    - name: "Fail if derived key not found — {{ _validate_service }}"
+      ansible.builtin.fail:
+        msg: >-
+          Could not find key file {{ _validate_derived_key }} (derived from cert path).
+          Set the corresponding *_tls_key variable explicitly.
+      when: not _validate_derived_key_stat.stat.exists
+
+    - name: "Set resolved key fact — {{ _validate_service }}"
+      ansible.builtin.set_fact:
+        "{{ _validate_key_fact }}": "{{ _validate_derived_key }}"
+
+- name: "Set explicit key fact — {{ _validate_service }}"
+  ansible.builtin.set_fact:
+    "{{ _validate_key_fact }}": "{{ _validate_key_path }}"
+  when:
+    - (_validate_key_path | default('', true)) | length > 0
+
+- name: "Set empty key fact for P12 — {{ _validate_service }}"
+  ansible.builtin.set_fact:
+    "{{ _validate_key_fact }}": ""
+  when:
+    - _validate_pem_probe.rc != 0
+
+# --- PEM CA chain extraction ---
+
+- name: "Check for CA chain in PEM bundle — {{ _validate_service }}"
+  when: _validate_pem_probe.rc == 0
+  block:
+    - name: "Count PEM blocks in certificate file — {{ _validate_service }}"
+      ansible.builtin.command:
+        cmd: grep -c 'BEGIN CERTIFICATE' {{ _validate_cert_path }}
+      register: _validate_pem_count
+      changed_when: false
+      delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
+      become: false
+
+    - name: "Set CA extracted fact — {{ _validate_service }}"
+      ansible.builtin.set_fact:
+        "{{ _validate_ca_extracted_fact }}": "{{ (_validate_pem_count.stdout | int) > 1 }}"
+
+- name: "Set CA extracted fact for P12 — {{ _validate_service }}"
+  ansible.builtin.set_fact:
+    "{{ _validate_ca_extracted_fact }}": false
+  when: _validate_pem_probe.rc != 0
+
+# --- Certificate expiry check ---
+
+- name: "Check certificate has not expired — {{ _validate_service }}"
+  ansible.builtin.command:
+    cmd: openssl x509 -in {{ _validate_cert_path }} -noout -checkend 0
+  register: _validate_expiry_check
+  failed_when: false
+  changed_when: false
+  delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
+  become: false
+  when: _validate_pem_probe.rc == 0
+
+- name: "Fail if certificate already expired — {{ _validate_service }}"
+  ansible.builtin.fail:
+    msg: >-
+      {{ _validate_service }} certificate {{ _validate_cert_path }} has already expired.
+      Replace it with a valid certificate and re-run the playbook.
+  when:
+    - _validate_pem_probe.rc == 0
+    - _validate_expiry_check.rc != 0
+
+# --- PEM key-cert match verification ---
+
+- name: "Verify key matches certificate — {{ _validate_service }}"
+  when:
+    - _validate_pem_probe.rc == 0
+    - lookup('vars', _validate_key_fact) | length > 0
+  block:
+    - name: "Get certificate modulus — {{ _validate_service }}"
+      ansible.builtin.shell:
+        cmd: set -o pipefail && openssl x509 -in {{ _validate_cert_path }} -noout -modulus 2>/dev/null | openssl md5
+        executable: /bin/bash
+      register: _validate_cert_modulus
+      changed_when: false
+      delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
+      become: false
+
+    - name: "Get key modulus — {{ _validate_service }}"
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail &&
+          openssl rsa -in {{ lookup('vars', _validate_key_fact) }} -noout -modulus
+          {{ ('-passin pass:' ~ _validate_pass) if (_validate_pass | default('', true) | length > 0) else '' }}
+          2>/dev/null | openssl md5
+        executable: /bin/bash
+      register: _validate_key_modulus
+      changed_when: false
+      failed_when: false
+      delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
+      become: false
+      no_log: true
+
+    # If RSA modulus failed, try EC key
+    - name: "Get EC key fingerprint — {{ _validate_service }}"
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail &&
+          openssl ec -in {{ lookup('vars', _validate_key_fact) }} -pubout
+          {{ ('-passin pass:' ~ _validate_pass) if (_validate_pass | default('', true) | length > 0) else '' }}
+          2>/dev/null | openssl md5
+        executable: /bin/bash
+      register: _validate_ec_key_fp
+      changed_when: false
+      failed_when: false
+      delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
+      become: false
+      no_log: true
+      when: _validate_key_modulus.rc != 0
+
+    - name: "Get EC cert public key fingerprint — {{ _validate_service }}"
+      ansible.builtin.shell:
+        cmd: set -o pipefail && openssl x509 -in {{ _validate_cert_path }} -noout -pubkey 2>/dev/null | openssl md5
+        executable: /bin/bash
+      register: _validate_ec_cert_fp
+      changed_when: false
+      delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
+      become: false
+      when: _validate_key_modulus.rc != 0
+
+    - name: "Fail if RSA key does not match certificate — {{ _validate_service }}"
+      ansible.builtin.fail:
+        msg: >-
+          {{ _validate_service }} private key does not match the certificate.
+          Certificate: {{ _validate_cert_path }}
+          Key: {{ lookup('vars', _validate_key_fact) }}
+      when:
+        - _validate_key_modulus.rc == 0
+        - _validate_cert_modulus.stdout != _validate_key_modulus.stdout
+
+    - name: "Fail if EC key does not match certificate — {{ _validate_service }}"
+      ansible.builtin.fail:
+        msg: >-
+          {{ _validate_service }} private key does not match the certificate.
+          Certificate: {{ _validate_cert_path }}
+          Key: {{ lookup('vars', _validate_key_fact) }}
+      when:
+        - _validate_key_modulus.rc != 0
+        - _validate_ec_key_fp is defined
+        - _validate_ec_key_fp.rc == 0
+        - _validate_ec_cert_fp.stdout != _validate_ec_key_fp.stdout
+
+# --- SAN hostname check (warn only) ---
+
+- name: "Check SAN for hostname match — {{ _validate_service }}"
+  when: _validate_pem_probe.rc == 0
+  block:
+    - name: "Extract SAN from certificate — {{ _validate_service }}"
+      ansible.builtin.shell:
+        cmd: openssl x509 -in {{ _validate_cert_path }} -noout -ext subjectAltName 2>/dev/null || true
+        executable: /bin/bash
+      register: _validate_san_output
+      changed_when: false
+      delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
+      become: false
+
+    - name: "Warn if SAN does not include this node — {{ _validate_service }}"
+      ansible.builtin.debug:
+        msg: >-
+          Certificate SAN does not include this node's hostname
+          ({{ ansible_facts.hostname }}) or IP. This may cause TLS verification failures.
+          SAN: {{ _validate_san_output.stdout | default('(none)') }}
+      when:
+        - _validate_san_output.stdout | default('') | length > 0
+        - ansible_facts.hostname not in _validate_san_output.stdout
+        - ansible_facts.fqdn not in _validate_san_output.stdout
+        - inventory_hostname not in _validate_san_output.stdout
+        - (ansible_facts.all_ipv4_addresses | default([]) | select('search', _validate_san_output.stdout) | list | length) == 0

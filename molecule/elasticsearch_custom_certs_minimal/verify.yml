@@ -1,0 +1,98 @@
+---
+- name: Verify Elasticsearch with minimal external cert config
+  hosts: elasticsearch
+  tasks:
+    - name: Fetch Elastic password
+      ansible.builtin.shell: |
+        set -o pipefail
+        grep "PASSWORD elastic " /usr/share/elasticsearch/initial_passwords |
+        awk {' print $4 '}
+      args:
+        executable: /bin/bash
+      register: elastic_pass
+      changed_when: false
+      run_once: true  # noqa: run-once[task]
+
+    - name: Check cluster health
+      ansible.builtin.uri:
+        url: "https://localhost:9200/_cluster/health"
+        method: GET
+        force_basic_auth: true
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        return_content: true
+        status_code: 200
+        validate_certs: false
+      register: health
+      run_once: true  # noqa: run-once[task]
+
+    - name: Verify cluster is green or yellow
+      ansible.builtin.assert:
+        that:
+          - health.json.status in ["green", "yellow"]
+        fail_msg: "Cluster status is {{ health.json.status }}"
+      run_once: true  # noqa: run-once[task]
+
+    # Key auto-derivation: the role should have derived the key from server.crt → server.key
+    - name: Verify transport key was deployed
+      ansible.builtin.stat:
+        path: "/etc/elasticsearch/certs/{{ inventory_hostname }}-transport.key"
+      register: transport_key_stat
+
+    - name: Assert transport key exists (auto-derived)
+      ansible.builtin.assert:
+        that:
+          - transport_key_stat.stat.exists
+        fail_msg: "Transport key not found — auto-derivation from .crt → .key failed"
+
+    # HTTP fallback: HTTP cert should exist (copied from transport cert)
+    - name: Verify HTTP cert was deployed (fallback from transport)
+      ansible.builtin.stat:
+        path: "/etc/elasticsearch/certs/{{ inventory_hostname }}-http.crt"
+      register: http_cert_stat
+
+    - name: Assert HTTP cert exists (fell back to transport)
+      ansible.builtin.assert:
+        that:
+          - http_cert_stat.stat.exists
+        fail_msg: "HTTP cert not found — fallback from transport cert failed"
+
+    # CA chain extraction: ca.crt should have been extracted from the PEM bundle
+    - name: Verify CA cert was extracted from PEM bundle
+      ansible.builtin.stat:
+        path: /etc/elasticsearch/certs/ca.crt
+      register: ca_cert_stat
+
+    - name: Assert CA cert exists (auto-extracted from chain)
+      ansible.builtin.assert:
+        that:
+          - ca_cert_stat.stat.exists
+        fail_msg: "CA cert not found — auto-extraction from PEM bundle failed"
+
+    - name: Read CA cert content
+      ansible.builtin.slurp:
+        src: /etc/elasticsearch/certs/ca.crt
+      register: ca_cert_content
+
+    - name: Verify CA cert is not empty
+      ansible.builtin.assert:
+        that:
+          - (ca_cert_content.content | b64decode) is search('BEGIN CERTIFICATE')
+        fail_msg: "CA cert is empty or invalid"
+
+    - name: Verify elasticsearch.yml uses PEM config with CA authorities
+      ansible.builtin.shell: |
+        set -o pipefail
+        grep 'certificate_authorities' /etc/elasticsearch/elasticsearch.yml
+      args:
+        executable: /bin/bash
+      register: es_yml_ca_check
+      changed_when: false
+
+    - name: Assert certificate_authorities is configured
+      ansible.builtin.assert:
+        that:
+          - "'ca.crt' in es_yml_ca_check.stdout"
+        fail_msg: >-
+          Expected certificate_authorities in elasticsearch.yml.
+          Got: {{ es_yml_ca_check.stdout }}

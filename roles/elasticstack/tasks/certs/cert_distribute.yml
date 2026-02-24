@@ -17,6 +17,8 @@
     dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/certs/{{ inventory_hostname }}/{{ _cert_src | basename }}"
     flat: true
   delegate_to: "{{ elasticstack_ca_host }}"
+  # Throttle fetch to prevent parallel writes to the CA host filesystem.
+  # The subsequent copy task runs per-node and does not need throttling.
   throttle: 1
   tags:
     - certificates

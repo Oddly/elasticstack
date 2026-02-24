@@ -1,0 +1,167 @@
+---
+# Test: Elasticsearch with certificates provided as inline PEM content in variables.
+# This verifies the *_content variables work as an alternative to file paths.
+#
+# Flow:
+# 1. Generate test certs on the node (same as custom_certs scenario)
+# 2. Slurp the cert/key files into variables
+# 3. Apply ES role with content variables (not file paths)
+
+- name: Generate test certificates on nodes
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: Install openssl
+      ansible.builtin.package:
+        name: openssl
+        state: present
+
+    - name: Create cert working directory
+      ansible.builtin.file:
+        path: /tmp/test-certs
+        state: directory
+        mode: "0700"
+
+    - name: Generate CA private key
+      ansible.builtin.command:
+        cmd: openssl genrsa -out /tmp/test-certs/ca.key 2048
+        creates: /tmp/test-certs/ca.key
+
+    - name: Generate CA certificate
+      ansible.builtin.command:
+        cmd: >-
+          openssl req -x509 -new -nodes
+          -key /tmp/test-certs/ca.key
+          -sha256 -days 365
+          -subj "/CN=Test CA"
+          -out /tmp/test-certs/ca.crt
+        creates: /tmp/test-certs/ca.crt
+
+    - name: Generate transport key
+      ansible.builtin.command:
+        cmd: openssl genrsa -out /tmp/test-certs/transport.key 2048
+        creates: /tmp/test-certs/transport.key
+
+    - name: Create transport CSR config
+      ansible.builtin.copy:
+        content: |
+          [req]
+          distinguished_name = req_dn
+          req_extensions = v3_req
+          prompt = no
+          [req_dn]
+          CN = {{ ansible_facts.hostname }}
+          [v3_req]
+          subjectAltName = DNS:{{ ansible_facts.hostname }},DNS:{{ ansible_facts.fqdn }},DNS:{{ inventory_hostname }},DNS:localhost,IP:{{ ansible_facts.default_ipv4.address | default(ansible_facts.all_ipv4_addresses[0]) }},IP:127.0.0.1
+        dest: /tmp/test-certs/transport.cnf
+        mode: "0600"
+
+    - name: Generate transport CSR
+      ansible.builtin.command:
+        cmd: >-
+          openssl req -new
+          -key /tmp/test-certs/transport.key
+          -config /tmp/test-certs/transport.cnf
+          -out /tmp/test-certs/transport.csr
+        creates: /tmp/test-certs/transport.csr
+
+    - name: Sign transport certificate
+      ansible.builtin.command:
+        cmd: >-
+          openssl x509 -req
+          -in /tmp/test-certs/transport.csr
+          -CA /tmp/test-certs/ca.crt
+          -CAkey /tmp/test-certs/ca.key
+          -CAcreateserial
+          -out /tmp/test-certs/transport.crt
+          -days 365 -sha256
+          -extensions v3_req
+          -extfile /tmp/test-certs/transport.cnf
+        creates: /tmp/test-certs/transport.crt
+
+    - name: Generate HTTP key
+      ansible.builtin.command:
+        cmd: openssl genrsa -out /tmp/test-certs/http.key 2048
+        creates: /tmp/test-certs/http.key
+
+    - name: Create HTTP CSR config
+      ansible.builtin.copy:
+        content: |
+          [req]
+          distinguished_name = req_dn
+          req_extensions = v3_req
+          prompt = no
+          [req_dn]
+          CN = {{ ansible_facts.hostname }}-http
+          [v3_req]
+          subjectAltName = DNS:{{ ansible_facts.hostname }},DNS:{{ ansible_facts.fqdn }},DNS:{{ inventory_hostname }},DNS:localhost,IP:{{ ansible_facts.default_ipv4.address | default(ansible_facts.all_ipv4_addresses[0]) }},IP:127.0.0.1
+        dest: /tmp/test-certs/http.cnf
+        mode: "0600"
+
+    - name: Generate HTTP CSR
+      ansible.builtin.command:
+        cmd: >-
+          openssl req -new
+          -key /tmp/test-certs/http.key
+          -config /tmp/test-certs/http.cnf
+          -out /tmp/test-certs/http.csr
+        creates: /tmp/test-certs/http.csr
+
+    - name: Sign HTTP certificate
+      ansible.builtin.command:
+        cmd: >-
+          openssl x509 -req
+          -in /tmp/test-certs/http.csr
+          -CA /tmp/test-certs/ca.crt
+          -CAkey /tmp/test-certs/ca.key
+          -CAcreateserial
+          -out /tmp/test-certs/http.crt
+          -days 365 -sha256
+          -extensions v3_req
+          -extfile /tmp/test-certs/http.cnf
+        creates: /tmp/test-certs/http.crt
+
+    # Slurp all cert/key files so we can pass them as content variables
+    - name: Read certificate files into variables
+      ansible.builtin.slurp:
+        src: "{{ item.path }}"
+      register: _cert_files
+      loop:
+        - { path: /tmp/test-certs/transport.crt, name: transport_cert }
+        - { path: /tmp/test-certs/transport.key, name: transport_key }
+        - { path: /tmp/test-certs/http.crt, name: http_cert }
+        - { path: /tmp/test-certs/http.key, name: http_key }
+        - { path: /tmp/test-certs/ca.crt, name: ca_cert }
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Set cert content facts
+      ansible.builtin.set_fact:
+        _test_transport_cert_content: "{{ _cert_files.results[0].content | b64decode }}"
+        _test_transport_key_content: "{{ _cert_files.results[1].content | b64decode }}"
+        _test_http_cert_content: "{{ _cert_files.results[2].content | b64decode }}"
+        _test_http_key_content: "{{ _cert_files.results[3].content | b64decode }}"
+        _test_ca_cert_content: "{{ _cert_files.results[4].content | b64decode }}"
+
+- name: Converge — Elasticsearch with certificate content variables
+  hosts: all
+  vars:
+    elasticstack_full_stack: false
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    elasticsearch_heap: "1"
+    elasticstack_no_log: false
+    elasticsearch_cert_source: external
+    # Content mode: PEM strings in variables instead of file paths
+    elasticsearch_transport_tls_certificate_content: "{{ _test_transport_cert_content }}"
+    elasticsearch_transport_tls_key_content: "{{ _test_transport_key_content }}"
+    elasticsearch_http_tls_certificate_content: "{{ _test_http_cert_content }}"
+    elasticsearch_http_tls_key_content: "{{ _test_http_key_content }}"
+    elasticsearch_tls_ca_certificate_content: "{{ _test_ca_cert_content }}"
+    elasticsearch_ssl_verification_mode: certificate
+  tasks:
+    - name: Include Elastic repos role
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.repos
+    - name: Include Elasticsearch
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elasticsearch

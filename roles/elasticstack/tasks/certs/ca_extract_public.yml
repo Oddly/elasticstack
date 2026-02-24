@@ -8,12 +8,15 @@
 #   _cert_pass:     Passphrase for the P12 file
 
 - name: "Extract CA public certificate - {{ _cert_p12_path | basename }}"
-  ansible.builtin.command: >
-    openssl pkcs12 -in {{ _cert_p12_path }}
-    -cacerts -nokeys -out {{ _cert_ca_out }}
-    -password pass:{{ _cert_pass }}
-  args:
+  ansible.builtin.shell:
+    cmd: >
+      set -o pipefail &&
+      echo '{{ _cert_pass }}' |
+      openssl pkcs12 -in {{ _cert_p12_path }}
+      -cacerts -nokeys -out {{ _cert_ca_out }}
+      -passin stdin
     creates: "{{ _cert_ca_out }}"
+    executable: /bin/bash
   delegate_to: "{{ elasticstack_ca_host }}"
   no_log: "{{ elasticstack_no_log }}"
   tags:

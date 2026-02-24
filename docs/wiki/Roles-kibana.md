@@ -120,6 +120,64 @@ Passphrase for the Kibana TLS private key.
 kibana_tls_key_passphrase: PleaseChangeMe  # default
 ```
 
+### Custom TLS Certificates
+
+#### kibana_cert_source
+
+Certificate source: `elasticsearch_ca` (auto-generated, default) or `external` (bring your own).
+
+```yaml
+kibana_cert_source: elasticsearch_ca  # default
+```
+
+#### kibana_tls_certificate_file
+
+Path to the Kibana TLS certificate. Accepts PEM or P12 — format auto-detected.
+
+```yaml
+kibana_tls_certificate_file: ""  # default
+```
+
+#### kibana_tls_key_file
+
+Path to the TLS private key. Auto-derived from cert path for PEM if left empty.
+
+```yaml
+kibana_tls_key_file: ""  # default
+```
+
+#### kibana_tls_certificate_passphrase
+
+Passphrase for encrypted key or P12.
+
+```yaml
+kibana_tls_certificate_passphrase: ""  # default
+```
+
+#### kibana_tls_ca_file
+
+Path to CA certificate. Auto-extracted from PEM chain if cert has multiple blocks.
+
+```yaml
+kibana_tls_ca_file: ""  # default
+```
+
+#### kibana_tls_remote_src
+
+Whether cert files are on the managed node (`true`) or Ansible controller (`false`).
+
+```yaml
+kibana_tls_remote_src: false  # default
+```
+
+#### Inline PEM content variables
+
+| Variable | Description |
+|----------|-------------|
+| `kibana_tls_certificate_content` | Certificate as inline PEM |
+| `kibana_tls_key_content` | Key as inline PEM |
+| `kibana_tls_ca_content` | CA cert as inline PEM |
+
 ### Certificate Lifecycle
 
 #### kibana_cert_validity_period

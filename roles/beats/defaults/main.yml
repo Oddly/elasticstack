@@ -180,3 +180,27 @@ beats_cert_validity_period: 1095
 beats_cert_expiration_buffer: 30
 # @var beats_cert_will_expire_soon:description: Internal flag set when certificates are within the expiration buffer. Do not set manually
 beats_cert_will_expire_soon: false
+
+# @var beats_cert_source:description: Where to get TLS certificates. 'elasticsearch_ca' (default) auto-generates from the built-in CA; 'external' uses user-provided files
+beats_cert_source: elasticsearch_ca
+
+# --- External certificate settings (only used when beats_cert_source: external) ---
+
+# @var beats_tls_certificate_file:description: Path to Beat TLS certificate. Accepts PEM (.crt/.pem) — Beats uses PEM natively
+beats_tls_certificate_file: ""
+# @var beats_tls_key_file:description: Path to Beat TLS private key. Optional — auto-derived from cert path for PEM
+beats_tls_key_file: ""
+# @var beats_tls_ca_file:description: CA certificate. Optional — auto-extracted from PEM chain if cert contains multiple blocks
+beats_tls_ca_file: ""
+# --- External certificate content (PEM strings, alternative to file paths) ---
+# When set, these take precedence over the corresponding file path variables.
+
+# @var beats_tls_certificate_content:description: Beat certificate as inline PEM string. Takes precedence over file path
+beats_tls_certificate_content: ""
+# @var beats_tls_key_content:description: Beat private key as inline PEM string. Takes precedence over file path
+beats_tls_key_content: ""
+# @var beats_tls_ca_content:description: CA certificate as inline PEM string. Takes precedence over file path
+beats_tls_ca_content: ""
+
+# @var beats_tls_remote_src:description: Source location for external cert files. false = files on Ansible controller, true = files already on managed node
+beats_tls_remote_src: false

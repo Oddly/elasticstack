@@ -14,6 +14,8 @@
       register: elastic_pass
       changed_when: false
 
+    # ── Cluster health and API checks ──────────────────────────────
+
     - name: Check cluster health
       ansible.builtin.uri:
         url: "https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health"
@@ -26,11 +28,81 @@
         validate_certs: false
       register: health
 
+    - name: Verify cluster health is green or yellow
+      ansible.builtin.assert:
+        that:
+          - health.json.status in ['green', 'yellow']
+        fail_msg: "Cluster health is {{ health.json.status }}, expected green or yellow"
+
     - name: Verify cluster name is custom
       ansible.builtin.assert:
         that:
           - health.json.cluster_name == "custom-test-cluster"
         fail_msg: "Expected cluster name 'custom-test-cluster', got '{{ health.json.cluster_name }}'"
+
+    - name: Get Elasticsearch version from API
+      ansible.builtin.uri:
+        url: "https://localhost:{{ elasticstack_elasticsearch_http_port }}"
+        method: GET
+        force_basic_auth: true
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        return_content: true
+        status_code: 200
+        validate_certs: false
+      register: es_info
+
+    - name: Verify ES version matches expected release
+      ansible.builtin.assert:
+        that:
+          - es_info.json.version.number is version('9.0.0', '>=')
+        fail_msg: "Expected ES 9.x, got {{ es_info.json.version.number }}"
+
+    # ── Service state checks ──────────────────────────────────────
+
+    - name: Check Elasticsearch service status
+      ansible.builtin.service_facts:
+
+    - name: Verify Elasticsearch service is running and enabled
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.services['elasticsearch.service'].state == 'running'
+          - ansible_facts.services['elasticsearch.service'].status == 'enabled'
+        fail_msg: "Elasticsearch service is not running or not enabled"
+
+    # ── Configuration file checks ─────────────────────────────────
+
+    - name: Read elasticsearch.yml
+      ansible.builtin.slurp:
+        src: /etc/elasticsearch/elasticsearch.yml
+      register: es_yml
+
+    - name: Check for duplicate top-level YAML keys in elasticsearch.yml
+      ansible.builtin.shell: |
+        set -o pipefail
+        # Extract top-level keys (lines starting with a non-space, non-comment char followed by a colon)
+        grep -E '^[a-zA-Z_]' /etc/elasticsearch/elasticsearch.yml |
+        grep -v '^#' |
+        sed 's/:.*//' |
+        sort | uniq -d
+      args:
+        executable: /bin/bash
+      register: dup_check
+      changed_when: false
+
+    - name: Assert no duplicate top-level YAML keys
+      ansible.builtin.assert:
+        that:
+          - dup_check.stdout | length == 0
+        fail_msg: "Duplicate YAML keys found: {{ dup_check.stdout_lines }}"
+
+    - name: Verify single-node discovery type
+      ansible.builtin.assert:
+        that:
+          - "'discovery.type: single-node' in es_yml.content | b64decode"
+        fail_msg: "Single-node cluster should have discovery.type: single-node"
+
+    # ── Custom paths ──────────────────────────────────────────────
 
     - name: Verify custom data directory is used
       ansible.builtin.stat:
@@ -56,6 +128,8 @@
           - logfiles.files | length > 0
         fail_msg: "No log files found in /var/log/elasticsearch-custom"
 
+    # ── JVM settings ──────────────────────────────────────────────
+
     - name: Verify JVM custom parameters
       ansible.builtin.slurp:
         src: /etc/elasticsearch/jvm.options.d/90-custom.options
@@ -68,18 +142,66 @@
           - "'formatMsgNoLookups' in jvm_custom.content | b64decode"
         fail_msg: "Custom JVM parameters not found in 90-custom.options"
 
-    - name: Verify extra config in elasticsearch.yml
-      ansible.builtin.slurp:
-        src: /etc/elasticsearch/elasticsearch.yml
-      register: es_yml
+    - name: Verify JVM heap options exist
+      ansible.builtin.stat:
+        path: /etc/elasticsearch/jvm.options.d/10-heap.options
+      register: heap_opts
 
-    - name: Assert extra config is present
+    - name: Assert heap options file exists
+      ansible.builtin.assert:
+        that:
+          - heap_opts.stat.exists
+        fail_msg: "JVM heap options file not found"
+
+    - name: Read heap options
+      ansible.builtin.slurp:
+        src: /etc/elasticsearch/jvm.options.d/10-heap.options
+      register: heap_content
+
+    - name: Assert heap is set to 1g
+      ansible.builtin.assert:
+        that:
+          - "'-Xms1g' in heap_content.content | b64decode"
+          - "'-Xmx1g' in heap_content.content | b64decode"
+        fail_msg: "Heap not set to 1g in 10-heap.options"
+
+    # ── Extra config and conflict filtering ───────────────────────
+
+    - name: Assert extra config is present (auto_create_index from elasticsearch_extra_config)
       ansible.builtin.assert:
         that:
           - "'auto_create_index' in es_yml.content | b64decode"
-          - "'max_bytes_per_sec' in es_yml.content | b64decode"
+        fail_msg: "action.auto_create_index from elasticsearch_extra_config not found"
+
+    - name: Assert snapshot repo path is configured
+      ansible.builtin.assert:
+        that:
           - "'/mnt/es-snapshots' in es_yml.content | b64decode"
-        fail_msg: "Extra config or snapshot repo path not found in elasticsearch.yml"
+        fail_msg: "Snapshot repo path /mnt/es-snapshots not found in elasticsearch.yml"
+
+    - name: Count occurrences of indices.recovery.max_bytes_per_sec
+      ansible.builtin.shell: |
+        grep -c 'indices.recovery.max_bytes_per_sec' /etc/elasticsearch/elasticsearch.yml
+      args:
+        executable: /bin/bash
+      register: recovery_count
+      changed_when: false
+
+    - name: Assert indices.recovery.max_bytes_per_sec appears exactly once (conflict filtering works)
+      ansible.builtin.assert:
+        that:
+          - recovery_count.stdout | int == 1
+        fail_msg: >-
+          indices.recovery.max_bytes_per_sec appears {{ recovery_count.stdout }} times
+          (expected 1 — conflict filtering should remove the duplicate from elasticsearch_extra_config)
+
+    - name: Assert dedicated variable value wins (50mb, not 100mb from extra_config)
+      ansible.builtin.assert:
+        that:
+          - "'indices.recovery.max_bytes_per_sec: 50mb' in es_yml.content | b64decode"
+        fail_msg: "Expected 50mb from dedicated variable, not 100mb from elasticsearch_extra_config"
+
+    # ── Config backup ─────────────────────────────────────────────
 
     - name: Verify config backup was created
       ansible.builtin.find:
@@ -91,11 +213,15 @@
       ansible.builtin.debug:
         msg: "Found {{ backups.files | length }} config backup(s)"
 
+    # ── ML setting ────────────────────────────────────────────────
+
     - name: Verify ML is enabled in elasticsearch.yml
       ansible.builtin.assert:
         that:
           - "'xpack.ml.enabled' in es_yml.content | b64decode"
         fail_msg: "ML setting not found in elasticsearch.yml"
+
+    # ── PAM limits ────────────────────────────────────────────────
 
     - name: Read PAM limits content
       ansible.builtin.slurp:
@@ -108,3 +234,168 @@
           - "'elasticsearch' in pam_content.content | b64decode"
           - "'nofile' in pam_content.content | b64decode"
         fail_msg: "PAM limits missing elasticsearch nofile setting"
+
+    # ── Memory lock ───────────────────────────────────────────────
+
+    - name: Verify bootstrap.memory_lock is in elasticsearch.yml
+      ansible.builtin.assert:
+        that:
+          - "'bootstrap.memory_lock: true' in es_yml.content | b64decode"
+        fail_msg: "bootstrap.memory_lock not found in elasticsearch.yml"
+
+    - name: Check systemd memlock override exists
+      ansible.builtin.stat:
+        path: /etc/systemd/system/elasticsearch.service.d/memlock.conf
+      register: memlock_override
+
+    - name: Assert memlock override is deployed
+      ansible.builtin.assert:
+        that:
+          - memlock_override.stat.exists
+        fail_msg: "systemd memlock.conf override not found"
+
+    - name: Read memlock override content
+      ansible.builtin.slurp:
+        src: /etc/systemd/system/elasticsearch.service.d/memlock.conf
+      register: memlock_content
+
+    - name: Assert memlock override has LimitMEMLOCK
+      ansible.builtin.assert:
+        that:
+          - "'LimitMEMLOCK=infinity' in memlock_content.content | b64decode"
+        fail_msg: "LimitMEMLOCK=infinity not in memlock.conf"
+
+    # ── Destructive requires name ─────────────────────────────────
+
+    - name: Verify action.destructive_requires_name is in elasticsearch.yml
+      ansible.builtin.assert:
+        that:
+          - "'action.destructive_requires_name: true' in es_yml.content | b64decode"
+        fail_msg: "action.destructive_requires_name not found in elasticsearch.yml"
+
+    # ── Recovery throttle ─────────────────────────────────────────
+
+    - name: Verify indices.recovery.max_bytes_per_sec is in elasticsearch.yml
+      ansible.builtin.assert:
+        that:
+          - "'indices.recovery.max_bytes_per_sec: 50mb' in es_yml.content | b64decode"
+        fail_msg: "indices.recovery.max_bytes_per_sec not found in elasticsearch.yml"
+
+    # ── CORS settings ─────────────────────────────────────────────
+
+    - name: Verify CORS settings in elasticsearch.yml
+      ansible.builtin.assert:
+        that:
+          - "'http.cors.enabled: true' in es_yml.content | b64decode"
+          - "'http.cors.allow-origin' in es_yml.content | b64decode"
+          - "'http.cors.allow-methods' in es_yml.content | b64decode"
+          - "'http.cors.allow-headers' in es_yml.content | b64decode"
+          - "'http.cors.allow-credentials' in es_yml.content | b64decode"
+        fail_msg: "CORS settings not found in elasticsearch.yml"
+
+    # ── File permissions ──────────────────────────────────────────
+
+    - name: Check /etc/elasticsearch directory permissions
+      ansible.builtin.stat:
+        path: /etc/elasticsearch
+      register: es_conf_dir
+
+    - name: Assert config directory has correct ownership
+      ansible.builtin.assert:
+        that:
+          - es_conf_dir.stat.exists
+          - es_conf_dir.stat.isdir
+        fail_msg: "/etc/elasticsearch directory missing or not a directory"
+
+    - name: Check elasticsearch.yml permissions
+      ansible.builtin.stat:
+        path: /etc/elasticsearch/elasticsearch.yml
+      register: es_yml_stat
+
+    - name: Assert elasticsearch.yml has correct permissions
+      ansible.builtin.assert:
+        that:
+          - es_yml_stat.stat.mode == '0644'
+        fail_msg: "elasticsearch.yml has mode {{ es_yml_stat.stat.mode }}, expected 0644"
+
+    - name: Check JVM options file permissions
+      ansible.builtin.stat:
+        path: /etc/elasticsearch/jvm.options.d/90-custom.options
+      register: jvm_stat
+
+    - name: Assert JVM options have correct group-readable permissions
+      ansible.builtin.assert:
+        that:
+          - jvm_stat.stat.mode == '0660'
+        fail_msg: "90-custom.options has mode {{ jvm_stat.stat.mode }}, expected 0660"
+
+    - name: Check custom data directory permissions
+      ansible.builtin.stat:
+        path: /data/elasticsearch
+      register: data_stat
+
+    - name: Assert data directory is owned by elasticsearch
+      ansible.builtin.assert:
+        that:
+          - data_stat.stat.pw_name == 'elasticsearch'
+          - data_stat.stat.gr_name == 'elasticsearch'
+        fail_msg: "Data directory not owned by elasticsearch user/group"
+
+    - name: Check custom log directory permissions
+      ansible.builtin.stat:
+        path: /var/log/elasticsearch-custom
+      register: log_stat
+
+    - name: Assert log directory is owned by elasticsearch
+      ansible.builtin.assert:
+        that:
+          - log_stat.stat.pw_name == 'elasticsearch'
+          - log_stat.stat.gr_name == 'elasticsearch'
+        fail_msg: "Log directory not owned by elasticsearch user/group"
+
+    # ── Keystore ──────────────────────────────────────────────────
+
+    - name: Check elasticsearch keystore exists
+      ansible.builtin.stat:
+        path: /etc/elasticsearch/elasticsearch.keystore
+      register: keystore_stat
+
+    - name: Assert keystore exists
+      ansible.builtin.assert:
+        that:
+          - keystore_stat.stat.exists
+        fail_msg: "Elasticsearch keystore not found"
+
+    - name: List keystore entries
+      ansible.builtin.command:
+        cmd: /usr/share/elasticsearch/bin/elasticsearch-keystore list
+      register: keystore_list
+      changed_when: false
+
+    - name: Assert keystore has expected entries
+      ansible.builtin.assert:
+        that:
+          - "'keystore.seed' in keystore_list.stdout"
+        fail_msg: "Keystore missing expected entries. Found: {{ keystore_list.stdout_lines }}"
+
+    # ── Security / TLS ────────────────────────────────────────────
+
+    - name: Check certificate directory exists
+      ansible.builtin.stat:
+        path: /etc/elasticsearch/certs
+      register: certs_dir
+
+    - name: Assert certificate directory exists
+      ansible.builtin.assert:
+        that:
+          - certs_dir.stat.exists
+          - certs_dir.stat.isdir
+        fail_msg: "Certificate directory /etc/elasticsearch/certs not found"
+
+    - name: Verify security settings in elasticsearch.yml
+      ansible.builtin.assert:
+        that:
+          - "'xpack.security.enabled: true' in es_yml.content | b64decode"
+          - "'xpack.security.transport.ssl.enabled: true' in es_yml.content | b64decode"
+          - "'xpack.security.http.ssl.enabled: true' in es_yml.content | b64decode"
+        fail_msg: "Security/TLS settings missing from elasticsearch.yml"

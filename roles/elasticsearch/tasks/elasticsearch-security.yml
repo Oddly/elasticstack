@@ -5,254 +5,583 @@
 # to handle CA creation, certificate generation, distribution, backup, and
 # renewal. The modular files are reusable across elasticsearch, kibana,
 # logstash, and beats roles.
+#
+# When elasticsearch_cert_source == 'external', users provide their own
+# certificate files and the auto-generated CA flow is skipped entirely.
 
-# -- Check CA expiry on CA host --
-- name: Check CA certificate expiry
-  ansible.builtin.include_tasks:
-    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_check_expiry.yml"
-    apply:
+# ============================================================
+# External certificates
+# ============================================================
+
+- name: Validate certificate source setting
+  ansible.builtin.assert:
+    that:
+      - elasticsearch_cert_source in ['elasticsearch_ca', 'external']
+    fail_msg: >-
+      Invalid elasticsearch_cert_source '{{ elasticsearch_cert_source }}'.
+      Must be 'elasticsearch_ca' or 'external'.
+
+- name: Handle external certificates
+  when: elasticsearch_cert_source == 'external'
+  block:
+
+    # -- Detect content mode vs file mode --
+    # Content mode: PEM strings in variables (always PEM format)
+    # File mode: paths to cert files (PEM or P12 auto-detected)
+
+    - name: Detect content mode for transport layer
+      ansible.builtin.set_fact:
+        _elasticsearch_transport_content_mode: "{{ elasticsearch_transport_tls_certificate_content | default('', true) | length > 0 }}"
+        _elasticsearch_http_content_mode: >-
+          {{ (elasticsearch_http_tls_certificate_content | default('', true) | length > 0) or
+             (elasticsearch_transport_tls_certificate_content | default('', true) | length > 0) }}
+
+    - name: Validate transport certificate is provided
+      ansible.builtin.assert:
+        that:
+          - (elasticsearch_transport_tls_certificate | length > 0) or
+            (elasticsearch_transport_tls_certificate_content | default('', true) | length > 0)
+        fail_msg: >-
+          External cert mode requires at minimum:
+          elasticsearch_transport_tls_certificate or elasticsearch_transport_tls_certificate_content
+
+    # -- Resolve effective HTTP variables (content takes precedence, then falls back to transport) --
+
+    - name: Resolve effective HTTP cert variables
+      ansible.builtin.set_fact:
+        _elasticsearch_effective_http_cert: "{{ elasticsearch_http_tls_certificate | default(elasticsearch_transport_tls_certificate, true) }}"
+        _elasticsearch_effective_http_key: "{{ elasticsearch_http_tls_key | default(elasticsearch_transport_tls_key, true) }}"
+        _elasticsearch_effective_http_pass: "{{ elasticsearch_http_tls_key_passphrase | default(elasticsearch_transport_tls_key_passphrase, true) }}"
+        _elasticsearch_effective_http_cert_content: >-
+          {{ elasticsearch_http_tls_certificate_content | default('', true) |
+             default(elasticsearch_transport_tls_certificate_content | default('', true), true) }}
+        _elasticsearch_effective_http_key_content: >-
+          {{ elasticsearch_http_tls_key_content | default('', true) |
+             default(elasticsearch_transport_tls_key_content | default('', true), true) }}
+
+    # ---- Content mode: PEM strings in variables ----
+
+    - name: Handle content-mode certificates (transport)
+      when: _elasticsearch_transport_content_mode | bool
+      block:
+        - name: Validate transport key content is provided
+          ansible.builtin.assert:
+            that:
+              - elasticsearch_transport_tls_key_content | default('', true) | length > 0
+            fail_msg: >-
+              Content mode requires both certificate and key content.
+              Set elasticsearch_transport_tls_key_content.
+
+        - name: Set transport format facts for content mode
+          ansible.builtin.set_fact:
+            _elasticsearch_transport_cert_format: pem
+            _elasticsearch_transport_ca_extracted: false
+
+        - name: Check for CA chain in transport content
+          ansible.builtin.set_fact:
+            _elasticsearch_transport_ca_extracted: true
+          when: >-
+            elasticsearch_transport_tls_certificate_content | default('')
+            | regex_findall('-----BEGIN CERTIFICATE-----') | length > 1
+
+    - name: Handle content-mode certificates (HTTP)
+      when:
+        - _elasticsearch_http_content_mode | bool
+        - elasticsearch_http_security | bool
+      block:
+        - name: Set HTTP format facts for content mode
+          ansible.builtin.set_fact:
+            _elasticsearch_http_cert_format: pem
+
+    # ---- File mode: paths to cert files ----
+
+    - name: Validate transport certificate (file mode)
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/certs/cert_validate.yml"
+      vars:
+        _validate_cert_path: "{{ elasticsearch_transport_tls_certificate }}"
+        _validate_key_path: "{{ elasticsearch_transport_tls_key }}"
+        _validate_pass: "{{ elasticsearch_transport_tls_key_passphrase }}"
+        _validate_remote_src: "{{ elasticsearch_tls_remote_src }}"
+        _validate_service: "Elasticsearch transport"
+        _validate_format_fact: _elasticsearch_transport_cert_format
+        _validate_key_fact: _elasticsearch_transport_resolved_key
+        _validate_ca_extracted_fact: _elasticsearch_transport_ca_extracted
+      when: not (_elasticsearch_transport_content_mode | bool)
+
+    - name: Validate HTTP certificate (file mode)
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/certs/cert_validate.yml"
+      vars:
+        _validate_cert_path: "{{ _elasticsearch_effective_http_cert }}"
+        _validate_key_path: "{{ _elasticsearch_effective_http_key }}"
+        _validate_pass: "{{ _elasticsearch_effective_http_pass }}"
+        _validate_remote_src: "{{ elasticsearch_tls_remote_src }}"
+        _validate_service: "Elasticsearch HTTP"
+        _validate_format_fact: _elasticsearch_http_cert_format
+        _validate_key_fact: _elasticsearch_http_resolved_key
+        _validate_ca_extracted_fact: _elasticsearch_http_ca_extracted
+      when:
+        - not (_elasticsearch_http_content_mode | bool)
+        - elasticsearch_http_security | bool
+
+    - name: Default HTTP format to transport format when HTTP security disabled
+      ansible.builtin.set_fact:
+        _elasticsearch_http_cert_format: "{{ _elasticsearch_transport_cert_format }}"
+      when: not (elasticsearch_http_security | bool)
+
+    # ---- Deploy certificates (both modes converge here) ----
+
+    - name: Create certificate directory
+      ansible.builtin.file:
+        state: directory
+        path: /etc/elasticsearch/certs
+        owner: root
+        group: elasticsearch
+        mode: "0750"
+
+    # -- Transport cert/key --
+
+    - name: Write transport certificate (from content)
+      ansible.builtin.copy:
+        content: "{{ elasticsearch_transport_tls_certificate_content }}"
+        dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-transport.crt"
+        owner: root
+        group: elasticsearch
+        mode: "0640"
+      when: _elasticsearch_transport_content_mode | bool
+      notify: Restart Elasticsearch
+
+    - name: Copy transport certificate (from file)
+      ansible.builtin.copy:
+        src: "{{ elasticsearch_transport_tls_certificate }}"
+        dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-transport{{ '.p12' if _elasticsearch_transport_cert_format == 'p12' else '.crt' }}"
+        owner: root
+        group: elasticsearch
+        mode: "0640"
+        remote_src: "{{ elasticsearch_tls_remote_src }}"
+      when: not (_elasticsearch_transport_content_mode | bool)
+      notify: Restart Elasticsearch
+
+    - name: Write transport key (from content)
+      ansible.builtin.copy:
+        content: "{{ elasticsearch_transport_tls_key_content }}"
+        dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-transport.key"
+        owner: root
+        group: elasticsearch
+        mode: "0640"
+      when: _elasticsearch_transport_content_mode | bool
+      notify: Restart Elasticsearch
+
+    - name: Copy transport key (from file, PEM only)
+      ansible.builtin.copy:
+        src: "{{ _elasticsearch_transport_resolved_key }}"
+        dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-transport.key"
+        owner: root
+        group: elasticsearch
+        mode: "0640"
+        remote_src: "{{ elasticsearch_tls_remote_src }}"
+      when:
+        - not (_elasticsearch_transport_content_mode | bool)
+        - _elasticsearch_transport_cert_format == 'pem'
+      notify: Restart Elasticsearch
+
+    # -- HTTP cert/key (falls back to transport if not set separately) --
+
+    - name: Write HTTP certificate (from content)
+      ansible.builtin.copy:
+        content: "{{ _elasticsearch_effective_http_cert_content }}"
+        dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-http.crt"
+        owner: root
+        group: elasticsearch
+        mode: "0640"
+      when:
+        - _elasticsearch_http_content_mode | bool
+        - elasticsearch_http_security | bool
+      notify: Restart Elasticsearch
+
+    - name: Copy HTTP certificate (from file)
+      ansible.builtin.copy:
+        src: "{{ _elasticsearch_effective_http_cert }}"
+        dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-http{{ '.p12' if _elasticsearch_http_cert_format == 'p12' else '.crt' }}"
+        owner: root
+        group: elasticsearch
+        mode: "0640"
+        remote_src: "{{ elasticsearch_tls_remote_src }}"
+      when:
+        - not (_elasticsearch_http_content_mode | bool)
+        - elasticsearch_http_security | bool
+      notify: Restart Elasticsearch
+
+    - name: Write HTTP key (from content)
+      ansible.builtin.copy:
+        content: "{{ _elasticsearch_effective_http_key_content }}"
+        dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-http.key"
+        owner: root
+        group: elasticsearch
+        mode: "0640"
+      when:
+        - _elasticsearch_http_content_mode | bool
+        - elasticsearch_http_security | bool
+      notify: Restart Elasticsearch
+
+    - name: Copy HTTP key (from file, PEM only)
+      ansible.builtin.copy:
+        src: "{{ _elasticsearch_http_resolved_key }}"
+        dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-http.key"
+        owner: root
+        group: elasticsearch
+        mode: "0640"
+        remote_src: "{{ elasticsearch_tls_remote_src }}"
+      when:
+        - not (_elasticsearch_http_content_mode | bool)
+        - elasticsearch_http_security | bool
+        - _elasticsearch_http_cert_format == 'pem'
+      notify: Restart Elasticsearch
+
+    # -- CA certificate --
+
+    - name: Write CA certificate (from content)
+      ansible.builtin.copy:
+        content: "{{ elasticsearch_tls_ca_certificate_content }}"
+        dest: /etc/elasticsearch/certs/ca.crt
+        owner: root
+        group: elasticsearch
+        mode: "0640"
+      when: elasticsearch_tls_ca_certificate_content | default('', true) | length > 0
+      notify: Restart Elasticsearch
+
+    - name: Copy CA certificate (from file)
+      ansible.builtin.copy:
+        src: "{{ elasticsearch_tls_ca_certificate }}"
+        dest: /etc/elasticsearch/certs/ca.crt
+        owner: root
+        group: elasticsearch
+        mode: "0640"
+        remote_src: "{{ elasticsearch_tls_remote_src }}"
+      when:
+        - elasticsearch_tls_ca_certificate_content | default('', true) | length == 0
+        - elasticsearch_tls_ca_certificate | length > 0
+      notify: Restart Elasticsearch
+
+    # Extract CA chain from the already-deployed transport cert on the node.
+    # Uses copy+content for idempotency (only writes when content changes).
+    - name: Read CA chain from PEM bundle (transport cert)
+      ansible.builtin.shell:
+        cmd: >-
+          awk '/-----BEGIN CERTIFICATE-----/{n++} n>1'
+          /etc/elasticsearch/certs/{{ inventory_hostname }}-transport.crt
+      register: _extracted_ca_chain
+      changed_when: false
+      when:
+        - elasticsearch_tls_ca_certificate | length == 0
+        - elasticsearch_tls_ca_certificate_content | default('', true) | length == 0
+        - _elasticsearch_transport_ca_extracted | bool
+
+    - name: Write extracted CA chain
+      ansible.builtin.copy:
+        content: "{{ _extracted_ca_chain.stdout }}\n"
+        dest: /etc/elasticsearch/certs/ca.crt
+        owner: root
+        group: elasticsearch
+        mode: "0640"
+      when:
+        - elasticsearch_tls_ca_certificate | length == 0
+        - elasticsearch_tls_ca_certificate_content | default('', true) | length == 0
+        - _elasticsearch_transport_ca_extracted | bool
+      notify: Restart Elasticsearch
+
+    - name: Set effective CA availability fact
+      ansible.builtin.set_fact:
+        _elasticsearch_external_has_ca: >-
+          {{ (elasticsearch_tls_ca_certificate | length > 0) or
+             (elasticsearch_tls_ca_certificate_content | default('', true) | length > 0) or
+             (_elasticsearch_transport_ca_extracted | bool) }}
+
+    # -- Remove stale auto-generated P12 files from a previous elasticsearch_ca deployment --
+
+    - name: Find stale auto-generated P12 certificate files
+      ansible.builtin.find:
+        paths: /etc/elasticsearch/certs
+        patterns: "*.p12"
+        excludes:
+          - "{{ inventory_hostname }}-transport.p12"
+          - "{{ inventory_hostname }}-http.p12"
+      register: _stale_p12_files
+
+    - name: Remove stale auto-generated P12 files
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ _stale_p12_files.files }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
+      when: _stale_p12_files.files | length > 0
+
+    # -- Keystore setup for external certs --
+
+    - name: Import Tasks elasticsearch-keystore.yml
+      ansible.builtin.import_tasks: elasticsearch-keystore.yml
+
+# ============================================================
+# Auto-generated certificates (elasticsearch_ca)
+# ============================================================
+
+- name: Handle auto-generated certificates
+  when: elasticsearch_cert_source == 'elasticsearch_ca'
+  block:
+    # -- Check CA expiry on CA host --
+    - name: Check CA certificate expiry
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/certs/cert_check_expiry.yml"
+        apply:
+          tags:
+            - certificates
+            - renew_ca
+      vars:
+        _cert_path: "{{ elasticstack_ca_dir }}/elastic-stack-ca.p12"
+        _cert_pass: "{{ elasticstack_ca_pass }}"
+        _cert_buffer_days: "{{ elasticstack_ca_expiration_buffer }}"
+        _cert_expiry_fact: elasticstack_ca_will_expire_soon
+      when: inventory_hostname == elasticstack_ca_host
       tags:
         - certificates
         - renew_ca
-  vars:
-    _cert_path: "{{ elasticstack_ca_dir }}/elastic-stack-ca.p12"
-    _cert_pass: "{{ elasticstack_ca_pass }}"
-    _cert_buffer_days: "{{ elasticstack_ca_expiration_buffer }}"
-    _cert_expiry_fact: elasticstack_ca_will_expire_soon
-  when: inventory_hostname == elasticstack_ca_host
-  tags:
-    - certificates
-    - renew_ca
 
-# -- Stop Logstash for CA renewal (orchestration, kept inline) --
-# Use default([]) + length > 0 for group checks (Ansible 2.20 compatibility)
-- name: Stop Logstash
-  ansible.builtin.service:
-    name: logstash
-    state: stopped
-  loop: "{{ groups[elasticstack_logstash_group_name] | default([]) }}"
-  delegate_to: "{{ item }}"
-  when:
-    - "'renew_ca' in ansible_run_tags or elasticstack_ca_will_expire_soon | bool"
-    - elasticstack_logstash_group_name is defined
-    - groups[elasticstack_logstash_group_name] | default([]) | length > 0
+    # -- Stop Logstash for CA renewal (orchestration, kept inline) --
+    # Use default([]) + length > 0 for group checks (Ansible 2.20 compatibility)
+    - name: Stop Logstash
+      ansible.builtin.service:
+        name: logstash
+        state: stopped
+      loop: "{{ groups[elasticstack_logstash_group_name] | default([]) }}"
+      delegate_to: "{{ item }}"
+      run_once: true
+      when:
+        - "'renew_ca' in ansible_run_tags or elasticstack_ca_will_expire_soon | bool"
+        - elasticstack_logstash_group_name is defined
+        - groups[elasticstack_logstash_group_name] | default([]) | length > 0
 
-# -- Backup CA directory on CA host --
-- name: Backup CA directory on CA host
-  ansible.builtin.include_tasks:
-    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
-    apply:
+    # -- Backup CA directory on CA host --
+    - name: Backup CA directory on CA host
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
+        apply:
+          tags:
+            - renew_ca
+      vars:
+        _backup_path: "{{ elasticstack_ca_dir }}"
+        _backup_target: "{{ inventory_hostname }}"
+      when:
+        - inventory_hostname == elasticstack_ca_host
+        - "'renew_ca' in ansible_run_tags or elasticstack_ca_will_expire_soon | bool"
       tags:
         - renew_ca
-  vars:
-    _backup_path: "{{ elasticstack_ca_dir }}"
-    _backup_target: "{{ inventory_hostname }}"
-  when:
-    - inventory_hostname == elasticstack_ca_host
-    - "'renew_ca' in ansible_run_tags or elasticstack_ca_will_expire_soon | bool"
-  tags:
-    - renew_ca
 
-# -- Backup CA cert on Ansible controller --
-- name: Backup CA cert on Ansible controller
-  ansible.builtin.include_tasks:
-    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
-    apply:
+    # -- Backup CA cert on Ansible controller --
+    - name: Backup CA cert on Ansible controller
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
+        apply:
+          tags:
+            - renew_ca
+      vars:
+        _backup_path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/certs/{{ inventory_hostname }}/ca.crt"
+        _backup_target: localhost
+        _backup_become: false
+      when:
+        - inventory_hostname == elasticstack_ca_host
+        - "'renew_ca' in ansible_run_tags or elasticstack_ca_will_expire_soon | bool"
       tags:
         - renew_ca
-  vars:
-    _backup_path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/certs/{{ inventory_hostname }}/ca.crt"
-    _backup_target: localhost
-    _backup_become: false
-  when:
-    - inventory_hostname == elasticstack_ca_host
-    - "'renew_ca' in ansible_run_tags or elasticstack_ca_will_expire_soon | bool"
-  tags:
-    - renew_ca
 
-# -- Check ES node certificate expiry --
-- name: Check Elasticsearch certificate expiry
-  ansible.builtin.include_tasks:
-    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_check_expiry.yml"
-    apply:
+    # -- Check ES node certificate expiry --
+    - name: Check Elasticsearch certificate expiry
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/certs/cert_check_expiry.yml"
+        apply:
+          tags:
+            - certificates
+            - renew_es_cert
+      vars:
+        _cert_path: "/etc/elasticsearch/certs/{{ ansible_facts.hostname }}.p12"
+        _cert_pass: "{{ elasticsearch_tls_key_passphrase }}"
+        _cert_buffer_days: "{{ elasticsearch_cert_expiration_buffer }}"
+        _cert_expiry_fact: elasticsearch_cert_will_expire_soon
       tags:
         - certificates
         - renew_es_cert
-  vars:
-    _cert_path: "/etc/elasticsearch/certs/{{ ansible_facts.hostname }}.p12"
-    _cert_pass: "{{ elasticsearch_tls_key_passphrase }}"
-    _cert_buffer_days: "{{ elasticsearch_cert_expiration_buffer }}"
-    _cert_expiry_fact: elasticsearch_cert_will_expire_soon
-  tags:
-    - certificates
-    - renew_es_cert
 
-# -- Backup ES certs on the node --
-- name: Backup Elasticsearch certs on node
-  ansible.builtin.include_tasks:
-    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
-    apply:
+    # -- Backup ES certs on the node --
+    - name: Backup Elasticsearch certs on node
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
+        apply:
+          tags:
+            - renew_ca
+            - renew_es_cert
+      vars:
+        _backup_path: /etc/elasticsearch/certs
+        _backup_target: "{{ inventory_hostname }}"
+      when: "'renew_es_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or elasticsearch_cert_will_expire_soon | bool"
       tags:
         - renew_ca
         - renew_es_cert
-  vars:
-    _backup_path: /etc/elasticsearch/certs
-    _backup_target: "{{ inventory_hostname }}"
-  when: "'renew_es_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or elasticsearch_cert_will_expire_soon | bool"
-  tags:
-    - renew_ca
-    - renew_es_cert
 
-# -- Backup ES cert on CA host --
-- name: Backup Elasticsearch cert on CA host
-  ansible.builtin.include_tasks:
-    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
-    apply:
+    # -- Backup ES cert on CA host --
+    - name: Backup Elasticsearch cert on CA host
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
+        apply:
+          tags:
+            - renew_ca
+            - renew_es_cert
+      vars:
+        _backup_path: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}.p12"
+        _backup_target: "{{ elasticstack_ca_host }}"
+      when: "'renew_es_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or elasticsearch_cert_will_expire_soon | bool"
       tags:
         - renew_ca
         - renew_es_cert
-  vars:
-    _backup_path: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}.p12"
-    _backup_target: "{{ elasticstack_ca_host }}"
-  when: "'renew_es_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or elasticsearch_cert_will_expire_soon | bool"
-  tags:
-    - renew_ca
-    - renew_es_cert
 
-# -- Backup ES cert on Ansible controller --
-- name: Backup Elasticsearch cert on Ansible controller
-  ansible.builtin.include_tasks:
-    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
-    apply:
+    # -- Backup ES cert on Ansible controller --
+    - name: Backup Elasticsearch cert on Ansible controller
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
+        apply:
+          tags:
+            - renew_ca
+            - renew_es_cert
+      vars:
+        _backup_path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/certs/{{ inventory_hostname }}/{{ ansible_facts.hostname }}.p12"
+        _backup_target: localhost
+        _backup_become: false
+      when: "'renew_es_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or elasticsearch_cert_will_expire_soon | bool"
       tags:
         - renew_ca
         - renew_es_cert
-  vars:
-    _backup_path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/certs/{{ inventory_hostname }}/{{ ansible_facts.hostname }}.p12"
-    _backup_target: localhost
-    _backup_become: false
-  when: "'renew_es_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or elasticsearch_cert_will_expire_soon | bool"
-  tags:
-    - renew_ca
-    - renew_es_cert
 
-# -- Keystore setup (kept inline, import_tasks) --
-- name: Import Tasks elasticsearch-keystore.yml
-  ansible.builtin.import_tasks: elasticsearch-keystore.yml
+    # -- Keystore setup (kept inline, import_tasks) --
+    - name: Import Tasks elasticsearch-keystore.yml
+      ansible.builtin.import_tasks: elasticsearch-keystore.yml
 
-# -- Create CA on CA host --
-- name: Ensure CA exists on CA host
-  ansible.builtin.include_tasks:
-    file: "{{ role_path }}/../elasticstack/tasks/certs/ca_ensure.yml"
-    apply:
+    # -- Create CA on CA host --
+    - name: Ensure CA exists on CA host
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/certs/ca_ensure.yml"
+        apply:
+          tags:
+            - certificates
+            - renew_ca
+            - renew_es_cert
+      when: inventory_hostname == elasticstack_ca_host
       tags:
         - certificates
         - renew_ca
         - renew_es_cert
-  when: inventory_hostname == elasticstack_ca_host
-  tags:
-    - certificates
-    - renew_ca
-    - renew_es_cert
 
-# -- Generate node certificates on CA host --
-- name: Generate Elasticsearch node certificate
-  ansible.builtin.include_tasks:
-    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_generate.yml"
-    apply:
+    # -- Generate node certificates on CA host --
+    - name: Generate Elasticsearch node certificate
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/certs/cert_generate.yml"
+        apply:
+          tags:
+            - certificates
+            - renew_ca
+            - renew_es_cert
+      vars:
+        _cert_name: "{{ hostvars[item].ansible_facts.hostname }}"
+        _cert_ip: "{{ hostvars[item].ansible_facts.default_ipv4.address | default(hostvars[item].ansible_facts.all_ipv4_addresses[0]) }}"
+        _cert_dns: "{{ hostvars[item].ansible_facts.hostname }},{{ hostvars[item].ansible_facts.fqdn }},{{ hostvars[item].inventory_hostname }}"
+        _cert_out: "{{ elasticstack_ca_dir }}/{{ hostvars[item].ansible_facts.hostname }}.p12"
+        _cert_pass: "{{ (hostvars[item].elasticsearch_tls_key_passphrase is defined) | ternary(hostvars[item].elasticsearch_tls_key_passphrase, elasticsearch_tls_key_passphrase) }}"
+        _cert_validity: "{{ elasticsearch_cert_validity_period }}"
+      loop: "{{ groups[elasticstack_elasticsearch_group_name] }}"
+      when: inventory_hostname == elasticstack_ca_host
       tags:
         - certificates
         - renew_ca
         - renew_es_cert
-  vars:
-    _cert_name: "{{ hostvars[item].ansible_facts.hostname }}"
-    _cert_ip: "{{ hostvars[item].ansible_facts.default_ipv4.address | default(hostvars[item].ansible_facts.all_ipv4_addresses[0]) }}"
-    _cert_dns: "{{ hostvars[item].ansible_facts.hostname }},{{ hostvars[item].ansible_facts.fqdn }},{{ hostvars[item].inventory_hostname }}"
-    _cert_out: "{{ elasticstack_ca_dir }}/{{ hostvars[item].ansible_facts.hostname }}.p12"
-    _cert_pass: "{{ (hostvars[item].elasticsearch_tls_key_passphrase is defined) | ternary(hostvars[item].elasticsearch_tls_key_passphrase, elasticsearch_tls_key_passphrase) }}"
-    _cert_validity: "{{ elasticsearch_cert_validity_period }}"
-  loop: "{{ groups[elasticstack_elasticsearch_group_name] }}"
-  when: inventory_hostname == elasticstack_ca_host
-  tags:
-    - certificates
-    - renew_ca
-    - renew_es_cert
 
-# -- Extract CA public certificate --
-- name: Extract CA public certificate
-  ansible.builtin.include_tasks:
-    file: "{{ role_path }}/../elasticstack/tasks/certs/ca_extract_public.yml"
-    apply:
+    # -- Extract CA public certificate --
+    - name: Extract CA public certificate
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/certs/ca_extract_public.yml"
+        apply:
+          tags:
+            - certificates
+            - renew_ca
+      vars:
+        _cert_p12_path: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}.p12"
+        _cert_ca_out: "{{ elasticstack_ca_dir }}/ca.crt"
+        _cert_pass: "{{ elasticsearch_tls_key_passphrase }}"
+      when: inventory_hostname == elasticstack_ca_host
       tags:
         - certificates
         - renew_ca
-  vars:
-    _cert_p12_path: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}.p12"
-    _cert_ca_out: "{{ elasticstack_ca_dir }}/ca.crt"
-    _cert_pass: "{{ elasticsearch_tls_key_passphrase }}"
-  when: inventory_hostname == elasticstack_ca_host
-  tags:
-    - certificates
-    - renew_ca
 
-# -- Create ES certificate directory (ES-specific path/perms, kept inline) --
-- name: Create certificate directory
-  ansible.builtin.file:
-    state: directory
-    path: /etc/elasticsearch/certs
-    owner: root
-    group: elasticsearch
-    mode: "0750"
-  tags:
-    - certificates
-    - renew_ca
-    - renew_es_cert
-
-# -- Distribute CA certificate to ES nodes --
-- name: Distribute CA certificate to Elasticsearch nodes
-  ansible.builtin.include_tasks:
-    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_distribute.yml"
-    apply:
+    # -- Create ES certificate directory (ES-specific path/perms, kept inline) --
+    - name: Create certificate directory
+      ansible.builtin.file:
+        state: directory
+        path: /etc/elasticsearch/certs
+        owner: root
+        group: elasticsearch
+        mode: "0750"
       tags:
         - certificates
         - renew_ca
         - renew_es_cert
-  vars:
-    _cert_src: "{{ elasticstack_ca_dir }}/ca.crt"
-    _cert_dest: /etc/elasticsearch/certs/ca.crt
-    _cert_owner: root
-    _cert_group: elasticsearch
-    _cert_mode: "0640"
-    _cert_notify:
-      - Restart Elasticsearch
-      - Restart kibana if available for elasticsearch certificates
-  tags:
-    - certificates
-    - renew_ca
-    - renew_es_cert
 
-# -- Distribute node certificate to ES nodes --
-- name: Distribute node certificate to Elasticsearch nodes
-  ansible.builtin.include_tasks:
-    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_distribute.yml"
-    apply:
+    # -- Distribute CA certificate to ES nodes --
+    - name: Distribute CA certificate to Elasticsearch nodes
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/certs/cert_distribute.yml"
+        apply:
+          tags:
+            - certificates
+            - renew_ca
+            - renew_es_cert
+      vars:
+        _cert_src: "{{ elasticstack_ca_dir }}/ca.crt"
+        _cert_dest: /etc/elasticsearch/certs/ca.crt
+        _cert_owner: root
+        _cert_group: elasticsearch
+        _cert_mode: "0640"
+        _cert_notify:
+          - Restart Elasticsearch
+          - Restart kibana if available for elasticsearch certificates
       tags:
         - certificates
         - renew_ca
         - renew_es_cert
-  vars:
-    _cert_src: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}.p12"
-    _cert_dest: "/etc/elasticsearch/certs/{{ ansible_facts.hostname }}.p12"
-    _cert_owner: root
-    _cert_group: elasticsearch
-    _cert_mode: "0640"
-    _cert_notify:
-      - Restart Elasticsearch
-      - Restart kibana if available for elasticsearch certificates
-  tags:
-    - certificates
-    - renew_ca
-    - renew_es_cert
+
+    # -- Distribute node certificate to ES nodes --
+    - name: Distribute node certificate to Elasticsearch nodes
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/certs/cert_distribute.yml"
+        apply:
+          tags:
+            - certificates
+            - renew_ca
+            - renew_es_cert
+      vars:
+        _cert_src: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}.p12"
+        _cert_dest: "/etc/elasticsearch/certs/{{ ansible_facts.hostname }}.p12"
+        _cert_owner: root
+        _cert_group: elasticsearch
+        _cert_mode: "0640"
+        _cert_notify:
+          - Restart Elasticsearch
+          - Restart kibana if available for elasticsearch certificates
+      tags:
+        - certificates
+        - renew_ca
+        - renew_es_cert
+
+# ============================================================
+# Post-certificate tasks (shared by both cert sources)
+# ============================================================
 
 - name: Start Elasticsearch for security tasks
   ansible.builtin.service:
@@ -301,7 +630,7 @@
     url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}"
     user: elastic
     password: "{{ elasticsearch_bootstrap_pw }}"
-    validate_certs: false
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
     force_basic_auth: true
   register: elasticsearch_api_status_bootstrap
   changed_when: false
@@ -320,7 +649,7 @@
     url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/health?pretty"
     user: elastic
     password: "{{ elasticsearch_bootstrap_pw }}"
-    validate_certs: false
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
     force_basic_auth: true
   register: elasticsearch_cluster_status_bootstrap
   changed_when: false
@@ -344,7 +673,7 @@
     url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}"
     user: elastic
     password: "{{ elasticstack_password.stdout }}"
-    validate_certs: false
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
     force_basic_auth: true
   register: elasticsearch_api_status
   changed_when: false
@@ -359,8 +688,9 @@
   when: ansible_facts.virtualization_type in ["container", "docker", "lxc"]
   block:
     - name: Remove cache
-      ansible.builtin.command: >
-        rm -rf /var/cache/*
+      ansible.builtin.shell:
+        cmd: rm -rf /var/cache/*
+        executable: /bin/bash
       changed_when: false
 
     - name: Set lenient disk watermarks for CI containers
@@ -376,7 +706,7 @@
         body_format: json
         user: elastic
         password: "{{ elasticstack_password.stdout | default(elasticsearch_bootstrap_pw) }}"
-        validate_certs: false
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
         force_basic_auth: true
       register: elasticsearch_watermark_response
       until: elasticsearch_watermark_response.status | default(0) == 200
@@ -393,7 +723,7 @@
     url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/health?pretty"
     user: elastic
     password: "{{ elasticstack_password.stdout }}"
-    validate_certs: false
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
     force_basic_auth: true
   register: elasticsearch_cluster_status
   changed_when: false
@@ -438,3 +768,47 @@
   when: inventory_hostname == elasticstack_ca_host
 
 # Maybe make sure that Elasticsearch is using the right protocol http(s) to connect, even in newly setup clusters
+
+# -- Certificate expiry warnings --
+- name: Check transport certificate expiry warning
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_expiry_warn.yml"
+  vars:
+    _warn_cert_path: >-
+      {{ '/etc/elasticsearch/certs/' ~ inventory_hostname ~ '-transport'
+         ~ ('.p12' if (_elasticsearch_transport_cert_format | default('')) == 'p12' else '.crt')
+         if elasticsearch_cert_source == 'external'
+         else '/etc/elasticsearch/certs/' ~ ansible_facts.hostname ~ '.p12' }}
+    _warn_cert_pass: >-
+      {{ elasticsearch_transport_tls_key_passphrase
+         if elasticsearch_cert_source == 'external'
+         else elasticsearch_tls_key_passphrase }}
+    _warn_cert_format: >-
+      {{ _elasticsearch_transport_cert_format | default('p12')
+         if elasticsearch_cert_source == 'external'
+         else 'p12' }}
+    _warn_buffer_days: "{{ elasticsearch_cert_expiration_buffer }}"
+    _warn_service_name: "Elasticsearch transport"
+    _warn_cert_source: "{{ elasticsearch_cert_source }}"
+
+- name: Check HTTP certificate expiry warning
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_expiry_warn.yml"
+  vars:
+    _warn_cert_path: >-
+      {{ '/etc/elasticsearch/certs/' ~ inventory_hostname ~ '-http'
+         ~ ('.p12' if (_elasticsearch_http_cert_format | default('')) == 'p12' else '.crt')
+         if elasticsearch_cert_source == 'external'
+         else '/etc/elasticsearch/certs/' ~ ansible_facts.hostname ~ '.p12' }}
+    _warn_cert_pass: >-
+      {{ _elasticsearch_effective_http_pass | default(elasticsearch_transport_tls_key_passphrase)
+         if elasticsearch_cert_source == 'external'
+         else elasticsearch_tls_key_passphrase }}
+    _warn_cert_format: >-
+      {{ _elasticsearch_http_cert_format | default('p12')
+         if elasticsearch_cert_source == 'external'
+         else 'p12' }}
+    _warn_buffer_days: "{{ elasticsearch_cert_expiration_buffer }}"
+    _warn_service_name: "Elasticsearch http"
+    _warn_cert_source: "{{ elasticsearch_cert_source }}"
+  when: elasticsearch_http_security | bool
