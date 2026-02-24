@@ -332,6 +332,17 @@
     - Restart Elasticsearch
   when: elasticsearch_manage_yaml | bool
 
+- name: Configure Elasticsearch logging
+  ansible.builtin.template:
+    src: log4j2.properties.j2
+    dest: /etc/elasticsearch/log4j2.properties
+    owner: root
+    group: elasticsearch
+    mode: "0660"
+    backup: "{{ elasticsearch_config_backup }}"
+  notify: Restart Elasticsearch
+  when: elasticsearch_manage_logging | bool
+
 - name: Create Elasticsearch directory
   ansible.builtin.file:
     path: "{{ item.path }}"
