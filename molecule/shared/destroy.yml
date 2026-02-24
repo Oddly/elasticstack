@@ -8,7 +8,7 @@
   vars:
     incus_host: "{{ lookup('env', 'INCUS_HOST') | default('172.30.0.172', true) }}"
     molecule_ssh_key: "{{ lookup('env', 'MOLECULE_SSH_KEY') | default(lookup('env', 'HOME') ~ '/.ssh/molecule_id_ed25519', true) }}"
-    molecule_yml: "{{ lookup('file', molecule_ephemeral_directory ~ '/molecule.yml') | from_yaml }}"
+    molecule_yml: "{{ lookup('file', molecule_scenario_directory ~ '/molecule.yml') | from_yaml }}"
     _ssh_cmd: >-
       ssh -o StrictHostKeyChecking=no -o BatchMode=yes
       -i {{ molecule_ssh_key }} root@{{ incus_host }}

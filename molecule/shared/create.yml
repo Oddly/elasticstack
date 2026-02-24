@@ -12,7 +12,7 @@
   vars:
     incus_host: "{{ lookup('env', 'INCUS_HOST') | default('172.30.0.172', true) }}"
     molecule_ssh_key: "{{ lookup('env', 'MOLECULE_SSH_KEY') | default(lookup('env', 'HOME') ~ '/.ssh/molecule_id_ed25519', true) }}"
-    molecule_yml: "{{ lookup('file', molecule_ephemeral_directory ~ '/molecule.yml') | from_yaml }}"
+    molecule_yml: "{{ lookup('file', molecule_scenario_directory ~ '/molecule.yml') | from_yaml }}"
     gitea_run_id: "{{ lookup('env', 'GITHUB_RUN_ID') | default('', true) }}"
     gitea_repository: "{{ lookup('env', 'GITHUB_REPOSITORY') | default('', true) }}"
     _ssh_cmd: >-
@@ -63,6 +63,7 @@
           exit 1
         fi
         {% for item in molecule_yml.platforms %}
+        incus delete {{ item.name }} --force 2>/dev/null || true
         incus launch {{ incus_images[item.distro | default("debian12")] }} {{ item.name }} \
           -c limits.memory=6GB \
           -c security.nesting=true \
