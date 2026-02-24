@@ -15,7 +15,7 @@ The collection handles the complete lifecycle of an Elastic Stack deployment: pa
 | [kibana](Roles-kibana) | Kibana — web UI, Elasticsearch connection, optional HTTPS frontend |
 | [logstash](Roles-logstash) | Logstash — pipeline management (inputs, filters, outputs), queue config, ES user/role creation |
 | [beats](Roles-beats) | Filebeat, Metricbeat, and Auditbeat — log/metric/audit collection with syslog, journald, and Docker inputs |
-| [repos](Roles-repos) | APT/YUM/Zypper repository setup, GPG key management |
+| [repos](Roles-repos) | APT/YUM repository setup, GPG key management |
 
 ## Quick start
 

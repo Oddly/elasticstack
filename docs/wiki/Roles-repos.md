@@ -1,6 +1,6 @@
 # repos
 
-Ansible role for configuring Elastic Stack package repositories. Sets up APT, YUM, or Zypper repositories and imports the Elastic GPG signing key. This role must run before any other role in the collection so that packages are available for installation.
+Ansible role for configuring Elastic Stack package repositories. Sets up APT or YUM repositories and imports the Elastic GPG signing key. This role must run before any other role in the collection so that packages are available for installation.
 
 The role has no service to manage — it only configures the package manager. It delegates to the shared `elasticstack` role for defaults (base URL, release version, GPG key URL).
 
@@ -11,7 +11,7 @@ graph TD
     A[Include shared defaults] --> B{OS family?}
     B -->|Debian| C[Install gpg + gpg-agent]
     B -->|RedHat| D[Install gnupg]
-    B -->|SuSE| E[Install gpg2]
+
 
     C --> F[Download GPG key to<br/>/usr/share/keyrings/elasticsearch.asc]
     F --> G[Remove legacy repo files<br/>7.x, 8.x, 9.x]
@@ -25,8 +25,6 @@ graph TD
     K --> M
     L --> M
     M --> N[Configure yum repository]
-
-    E --> O[Configure zypper repository<br/>with auto_import_keys]
 
     style K fill:#ff9800,stroke:#333,color:#fff
     style G fill:#f44336,stroke:#333,color:#fff
@@ -55,11 +53,6 @@ graph TD
 3. Imports the Elastic RPM GPG key via `rpm_key`
 4. Configures the YUM repository at `<base_url>/packages/<release>.x/yum`
 
-### SuSE
-
-1. Installs `gpg2`
-2. Configures the Zypper repository with `auto_import_keys: true`
-
 ## EL 9+ crypto-policy workaround
 
 RHEL 9 and derivatives ship with stricter default crypto policies that can prevent RPM signature verification of older Elastic packages (see [elasticsearch#85876](https://github.com/elastic/elasticsearch/issues/85876)). The workaround sets `update-crypto-policies --set LEGACY` to relax the policy.
@@ -83,7 +76,7 @@ All repository configuration comes from the shared `elasticstack` role defaults.
 | `elasticstack_release` | `8` | Major version — controls which repo URL is configured |
 | `elasticstack_repo_base_url` | `https://artifacts.elastic.co` | Base URL for repos (override for mirrors). Also reads `ELASTICSTACK_REPO_BASE_URL` env var |
 | `elasticstack_repo_key` | `<base_url>/GPG-KEY-elasticsearch` | GPG key URL |
-| `elasticstack_enable_repos` | `true` | Whether the YUM/Zypper repo is `enabled` (APT repos are always present once added) |
+| `elasticstack_enable_repos` | `true` | Whether the YUM repo is `enabled` (APT repos are always present once added) |
 | `elasticstack_rpm_workaround` | `false` | Apply EL 9+ crypto-policy workaround |
 
 See [Roles-elasticstack](Roles-elasticstack) for full documentation of these variables.

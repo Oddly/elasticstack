@@ -83,7 +83,7 @@ See the **[getting started guide](https://github.com/Oddly/elasticstack/wiki/Get
 
 | Role | Purpose |
 |------|---------|
-| [`repos`](https://github.com/Oddly/elasticstack/wiki/Roles-repos) | APT/YUM/Zypper repository and GPG key setup |
+| [`repos`](https://github.com/Oddly/elasticstack/wiki/Roles-repos) | APT/YUM repository and GPG key setup |
 | [`elasticsearch`](https://github.com/Oddly/elasticstack/wiki/Roles-elasticsearch) | Cluster formation, JVM tuning, security setup, rolling upgrades |
 | [`kibana`](https://github.com/Oddly/elasticstack/wiki/Roles-kibana) | Web UI, Elasticsearch connection, optional HTTPS frontend |
 | [`logstash`](https://github.com/Oddly/elasticstack/wiki/Roles-logstash) | Pipeline management, queue config, ES user/role creation |

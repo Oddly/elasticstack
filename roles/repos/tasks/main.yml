@@ -13,6 +13,3 @@
   ansible.builtin.import_tasks: debian.yml
   when: ansible_facts.os_family == 'Debian'
 
-- name: Import SuSE tasks
-  ansible.builtin.import_tasks: suse.yml
-  when: ansible_facts.os_family|lower == 'suse'
