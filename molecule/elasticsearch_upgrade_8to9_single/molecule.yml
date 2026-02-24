@@ -1,4 +1,5 @@
 ---
+prerun: false
 # Molecule scenario for testing single-node Elasticsearch 8.x to 9.x upgrade
 # Simpler test case than multi-node cluster upgrade
 dependency:
