@@ -589,6 +589,7 @@
     state: started
     enabled: true
   register: elasticsearch_freshstart_security
+  when: not ansible_check_mode
 
 - name: Wait for all instances to start
   ansible.builtin.include_tasks: wait_for_instance.yml
@@ -625,147 +626,150 @@
     elasticsearch_http_protocol: "https"
   when: elasticsearch_http_security
 
-- name: Check for API with bootstrap password
-  ansible.builtin.uri:
-    url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}"
-    user: elastic
-    password: "{{ elasticsearch_bootstrap_pw }}"
-    validate_certs: "{{ elasticsearch_validate_api_certs }}"
-    force_basic_auth: true
-  register: elasticsearch_api_status_bootstrap
-  changed_when: false
-  no_log: "{{ elasticstack_no_log }}"
-  when:
-    - not elasticsearch_passwords_file.stat.exists | bool
-  until: elasticsearch_api_status_bootstrap.json.cluster_name is defined
-  retries: 5
-  delay: 10
-
-# We need this check twice. One to wait for the API to be actually available. And a second time to
-# check the actual return code. Should not cause a huge delay.
-
-- name: Check for cluster status with bootstrap password
-  ansible.builtin.uri:
-    url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/health?pretty"
-    user: elastic
-    password: "{{ elasticsearch_bootstrap_pw }}"
-    validate_certs: "{{ elasticsearch_validate_api_certs }}"
-    force_basic_auth: true
-  register: elasticsearch_cluster_status_bootstrap
-  changed_when: false
-  no_log: "{{ elasticstack_no_log }}"
-  when:
-    - not elasticsearch_passwords_file.stat.exists | bool
-  until: elasticsearch_cluster_status_bootstrap.json.status in ["green", "yellow"]
-  retries: 5
-  delay: 10
-
-- name: Fetch Elastic password
-  ansible.builtin.include_tasks:
-    file: "{{ role_path }}/../elasticstack/tasks/fetch_password.yml"
-  vars:
-    _password_user: elastic
-    _password_fact: elasticstack_password
-  when: elasticsearch_passwords_file.stat.exists | bool
-
-- name: Check for API availability with elastic password
-  ansible.builtin.uri:
-    url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}"
-    user: elastic
-    password: "{{ elasticstack_password.stdout }}"
-    validate_certs: "{{ elasticsearch_validate_api_certs }}"
-    force_basic_auth: true
-  register: elasticsearch_api_status
-  changed_when: false
-  no_log: "{{ elasticstack_no_log }}"
-  when:
-    - elasticsearch_passwords_file.stat.exists | bool
-  until: elasticsearch_api_status.json.cluster_name is defined
-  retries: 20
-  delay: 10
-
-- name: Work around low resources on CI/CD nodes
-  when: ansible_facts.virtualization_type in ["container", "docker", "lxc"]
+- name: Runtime cluster setup (requires running Elasticsearch)
+  when: not ansible_check_mode
   block:
-    - name: Remove cache
-      ansible.builtin.shell:
-        cmd: rm -rf /var/cache/*
-        executable: /bin/bash
-      changed_when: false
-
-    - name: Set lenient disk watermarks for CI containers
+    - name: Check for API with bootstrap password
       ansible.builtin.uri:
-        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/settings"
-        method: PUT
-        body:
-          persistent:
-            cluster.routing.allocation.disk.watermark.low: "97%"
-            cluster.routing.allocation.disk.watermark.high: "98%"
-            cluster.routing.allocation.disk.watermark.flood_stage: "99%"
-            cluster.routing.allocation.disk.watermark.flood_stage.frozen: "99%"
-        body_format: json
+        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}"
         user: elastic
-        password: "{{ elasticstack_password.stdout | default(elasticsearch_bootstrap_pw) }}"
+        password: "{{ elasticsearch_bootstrap_pw }}"
         validate_certs: "{{ elasticsearch_validate_api_certs }}"
         force_basic_auth: true
-      register: elasticsearch_watermark_response
-      until: elasticsearch_watermark_response.status | default(0) == 200
-      retries: 5
-      delay: 10
+      register: elasticsearch_api_status_bootstrap
       changed_when: false
       no_log: "{{ elasticstack_no_log }}"
+      when:
+        - not elasticsearch_passwords_file.stat.exists | bool
+      until: elasticsearch_api_status_bootstrap.json.cluster_name is defined
+      retries: 5
+      delay: 10
 
-# We need this check twice. One to wait for the API to be actually available. And a second time to
-# check the actual return code. Should not cause a huge delay.
+    # We need this check twice. One to wait for the API to be actually available. And a second time to
+    # check the actual return code. Should not cause a huge delay.
 
-- name: Check for cluster status with elastic password
-  ansible.builtin.uri:
-    url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/health?pretty"
-    user: elastic
-    password: "{{ elasticstack_password.stdout }}"
-    validate_certs: "{{ elasticsearch_validate_api_certs }}"
-    force_basic_auth: true
-  register: elasticsearch_cluster_status
-  changed_when: false
-  no_log: "{{ elasticstack_no_log }}"
-  when:
-    - elasticsearch_passwords_file.stat.exists | bool
-  until: (elasticsearch_cluster_status.json.status | default('')) in ['green', 'yellow']
-  retries: 20
-  delay: 10
+    - name: Check for cluster status with bootstrap password
+      ansible.builtin.uri:
+        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/health?pretty"
+        user: elastic
+        password: "{{ elasticsearch_bootstrap_pw }}"
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
+        force_basic_auth: true
+      register: elasticsearch_cluster_status_bootstrap
+      changed_when: false
+      no_log: "{{ elasticstack_no_log }}"
+      when:
+        - not elasticsearch_passwords_file.stat.exists | bool
+      until: elasticsearch_cluster_status_bootstrap.json.status in ["green", "yellow"]
+      retries: 5
+      delay: 10
 
-- name: Leave a file showing that the cluster is set up
-  ansible.builtin.template:
-    dest: "{{ elasticsearch_initialized_file }}"
-    src: elasticsearch_initialized.j2
-    owner: root
-    group: root
-    mode: "0600"
+    - name: Fetch Elastic password
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/fetch_password.yml"
+      vars:
+        _password_user: elastic
+        _password_fact: elasticstack_password
+      when: elasticsearch_passwords_file.stat.exists | bool
 
-- name: Set var that cluster is set up
-  ansible.builtin.set_fact:
-    elasticsearch_cluster_set_up: true
+    - name: Check for API availability with elastic password
+      ansible.builtin.uri:
+        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}"
+        user: elastic
+        password: "{{ elasticstack_password.stdout }}"
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
+        force_basic_auth: true
+      register: elasticsearch_api_status
+      changed_when: false
+      no_log: "{{ elasticstack_no_log }}"
+      when:
+        - elasticsearch_passwords_file.stat.exists | bool
+      until: elasticsearch_api_status.json.cluster_name is defined
+      retries: 20
+      delay: 10
 
-- name: Create initial passwords
-  ansible.builtin.shell: >
-    set -o pipefail;
-    /usr/share/elasticsearch/bin/elasticsearch-setup-passwords auto -b >
-    {{ elasticstack_initial_passwords }}
-  args:
-    executable: /bin/bash
-    creates: "{{ elasticstack_initial_passwords }}"
-  when: inventory_hostname == elasticstack_ca_host
-  no_log: "{{ elasticstack_no_log }}"
+    - name: Work around low resources on CI/CD nodes
+      when: ansible_facts.virtualization_type in ["container", "docker", "lxc"]
+      block:
+        - name: Remove cache
+          ansible.builtin.shell:
+            cmd: rm -rf /var/cache/*
+            executable: /bin/bash
+          changed_when: false
 
-# It would be better to create and set the permissions before generating the passwords. But this would
-# break the logic that relies on the file being absent when no passwords are set
-- name: Set permissions on passwords file
-  ansible.builtin.file:
-    path: "{{ elasticstack_initial_passwords }}"
-    owner: root
-    group: root
-    mode: "0600"
-  when: inventory_hostname == elasticstack_ca_host
+        - name: Set lenient disk watermarks for CI containers
+          ansible.builtin.uri:
+            url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/settings"
+            method: PUT
+            body:
+              persistent:
+                cluster.routing.allocation.disk.watermark.low: "97%"
+                cluster.routing.allocation.disk.watermark.high: "98%"
+                cluster.routing.allocation.disk.watermark.flood_stage: "99%"
+                cluster.routing.allocation.disk.watermark.flood_stage.frozen: "99%"
+            body_format: json
+            user: elastic
+            password: "{{ elasticstack_password.stdout | default(elasticsearch_bootstrap_pw) }}"
+            validate_certs: "{{ elasticsearch_validate_api_certs }}"
+            force_basic_auth: true
+          register: elasticsearch_watermark_response
+          until: elasticsearch_watermark_response.status | default(0) == 200
+          retries: 5
+          delay: 10
+          changed_when: false
+          no_log: "{{ elasticstack_no_log }}"
+
+    # We need this check twice. One to wait for the API to be actually available. And a second time to
+    # check the actual return code. Should not cause a huge delay.
+
+    - name: Check for cluster status with elastic password
+      ansible.builtin.uri:
+        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/health?pretty"
+        user: elastic
+        password: "{{ elasticstack_password.stdout }}"
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
+        force_basic_auth: true
+      register: elasticsearch_cluster_status
+      changed_when: false
+      no_log: "{{ elasticstack_no_log }}"
+      when:
+        - elasticsearch_passwords_file.stat.exists | bool
+      until: (elasticsearch_cluster_status.json.status | default('')) in ['green', 'yellow']
+      retries: 20
+      delay: 10
+
+    - name: Leave a file showing that the cluster is set up
+      ansible.builtin.template:
+        dest: "{{ elasticsearch_initialized_file }}"
+        src: elasticsearch_initialized.j2
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Set var that cluster is set up
+      ansible.builtin.set_fact:
+        elasticsearch_cluster_set_up: true
+
+    - name: Create initial passwords
+      ansible.builtin.shell: >
+        set -o pipefail;
+        /usr/share/elasticsearch/bin/elasticsearch-setup-passwords auto -b >
+        {{ elasticstack_initial_passwords }}
+      args:
+        executable: /bin/bash
+        creates: "{{ elasticstack_initial_passwords }}"
+      when: inventory_hostname == elasticstack_ca_host
+      no_log: "{{ elasticstack_no_log }}"
+
+    # It would be better to create and set the permissions before generating the passwords. But this would
+    # break the logic that relies on the file being absent when no passwords are set
+    - name: Set permissions on passwords file
+      ansible.builtin.file:
+        path: "{{ elasticstack_initial_passwords }}"
+        owner: root
+        group: root
+        mode: "0600"
+      when: inventory_hostname == elasticstack_ca_host
 
 # Maybe make sure that Elasticsearch is using the right protocol http(s) to connect, even in newly setup clusters
 

@@ -458,6 +458,7 @@
     state: started
     enabled: true
   register: elasticsearch_freshstart
+  when: not ansible_check_mode
 
 # The comment in the following task will disable KICS security checks for this
 # very line. In this state of the system we can only communicate without https
