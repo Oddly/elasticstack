@@ -58,7 +58,7 @@
         - renew_ca
         - renew_kibana_cert
   vars:
-    _backup_path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_facts.hostname }}-kibana.p12"
+    _backup_path: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/certs/{{ inventory_hostname }}/{{ ansible_facts.hostname }}-kibana.p12"
     _backup_target: localhost
     _backup_become: false
   when: "'renew_kibana_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or kibana_cert_will_expire_soon | bool"
