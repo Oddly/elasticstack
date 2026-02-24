@@ -4,7 +4,7 @@
 - name: Converge
   hosts: all
   vars:
-    #elasticsearch_security: true # needed for tests of > 7 releases
+    # elasticsearch_security: true # needed for tests of > 7 releases
     elasticstack_full_stack: false
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticsearch_heap: "1"

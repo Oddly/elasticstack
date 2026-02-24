@@ -1,6 +1,11 @@
 ---
 extends: relaxed
 
+ignore:
+  - .ansible/
+  - .venv/
+  - venv/
+
 rules:
   comments:
     min-spaces-from-content: 1

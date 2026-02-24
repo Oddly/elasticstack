@@ -28,8 +28,8 @@ provisioner:
         ansible_python_interpreter: /usr/bin/python3
   # Just enable temporarily. Sometimes it's useful, but most of the time it's
   # overwhelming
-  #env:
-  #  ANSIBLE_VERBOSITY: 3
+  # env:
+  #   ANSIBLE_VERBOSITY: 3
 scenario:
   test_sequence:
     - dependency

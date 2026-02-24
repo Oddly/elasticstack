@@ -141,8 +141,8 @@ beats_filebeat_mysql_slowlog_input: false
 #   - system
 #   - nginx
 # @end
-#beats_filebeat_modules:
-#  - system
+# beats_filebeat_modules:
+#   - system
 
 # === Auditbeat Configuration ===
 
