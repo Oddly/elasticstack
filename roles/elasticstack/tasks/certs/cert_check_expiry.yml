@@ -24,7 +24,7 @@
   when: elasticstack_cert_stat.stat.exists
   block:
     - name: Get certificate info
-      cert_info:
+      oddly.elasticstack.cert_info:
         path: "{{ _cert_path }}"
         passphrase: "{{ _cert_pass | default(omit, true) }}"
         format: "{{ _cert_format | default('p12') }}"
