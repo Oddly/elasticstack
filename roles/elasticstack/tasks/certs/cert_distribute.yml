@@ -14,7 +14,7 @@
 - name: "Fetch certificate from CA host - {{ _cert_src | basename }}"
   ansible.builtin.fetch:
     src: "{{ _cert_src }}"
-    dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ _cert_src | basename }}"
+    dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/certs/{{ inventory_hostname }}/{{ _cert_src | basename }}"
     flat: true
   delegate_to: "{{ elasticstack_ca_host }}"
   throttle: 1
@@ -23,7 +23,7 @@
 
 - name: "Copy certificate to target node - {{ _cert_src | basename }}"
   ansible.builtin.copy:
-    src: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ _cert_src | basename }}"
+    src: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/certs/{{ inventory_hostname }}/{{ _cert_src | basename }}"
     dest: "{{ _cert_dest }}"
     owner: "{{ _cert_owner }}"
     group: "{{ _cert_group }}"

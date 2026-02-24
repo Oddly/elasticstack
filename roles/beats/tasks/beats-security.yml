@@ -105,7 +105,7 @@
 - name: Fetch certificate zip from CA host to controller
   ansible.builtin.fetch:
     src: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}-beats.zip"
-    dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_facts.hostname }}-beats.zip"
+    dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/certs/{{ inventory_hostname }}/{{ ansible_facts.hostname }}-beats.zip"
     flat: true
   delegate_to: "{{ elasticstack_ca_host }}"
   tags:
@@ -115,7 +115,7 @@
 
 - name: Extract certificate on Beats node
   ansible.builtin.unarchive:
-    src: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/{{ ansible_facts.hostname }}-beats.zip"
+    src: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/certs/{{ inventory_hostname }}/{{ ansible_facts.hostname }}-beats.zip"
     dest: "/etc/beats/certs/"
     owner: root
     group: root
