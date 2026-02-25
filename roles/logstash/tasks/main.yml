@@ -171,7 +171,7 @@
   ansible.builtin.import_tasks: logstash-security.yml
   when:
     - (elasticstack_full_stack | default(false) | bool and _logstash_security | bool) or
-      logstash_cert_source | default('elasticsearch_ca') == 'external'
+      logstash_cert_source | default('elasticsearch_ca') in ['external', 'standalone']
   tags:
     - certificates
     - renew_ca

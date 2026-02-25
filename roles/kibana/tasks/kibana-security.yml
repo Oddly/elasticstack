@@ -255,6 +255,14 @@
     - renew_ca
     - renew_kibana_cert
   block:
+    - name: Ensure CA directory exists for encryption keys
+      ansible.builtin.file:
+        path: "{{ elasticstack_ca_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
     - name: Generate encryption key
       ansible.builtin.shell: >
         set -o pipefail;

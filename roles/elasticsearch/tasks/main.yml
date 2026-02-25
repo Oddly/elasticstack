@@ -350,10 +350,10 @@
     owner: elasticsearch
     group: elasticsearch
     mode: "2750"
-  when: item.create | bool
+  when: item.create | bool or item.path != item.default
   loop:
-    - {create: "{{ elasticsearch_create_logpath }}", path: "{{ elasticsearch_logpath }}" }
-    - {create: "{{ elasticsearch_create_datapath }}", path: "{{ elasticsearch_datapath }}" }
+    - {create: "{{ elasticsearch_create_logpath }}", path: "{{ elasticsearch_logpath }}", default: "/var/log/elasticsearch"}
+    - {create: "{{ elasticsearch_create_datapath }}", path: "{{ elasticsearch_datapath }}", default: "/var/lib/elasticsearch"}
 
 - name: Activate JNA workaround (see README.md)
   ansible.builtin.lineinfile:

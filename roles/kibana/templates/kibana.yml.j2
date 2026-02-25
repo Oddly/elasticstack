@@ -36,8 +36,8 @@ server.ssl.keystore.path: "/etc/kibana/certs/{{ inventory_hostname }}-kibana.p12
 server.ssl.keystore.password: "{{ kibana_tls_certificate_passphrase }}"
 {% endif %}
 {% else %}
-server.ssl.certificate: "{{ kibana_tls_cert }}"
-server.ssl.key: "{{ kibana_tls_key }}"
+server.ssl.keystore.path: "/etc/kibana/certs/{{ inventory_hostname }}-kibana.p12"
+server.ssl.keystore.password: "{{ kibana_tls_key_passphrase }}"
 {% endif %}
 {% endif %}
 
