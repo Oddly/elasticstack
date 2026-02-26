@@ -24,11 +24,11 @@
       ssh -o StrictHostKeyChecking=no -o BatchMode=yes
       -i {{ molecule_ssh_key }} root@{{ incus_host }}
     # Max molecule containers allowed on the Incus host at once.
-    # 64GB host runs a mix of full-stack (~6.5GB) and single-role (~2-3GB)
+    # 96GB host runs a mix of full-stack (~6.5GB) and single-role (~2-3GB)
     # containers.  Concurrent workflows (e.g. ES-modules at max-parallel 10
-    # + full-stack at max-parallel 4) can need up to ~18 slots.  14 keeps
-    # peak memory under 64GB for the realistic worst case.
-    incus_max_containers: "{{ lookup('env', 'INCUS_MAX_CONTAINERS') | default(14, true) | int }}"
+    # + full-stack at max-parallel 8) can need up to ~28 slots.  22 keeps
+    # peak memory under 96GB for the realistic worst case.
+    incus_max_containers: "{{ lookup('env', 'INCUS_MAX_CONTAINERS') | default(22, true) | int }}"
     # Pre-baked local images with SSH + python3 + authorized_keys ready.
     incus_images:
       debian11: "molecule-debian-11"

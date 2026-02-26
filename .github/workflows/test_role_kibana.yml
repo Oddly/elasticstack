@@ -46,6 +46,7 @@ jobs:
       ANSIBLE_ANY_ERRORS_FATAL: 'true'
       ANSIBLE_DISPLAY_SKIPPED_HOSTS: 'false'
       ANSIBLE_TRANSFER_METHOD: sftp
+      ANSIBLE_SSH_RETRIES: '5'
       ANSIBLE_SSH_ARGS: >-
         -o ControlMaster=auto
         -o ControlPersist=300s
