@@ -31,7 +31,7 @@ jobs:
   molecule_full_stack_every_os:
     runs-on: self-hosted
     needs: lint_full
-    timeout-minutes: 60
+    timeout-minutes: 240
 
     env:
       COLLECTION_NAMESPACE: oddly

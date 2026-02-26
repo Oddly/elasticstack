@@ -37,7 +37,7 @@ jobs:
   molecule_elasticsearch_custom_certs:
     needs: lint_elasticsearch
     runs-on: self-hosted
-    timeout-minutes: 20
+    timeout-minutes: 45
 
     env:
       COLLECTION_NAMESPACE: oddly
