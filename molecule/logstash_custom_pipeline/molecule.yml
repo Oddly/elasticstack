@@ -18,6 +18,7 @@ provisioner:
   connection_options:
     ansible_connection: ssh
     ansible_user: root
+    ansible_ssh_retries: 3
     ansible_ssh_common_args: >-
       -o StrictHostKeyChecking=no
       -o "ProxyCommand=ssh -o StrictHostKeyChecking=no -o BatchMode=yes
