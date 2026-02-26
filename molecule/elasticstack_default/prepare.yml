@@ -10,10 +10,19 @@
       loop: "{{ groups['all'] }}"
       when: groups['all'] | length > 1
 
+    - name: Clean dnf cache for RHEL
+      ansible.builtin.command: dnf clean all
+      changed_when: false
+      when: ansible_facts.os_family == "RedHat"
+
     - name: Install EPEL for RHEL
       ansible.builtin.package:
         name: epel-release
       when: ansible_facts.os_family == "RedHat"
+      retries: 3
+      delay: 10
+      register: epel_install
+      until: epel_install is success
 
     - name: Install packages for RHEL
       ansible.builtin.package:
