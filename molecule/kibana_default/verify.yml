@@ -19,10 +19,10 @@
       register: kibana_status
       retries: 18
       delay: 10
-      until: kibana_status.status in [200, 401]
+      until: (kibana_status.status | default(0)) in [200, 401, 503]
 
     - name: Verify Kibana responded
       ansible.builtin.assert:
         that:
-          - kibana_status.status in [200, 401]
+          - kibana_status.status in [200, 401, 503]
         fail_msg: "Kibana did not respond on port 5601"

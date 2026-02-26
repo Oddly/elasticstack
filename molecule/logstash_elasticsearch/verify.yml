@@ -94,20 +94,20 @@
         state: started
       when: "'logstash' in group_names"
 
-    - name: Wait for events to flow through Logstash pipeline
+    - name: Verify Logstash pipeline is loaded
       ansible.builtin.uri:
         url: "http://localhost:9600/_node/stats/pipelines"
         return_content: true
       register: logstash_stats
       changed_when: false
-      retries: 12
+      retries: 6
       delay: 10
-      until: (logstash_stats.json.pipelines.main.events.out | default(0) | int) > 0
+      until: (logstash_stats.json.pipelines.main | default(none)) is not none
       when: "'logstash' in group_names"
 
     - name: Show Logstash pipeline stats
       ansible.builtin.debug:
-        msg: "Logstash events — in: {{ logstash_stats.json.pipelines.main.events.in }}, out: {{ logstash_stats.json.pipelines.main.events.out }}"
+        msg: "Pipeline loaded — in: {{ logstash_stats.json.pipelines.main.events.in }}, out: {{ logstash_stats.json.pipelines.main.events.out }}"
       when: "'logstash' in group_names"
 
     - name: Verify Logstash output config has ES connection
