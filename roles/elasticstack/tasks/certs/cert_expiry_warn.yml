@@ -11,33 +11,41 @@
 #   _warn_cert_format     'pem' or 'p12' (default: 'p12')
 #   _warn_cert_source     'elasticsearch_ca' or 'external' (default: 'elasticsearch_ca')
 
-- name: "Check certificate expiry — {{ _warn_service_name }}"
-  oddly.elasticstack.cert_info:
+- name: "Check certificate file exists — {{ _warn_service_name }}"
+  ansible.builtin.stat:
     path: "{{ _warn_cert_path }}"
-    passphrase: "{{ _warn_cert_pass | default(omit, true) }}"
-    format: "{{ _warn_cert_format | default('p12') }}"
-  register: _warn_cert_result
-  ignore_errors: true
+  register: _warn_cert_file
 
-- name: "Calculate days until certificate expires — {{ _warn_service_name }}"
-  ansible.builtin.set_fact:
-    _warn_days_remaining: >-
-      {{ ((((_warn_cert_result.not_valid_after | regex_replace('[+-]\d{2}:\d{2}$', ''))
-      | to_datetime('%Y-%m-%d %H:%M:%S')) - (ansible_date_time.date
-      | to_datetime('%Y-%m-%d'))).days) }}
-  when: _warn_cert_result is succeeded
+- name: "Check certificate expiry — {{ _warn_service_name }}"
+  when: _warn_cert_file.stat.exists
+  block:
+    - name: "Read certificate info — {{ _warn_service_name }}"
+      oddly.elasticstack.cert_info:
+        path: "{{ _warn_cert_path }}"
+        passphrase: "{{ _warn_cert_pass | default(omit, true) }}"
+        format: "{{ _warn_cert_format | default('p12') }}"
+      register: _warn_cert_result
+      ignore_errors: true
 
-- name: "Certificate expires soon — {{ _warn_service_name }}"
-  ansible.builtin.debug:
-    msg: >-
-      Certificate {{ _warn_cert_path }} on {{ inventory_hostname }}
-      expires in {{ _warn_days_remaining }} days.
-      {% if (_warn_cert_source | default('elasticsearch_ca')) == 'external' %}
-      Replace the certificate files and re-run the playbook.
-      {% else %}
-      Run with --tags renew_{{ _warn_service_name | lower | replace(' ', '_') }}_cert to renew.
-      {% endif %}
-  when:
-    - _warn_cert_result is succeeded
-    - _warn_days_remaining | int <= _warn_buffer_days | int
-  changed_when: true
+    - name: "Calculate days until certificate expires — {{ _warn_service_name }}"
+      ansible.builtin.set_fact:
+        _warn_days_remaining: >-
+          {{ ((((_warn_cert_result.not_valid_after | regex_replace('[+-]\d{2}:\d{2}$', ''))
+          | to_datetime('%Y-%m-%d %H:%M:%S')) - (ansible_date_time.date
+          | to_datetime('%Y-%m-%d'))).days) }}
+      when: _warn_cert_result is succeeded
+
+    - name: "Certificate expires soon — {{ _warn_service_name }}"
+      ansible.builtin.debug:
+        msg: >-
+          Certificate {{ _warn_cert_path }} on {{ inventory_hostname }}
+          expires in {{ _warn_days_remaining }} days.
+          {% if (_warn_cert_source | default('elasticsearch_ca')) == 'external' %}
+          Replace the certificate files and re-run the playbook.
+          {% else %}
+          Run with --tags renew_{{ _warn_service_name | lower | replace(' ', '_') }}_cert to renew.
+          {% endif %}
+      when:
+        - _warn_cert_result is succeeded
+        - _warn_days_remaining | int <= _warn_buffer_days | int
+      changed_when: true
