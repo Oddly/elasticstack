@@ -16,6 +16,7 @@ on:
     paths:
       - '.github/workflows/test_elasticsearch_custom_certs.yml'
       - 'molecule/elasticsearch_custom_certs/*'
+      - 'molecule/elasticsearch_custom_certs_minimal/*'
       - 'roles/elasticstack/tasks/certs/cert_validate.yml'
       - 'roles/elasticstack/tasks/certs/cert_expiry_warn.yml'
       - 'roles/elasticsearch/tasks/elasticsearch-security.yml'
@@ -47,10 +48,18 @@ jobs:
       max-parallel: 10
       matrix:
         distro:
+          - rockylinux9
+          - rockylinux10
+          - ubuntu2204
+          - ubuntu2404
+          - debian11
           - debian12
+          - debian13
         scenario:
           - elasticsearch_custom_certs
+          - elasticsearch_custom_certs_minimal
         release:
+          - 8
           - 9
 
     steps:
