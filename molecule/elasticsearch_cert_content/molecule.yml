@@ -11,6 +11,7 @@ platforms:
     groups:
       - elasticsearch
     distro: "${MOLECULE_DISTRO:-debian12}"
+    memory_mb: 3328
 provisioner:
   name: ansible
   env:

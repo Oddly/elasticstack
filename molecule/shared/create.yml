@@ -31,9 +31,9 @@
     _ssh_cmd: >-
       ssh -o StrictHostKeyChecking=no -o BatchMode=yes
       -i {{ molecule_ssh_key }} root@{{ incus_host }}
-    # Default memory per container in MB.  4GB covers ES comfortably;
-    # lighter services (Kibana, Logstash, Beats) can override with a
-    # smaller memory_mb in their molecule.yml platform definition.
+    # Default memory per container in MB.  Most scenarios now set
+    # memory_mb explicitly; this default covers mixed ES+KB containers
+    # like kibana_default that don't specify their own limit.
     incus_default_memory_mb: "{{ lookup('env', 'INCUS_DEFAULT_MEMORY_MB') | default(4096, true) | int }}"
     # Memory reserved for host OS and Incus overhead (MB).
     incus_reserve_mb: "{{ lookup('env', 'INCUS_RESERVE_MB') | default(8192, true) | int }}"

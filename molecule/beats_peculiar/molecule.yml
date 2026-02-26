@@ -9,6 +9,7 @@ driver:
 platforms:
   - name: beats-pec-${MOLECULE_DISTRO:-debian11}-r${ELASTIC_RELEASE:-9}
     distro: "${MOLECULE_DISTRO:-debian11}"
+    memory_mb: 1024
 provisioner:
   name: ansible
   env:
