@@ -46,41 +46,48 @@
 
 - name: Record original certificate fingerprints
   hosts: all
+  vars:
+    elasticsearch_tls_key_passphrase: PleaseChangeMeIndividually
+    logstash_tls_key_passphrase: LogstashChangeMe
+    kibana_tls_key_passphrase: PleaseChangeMe
   tasks:
     - name: Get ES transport cert fingerprint
       ansible.builtin.shell: >-
         set -o pipefail &&
         openssl pkcs12 -in /etc/elasticsearch/certs/{{ ansible_facts.hostname }}-es.p12
-        -nokeys -passin pass:PleaseChangeMeIndividually 2>/dev/null |
+        -nokeys -passin pass:{{ elasticsearch_tls_key_passphrase }} 2>/dev/null |
         openssl x509 -fingerprint -sha256 -noout 2>/dev/null || echo "NONE"
       args:
         executable: /bin/bash
       register: _es_cert_fp_before
       changed_when: false
+      no_log: true
       when: "'elasticsearch' in group_names"
 
     - name: Get Logstash cert fingerprint
       ansible.builtin.shell: >-
         set -o pipefail &&
         openssl pkcs12 -in /etc/logstash/certs/{{ ansible_facts.hostname }}-ls.p12
-        -nokeys -passin pass:LogstashChangeMe 2>/dev/null |
+        -nokeys -passin pass:{{ logstash_tls_key_passphrase }} 2>/dev/null |
         openssl x509 -fingerprint -sha256 -noout 2>/dev/null || echo "NONE"
       args:
         executable: /bin/bash
       register: _ls_cert_fp_before
       changed_when: false
+      no_log: true
       when: "'logstash' in group_names"
 
     - name: Get Kibana cert fingerprint
       ansible.builtin.shell: >-
         set -o pipefail &&
         openssl pkcs12 -in /etc/kibana/certs/{{ ansible_facts.hostname }}-kibana.p12
-        -nokeys -passin pass:PleaseChangeMe 2>/dev/null |
+        -nokeys -passin pass:{{ kibana_tls_key_passphrase }} 2>/dev/null |
         openssl x509 -fingerprint -sha256 -noout 2>/dev/null || echo "NONE"
       args:
         executable: /bin/bash
       register: _kb_cert_fp_before
       changed_when: false
+      no_log: true
       when: "'kibana' in group_names"
 
     - name: Display original fingerprints

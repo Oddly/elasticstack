@@ -114,10 +114,9 @@
         name: oddly.elasticstack.repos
 
     - name: Upgrade to latest 8.x  # noqa: package-latest
-      ansible.builtin.apt:
+      ansible.builtin.package:
         name: elasticsearch
         state: latest
-        update_cache: true
 
     - name: Restart Elasticsearch after upgrade
       ansible.builtin.service:
@@ -179,10 +178,9 @@
         name: oddly.elasticstack.repos
 
     - name: Upgrade to 9.x  # noqa: package-latest
-      ansible.builtin.apt:
+      ansible.builtin.package:
         name: elasticsearch
         state: latest
-        update_cache: true
 
     - name: Restart Elasticsearch after 9.x upgrade
       ansible.builtin.service:

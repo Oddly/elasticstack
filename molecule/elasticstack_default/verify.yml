@@ -103,13 +103,17 @@
             user: elastic
             password: "{{ elastic_pass.stdout }}"
             return_content: true
+            status_code: [200, 503]
           register: kibana_status
-          retries: 6
+          retries: 18
           delay: 10
-          until: "'green' in (kibana_status.content | default('')) or 'Elasticsearch is available' in (kibana_status.content | default(''))"
-          failed_when:
-            - "'green' not in (kibana_status.content | default(''))"
-            - "'Elasticsearch is available' not in (kibana_status.content | default(''))"
+          until: (kibana_status.json.status.overall.level | default('')) == 'available'
+
+        - name: Verify Kibana is available
+          ansible.builtin.assert:
+            that:
+              - kibana_status.json.status.overall.level == 'available'
+            fail_msg: "Kibana status: {{ kibana_status.json.status.overall.level | default('unknown') }}"
 
     - name: Run Beats checks
       when: "'beats' in group_names"

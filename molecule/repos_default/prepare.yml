@@ -9,9 +9,17 @@
           - apt-transport-https
         update_cache: true
       when: ansible_facts.os_family == "Debian"
+      retries: 3
+      delay: 10
+      register: _apt_install
+      until: _apt_install is success
     - name: Install requirements for Ubuntu
       ansible.builtin.apt:
         name:
           - gpg-agent
         update_cache: true
       when: ansible_facts.os_family == "Debian" and ansible_facts.distribution == "Ubuntu"
+      retries: 3
+      delay: 10
+      register: _apt_install_ubuntu
+      until: _apt_install_ubuntu is success

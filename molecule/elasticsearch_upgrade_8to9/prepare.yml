@@ -16,6 +16,10 @@
           - iproute
           - NetworkManager
       when: ansible_facts.os_family == "RedHat"
+      retries: 3
+      delay: 10
+      register: _rhel_install
+      until: _rhel_install is success
 
     - name: Start NetworkManager
       ansible.builtin.service:
@@ -34,6 +38,10 @@
           - iproute2
         update_cache: true
       when: ansible_facts.os_family == "Debian"
+      retries: 3
+      delay: 10
+      register: _apt_install
+      until: _apt_install is success
 
     - name: Install common packages
       ansible.builtin.package:
@@ -42,3 +50,7 @@
           - openssl
           - unzip
           - systemd
+      retries: 3
+      delay: 10
+      register: _common_install
+      until: _common_install is success

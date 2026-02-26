@@ -12,3 +12,7 @@
           - git
         update_cache: true
       when: ansible_facts.os_family == "Debian"
+      retries: 3
+      delay: 10
+      register: _apt_install
+      until: _apt_install is success
