@@ -59,6 +59,7 @@ jobs:
           - logstash_custom_pipeline
           - logstash_advanced
           - logstash_standalone_certs
+          - logstash_centralized_pipelines
         release:
           - 8
           - 9
