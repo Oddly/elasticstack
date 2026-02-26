@@ -15,7 +15,9 @@ elasticsearch.sniffInterval: {{ kibana_sniff_interval }}
 elasticsearch.hosts: [{% for host in kibana_elasticsearch_hosts %}"https://{{ host }}:{{ elasticstack_elasticsearch_http_port }}"{% if not loop.last %},{% endif %}{% endfor %}]
 elasticsearch.username: "kibana_system"
 elasticsearch.password: "{{ kibana_password.stdout }}"
-elasticsearch.ssl.certificateAuthorities:  "/etc/kibana/certs/ca.crt"
+{%- if _kibana_has_ca | default(true) | bool +%}
+elasticsearch.ssl.certificateAuthorities: "/etc/kibana/certs/ca.crt"
+        {%- endif %}
         {%- if "localhost" in kibana_elasticsearch_hosts +%}elasticsearch.ssl.verificationMode: certificate
         {%- endif +%}
 xpack.security.encryptionKey: "{{ kibana_encryption_key.content | b64decode | trim }}"

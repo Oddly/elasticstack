@@ -1,0 +1,79 @@
+---
+- name: Verify Kibana with external certs and system trust store CA
+  hosts: all
+  vars:
+    elasticstack_elasticsearch_http_port: 9200
+    elasticstack_elasticsearch_group_name: elasticsearch
+  tasks:
+    - name: Set elasticsearch_ca variable
+      ansible.builtin.set_fact:
+        elasticsearch_ca: "{{ groups[elasticstack_elasticsearch_group_name][0] }}"
+      when: elasticsearch_ca is undefined
+
+    - name: Fetch Elastic password
+      ansible.builtin.shell: |
+        set -o pipefail
+        grep "PASSWORD elastic " /usr/share/elasticsearch/initial_passwords |
+        awk {' print $4 '}
+      args:
+        executable: /bin/bash
+      register: elastic_pass
+      changed_when: false
+      delegate_to: "{{ elasticsearch_ca }}"
+
+    - name: Elasticsearch health check
+      ansible.builtin.uri:
+        url: "https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health?wait_for_status=yellow&timeout=30s"
+        method: GET
+        force_basic_auth: true
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        return_content: true
+        status_code: 200
+        validate_certs: false
+      register: result
+      until: result.json.status | default('red') in ['green', 'yellow']
+      retries: 6
+      delay: 10
+      when: "'elasticsearch' in group_names"
+
+    - name: Run Kibana checks
+      when: "'kibana' in group_names"
+      block:
+        - name: Connect to Kibana (HTTPS)
+          ansible.builtin.uri:
+            url: "https://localhost:5601/api/status"
+            method: GET
+            force_basic_auth: true
+            user: elastic
+            password: "{{ elastic_pass.stdout }}"
+            return_content: true
+            status_code: [200, 503]
+            validate_certs: false
+          register: kibana_status
+          retries: 18
+          delay: 10
+          until: (kibana_status.json.status.overall.level | default('')) == 'available'
+
+        - name: Verify Kibana is available
+          ansible.builtin.assert:
+            that:
+              - kibana_status.json.status.overall.level == 'available'
+            fail_msg: "Kibana status: {{ kibana_status.json.status.overall.level | default('unknown') }}"
+
+        - name: Read kibana.yml
+          ansible.builtin.slurp:
+            src: /etc/kibana/kibana.yml
+          register: kibana_yml
+
+        - name: Verify CA is NOT in kibana.yml (system trust store used)
+          ansible.builtin.assert:
+            that:
+              - "'certificateAuthorities' not in (kibana_yml.content | b64decode)"
+            fail_msg: "certificateAuthorities should not be present — CA is in system trust store"
+
+        - name: Verify server.ssl.enabled is true
+          ansible.builtin.assert:
+            that:
+              - "'server.ssl.enabled: true' in (kibana_yml.content | b64decode)"
+            fail_msg: "server.ssl.enabled not found in kibana.yml"
