@@ -12,7 +12,7 @@
 #   _warn_cert_source     'elasticsearch_ca' or 'external' (default: 'elasticsearch_ca')
 
 - name: "Check certificate expiry — {{ _warn_service_name }}"
-  cert_info:
+  oddly.elasticstack.cert_info:
     path: "{{ _warn_cert_path }}"
     passphrase: "{{ _warn_cert_pass | default(omit, true) }}"
     format: "{{ _warn_cert_format | default('p12') }}"
