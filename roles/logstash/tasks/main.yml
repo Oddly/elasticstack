@@ -192,6 +192,18 @@
     - configuration
     - logstash_configuration
 
+- name: Ensure Logstash jvm.options.d directory exists
+  ansible.builtin.file:
+    path: /etc/logstash/jvm.options.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: logstash_heap is defined and (logstash_heap | string | length > 0)
+  tags:
+    - configuration
+    - logstash_configuration
+
 - name: Set Logstash JVM heap size
   ansible.builtin.template:
     src: "jvm.options.d/heap.options.j2"
