@@ -5,4 +5,5 @@
     name: kibana
     state: restarted
   when:
+    - not ansible_check_mode
     - not kibana_freshstart.changed | bool
