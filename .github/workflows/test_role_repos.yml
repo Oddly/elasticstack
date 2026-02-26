@@ -83,9 +83,9 @@ jobs:
 
       - name: Set up SSH key for molecule
         run: |
+          echo "${{ secrets.MOLECULE_SSH_PRIVATE_KEY }}" > ${{ runner.temp }}/molecule_id_ed25519
+          chmod 600 ${{ runner.temp }}/molecule_id_ed25519
           mkdir -p ~/.ssh
-          echo "${{ secrets.MOLECULE_SSH_PRIVATE_KEY }}" > ~/.ssh/molecule_id_ed25519
-          chmod 600 ~/.ssh/molecule_id_ed25519
           ssh-keyscan -t ed25519 ${{ secrets.INCUS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Test with molecule
@@ -99,7 +99,7 @@ jobs:
           ANSIBLE_DIFF_ALWAYS: 'true'
           ANSIBLE_CALLBACKS_ENABLED: profile_tasks
           INCUS_HOST: ${{ secrets.INCUS_HOST }}
-          MOLECULE_SSH_KEY: ~/.ssh/molecule_id_ed25519
+          MOLECULE_SSH_KEY: ${{ runner.temp }}/molecule_id_ed25519
           DISTRO_CACHE_URL: http://${{ secrets.REGISTRY_HOST }}:8081
 
       - name: Collect and upload diagnostics
@@ -107,6 +107,9 @@ jobs:
         uses: ./.github/actions/collect-diagnostics
         with:
           artifact-name: diag-${{ matrix.scenario }}-${{ matrix.distro }}-r${{ matrix.release }}
+        env:
+          INCUS_HOST: ${{ secrets.INCUS_HOST }}
+          MOLECULE_SSH_KEY: ${{ runner.temp }}/molecule_id_ed25519
 
       - name: Cleanup molecule
         if: always()
@@ -116,9 +119,9 @@ jobs:
           MOLECULE_DISTRO: ${{ matrix.distro }}
           ELASTIC_RELEASE: ${{ matrix.release }}
           INCUS_HOST: ${{ secrets.INCUS_HOST }}
-          MOLECULE_SSH_KEY: ~/.ssh/molecule_id_ed25519
+          MOLECULE_SSH_KEY: ${{ runner.temp }}/molecule_id_ed25519
           DISTRO_CACHE_URL: http://${{ secrets.REGISTRY_HOST }}:8081
 
       - name: Clean up SSH key
         if: always()
-        run: rm -f ~/.ssh/molecule_id_ed25519
+        run: rm -f ${{ runner.temp }}/molecule_id_ed25519

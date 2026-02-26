@@ -12,18 +12,18 @@ jobs:
     steps:
       - name: Set up SSH key
         run: |
+          echo "${{ secrets.MOLECULE_SSH_PRIVATE_KEY }}" > ${{ runner.temp }}/molecule_id_ed25519
+          chmod 600 ${{ runner.temp }}/molecule_id_ed25519
           mkdir -p ~/.ssh
-          echo "${{ secrets.MOLECULE_SSH_PRIVATE_KEY }}" > ~/.ssh/molecule_id_ed25519
-          chmod 600 ~/.ssh/molecule_id_ed25519
           ssh-keyscan -t ed25519 ${{ secrets.INCUS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Run smart cleanup (checks Gitea API for orphaned containers)
         run: |
-          SSH="ssh -o StrictHostKeyChecking=no -o BatchMode=yes -i ~/.ssh/molecule_id_ed25519 root@${INCUS_HOST}"
+          SSH="ssh -o StrictHostKeyChecking=no -o BatchMode=yes -i ${{ runner.temp }}/molecule_id_ed25519 root@${INCUS_HOST}"
           $SSH /usr/local/bin/cleanup-molecule-containers.sh
         env:
           INCUS_HOST: ${{ secrets.INCUS_HOST }}
 
       - name: Clean up SSH key
         if: always()
-        run: rm -f ~/.ssh/molecule_id_ed25519
+        run: rm -f ${{ runner.temp }}/molecule_id_ed25519
