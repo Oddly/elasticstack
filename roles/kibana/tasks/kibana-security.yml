@@ -274,6 +274,7 @@
         owner: root
         group: elasticsearch
         mode: "0700"
+      check_mode: false
 
     - name: Generate encryption key
       ansible.builtin.shell: >
@@ -284,11 +285,13 @@
         executable: /bin/bash
         creates: "{{ elasticstack_ca_dir }}/encryption_key"
       changed_when: false
+      check_mode: false
 
     - name: Fetch encryption key
       ansible.builtin.slurp:
         src: "{{ elasticstack_ca_dir }}/encryption_key"
       register: kibana_encryption_key
+      check_mode: false
 
     - name: Generate saved objects encryption key
       ansible.builtin.shell: >
@@ -299,11 +302,13 @@
         executable: /bin/bash
         creates: "{{ elasticstack_ca_dir }}/savedobjects_encryption_key"
       changed_when: false
+      check_mode: false
 
     - name: Fetch saved objects encryption key
       ansible.builtin.slurp:
         src: "{{ elasticstack_ca_dir }}/savedobjects_encryption_key"
       register: kibana_savedobjects_encryption_key
+      check_mode: false
 
 # -- Auto-generated cert tasks (only for elasticsearch_ca) --
 - name: Handle auto-generated Kibana certificate distribution
