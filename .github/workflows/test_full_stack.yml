@@ -12,8 +12,14 @@ on:
           - info
           - warning
           - debug
+  pull_request:
+  merge_group:
   schedule:
     - cron: "0 4 * * *"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint_full:
@@ -107,3 +113,16 @@ jobs:
           ELASTIC_RELEASE: ${{ matrix.release }}
           INCUS_HOST: ${{ secrets.INCUS_HOST }}
           MOLECULE_SSH_KEY: ~/.ssh/molecule_id_ed25519
+
+  full_stack_gate:
+    runs-on: ubuntu-latest
+    needs: [lint_full, molecule_full_stack_every_os]
+    if: always()
+    steps:
+      - name: Check results
+        run: |
+          if [[ "${{ needs.lint_full.result }}" != "success" ]] || \
+             [[ "${{ needs.molecule_full_stack_every_os.result }}" != "success" ]]; then
+            echo "Required jobs failed"
+            exit 1
+          fi
