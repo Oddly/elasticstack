@@ -260,7 +260,7 @@
         path: "{{ elasticstack_ca_dir }}"
         state: directory
         owner: root
-        group: root
+        group: elasticsearch
         mode: "0700"
 
     - name: Generate encryption key
