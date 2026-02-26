@@ -22,6 +22,10 @@
 
 ---
 
+> **This collection is under active development.** APIs, default values, and variable names may change between releases without deprecation notices. Pin to a specific version in your `requirements.yml` if you need stability.
+
+---
+
 ## Overview
 
 An Ansible collection that handles the complete lifecycle of an Elastic Stack deployment: package repositories, installation, cluster formation, TLS certificate generation and renewal, security initialization, service management, and rolling upgrades from 8.x to 9.x.

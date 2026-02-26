@@ -32,7 +32,7 @@
 
     - name: Check Elastic repo file exists (RHEL)
       ansible.builtin.stat:
-        path: /etc/yum.repos.d/elastic.repo
+        path: /etc/yum.repos.d/elastic-release.repo
       register: repo_file_rhel
       when: ansible_facts.os_family == "RedHat"
 
@@ -40,7 +40,7 @@
       ansible.builtin.assert:
         that:
           - repo_file_rhel.stat.exists
-        fail_msg: "Elastic repo file not found at /etc/yum.repos.d/elastic.repo"
+        fail_msg: "Elastic repo file not found at /etc/yum.repos.d/elastic-release.repo"
       when: ansible_facts.os_family == "RedHat"
 
     - name: Verify elasticsearch package is available (Debian)

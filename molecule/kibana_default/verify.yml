@@ -13,9 +13,8 @@
 
     - name: Connect to Kibana API
       ansible.builtin.uri:
-        url: "https://localhost:5601/api/status"
+        url: "http://localhost:5601/api/status"
         method: GET
-        validate_certs: false
         status_code: [200, 401, 503]
       register: kibana_status
       retries: 18
