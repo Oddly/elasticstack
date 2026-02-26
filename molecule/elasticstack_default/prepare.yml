@@ -15,21 +15,16 @@
       changed_when: false
       when: ansible_facts.os_family == "RedHat"
 
-    - name: Install EPEL for RHEL
-      ansible.builtin.package:
-        name: epel-release
-      when: ansible_facts.os_family == "RedHat"
-      retries: 3
-      delay: 10
-      register: epel_install
-      until: epel_install is success
-
     - name: Install packages for RHEL
       ansible.builtin.package:
         name:
           - iproute
           - NetworkManager
       when: ansible_facts.os_family == "RedHat"
+      retries: 3
+      delay: 10
+      register: rhel_packages
+      until: rhel_packages is success
 
     - name: Start NetworkManager
       ansible.builtin.service:
@@ -56,3 +51,7 @@
           - openssl
           - unzip
           - systemd
+      retries: 3
+      delay: 10
+      register: common_packages
+      until: common_packages is success
