@@ -24,6 +24,7 @@ jobs:
     uses: ./.github/workflows/test_linting.yml
     with:
       rolename: elasticsearch
+    secrets: inherit
 
   upgrade_multi_node:
     needs: lint_elasticsearch

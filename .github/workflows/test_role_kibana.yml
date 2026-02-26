@@ -31,6 +31,7 @@ jobs:
     uses: ./.github/workflows/test_linting.yml
     with:
       rolename: kibana
+    secrets: inherit
 
   molecule_kibana:
     needs: lint_kibana

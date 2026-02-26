@@ -26,6 +26,7 @@ jobs:
     uses: ./.github/workflows/test_linting.yml
     with:
       rolename: elasticsearch
+    secrets: inherit
 
   molecule_elasticsearch_modules:
     needs: lint_elasticsearch

@@ -31,6 +31,7 @@ jobs:
     uses: ./.github/workflows/test_linting.yml
     with:
       rolename: repos
+    secrets: inherit
 
   molecule_repos:
     needs: lint_repos
