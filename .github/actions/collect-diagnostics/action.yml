@@ -95,6 +95,26 @@ runs:
           } > "$dir/container-resources.txt" 2>&1 || true
         done
 
+        # Container memory report (cgroup v2 stats from Incus host)
+        ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 \
+          -i "$SSH_KEY" "root@${INCUS_HOST}" bash -s << 'MEMSCRIPT' \
+          > "$diag/container-memory-report.txt" 2>&1 || true
+        printf "%-50s %10s %10s %10s %10s %10s\n" \
+          "CONTAINER" "CURRENT" "PEAK" "ANON" "FILE" "LIMIT"
+        echo "---"
+        for c in $(incus list -f csv -c ns 2>/dev/null | grep ",RUNNING" | cut -d, -f1 | sort); do
+          cgdir="/sys/fs/cgroup/lxc.payload.${c}"
+          [ -f "$cgdir/memory.current" ] || continue
+          current=$(($(cat "$cgdir/memory.current") / 1048576))
+          peak=$(($(cat "$cgdir/memory.peak") / 1048576))
+          anon=$(($(awk '/^anon /{print $2}' "$cgdir/memory.stat") / 1048576))
+          file=$(($(awk '/^file /{print $2}' "$cgdir/memory.stat") / 1048576))
+          limit=$(incus config get "$c" limits.memory 2>/dev/null)
+          printf "%-50s %8dMB %8dMB %8dMB %8dMB %10s\n" \
+            "$c" "$current" "$peak" "$anon" "$file" "$limit"
+        done
+        MEMSCRIPT
+
         # Runner system info
         {
           echo "=== Memory ===" ; free -h

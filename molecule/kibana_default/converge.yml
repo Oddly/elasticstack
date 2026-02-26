@@ -9,6 +9,7 @@
     elasticstack_full_stack: false
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticstack_no_log: false
+    kibana_node_max_old_space_size: 512
   tasks:
     - name: Include Elastic Repos
       ansible.builtin.include_role:

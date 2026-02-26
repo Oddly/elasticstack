@@ -6,6 +6,15 @@
 # queue management, and plugin installation.
 # @end
 
+# === JVM Configuration ===
+
+# @var logstash_heap:description: >
+#   JVM heap size for Logstash (e.g. '1g', '512m').
+#   When set, a jvm.options.d override is deployed; when empty, the
+#   package default (usually 1g) is left in place.
+# @end
+logstash_heap: ""
+
 # === Service Management ===
 
 # @var logstash_enable:description: Whether to enable and start the Logstash service

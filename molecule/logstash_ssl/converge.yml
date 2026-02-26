@@ -9,6 +9,7 @@
     logstash_create_user: false
     logstash_create_role: false
     logstash_pipeline_unsafe_shutdown: true
+    logstash_heap: "512m"
     # Use elastic_agent input instead of beats, with SSL
     logstash_input_beats: false
     logstash_input_elastic_agent: true

@@ -12,13 +12,13 @@ platforms:
       - elasticsearch
       - logstash
     distro: "${MOLECULE_DISTRO:-debian12}"
-    memory_mb: 6144
+    memory_mb: 5120
   - name: "cert-renew-es2-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}"
     groups:
       - elasticsearch
       - kibana
     distro: "${MOLECULE_DISTRO:-debian12}"
-    memory_mb: 6144
+    memory_mb: 5120
 provisioner:
   name: ansible
   env:

@@ -5,6 +5,15 @@
 # Elasticsearch connection setup, and certificate management.
 # @end
 
+# === Node.js Memory ===
+
+# @var kibana_node_max_old_space_size:description: >
+#   Max V8 old-space heap in MB (maps to --max-old-space-size in node.options).
+#   When set, the existing node.options line is uncommented/updated.
+#   When empty, the package default is left in place.
+# @end
+kibana_node_max_old_space_size: ""
+
 # @var kibana_enable:description: Whether to enable and start the Kibana service
 kibana_enable: true
 # @var kibana_config_backup:description: Create a backup of kibana.yml before overwriting
@@ -22,6 +31,8 @@ kibana_tls_cert: /etc/kibana/certs/cert.pem
 kibana_tls_key: /etc/kibana/certs/key.pem
 # @var kibana_tls_key_passphrase:description: Passphrase for the Kibana TLS private key
 kibana_tls_key_passphrase: PleaseChangeMe
+# @var kibana_keystore_password:description: Password to encrypt the Kibana keystore file. Empty means no encryption (same as ES default)
+kibana_keystore_password: ""
 # @var kibana_cert_expiration_buffer:description: Days before certificate expiry to trigger renewal
 kibana_cert_expiration_buffer: 30
 # @var kibana_cert_validity_period:description: Validity period in days for generated TLS certificates

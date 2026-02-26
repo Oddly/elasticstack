@@ -40,7 +40,7 @@
       'kibana' +
       ((elasticstack_versionseparator +
       elasticstack_version |
-      string ) if (elasticstack_version is defined and elasticstack_version | length > 0)) |
+      string ) if (elasticstack_version is defined and elasticstack_version | length > 0) else '') |
       replace(' ', '') }}
 
 - name: Install Kibana - rpm - full stack
@@ -104,6 +104,21 @@
   notify:
     - Restart Kibana
   when: kibana_manage_yaml | bool
+
+- name: Set Kibana Node.js max-old-space-size
+  ansible.builtin.lineinfile:
+    path: /etc/kibana/node.options
+    regexp: '^#?--max-old-space-size='
+    line: "--max-old-space-size={{ kibana_node_max_old_space_size }}"
+  notify:
+    - Restart Kibana
+  when: kibana_node_max_old_space_size | default('') | string | length > 0
+
+- name: Import Kibana keystore tasks
+  ansible.builtin.import_tasks: kibana-keystore.yml
+  when:
+    - (elasticstack_full_stack | default(false) | bool and kibana_security | bool) or
+      kibana_tls | bool
 
 - name: Start Kibana
   ansible.builtin.service:
