@@ -17,7 +17,7 @@
         method: GET
         status_code: [200, 401, 503]
       register: kibana_status
-      retries: 18
+      retries: 30
       delay: 10
       until: (kibana_status.status | default(0)) in [200, 401, 503]
 

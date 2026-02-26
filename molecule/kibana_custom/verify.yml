@@ -50,7 +50,7 @@
             return_content: true
             status_code: [200, 503]
           register: kibana_status
-          retries: 18
+          retries: 30
           delay: 10
           until: (kibana_status.json.status.overall.level | default('')) == 'available'
 
