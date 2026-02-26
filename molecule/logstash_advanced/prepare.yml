@@ -1,20 +1,11 @@
 ---
 - name: Prepare
   hosts: all
+  vars:
+    distro_cache_url: "{{ lookup('env', 'DISTRO_CACHE_URL') }}"
   tasks:
-    - name: Install packages for Debian
-      ansible.builtin.apt:
-        name:
-          - gpg
-          - gpg-agent
-          - procps
-          - curl
-        update_cache: true
-      when: ansible_facts.os_family == "Debian"
-      retries: 3
-      delay: 10
-      register: _apt_install
-      until: _apt_install is success
+    - name: Common prepare tasks
+      ansible.builtin.include_tasks: ../shared/prepare_common.yml
 
     - name: Create filter files directory on controller
       ansible.builtin.file:

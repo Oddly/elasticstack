@@ -50,7 +50,7 @@
 
     - name: Verify ES certificates exist after renewal
       ansible.builtin.stat:
-        path: "/etc/elasticsearch/certs/{{ ansible_facts.hostname }}-es.p12"
+        path: "/etc/elasticsearch/certs/{{ ansible_facts.hostname }}.p12"
       register: es_cert_after
       when: "'elasticsearch' in group_names"
 

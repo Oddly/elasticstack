@@ -1,7 +1,8 @@
 ---
 - name: Prepare
   hosts: all
-  become: true
+  vars:
+    distro_cache_url: "{{ lookup('env', 'DISTRO_CACHE_URL') }}"
   tasks:
     - name: Populate /etc/hosts with molecule instances
       ansible.builtin.lineinfile:
@@ -10,3 +11,6 @@
         line: "{{ hostvars[item]['ansible_host'] }} {{ item }}"
       loop: "{{ groups['all'] }}"
       when: groups['all'] | length > 1
+
+    - name: Common prepare tasks
+      ansible.builtin.include_tasks: ../shared/prepare_common.yml

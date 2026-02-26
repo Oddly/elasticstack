@@ -20,7 +20,7 @@ runs:
         diag="/tmp/molecule-diagnostics"
         mkdir -p "$diag"/service-logs
 
-        INCUS_HOST="${INCUS_HOST:-172.30.0.172}"
+        INCUS_HOST="${INCUS_HOST:?INCUS_HOST secret must be set}"
         SSH_KEY="${MOLECULE_SSH_KEY:-~/.ssh/molecule_id_ed25519}"
 
         # Discover running Incus containers managed by molecule

@@ -54,7 +54,7 @@
     - name: Get ES transport cert fingerprint
       ansible.builtin.shell: >-
         set -o pipefail &&
-        openssl pkcs12 -in /etc/elasticsearch/certs/{{ ansible_facts.hostname }}-es.p12
+        openssl pkcs12 -in /etc/elasticsearch/certs/{{ ansible_facts.hostname }}.p12
         -nokeys -passin pass:{{ elasticsearch_tls_key_passphrase }} 2>/dev/null |
         openssl x509 -fingerprint -sha256 -noout 2>/dev/null || echo "NONE"
       args:

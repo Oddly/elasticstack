@@ -79,14 +79,14 @@ jobs:
         run: |
           mkdir -p $ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE
           cp -a "$GITHUB_WORKSPACE" $ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
-          ansible-galaxy collection install http://172.30.0.172:8082/collections/community-general-12.3.0.tar.gz http://172.30.0.172:8082/collections/community-crypto-3.1.1.tar.gz http://172.30.0.172:8082/collections/ansible-posix-2.1.0.tar.gz
+          ansible-galaxy collection install http://${{ secrets.INCUS_HOST }}:8082/collections/community-general-12.3.0.tar.gz http://${{ secrets.INCUS_HOST }}:8082/collections/community-crypto-3.1.1.tar.gz http://${{ secrets.INCUS_HOST }}:8082/collections/ansible-posix-2.1.0.tar.gz
 
       - name: Set up SSH key for molecule
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.MOLECULE_SSH_PRIVATE_KEY }}" > ~/.ssh/molecule_id_ed25519
           chmod 600 ~/.ssh/molecule_id_ed25519
-          ssh-keyscan -t ed25519 ${{ secrets.INCUS_HOST || '172.30.0.172' }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan -t ed25519 ${{ secrets.INCUS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Test with molecule
         run: molecule test -s ${{ matrix.scenario }} --destroy=never
@@ -100,6 +100,7 @@ jobs:
           ANSIBLE_CALLBACKS_ENABLED: profile_tasks
           INCUS_HOST: ${{ secrets.INCUS_HOST }}
           MOLECULE_SSH_KEY: ~/.ssh/molecule_id_ed25519
+          DISTRO_CACHE_URL: http://${{ secrets.REGISTRY_HOST }}:8081
 
       - name: Collect and upload diagnostics
         if: failure()
@@ -116,3 +117,8 @@ jobs:
           ELASTIC_RELEASE: ${{ matrix.release }}
           INCUS_HOST: ${{ secrets.INCUS_HOST }}
           MOLECULE_SSH_KEY: ~/.ssh/molecule_id_ed25519
+          DISTRO_CACHE_URL: http://${{ secrets.REGISTRY_HOST }}:8081
+
+      - name: Clean up SSH key
+        if: always()
+        run: rm -f ~/.ssh/molecule_id_ed25519
