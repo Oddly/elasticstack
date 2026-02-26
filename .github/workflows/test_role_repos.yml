@@ -41,6 +41,15 @@ jobs:
     env:
       COLLECTION_NAMESPACE: oddly
       COLLECTION_NAME: elasticstack
+      ANSIBLE_PIPELINING: 'true'
+      ANSIBLE_GATHERING: smart
+      ANSIBLE_ANY_ERRORS_FATAL: 'true'
+      ANSIBLE_DISPLAY_SKIPPED_HOSTS: 'false'
+      ANSIBLE_TRANSFER_METHOD: sftp
+      ANSIBLE_SSH_ARGS: >-
+        -o ControlMaster=auto
+        -o ControlPersist=300s
+        -o PreferredAuthentications=publickey
 
     strategy:
       fail-fast: false

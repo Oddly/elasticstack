@@ -31,15 +31,24 @@ jobs:
   molecule_full_stack_every_os:
     runs-on: self-hosted
     needs: lint_full
-    timeout-minutes: 240
+    timeout-minutes: 120
 
     env:
       COLLECTION_NAMESPACE: oddly
       COLLECTION_NAME: elasticstack
+      ANSIBLE_PIPELINING: 'true'
+      ANSIBLE_GATHERING: smart
+      ANSIBLE_ANY_ERRORS_FATAL: 'true'
+      ANSIBLE_DISPLAY_SKIPPED_HOSTS: 'false'
+      ANSIBLE_TRANSFER_METHOD: sftp
+      ANSIBLE_SSH_ARGS: >-
+        -o ControlMaster=auto
+        -o ControlPersist=300s
+        -o PreferredAuthentications=publickey
 
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 8
       matrix:
         distro:
           - rockylinux9
