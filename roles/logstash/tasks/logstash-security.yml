@@ -416,34 +416,50 @@
         _password_user: elastic
         _password_fact: _logstash_elastic_password
 
+    - name: Set ES API URL fact
+      ansible.builtin.set_fact:
+        _logstash_es_url: "https://{{ hostvars[elasticstack_ca_host].ansible_host | default(hostvars[elasticstack_ca_host].inventory_hostname) }}:{{ elasticstack_elasticsearch_http_port }}"
+
     - name: Create logstash role
-      oddly.elasticstack.elasticsearch_role:
-        name: "{{ logstash_role_name }}"
-        cluster: "{{ logstash_role_cluster_privileges }}"
-        indicies:
-          - names: "{{ logstash_role_indicies_names }}"
-            privileges: "{{ logstash_role_indicies_privileges }}"
-        state: present
-        host: "https://{{ hostvars[elasticstack_ca_host].ansible_host | default(hostvars[elasticstack_ca_host].inventory_hostname) }}:{{ elasticstack_elasticsearch_http_port }}"
-        auth_user: elastic
-        auth_pass: "{{ _logstash_elastic_password.stdout }}"
-        verify_certs: true
-        ca_certs: "{{ logstash_certs_dir }}/ca.crt"
+      ansible.builtin.uri:
+        url: "{{ _logstash_es_url }}/_security/role/{{ logstash_role_name }}"
+        method: PUT
+        user: elastic
+        password: "{{ _logstash_elastic_password.stdout }}"
+        force_basic_auth: true
+        validate_certs: true
+        ca_path: "{{ logstash_certs_dir }}/ca.crt"
+        body_format: json
+        body:
+          cluster: "{{ logstash_role_cluster_privileges }}"
+          indices:
+            - names: "{{ logstash_role_indicies_names }}"
+              privileges: "{{ logstash_role_indicies_privileges }}"
+        status_code: [200]
+      register: _logstash_role_result
+      changed_when: _logstash_role_result.json.role.created | default(false)
+      no_log: "{{ elasticstack_no_log }}"
       when: logstash_create_role | bool
 
     - name: Create logstash user
-      oddly.elasticstack.elasticsearch_user:
-        name: "{{ logstash_user_name }}"
-        fullname: "{{ logstash_user_fullname }}"
-        password: "{{ logstash_user_password }}"
-        email: "{{ logstash_user_email }}"
-        roles:
-          - "{{ logstash_role_name }}"
-        enabled: true
-        state: present
-        host: "https://{{ hostvars[elasticstack_ca_host].ansible_host | default(hostvars[elasticstack_ca_host].inventory_hostname) }}:{{ elasticstack_elasticsearch_http_port }}"
-        auth_user: elastic
-        auth_pass: "{{ _logstash_elastic_password.stdout }}"
-        verify_certs: true
-        ca_certs: "{{ logstash_certs_dir }}/ca.crt"
+      ansible.builtin.uri:
+        url: "{{ _logstash_es_url }}/_security/user/{{ logstash_user_name }}"
+        method: PUT
+        user: elastic
+        password: "{{ _logstash_elastic_password.stdout }}"
+        force_basic_auth: true
+        validate_certs: true
+        ca_path: "{{ logstash_certs_dir }}/ca.crt"
+        body_format: json
+        body:
+          password: "{{ logstash_user_password }}"
+          full_name: "{{ logstash_user_fullname }}"
+          email: "{{ logstash_user_email | default(omit) }}"
+          roles:
+            - "{{ logstash_role_name }}"
+          enabled: true
+        status_code: [200]
+      register: _logstash_user_result
+      changed_when: _logstash_user_result.json.created | default(false)
+      no_log: "{{ elasticstack_no_log }}"
       when: logstash_create_user | bool

@@ -65,15 +65,6 @@ elasticstack_rpm_workaround: false
 # @var elasticstack_security:description: Enable security features across the entire stack (TLS, authentication, RBAC)
 elasticstack_security: true
 
-# === Python Dependencies ===
-
-# @var elasticstack_force_pip:description: Force installation of the Python elasticsearch client via pip even if a system package exists
-elasticstack_force_pip: false
-# @var elasticstack_install_python_client:description: Install the Python elasticsearch client (needed for Ansible modules that interact with the ES API)
-elasticstack_install_python_client: true
-# @var elasticstack_manage_pip:description: Let the role manage pip installation
-elasticstack_manage_pip: false
-
 # === Debugging ===
 
 # @var elasticstack_no_log:description: Suppress sensitive output in Ansible logs. Set to false for debugging

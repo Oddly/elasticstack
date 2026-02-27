@@ -3,7 +3,6 @@
   hosts: all
   vars:
     distro_cache_url: "{{ lookup('env', 'DISTRO_CACHE_URL') }}"
-    es_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
   tasks:
     - name: Wait for systemd to finish booting
       ansible.builtin.shell: |
@@ -32,9 +31,3 @@
 
     - name: Common prepare tasks
       ansible.builtin.include_tasks: ../shared/prepare_common.yml
-
-    - name: Install python module dependencies
-      ansible.builtin.pip:
-        name: "{{ item }}"
-      loop:
-        - "elasticsearch>={{ es_release }},<{{ es_release | int + 1 }}"
