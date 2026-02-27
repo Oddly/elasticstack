@@ -39,6 +39,9 @@
     incus_reserve_mb: "{{ lookup('env', 'INCUS_RESERVE_MB') | default(8192, true) | int }}"
     # Total memory this batch of containers needs (MB).
     _needed_mb: "{{ molecule_yml.platforms | map(attribute='memory_mb', default=incus_default_memory_mb) | map('int') | sum }}"
+    # Incus storage pool for containers.  LVM thin on NVMe gives CoW
+    # snapshots for instant cloning.  Falls back to "default" (dir) pool.
+    incus_storage_pool: "{{ lookup('env', 'INCUS_STORAGE_POOL') | default('lvm-pool', true) }}"
     # Pre-baked local images with SSH + python3 + authorized_keys ready.
     incus_images:
       debian11: "molecule-debian-11"
@@ -109,6 +112,7 @@
         {% set mem_mb = item.memory_mb | default(incus_default_memory_mb) | int %}
         incus delete {{ item.name }} --force 2>/dev/null || true
         incus launch {{ incus_images[item.distro | default("debian12")] }} {{ item.name }} \
+          --storage {{ incus_storage_pool | default("default") }} \
           -c limits.memory={{ mem_mb }}MB \
           -c security.nesting=true \
           -c security.privileged=true \
