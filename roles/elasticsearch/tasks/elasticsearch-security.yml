@@ -642,7 +642,7 @@
       when:
         - not elasticsearch_passwords_file.stat.exists | bool
       until: elasticsearch_api_status_bootstrap.json.cluster_name is defined
-      retries: 5
+      retries: 30
       delay: 10
 
     # We need this check twice. One to wait for the API to be actually available. And a second time to
@@ -661,7 +661,7 @@
       when:
         - not elasticsearch_passwords_file.stat.exists | bool
       until: elasticsearch_cluster_status_bootstrap.json.status in ["green", "yellow"]
-      retries: 5
+      retries: 30
       delay: 10
 
     - name: Fetch Elastic password

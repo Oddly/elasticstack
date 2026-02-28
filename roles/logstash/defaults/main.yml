@@ -103,10 +103,6 @@ logstash_output_elasticsearch: true
 logstash_elasticsearch_hosts: []
 # @var logstash_elasticsearch_index:description: Index name pattern. Leave empty for the default (logstash-%{+YYYY.MM.dd})
 logstash_elasticsearch_index: ""
-# @var logstash_elasticsearch_ssl:description: Connect to Elasticsearch over TLS
-logstash_elasticsearch_ssl: true
-# @var logstash_elasticsearch_ssl_verification:description: Verify the Elasticsearch TLS certificate
-logstash_elasticsearch_ssl_verification: true
 # @var logstash_validate_after_inactivity:description: Seconds before re-validating an idle Elasticsearch connection
 logstash_validate_after_inactivity: 300
 # @var logstash_sniffing:description: Enable Elasticsearch node sniffing to discover all cluster members
@@ -179,9 +175,6 @@ logstash_user_password: password
 logstash_user_email: ""
 # @var logstash_user_fullname:description: Full name for the Logstash Elasticsearch user
 logstash_user_fullname: "Internal Logstash User"
-# @var logstash_reset_writer_role:description: Reset the writer role definition on every run (ensures privileges stay current)
-logstash_reset_writer_role: true
-
 # === Certificate Configuration ===
 
 # @var logstash_cert_source:description: Where to get TLS certificates. 'elasticsearch_ca' fetches from ES CA, 'standalone' generates its own, 'external' uses provided files

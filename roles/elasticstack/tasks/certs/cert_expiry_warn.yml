@@ -40,4 +40,4 @@
   when:
     - _warn_cert_result is succeeded
     - _warn_days_remaining | int <= _warn_buffer_days | int
-  changed_when: true
+  changed_when: false

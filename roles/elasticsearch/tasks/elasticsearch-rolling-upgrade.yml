@@ -206,6 +206,7 @@
         host: "{{ elasticsearch_api_host }}"
         port: "{{ elasticstack_elasticsearch_http_port }}"
         delay: 30
+        timeout: 600
 
     - name: Confirm the node joins the cluster
       ansible.builtin.uri:
