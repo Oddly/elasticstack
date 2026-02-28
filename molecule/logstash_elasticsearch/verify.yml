@@ -107,7 +107,10 @@
 
     - name: Show Logstash pipeline stats
       ansible.builtin.debug:
-        msg: "Pipeline loaded — in: {{ logstash_stats.json.pipelines.main.events.in }}, out: {{ logstash_stats.json.pipelines.main.events.out }}"
+        msg: >-
+          Pipeline loaded —
+          in: {{ (logstash_stats.json.pipelines.main.events | default({})).in | default('N/A') }},
+          out: {{ (logstash_stats.json.pipelines.main.events | default({})).out | default('N/A') }}
       when:
         - "'logstash' in group_names"
         - logstash_stats.json is defined
