@@ -25,7 +25,7 @@
         passphrase: "{{ _warn_cert_pass | default(omit, true) }}"
         format: "{{ _warn_cert_format | default('p12') }}"
       register: _warn_cert_result
-      ignore_errors: true
+      ignore_errors: true  # noqa: ignore-errors
 
     - name: "Calculate days until certificate expires — {{ _warn_service_name }}"
       ansible.builtin.set_fact:

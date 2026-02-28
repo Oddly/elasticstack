@@ -94,9 +94,8 @@
         path: /etc/logstash/conf.d/main
       register: pipeline_dir
 
-    - name: Assert no local pipeline configs
-      ansible.builtin.assert:
-        that:
-          - not pipeline_dir.stat.exists or (pipeline_dir.stat.isdir and pipeline_dir.stat.size == 0)
-        fail_msg: "Local pipeline configs should not exist with centralized management"
-      ignore_errors: true
+    - name: Warn if local pipeline configs exist
+      ansible.builtin.debug:
+        msg: "Local pipeline configs should not exist with centralized management"
+      when: pipeline_dir.stat.exists and (not pipeline_dir.stat.isdir or pipeline_dir.stat.size > 0)
+      changed_when: true
