@@ -1,0 +1,35 @@
+---
+prerun: false
+dependency:
+  name: galaxy
+  options:
+    requirements-file: requirements.yml
+driver:
+  name: default
+platforms:
+  - name: "kib-extcrt-es1-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}"
+    groups:
+      - elasticsearch
+    distro: "${MOLECULE_DISTRO:-debian12}"
+  - name: "kib-extcrt-kb1-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}"
+    groups:
+      - kibana
+    distro: "${MOLECULE_DISTRO:-debian12}"
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_LOG_PATH: /var/log/ansible.log
+  connection_options:
+    ansible_connection: ssh
+    ansible_user: root
+    ansible_ssh_common_args: >-
+      -o StrictHostKeyChecking=no
+      -o "ProxyCommand=ssh -o StrictHostKeyChecking=no -o BatchMode=yes
+      -i ${MOLECULE_SSH_KEY:-~/.ssh/molecule_id_ed25519}
+      -W %h:%p root@${INCUS_HOST:-172.30.0.172}"
+  inventory:
+    group_vars:
+      all:
+        ansible_python_interpreter: /usr/bin/python3
+verifier:
+  name: ansible

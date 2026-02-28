@@ -1,0 +1,58 @@
+---
+# Tests centralized pipeline management, dead letter queue, log format,
+# monitoring toggle, and logstash_extra_config support.
+- name: Deploy Logstash with centralized pipeline management
+  hosts: all
+  vars:
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    elasticstack_full_stack: false
+    elasticstack_no_log: false
+    logstash_output_elasticsearch: false
+    logstash_create_user: false
+    logstash_create_role: false
+    logstash_input_beats_ssl: false
+    logstash_manage_pipelines: false
+    logstash_no_pipelines: true
+
+    # Centralized pipeline management (no real ES, so Logstash won't connect,
+    # but we verify the config is rendered correctly)
+    logstash_xpack_management: true
+    logstash_xpack_management_elasticsearch_username: logstash_internal
+    logstash_xpack_management_elasticsearch_password: testpassword
+    logstash_xpack_management_elasticsearch_hosts:
+      - "https://es-001.example.com:9200"
+      - "https://es-002.example.com:9200"
+    logstash_xpack_management_pipeline_id:
+      - beats
+      - syslog
+      - agent-input-pipeline
+
+    # Dead letter queue
+    logstash_dead_letter_queue_enable: true
+    logstash_dead_letter_queue_retain_age: 7d
+
+    # Log format
+    logstash_log_format: json
+
+    # Monitoring
+    logstash_monitoring_enabled: false
+
+    # HTTP API
+    logstash_http_host: "127.0.0.1"
+    logstash_http_port: 9600
+
+    # Extra config (catch-all)
+    logstash_extra_config:
+      queue.checkpoint.writes: 1024
+      xpack.management.elasticsearch.sniffing: true
+      xpack.management.logstash.poll_interval: 5s
+      xpack.management.elasticsearch.ssl.certificate_authority: /etc/logstash/certs/ca.pem
+
+  tasks:
+    - name: Include Elastic repos role
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.repos
+
+    - name: Include Logstash role
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.logstash

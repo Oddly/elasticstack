@@ -14,7 +14,10 @@ elasticsearch.sniffInterval: {{ kibana_sniff_interval }}
     {%- if kibana_security | bool +%}
 elasticsearch.hosts: [{% for host in kibana_elasticsearch_hosts %}"https://{{ host }}:{{ elasticstack_elasticsearch_http_port }}"{% if not loop.last %},{% endif %}{% endfor %}]
 elasticsearch.username: "kibana_system"
-elasticsearch.ssl.certificateAuthorities:  "/etc/kibana/certs/ca.crt"
+elasticsearch.password: "{{ kibana_password.stdout }}"
+{%- if _kibana_has_ca | default(true) | bool +%}
+elasticsearch.ssl.certificateAuthorities: "/etc/kibana/certs/ca.crt"
+        {%- endif %}
         {%- if "localhost" in kibana_elasticsearch_hosts +%}elasticsearch.ssl.verificationMode: certificate
         {%- endif +%}
     {%- else +%}

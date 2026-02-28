@@ -8,61 +8,112 @@
   when: kibana_cert_source == 'external'
   block:
 
-    # -- Detect content mode vs file mode --
-    - name: Detect content mode for Kibana
-      ansible.builtin.set_fact:
-        _kibana_content_mode: "{{ kibana_tls_certificate_content | default('', true) | length > 0 }}"
+    # -- Kibana web UI certificate (only when kibana_tls is enabled) --
 
-    - name: Validate certificate is provided
-      ansible.builtin.assert:
-        that:
-          - (kibana_tls_certificate_file | length > 0) or
-            (kibana_tls_certificate_content | default('', true) | length > 0)
-        fail_msg: >-
-          External cert mode requires at minimum:
-          kibana_tls_certificate_file or kibana_tls_certificate_content
+    - name: Handle Kibana web UI certificates
+      when: kibana_tls | bool
+      block:
+        # -- Detect content mode vs file mode --
+        - name: Detect content mode for Kibana
+          ansible.builtin.set_fact:
+            _kibana_content_mode: "{{ kibana_tls_certificate_content | default('', true) | length > 0 }}"
 
-    # -- Content mode: set format to PEM --
-    - name: Set format facts for content mode
-      ansible.builtin.set_fact:
-        _kibana_cert_format: pem
-        _kibana_ca_extracted: false
-      when: _kibana_content_mode | bool
+        - name: Validate certificate is provided
+          ansible.builtin.assert:
+            that:
+              - (kibana_tls_certificate_file | length > 0) or
+                (kibana_tls_certificate_content | default('', true) | length > 0)
+            fail_msg: >-
+              External cert mode with kibana_tls requires at minimum:
+              kibana_tls_certificate_file or kibana_tls_certificate_content
 
-    - name: Check for CA chain in certificate content
-      ansible.builtin.set_fact:
-        _kibana_ca_extracted: true
-      when:
-        - _kibana_content_mode | bool
-        - >-
-          kibana_tls_certificate_content | default('')
-          | regex_findall('-----BEGIN CERTIFICATE-----') | length > 1
+        # -- Content mode: set format to PEM --
+        - name: Set format facts for content mode
+          ansible.builtin.set_fact:
+            _kibana_cert_format: pem
+            _kibana_ca_extracted: false
+          when: _kibana_content_mode | bool
 
-    - name: Validate key content is provided (content mode)
-      ansible.builtin.assert:
-        that:
-          - kibana_tls_key_content | default('', true) | length > 0
-        fail_msg: >-
-          Content mode requires both certificate and key content.
-          Set kibana_tls_key_content.
-      when: _kibana_content_mode | bool
+        - name: Check for CA chain in certificate content
+          ansible.builtin.set_fact:
+            _kibana_ca_extracted: true
+          when:
+            - _kibana_content_mode | bool
+            - >-
+              kibana_tls_certificate_content | default('')
+              | regex_findall('-----BEGIN CERTIFICATE-----') | length > 1
 
-    # -- File mode: validate and detect format --
-    - name: Validate Kibana certificate (file mode)
-      ansible.builtin.include_tasks:
-        file: "{{ role_path }}/../elasticstack/tasks/certs/cert_validate.yml"
-      vars:
-        _validate_cert_path: "{{ kibana_tls_certificate_file }}"
-        _validate_key_path: "{{ kibana_tls_key_file }}"
-        _validate_pass: "{{ kibana_tls_certificate_passphrase }}"
-        _validate_remote_src: "{{ kibana_tls_remote_src }}"
-        _validate_service: "Kibana"
-        _validate_format_fact: _kibana_cert_format
-        _validate_key_fact: _kibana_resolved_key
-        _validate_ca_extracted_fact: _kibana_ca_extracted
-      when: not (_kibana_content_mode | bool)
+        - name: Validate key content is provided (content mode)
+          ansible.builtin.assert:
+            that:
+              - kibana_tls_key_content | default('', true) | length > 0
+            fail_msg: >-
+              Content mode requires both certificate and key content.
+              Set kibana_tls_key_content.
+          when: _kibana_content_mode | bool
 
-    # -- Deploy certificates --
+        # -- File mode: validate and detect format --
+        - name: Validate Kibana certificate (file mode)
+          ansible.builtin.include_tasks:
+            file: "{{ role_path }}/../elasticstack/tasks/certs/cert_validate.yml"
+          vars:
+            _validate_cert_path: "{{ kibana_tls_certificate_file }}"
+            _validate_key_path: "{{ kibana_tls_key_file }}"
+            _validate_pass: "{{ kibana_tls_certificate_passphrase }}"
+            _validate_remote_src: "{{ kibana_tls_remote_src }}"
+            _validate_service: "Kibana"
+            _validate_format_fact: _kibana_cert_format
+            _validate_key_fact: _kibana_resolved_key
+            _validate_ca_extracted_fact: _kibana_ca_extracted
+          when: not (_kibana_content_mode | bool)
+
+        # -- Deploy certificates --
+
+        - name: Write Kibana certificate (from content)
+          ansible.builtin.copy:
+            content: "{{ kibana_tls_certificate_content }}"
+            dest: "/etc/kibana/certs/{{ inventory_hostname }}-kibana.crt"
+            owner: root
+            group: kibana
+            mode: "0640"
+          when: _kibana_content_mode | bool
+          notify: Restart Kibana
+
+        - name: Copy Kibana certificate (from file)
+          ansible.builtin.copy:
+            src: "{{ kibana_tls_certificate_file }}"
+            dest: "/etc/kibana/certs/{{ inventory_hostname }}-kibana{{ '.p12' if _kibana_cert_format == 'p12' else '.crt' }}"
+            owner: root
+            group: kibana
+            mode: "0640"
+            remote_src: "{{ kibana_tls_remote_src }}"
+          when: not (_kibana_content_mode | bool)
+          notify: Restart Kibana
+
+        - name: Write Kibana key (from content)
+          ansible.builtin.copy:
+            content: "{{ kibana_tls_key_content }}"
+            dest: "/etc/kibana/certs/{{ inventory_hostname }}-kibana.key"
+            owner: root
+            group: kibana
+            mode: "0640"
+          when: _kibana_content_mode | bool
+          notify: Restart Kibana
+
+        - name: Copy Kibana key (from file, PEM only)
+          ansible.builtin.copy:
+            src: "{{ _kibana_resolved_key }}"
+            dest: "/etc/kibana/certs/{{ inventory_hostname }}-kibana.key"
+            owner: root
+            group: kibana
+            mode: "0640"
+            remote_src: "{{ kibana_tls_remote_src }}"
+          when:
+            - not (_kibana_content_mode | bool)
+            - _kibana_cert_format == 'pem'
+          notify: Restart Kibana
+
+    # -- CA certificate (always handled, independent of kibana_tls) --
 
     - name: Create certificate directory
       ansible.builtin.file:
@@ -71,52 +122,6 @@
         owner: root
         group: kibana
         mode: "0750"
-
-    - name: Write Kibana certificate (from content)
-      ansible.builtin.copy:
-        content: "{{ kibana_tls_certificate_content }}"
-        dest: "/etc/kibana/certs/{{ inventory_hostname }}-kibana.crt"
-        owner: root
-        group: kibana
-        mode: "0640"
-      when: _kibana_content_mode | bool
-      notify: Restart Kibana
-
-    - name: Copy Kibana certificate (from file)
-      ansible.builtin.copy:
-        src: "{{ kibana_tls_certificate_file }}"
-        dest: "/etc/kibana/certs/{{ inventory_hostname }}-kibana{{ '.p12' if _kibana_cert_format == 'p12' else '.crt' }}"
-        owner: root
-        group: kibana
-        mode: "0640"
-        remote_src: "{{ kibana_tls_remote_src }}"
-      when: not (_kibana_content_mode | bool)
-      notify: Restart Kibana
-
-    - name: Write Kibana key (from content)
-      ansible.builtin.copy:
-        content: "{{ kibana_tls_key_content }}"
-        dest: "/etc/kibana/certs/{{ inventory_hostname }}-kibana.key"
-        owner: root
-        group: kibana
-        mode: "0640"
-      when: _kibana_content_mode | bool
-      notify: Restart Kibana
-
-    - name: Copy Kibana key (from file, PEM only)
-      ansible.builtin.copy:
-        src: "{{ _kibana_resolved_key }}"
-        dest: "/etc/kibana/certs/{{ inventory_hostname }}-kibana.key"
-        owner: root
-        group: kibana
-        mode: "0640"
-        remote_src: "{{ kibana_tls_remote_src }}"
-      when:
-        - not (_kibana_content_mode | bool)
-        - _kibana_cert_format == 'pem'
-      notify: Restart Kibana
-
-    # -- CA certificate --
 
     - name: Write CA certificate (from content)
       ansible.builtin.copy:
@@ -168,6 +173,13 @@
         - _kibana_ca_extracted | bool
         - _kibana_cert_format == 'pem'
       notify: Restart Kibana
+
+    - name: Set effective CA availability fact
+      ansible.builtin.set_fact:
+        _kibana_has_ca: >-
+          {{ (kibana_tls_ca_file | length > 0) or
+             (kibana_tls_ca_content | default('', true) | length > 0) or
+             (_kibana_ca_extracted | default(false) | bool) }}
 
 # ============================================================
 # Auto-generated certificates (elasticsearch_ca)
@@ -262,6 +274,7 @@
         owner: root
         group: elasticsearch
         mode: "0700"
+      check_mode: false
 
     - name: Check for preserved encryption keys from CA renewal
       ansible.builtin.stat:
@@ -300,11 +313,13 @@
         executable: /bin/bash
         creates: "{{ elasticstack_ca_dir }}/encryption_key"
       changed_when: false
+      check_mode: false
 
     - name: Fetch encryption key
       ansible.builtin.slurp:
         src: "{{ elasticstack_ca_dir }}/encryption_key"
       register: kibana_encryption_key
+      check_mode: false
 
     - name: Generate saved objects encryption key
       ansible.builtin.shell: >
@@ -315,11 +330,13 @@
         executable: /bin/bash
         creates: "{{ elasticstack_ca_dir }}/savedobjects_encryption_key"
       changed_when: false
+      check_mode: false
 
     - name: Fetch saved objects encryption key
       ansible.builtin.slurp:
         src: "{{ elasticstack_ca_dir }}/savedobjects_encryption_key"
       register: kibana_savedobjects_encryption_key
+      check_mode: false
 
 # -- Auto-generated cert tasks (only for elasticsearch_ca) --
 - name: Handle auto-generated Kibana certificate distribution

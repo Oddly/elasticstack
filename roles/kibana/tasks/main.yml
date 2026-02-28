@@ -125,7 +125,9 @@
     name: kibana
     state: started
     enabled: true
-  when: kibana_enable | bool
+  when:
+    - kibana_enable | bool
+    - not ansible_check_mode
   register: kibana_freshstart
 
 # the following is useful when running tests or extra tasks that need to
@@ -136,4 +138,5 @@
     host: localhost
     port: 5601
     timeout: 300
+  when: not ansible_check_mode
 

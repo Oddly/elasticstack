@@ -200,6 +200,50 @@ logstash_cert_force_regenerate: false
 # @var logstash_tls_key_passphrase:description: Passphrase for the Logstash TLS private key
 logstash_tls_key_passphrase: LogstashChangeMe
 
+# === Dead Letter Queue ===
+
+# @var logstash_dead_letter_queue_enable:description: Enable the dead letter queue for failed events
+# logstash_dead_letter_queue_enable: false
+# @var logstash_dead_letter_queue_retain_age:description: Retention period for dead letter queue entries
+# logstash_dead_letter_queue_retain_age: 7d
+
+# === Log Format ===
+
+# @var logstash_log_format:description: Log output format ('plain' or 'json')
+# logstash_log_format: plain
+
+# === Monitoring ===
+
+# @var logstash_monitoring_enabled:description: Enable internal monitoring collection
+# logstash_monitoring_enabled: true
+
+# === Centralized Pipeline Management ===
+
+# @var logstash_xpack_management:description: Enable centralized pipeline management via Elasticsearch
+logstash_xpack_management: false
+# @var logstash_xpack_management_elasticsearch_username:description: Elasticsearch username for pipeline management
+# logstash_xpack_management_elasticsearch_username: logstash_admin
+# @var logstash_xpack_management_elasticsearch_password:description: Elasticsearch password for pipeline management
+# logstash_xpack_management_elasticsearch_password: ""
+# @var logstash_xpack_management_elasticsearch_hosts:description: Elasticsearch hosts for pipeline management
+# logstash_xpack_management_elasticsearch_hosts: []
+# @var logstash_xpack_management_pipeline_id:description: List of pipeline IDs to manage centrally
+# logstash_xpack_management_pipeline_id: []
+
+# === Extra Configuration ===
+
+# @var logstash_extra_config:description: >
+#   Dictionary of additional logstash.yml settings not covered by dedicated
+#   variables. Keys are written as-is into logstash.yml. Nested values are
+#   rendered as YAML.
+# @var logstash_extra_config:example: >
+# logstash_extra_config:
+#   queue.checkpoint.writes: 1024
+#   xpack.management.elasticsearch.sniffing: true
+#   xpack.management.logstash.poll_interval: 5s
+# @end
+logstash_extra_config: {}
+
 # === Logging Configuration ===
 
 # @var logstash_logging_console:description: Enable Logstash console (stdout) logging

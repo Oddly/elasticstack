@@ -16,3 +16,47 @@ pipeline.ecs_compatibility: {{ logstash_global_ecs }}
 {% if logstash_pipeline_unsafe_shutdown is defined %}
 pipeline.unsafe_shutdown: {{ logstash_pipeline_unsafe_shutdown }}
 {% endif %}
+{% if logstash_dead_letter_queue_enable is defined %}
+dead_letter_queue.enable: {{ logstash_dead_letter_queue_enable | lower }}
+{% if logstash_dead_letter_queue_enable | bool %}
+{% if logstash_dead_letter_queue_retain_age is defined %}
+dead_letter_queue.retain.age: {{ logstash_dead_letter_queue_retain_age }}
+{% endif %}
+{% endif %}
+{% endif %}
+{% if logstash_log_format is defined %}
+log.format: {{ logstash_log_format }}
+{% endif %}
+{% if logstash_monitoring_enabled is defined %}
+monitoring.enabled: {{ logstash_monitoring_enabled | lower }}
+{% endif %}
+{% if logstash_xpack_management | bool %}
+xpack.management.enabled: true
+{% if logstash_xpack_management_elasticsearch_username is defined %}
+xpack.management.elasticsearch.username: {{ logstash_xpack_management_elasticsearch_username }}
+{% endif %}
+{% if logstash_xpack_management_elasticsearch_password is defined %}
+xpack.management.elasticsearch.password: {{ logstash_xpack_management_elasticsearch_password }}
+{% endif %}
+{% if logstash_xpack_management_elasticsearch_hosts is defined %}
+xpack.management.elasticsearch.hosts: {{ logstash_xpack_management_elasticsearch_hosts | to_json }}
+{% endif %}
+{% if logstash_xpack_management_pipeline_id is defined %}
+xpack.management.pipeline.id: {{ logstash_xpack_management_pipeline_id | to_json }}
+{% endif %}
+{% endif %}
+{% if logstash_extra_config is defined and logstash_extra_config %}
+{%   set _managed_keys = [
+       'path.data', 'path.logs', 'config.reload.automatic', 'config.reload.interval',
+       'http.host', 'http.port', 'pipeline.ecs_compatibility', 'pipeline.unsafe_shutdown',
+       'dead_letter_queue.enable', 'dead_letter_queue.retain.age',
+       'log.format', 'monitoring.enabled',
+       'xpack.management.enabled', 'xpack.management.elasticsearch.username',
+       'xpack.management.elasticsearch.password', 'xpack.management.elasticsearch.hosts',
+       'xpack.management.pipeline.id'
+     ] %}
+{%   set _filtered = logstash_extra_config | dict2items | rejectattr('key', 'in', _managed_keys) | list | items2dict %}
+{%   if _filtered %}
+{{ _filtered | to_nice_yaml(indent=2, sort_keys=False) }}
+{%   endif %}
+{% endif %}
