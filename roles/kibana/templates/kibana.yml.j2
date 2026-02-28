@@ -1,5 +1,8 @@
 server.host: "0.0.0.0"
 server.publicBaseUrl: "http{% if kibana_tls | bool %}s{% endif %}://{{ elasticstack_kibana_host | default( ansible_facts.fqdn ) }}:{{ elasticstack_kibana_port }}"
+{% if kibana_server_protocol is defined and kibana_server_protocol | length > 0 %}
+server.protocol: "{{ kibana_server_protocol }}"
+{% endif %}
 
 {% if elasticstack_full_stack is defined and elasticstack_full_stack | bool %}
     {%- if kibana_sniff_on_start | bool %}
@@ -15,11 +18,11 @@ elasticsearch.sniffInterval: {{ kibana_sniff_interval }}
 elasticsearch.hosts: [{% for host in kibana_elasticsearch_hosts %}"https://{{ host }}:{{ elasticstack_elasticsearch_http_port }}"{% if not loop.last %},{% endif %}{% endfor %}]
 elasticsearch.username: "kibana_system"
 elasticsearch.password: "{{ kibana_password.stdout }}"
-elasticsearch.ssl.certificateAuthorities:  "/etc/kibana/certs/ca.crt"
+{%- if _kibana_has_ca | default(true) | bool +%}
+elasticsearch.ssl.certificateAuthorities: "/etc/kibana/certs/ca.crt"
+        {%- endif %}
         {%- if "localhost" in kibana_elasticsearch_hosts +%}elasticsearch.ssl.verificationMode: certificate
         {%- endif +%}
-xpack.security.encryptionKey: "{{ kibana_encryption_key.content | b64decode | trim }}"
-xpack.encryptedSavedObjects.encryptionKey: "{{ kibana_savedobjects_encryption_key.content | b64decode | trim }}"
     {%- else +%}
 elasticsearch.hosts: [{% for host in kibana_elasticsearch_hosts %}"http://{{ host }}:{{ elasticstack_elasticsearch_http_port }}"{% if not loop.last %},{% endif %}{% endfor %}]
     {%- endif %}
@@ -32,12 +35,8 @@ server.ssl.certificate: "/etc/kibana/certs/{{ inventory_hostname }}-kibana.crt"
 server.ssl.key: "/etc/kibana/certs/{{ inventory_hostname }}-kibana.key"
 {% elif kibana_cert_source == 'external' and _kibana_cert_format | default('pem') == 'p12' %}
 server.ssl.keystore.path: "/etc/kibana/certs/{{ inventory_hostname }}-kibana.p12"
-{% if kibana_tls_certificate_passphrase | default('') | length > 0 %}
-server.ssl.keystore.password: "{{ kibana_tls_certificate_passphrase }}"
-{% endif %}
 {% else %}
-server.ssl.certificate: "{{ kibana_tls_cert }}"
-server.ssl.key: "{{ kibana_tls_key }}"
+server.ssl.keystore.path: "/etc/kibana/certs/{{ inventory_hostname }}-kibana.p12"
 {% endif %}
 {% endif %}
 

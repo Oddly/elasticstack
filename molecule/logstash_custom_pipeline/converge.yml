@@ -13,6 +13,7 @@
     logstash_create_user: false
     logstash_create_role: false
     logstash_pipeline_unsafe_shutdown: true
+    logstash_heap: "512m"
     # Full custom pipeline - this uses the logstash_custom_pipeline variable
     # which bypasses the normal input/filter/output template system
     logstash_custom_pipeline: |

@@ -8,5 +8,4 @@
 -XX:ErrorFile={{ elasticsearch_logpath }}/hs_err_pid%p.log
 
 ## GC logging
-8:-Xloggc:{{ elasticsearch_logpath }}/gc.log
 9-:-Xlog:gc*,gc+age=trace,safepoint:file={{ elasticsearch_logpath }}/gc.log:utctime,pid,tags:filecount=32,filesize=64m

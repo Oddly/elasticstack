@@ -109,7 +109,7 @@
       'logstash' +
       ((elasticstack_versionseparator +
       elasticstack_version |
-      string ) if (elasticstack_version is defined and elasticstack_version | length > 0)) |
+      string ) if (elasticstack_version is defined and elasticstack_version | length > 0) else '') |
       replace(' ', '')
       }}
   when:
@@ -171,7 +171,7 @@
   ansible.builtin.import_tasks: logstash-security.yml
   when:
     - (elasticstack_full_stack | default(false) | bool and _logstash_security | bool) or
-      logstash_cert_source | default('elasticsearch_ca') == 'external'
+      logstash_cert_source | default('elasticsearch_ca') in ['external', 'standalone']
   tags:
     - certificates
     - renew_ca
@@ -188,6 +188,25 @@
   notify:
     - Restart Logstash
   when: logstash_manage_yaml | bool
+  tags:
+    - configuration
+    - logstash_configuration
+
+- name: Set Logstash JVM heap size
+  ansible.builtin.lineinfile:
+    path: /etc/logstash/jvm.options
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  loop:
+    - regexp: '^-Xms'
+      line: "-Xms{{ logstash_heap }}"
+    - regexp: '^-Xmx'
+      line: "-Xmx{{ logstash_heap }}"
+  loop_control:
+    label: "{{ item.line }}"
+  notify:
+    - Restart Logstash
+  when: logstash_heap is defined and (logstash_heap | string | length > 0)
   tags:
     - configuration
     - logstash_configuration

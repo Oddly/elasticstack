@@ -2,7 +2,7 @@
 - name: Prepare
   hosts: all
   vars:
-    es_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    distro_cache_url: "{{ lookup('env', 'DISTRO_CACHE_URL') }}"
   tasks:
     - name: Wait for systemd to finish booting
       ansible.builtin.shell: |
@@ -29,36 +29,5 @@
       ansible.builtin.debug:
         var: systemd_wait.stdout_lines
 
-    - name: Install packages for Debian
-      ansible.builtin.apt:
-        name:
-          - gpg
-          - gpg-agent
-          - procps
-          - curl
-          - iproute2
-          - git
-          - openssl
-          - python3
-          - python3-pip
-          - python3-setuptools
-        update_cache: true
-      when: ansible_facts.os_family == "Debian"
-
-    - name: Install packages for RedHat
-      ansible.builtin.dnf:
-        name:
-          - python3-pip
-          - python3-setuptools
-      when: ansible_facts.os_family == "RedHat"
-
-    - name: Remove PEP 668 marker (test containers only)
-      ansible.builtin.file:
-        path: "/usr/lib/python{{ ansible_python.version.major }}.{{ ansible_python.version.minor }}/EXTERNALLY-MANAGED"
-        state: absent
-
-    - name: Install python module dependencies
-      ansible.builtin.pip:
-        name: "{{ item }}"
-      loop:
-        - "elasticsearch>={{ es_release }},<{{ es_release | int + 1 }}"
+    - name: Common prepare tasks
+      ansible.builtin.include_tasks: ../shared/prepare_common.yml

@@ -16,6 +16,7 @@ on:
     paths:
       - '.github/workflows/test_elasticsearch_custom_certs.yml'
       - 'molecule/elasticsearch_custom_certs/*'
+      - 'molecule/elasticsearch_custom_certs_minimal/*'
       - 'roles/elasticstack/tasks/certs/cert_validate.yml'
       - 'roles/elasticstack/tasks/certs/cert_expiry_warn.yml'
       - 'roles/elasticsearch/tasks/elasticsearch-security.yml'
@@ -31,25 +32,44 @@ jobs:
     uses: ./.github/workflows/test_linting.yml
     with:
       rolename: elasticsearch
+    secrets: inherit
 
   molecule_elasticsearch_custom_certs:
     needs: lint_elasticsearch
     runs-on: self-hosted
-    timeout-minutes: 20
+    timeout-minutes: 45
 
     env:
       COLLECTION_NAMESPACE: oddly
       COLLECTION_NAME: elasticstack
+      ANSIBLE_PIPELINING: 'true'
+      ANSIBLE_GATHERING: smart
+      ANSIBLE_ANY_ERRORS_FATAL: 'true'
+      ANSIBLE_DISPLAY_SKIPPED_HOSTS: 'false'
+      ANSIBLE_TRANSFER_METHOD: sftp
+      ANSIBLE_SSH_RETRIES: '5'
+      ANSIBLE_SSH_ARGS: >-
+        -o ControlMaster=auto
+        -o ControlPersist=300s
+        -o PreferredAuthentications=publickey
 
     strategy:
       fail-fast: false
       max-parallel: 10
       matrix:
         distro:
+          - rockylinux9
+          - rockylinux10
+          - ubuntu2204
+          - ubuntu2404
+          - debian11
           - debian12
+          - debian13
         scenario:
           - elasticsearch_custom_certs
+          - elasticsearch_custom_certs_minimal
         release:
+          - 8
           - 9
 
     steps:
@@ -70,14 +90,14 @@ jobs:
         run: |
           mkdir -p $ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE
           cp -a "$GITHUB_WORKSPACE" $ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
-          ansible-galaxy collection install http://172.30.0.172:8082/collections/community-general-12.3.0.tar.gz http://172.30.0.172:8082/collections/community-crypto-3.1.1.tar.gz http://172.30.0.172:8082/collections/ansible-posix-2.1.0.tar.gz
+          ansible-galaxy collection install http://${{ secrets.INCUS_HOST }}:8082/collections/community-general-12.3.0.tar.gz http://${{ secrets.INCUS_HOST }}:8082/collections/community-crypto-3.1.1.tar.gz http://${{ secrets.INCUS_HOST }}:8082/collections/ansible-posix-2.1.0.tar.gz
 
       - name: Set up SSH key for molecule
         run: |
+          echo "${{ secrets.MOLECULE_SSH_PRIVATE_KEY }}" > ${{ runner.temp }}/molecule_id_ed25519
+          chmod 600 ${{ runner.temp }}/molecule_id_ed25519
           mkdir -p ~/.ssh
-          echo "${{ secrets.MOLECULE_SSH_PRIVATE_KEY }}" > ~/.ssh/molecule_id_ed25519
-          chmod 600 ~/.ssh/molecule_id_ed25519
-          ssh-keyscan -t ed25519 ${{ secrets.INCUS_HOST || '172.30.0.172' }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan -t ed25519 ${{ secrets.INCUS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Converge and verify
         run: |
@@ -92,7 +112,8 @@ jobs:
           ANSIBLE_DIFF_ALWAYS: 'true'
           ANSIBLE_CALLBACKS_ENABLED: profile_tasks
           INCUS_HOST: ${{ secrets.INCUS_HOST }}
-          MOLECULE_SSH_KEY: ~/.ssh/molecule_id_ed25519
+          MOLECULE_SSH_KEY: ${{ runner.temp }}/molecule_id_ed25519
+          DISTRO_CACHE_URL: http://${{ secrets.REGISTRY_HOST }}:8081
 
       - name: Idempotence check
         timeout-minutes: 20
@@ -106,13 +127,17 @@ jobs:
           ANSIBLE_DIFF_ALWAYS: 'true'
           ANSIBLE_CALLBACKS_ENABLED: profile_tasks
           INCUS_HOST: ${{ secrets.INCUS_HOST }}
-          MOLECULE_SSH_KEY: ~/.ssh/molecule_id_ed25519
+          MOLECULE_SSH_KEY: ${{ runner.temp }}/molecule_id_ed25519
+          DISTRO_CACHE_URL: http://${{ secrets.REGISTRY_HOST }}:8081
 
       - name: Collect and upload diagnostics
         if: failure()
         uses: ./.github/actions/collect-diagnostics
         with:
           artifact-name: diag-${{ matrix.scenario }}-${{ matrix.distro }}-r${{ matrix.release }}
+        env:
+          INCUS_HOST: ${{ secrets.INCUS_HOST }}
+          MOLECULE_SSH_KEY: ${{ runner.temp }}/molecule_id_ed25519
 
       - name: Cleanup molecule
         if: always()
@@ -122,4 +147,9 @@ jobs:
           MOLECULE_DISTRO: ${{ matrix.distro }}
           ELASTIC_RELEASE: ${{ matrix.release }}
           INCUS_HOST: ${{ secrets.INCUS_HOST }}
-          MOLECULE_SSH_KEY: ~/.ssh/molecule_id_ed25519
+          MOLECULE_SSH_KEY: ${{ runner.temp }}/molecule_id_ed25519
+          DISTRO_CACHE_URL: http://${{ secrets.REGISTRY_HOST }}:8081
+
+      - name: Clean up SSH key
+        if: always()
+        run: rm -f ${{ runner.temp }}/molecule_id_ed25519

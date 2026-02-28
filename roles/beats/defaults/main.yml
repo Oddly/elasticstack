@@ -133,6 +133,21 @@ beats_queue_disk_path: ""
 # @var beats_queue_disk_max_size:description: Maximum size of the disk queue before Filebeat applies backpressure
 beats_queue_disk_max_size: 1GB
 
+# @var beats_filebeat_extra_inputs:description: >
+#   List of additional Filebeat input configurations appended after the built-in inputs.
+#   Each item is a dict rendered as a complete YAML input block under filebeat.inputs
+# @var beats_filebeat_extra_inputs:example: >
+# beats_filebeat_extra_inputs:
+#   - type: aws-s3
+#     enabled: true
+#     queue_url: https://sqs.us-east-1.amazonaws.com/1234/queue
+#   - type: httpjson
+#     enabled: true
+#     config_version: 2
+#     request.url: https://api.example.com/logs
+# @end
+beats_filebeat_extra_inputs: []
+
 # @var beats_filebeat_mysql_slowlog_input:description: Enable MySQL slow query log input with multiline parsing
 beats_filebeat_mysql_slowlog_input: false
 # @var beats_filebeat_modules:description: List of Filebeat modules to enable

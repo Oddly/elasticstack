@@ -5,7 +5,11 @@ path.data: {{ elasticsearch_datapath }}
 path.logs: {{ elasticsearch_logpath }}
 cluster.name: "{{ elasticsearch_clustername }}"
 {% if elasticsearch_network_host is defined %}
+{% if elasticsearch_network_host is string %}
 network.host: [ {{ elasticsearch_network_host }} ]
+{% else %}
+network.host: {{ elasticsearch_network_host | to_json }}
+{% endif %}
 {% else %}
 network.host: [ "_local_", "_site_" ]
 {% endif %}

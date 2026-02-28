@@ -13,6 +13,7 @@
     logstash_create_role: false
     logstash_input_beats_ssl: false
     logstash_pipeline_unsafe_shutdown: true
+    logstash_heap: "512m"
     # Config backup
     logstash_config_backup: true
     # Logging management

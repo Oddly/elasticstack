@@ -153,7 +153,7 @@
       'elasticsearch' +
       ((elasticstack_versionseparator +
       elasticstack_version |
-      string ) if (elasticstack_version is defined and elasticstack_version | length > 0)) |
+      string ) if (elasticstack_version is defined and elasticstack_version | length > 0) else '') |
       replace(' ', '')
       }}
 
@@ -332,6 +332,17 @@
     - Restart Elasticsearch
   when: elasticsearch_manage_yaml | bool
 
+- name: Configure Elasticsearch logging
+  ansible.builtin.template:
+    src: log4j2.properties.j2
+    dest: /etc/elasticsearch/log4j2.properties
+    owner: root
+    group: elasticsearch
+    mode: "0660"
+    backup: "{{ elasticsearch_config_backup }}"
+  notify: Restart Elasticsearch
+  when: elasticsearch_manage_logging | bool
+
 - name: Create Elasticsearch directory
   ansible.builtin.file:
     path: "{{ item.path }}"
@@ -339,10 +350,10 @@
     owner: elasticsearch
     group: elasticsearch
     mode: "2750"
-  when: item.create | bool
+  when: item.create | bool or item.path != item.default
   loop:
-    - {create: "{{ elasticsearch_create_logpath }}", path: "{{ elasticsearch_logpath }}" }
-    - {create: "{{ elasticsearch_create_datapath }}", path: "{{ elasticsearch_datapath }}" }
+    - {create: "{{ elasticsearch_create_logpath }}", path: "{{ elasticsearch_logpath }}", default: "/var/log/elasticsearch"}
+    - {create: "{{ elasticsearch_create_datapath }}", path: "{{ elasticsearch_datapath }}", default: "/var/lib/elasticsearch"}
 
 - name: Activate JNA workaround (see README.md)
   ansible.builtin.lineinfile:
@@ -447,6 +458,7 @@
     state: started
     enabled: true
   register: elasticsearch_freshstart
+  when: not ansible_check_mode
 
 # The comment in the following task will disable KICS security checks for this
 # very line. In this state of the system we can only communicate without https
@@ -461,8 +473,8 @@
         url: "http://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/health?pretty"
       register: elasticsearch_cluster_status
       ignore_errors: "{{ ansible_check_mode }}"
-      until: elasticsearch_cluster_status.json.status == "green"
-      retries: 5
+      until: (elasticsearch_cluster_status.json.status | default('')) in ['green', 'yellow']
+      retries: 30
       delay: 10
       no_log: "{{ elasticstack_no_log }}"
 

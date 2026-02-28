@@ -1,6 +1,8 @@
 ---
 - name: Prepare
   hosts: all
+  vars:
+    distro_cache_url: "{{ lookup('env', 'DISTRO_CACHE_URL') }}"
   tasks:
     - name: Populate /etc/hosts with molecule instances
       ansible.builtin.lineinfile:
@@ -10,35 +12,5 @@
       loop: "{{ groups['all'] }}"
       when: groups['all'] | length > 1
 
-    - name: Install packages for RHEL
-      ansible.builtin.package:
-        name:
-          - iproute
-          - NetworkManager
-      when: ansible_facts.os_family == "RedHat"
-
-    - name: Start NetworkManager
-      ansible.builtin.service:
-        name: NetworkManager
-        state: started
-        enabled: true
-      when: ansible_facts.os_family == "RedHat"
-
-    - name: Install packages for Debian
-      ansible.builtin.apt:
-        name:
-          - gpg
-          - gpg-agent
-          - procps
-          - curl
-          - iproute2
-        update_cache: true
-      when: ansible_facts.os_family == "Debian"
-
-    - name: Install common packages
-      ansible.builtin.package:
-        name:
-          - git
-          - openssl
-          - unzip
-          - systemd
+    - name: Common prepare tasks
+      ansible.builtin.include_tasks: ../shared/prepare_common.yml

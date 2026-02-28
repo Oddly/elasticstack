@@ -11,6 +11,8 @@
     elasticsearch_monitoring_enabled: false
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticsearch_heap: "1"
+    logstash_heap: "512m"
+
     elasticstack_full_stack: true
     elasticstack_no_log: false
     logstash_pipeline_unsafe_shutdown: true

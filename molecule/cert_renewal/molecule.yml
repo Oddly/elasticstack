@@ -12,11 +12,13 @@ platforms:
       - elasticsearch
       - logstash
     distro: "${MOLECULE_DISTRO:-debian12}"
+    memory_mb: 4096
   - name: "cert-renew-es2-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}"
     groups:
       - elasticsearch
       - kibana
     distro: "${MOLECULE_DISTRO:-debian12}"
+    memory_mb: 5632
 provisioner:
   name: ansible
   env:
@@ -24,6 +26,7 @@ provisioner:
   connection_options:
     ansible_connection: ssh
     ansible_user: root
+    ansible_ssh_retries: 3
     ansible_ssh_common_args: >-
       -o StrictHostKeyChecking=no
       -o "ProxyCommand=ssh -o StrictHostKeyChecking=no -o BatchMode=yes

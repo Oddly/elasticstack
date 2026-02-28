@@ -174,12 +174,19 @@ filebeat.inputs:
   combine_partial: true
 
 {% endif %}
+{% for input in beats_filebeat_extra_inputs %}
+- {{ input | to_nice_yaml(indent=2) | indent(2) | trim }}
+
+{% endfor %}
 filebeat.config.modules:
   path: ${path.config}/modules.d/*.yml
   reload.enabled: false
 setup.template.settings:
   index.number_of_shards: 1
 setup.kibana:
+{% if elasticstack_full_stack | default(false) | bool and groups[elasticstack_kibana_group_name] | default([]) | length > 0 %}
+  host: "http://{{ groups[elasticstack_kibana_group_name][0] }}:{{ elasticstack_kibana_port }}"
+{% endif %}
 {% if beats_filebeat_output == "elasticsearch" %}
 output.elasticsearch:
 {% if beats_security | bool %}

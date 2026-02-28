@@ -268,22 +268,6 @@ Elasticsearch index name pattern. Leave empty for the default `logstash-%{+YYYY.
 logstash_elasticsearch_index: ''  # default
 ```
 
-#### logstash_elasticsearch_ssl
-
-Connect to Elasticsearch over TLS.
-
-```yaml
-logstash_elasticsearch_ssl: true  # default
-```
-
-#### logstash_elasticsearch_ssl_verification
-
-Verify the Elasticsearch TLS certificate. Disable only for self-signed certs in development.
-
-```yaml
-logstash_elasticsearch_ssl_verification: true  # default
-```
-
 #### logstash_validate_after_inactivity
 
 Seconds of inactivity before re-validating an Elasticsearch connection.
@@ -445,14 +429,6 @@ Display name for the Logstash user.
 
 ```yaml
 logstash_user_fullname: "Internal Logstash User"  # default
-```
-
-#### logstash_reset_writer_role
-
-Reset the writer role definition on every run. Ensures the role's privileges stay current if you update `logstash_role_*` variables.
-
-```yaml
-logstash_reset_writer_role: true  # default
 ```
 
 ### Certificate Configuration
@@ -644,10 +620,6 @@ The `logstash_cert_source` variable controls where TLS certificates come from:
 - **`elasticsearch_ca`** (default) — fetches certificates from the Elasticsearch CA host. The role also creates the `logstash_writer` user and role in Elasticsearch.
 - **`standalone`** — for environments where Logstash runs independently. User/role creation still occurs.
 - **`external`** — uses certificate files you provide via `logstash_tls_certificate_file`, `logstash_tls_key_file`, and optionally `logstash_tls_ca_file`. The role copies them into place but does NOT create the ES user/role (assumes you manage that separately).
-
-### Role reset on every run
-
-`logstash_reset_writer_role` (default `true`) causes the `logstash_writer` role definition to be reapplied on every playbook run. This ensures that if you change `logstash_role_cluster_privileges`, `logstash_role_indicies_names`, or `logstash_role_indicies_privileges`, the Elasticsearch role definition stays in sync.
 
 ### Password validation
 

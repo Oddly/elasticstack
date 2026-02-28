@@ -28,7 +28,7 @@
 
 - name: Enable Ingest Pipelines
   ansible.builtin.shell: >
-    /usr/bin/metricbeat setup &&
+    /usr/bin/metricbeat setup --pipelines --index-management &&
     /usr/bin/metricbeat version > /etc/metricbeat/pipelines_created
   run_once: true
   args:

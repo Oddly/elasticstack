@@ -14,6 +14,19 @@ elasticsearch_ml_enabled: true
 elasticsearch_config_backup: false
 # @var elasticsearch_manage_yaml:description: Let the role manage elasticsearch.yml. Set to false to manage it yourself
 elasticsearch_manage_yaml: true
+# @var elasticsearch_manage_logging:description: Let the role manage log4j2.properties for Elasticsearch logging
+elasticsearch_manage_logging: false
+# @var elasticsearch_logging_console:description: Enable console (stdout) log appender. Usually off for daemon mode
+elasticsearch_logging_console: false
+# @var elasticsearch_logging_file:description: Enable plain-text rolling file appender (es.log)
+elasticsearch_logging_file: true
+# @var elasticsearch_logging_json_file:description: Enable JSON rolling file appender (es_server.json). ES 8+ default format
+elasticsearch_logging_json_file: true
+# @var elasticsearch_logging_slowlog:description: Enable search and indexing slow log appenders
+elasticsearch_logging_slowlog: true
+# @var elasticsearch_logging_deprecation:description: Enable deprecation log appender
+elasticsearch_logging_deprecation: true
+
 # @var elasticsearch_security:description: Enable Elasticsearch security features (TLS, authentication, RBAC)
 elasticsearch_security: true
 # @var elasticsearch_bootstrap_pw:description: Bootstrap password for the elastic superuser during initial cluster setup
@@ -52,8 +65,8 @@ elasticsearch_api_host: localhost
 #   -Djava.io.tmpdir=/var/tmp/elasticsearch
 # @end
 elasticsearch_jvm_custom_parameters: ''
-# @var elasticsearch_heap_dump_path:description: Directory for JVM heap dump files on OutOfMemoryError
-elasticsearch_heap_dump_path: "/var/lib/elasticsearch"
+# @var elasticsearch_heap_dump_path:description: Directory for JVM heap dump files on OutOfMemoryError. Upstream default changed to /var/log/elasticsearch in 9.x
+elasticsearch_heap_dump_path: "{{ '/var/log/elasticsearch' if (elasticstack_release | int >= 9) else '/var/lib/elasticsearch' }}"
 
 # @var elasticsearch_jna_workaround:description: Apply JNA temporary directory workaround for systems with noexec /tmp
 elasticsearch_jna_workaround: false
