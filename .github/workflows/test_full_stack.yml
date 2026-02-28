@@ -12,27 +12,43 @@ on:
           - info
           - warning
           - debug
+  pull_request:
+  merge_group:
   schedule:
     - cron: "0 4 * * *"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint_full:
     uses: ./.github/workflows/test_linting.yml
     with:
       rolename: ''
+    secrets: inherit
 
   molecule_full_stack_every_os:
     runs-on: self-hosted
     needs: lint_full
-    timeout-minutes: 60
+    timeout-minutes: 120
 
     env:
       COLLECTION_NAMESPACE: oddly
       COLLECTION_NAME: elasticstack
+      ANSIBLE_PIPELINING: 'true'
+      ANSIBLE_GATHERING: smart
+      ANSIBLE_ANY_ERRORS_FATAL: 'true'
+      ANSIBLE_DISPLAY_SKIPPED_HOSTS: 'false'
+      ANSIBLE_TRANSFER_METHOD: sftp
+      ANSIBLE_SSH_RETRIES: '5'
+      ANSIBLE_SSH_ARGS: >-
+        -o ControlMaster=auto
+        -o ControlPersist=300s
+        -o PreferredAuthentications=publickey
 
     strategy:
       fail-fast: false
-      max-parallel: 4
       matrix:
         distro:
           - rockylinux9
@@ -70,14 +86,14 @@ jobs:
         run: |
           mkdir -p $ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE
           cp -a "$GITHUB_WORKSPACE" $ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
-          ansible-galaxy collection install http://172.30.0.172:8082/collections/community-general-12.3.0.tar.gz http://172.30.0.172:8082/collections/community-crypto-3.1.1.tar.gz http://172.30.0.172:8082/collections/ansible-posix-2.1.0.tar.gz
+          ansible-galaxy collection install http://${{ secrets.INCUS_HOST }}:8082/collections/community-general-12.3.0.tar.gz http://${{ secrets.INCUS_HOST }}:8082/collections/community-crypto-3.1.1.tar.gz http://${{ secrets.INCUS_HOST }}:8082/collections/ansible-posix-2.1.0.tar.gz
 
       - name: Set up SSH key for molecule
         run: |
+          echo "${{ secrets.MOLECULE_SSH_PRIVATE_KEY }}" > ${{ runner.temp }}/molecule_id_ed25519
+          chmod 600 ${{ runner.temp }}/molecule_id_ed25519
           mkdir -p ~/.ssh
-          echo "${{ secrets.MOLECULE_SSH_PRIVATE_KEY }}" > ~/.ssh/molecule_id_ed25519
-          chmod 600 ~/.ssh/molecule_id_ed25519
-          ssh-keyscan -t ed25519 ${{ secrets.INCUS_HOST || '172.30.0.172' }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan -t ed25519 ${{ secrets.INCUS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Test with molecule
         run: molecule test -s ${{ matrix.scenario }} --destroy=never
@@ -90,13 +106,17 @@ jobs:
           ANSIBLE_DIFF_ALWAYS: 'true'
           ANSIBLE_CALLBACKS_ENABLED: profile_tasks
           INCUS_HOST: ${{ secrets.INCUS_HOST }}
-          MOLECULE_SSH_KEY: ~/.ssh/molecule_id_ed25519
+          MOLECULE_SSH_KEY: ${{ runner.temp }}/molecule_id_ed25519
+          DISTRO_CACHE_URL: http://${{ secrets.REGISTRY_HOST }}:8081
 
       - name: Collect and upload diagnostics
         if: failure()
         uses: ./.github/actions/collect-diagnostics
         with:
           artifact-name: diag-${{ matrix.scenario }}-${{ matrix.distro }}-r${{ matrix.release }}
+        env:
+          INCUS_HOST: ${{ secrets.INCUS_HOST }}
+          MOLECULE_SSH_KEY: ${{ runner.temp }}/molecule_id_ed25519
 
       - name: Cleanup molecule
         if: always()
@@ -106,4 +126,22 @@ jobs:
           MOLECULE_DISTRO: ${{ matrix.distro }}
           ELASTIC_RELEASE: ${{ matrix.release }}
           INCUS_HOST: ${{ secrets.INCUS_HOST }}
-          MOLECULE_SSH_KEY: ~/.ssh/molecule_id_ed25519
+          MOLECULE_SSH_KEY: ${{ runner.temp }}/molecule_id_ed25519
+          DISTRO_CACHE_URL: http://${{ secrets.REGISTRY_HOST }}:8081
+
+      - name: Clean up SSH key
+        if: always()
+        run: rm -f ${{ runner.temp }}/molecule_id_ed25519
+
+  full_stack_gate:
+    runs-on: ubuntu-latest
+    needs: [lint_full, molecule_full_stack_every_os]
+    if: always()
+    steps:
+      - name: Check results
+        run: |
+          if [[ "${{ needs.lint_full.result }}" != "success" ]] || \
+             [[ "${{ needs.molecule_full_stack_every_os.result }}" != "success" ]]; then
+            echo "Required jobs failed"
+            exit 1
+          fi

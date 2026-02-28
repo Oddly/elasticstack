@@ -1,9 +1,28 @@
 ---
-# This is an example playbook to execute Ansible tests.
-
-- name: Verify
+- name: Verify default Beats deployment
   hosts: all
   tasks:
-  - name: Example assertion
-    ansible.builtin.assert:
-      that: true
+    - name: Check filebeat service is running
+      ansible.builtin.service:
+        name: filebeat
+        state: started
+      check_mode: true
+      register: filebeat_svc
+      failed_when: filebeat_svc.changed
+
+    - name: Read filebeat.yml
+      ansible.builtin.slurp:
+        src: /etc/filebeat/filebeat.yml
+      register: filebeat_yml
+
+    - name: Verify filebeat has output configured
+      ansible.builtin.assert:
+        that:
+          - "'output' in (filebeat_yml.content | b64decode)"
+        fail_msg: "No output configured in filebeat.yml"
+
+    - name: Verify filebeat config has inputs section
+      ansible.builtin.assert:
+        that:
+          - "'filebeat.inputs' in (filebeat_yml.content | b64decode)"
+        fail_msg: "No filebeat.inputs section in filebeat.yml"

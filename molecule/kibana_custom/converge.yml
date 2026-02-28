@@ -8,6 +8,7 @@
     elasticstack_full_stack: true
     elasticstack_no_log: false
     elasticsearch_heap: "1"
+
     # Kibana custom settings
     kibana_config_backup: true
     kibana_sniff_on_start: true

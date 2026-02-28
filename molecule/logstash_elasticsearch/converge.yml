@@ -9,6 +9,7 @@
     elasticstack_full_stack: true
     elasticstack_no_log: false
     elasticsearch_heap: "1"
+    logstash_heap: "512m"
     logstash_pipeline_unsafe_shutdown: true
     logstash_filters: |
       grok {

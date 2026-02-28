@@ -5,6 +5,7 @@
     host: "{{ elasticsearch_api_host }}"
     port: "{{ elasticstack_elasticsearch_http_port }}"
     timeout: 600
+  when: not ansible_check_mode
   tags:
     - certificates
     - renew_ca

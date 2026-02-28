@@ -71,6 +71,50 @@
       loop: "{{ cert_check.results }}"
       when: "'logstash' in group_names"
 
+    - name: Stop Logstash for syntax check
+      ansible.builtin.service:
+        name: logstash
+        state: stopped
+      when: "'logstash' in group_names"
+
+    - name: Run Logstash config syntax check
+      ansible.builtin.command: "/usr/share/logstash/bin/logstash --path.settings=/etc/logstash -t"
+      become: true
+      become_user: logstash
+      become_method: ansible.builtin.su
+      become_flags: '-s /bin/sh'
+      environment:
+        HOME: /tmp
+      when: "'logstash' in group_names"
+      changed_when: false
+
+    - name: Start Logstash after syntax check
+      ansible.builtin.service:
+        name: logstash
+        state: started
+      when: "'logstash' in group_names"
+
+    - name: Verify Logstash pipeline is loaded
+      ansible.builtin.uri:
+        url: "http://localhost:9600/_node/stats/pipelines"
+        return_content: true
+      register: logstash_stats
+      changed_when: false
+      retries: 6
+      delay: 10
+      until: (logstash_stats.json.pipelines.main | default(none)) is not none
+      when: "'logstash' in group_names"
+
+    - name: Show Logstash pipeline stats
+      ansible.builtin.debug:
+        msg: >-
+          Pipeline loaded —
+          in: {{ (logstash_stats.json.pipelines.main.events | default({})).in | default('N/A') }},
+          out: {{ (logstash_stats.json.pipelines.main.events | default({})).out | default('N/A') }}
+      when:
+        - "'logstash' in group_names"
+        - logstash_stats.json is defined
+
     - name: Verify Logstash output config has ES connection
       ansible.builtin.command: grep -l "ssl_enabled" /etc/logstash/conf.d/main/90-output.conf
       changed_when: false

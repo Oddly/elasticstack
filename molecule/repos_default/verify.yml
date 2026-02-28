@@ -1,9 +1,66 @@
 ---
-# This is an example playbook to execute Ansible tests.
-
-- name: Verify
+- name: Verify Elastic repository configuration
   hosts: all
+  vars:
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
   tasks:
-  - name: Install Kibana
-    ansible.builtin.package:
-      name: kibana
+    - name: Check Elastic GPG key is present (Debian)
+      ansible.builtin.stat:
+        path: /usr/share/keyrings/elasticsearch.asc
+      register: gpg_key
+      when: ansible_facts.os_family == "Debian"
+
+    - name: Assert GPG key exists (Debian)
+      ansible.builtin.assert:
+        that:
+          - gpg_key.stat.exists
+        fail_msg: "Elastic GPG key not found at /usr/share/keyrings/elasticsearch.asc"
+      when: ansible_facts.os_family == "Debian"
+
+    - name: Check Elastic repo file exists (Debian)
+      ansible.builtin.stat:
+        path: /etc/apt/sources.list.d/elasticstack.list
+      register: repo_file_deb
+      when: ansible_facts.os_family == "Debian"
+
+    - name: Assert repo file exists (Debian)
+      ansible.builtin.assert:
+        that:
+          - repo_file_deb.stat.exists
+        fail_msg: "Elastic repo file not found at /etc/apt/sources.list.d/elasticstack.list"
+      when: ansible_facts.os_family == "Debian"
+
+    - name: Check Elastic repo file exists (RHEL)
+      ansible.builtin.stat:
+        path: /etc/yum.repos.d/elastic-release.repo
+      register: repo_file_rhel
+      when: ansible_facts.os_family == "RedHat"
+
+    - name: Assert repo file exists (RHEL)
+      ansible.builtin.assert:
+        that:
+          - repo_file_rhel.stat.exists
+        fail_msg: "Elastic repo file not found at /etc/yum.repos.d/elastic-release.repo"
+      when: ansible_facts.os_family == "RedHat"
+
+    - name: Verify elasticsearch package is available (Debian)
+      ansible.builtin.shell: >
+        set -o pipefail &&
+        apt-cache showpkg elasticsearch | grep -c '{{ elasticstack_release }}\.'
+      args:
+        executable: /bin/bash
+      register: es_available_deb
+      changed_when: false
+      failed_when: es_available_deb.stdout | int < 1
+      when: ansible_facts.os_family == "Debian"
+
+    - name: Verify elasticsearch package is available (RHEL)
+      ansible.builtin.shell: >
+        set -o pipefail &&
+        dnf list available elasticsearch 2>/dev/null | grep -c '{{ elasticstack_release }}\.'
+      args:
+        executable: /bin/bash
+      register: es_available_rhel
+      changed_when: false
+      failed_when: es_available_rhel.stdout | int < 1
+      when: ansible_facts.os_family == "RedHat"

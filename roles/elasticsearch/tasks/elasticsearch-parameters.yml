@@ -1,6 +1,8 @@
 ---
-- name: Fail when security is disabled
-  ansible.builtin.fail:
-    msg: "Elasticsearch requires enabled security. Set elasticsearch_security to true"
+- name: Warn when security is disabled
+  ansible.builtin.debug:
+    msg: >-
+      Elasticsearch security is disabled. TLS, authentication, and RBAC will not be configured.
+      This is not recommended for production use.
   when:
-    - elasticsearch_security is not defined or not elasticsearch_security
+    - not elasticsearch_security | default(true) | bool

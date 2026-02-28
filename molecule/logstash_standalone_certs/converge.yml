@@ -12,6 +12,7 @@
     logstash_create_user: false
     logstash_create_role: false
     logstash_pipeline_unsafe_shutdown: true
+    logstash_heap: "512m"
     # Beats input with SSL enabled
     logstash_input_beats: true
     logstash_input_beats_ssl: true

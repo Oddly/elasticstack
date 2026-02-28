@@ -1,8 +1,13 @@
 ---
 # handlers file for kibana
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
 - name: Restart Kibana
   ansible.builtin.service:
     name: kibana
     state: restarted
   when:
+    - not ansible_check_mode
     - not kibana_freshstart.changed | bool

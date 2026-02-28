@@ -9,8 +9,13 @@ appender.rolling.type = RollingFile
 appender.rolling.name = rolling
 appender.rolling.fileName = ${sys:es.logs.base_path}${sys:file.separator}${sys:es.logs.cluster_name}_server.json
 appender.rolling.filePattern = ${sys:es.logs.base_path}${sys:file.separator}${sys:es.logs.cluster_name}-%d{yyyy-MM-dd}-%i.json.gz
+{% if elasticstack_release | int >= 9 %}
+appender.rolling.layout.type = ECSJsonLayout
+appender.rolling.layout.dataset = elasticsearch.server
+{% else %}
 appender.rolling.layout.type = ESJsonLayout
 appender.rolling.layout.type_name = server
+{% endif %}
 appender.rolling.policies.type = Policies
 appender.rolling.policies.time.type = TimeBasedTriggeringPolicy
 appender.rolling.policies.time.interval = 1
@@ -79,18 +84,32 @@ appender.deprecation_rolling.type = RollingFile
 appender.deprecation_rolling.name = deprecation_rolling
 appender.deprecation_rolling.fileName = ${sys:es.logs.base_path}${sys:file.separator}${sys:es.logs.cluster_name}_deprecation.json
 appender.deprecation_rolling.filePattern = ${sys:es.logs.base_path}${sys:file.separator}${sys:es.logs.cluster_name}_deprecation-%i.json.gz
+{% if elasticstack_release | int >= 9 %}
+appender.deprecation_rolling.layout.type = ECSJsonLayout
+appender.deprecation_rolling.layout.dataset = elasticsearch.deprecation
+{% else %}
 appender.deprecation_rolling.layout.type = ESJsonLayout
 appender.deprecation_rolling.layout.type_name = deprecation
 appender.deprecation_rolling.layout.esmessagefields = x-opaque-id
+{% endif %}
 appender.deprecation_rolling.policies.type = Policies
 appender.deprecation_rolling.policies.size.type = SizeBasedTriggeringPolicy
 appender.deprecation_rolling.policies.size.size = 256MB
 appender.deprecation_rolling.strategy.type = DefaultRolloverStrategy
 appender.deprecation_rolling.strategy.max = 4
+{% if elasticstack_release | int >= 9 %}
+appender.deprecation_rolling.filter.rate_limit.type = RateLimitingFilter
+
+appender.header_warning.type = HeaderWarningAppender
+appender.header_warning.name = header_warning
+{% endif %}
 
 logger.deprecation.name = org.elasticsearch.deprecation
 logger.deprecation.level = WARN
 logger.deprecation.appenderRef.deprecation_rolling.ref = deprecation_rolling
+{% if elasticstack_release | int >= 9 %}
+logger.deprecation.appenderRef.header_warning.ref = header_warning
+{% endif %}
 logger.deprecation.additivity = false
 {% endif %}
 
@@ -101,9 +120,14 @@ appender.index_search_slowlog_rolling.type = RollingFile
 appender.index_search_slowlog_rolling.name = index_search_slowlog_rolling
 appender.index_search_slowlog_rolling.fileName = ${sys:es.logs.base_path}${sys:file.separator}${sys:es.logs.cluster_name}_index_search_slowlog.json
 appender.index_search_slowlog_rolling.filePattern = ${sys:es.logs.base_path}${sys:file.separator}${sys:es.logs.cluster_name}_index_search_slowlog-%i.json.gz
+{% if elasticstack_release | int >= 9 %}
+appender.index_search_slowlog_rolling.layout.type = ECSJsonLayout
+appender.index_search_slowlog_rolling.layout.dataset = elasticsearch.index_search_slowlog
+{% else %}
 appender.index_search_slowlog_rolling.layout.type = ESJsonLayout
 appender.index_search_slowlog_rolling.layout.type_name = index_search_slowlog
 appender.index_search_slowlog_rolling.layout.esmessagefields = message,took,took_millis,total_hits,stats,search_type,total_shards,source,id
+{% endif %}
 appender.index_search_slowlog_rolling.policies.type = Policies
 appender.index_search_slowlog_rolling.policies.size.type = SizeBasedTriggeringPolicy
 appender.index_search_slowlog_rolling.policies.size.size = 256MB
@@ -121,16 +145,25 @@ appender.index_indexing_slowlog_rolling.type = RollingFile
 appender.index_indexing_slowlog_rolling.name = index_indexing_slowlog_rolling
 appender.index_indexing_slowlog_rolling.fileName = ${sys:es.logs.base_path}${sys:file.separator}${sys:es.logs.cluster_name}_index_indexing_slowlog.json
 appender.index_indexing_slowlog_rolling.filePattern = ${sys:es.logs.base_path}${sys:file.separator}${sys:es.logs.cluster_name}_index_indexing_slowlog-%i.json.gz
+{% if elasticstack_release | int >= 9 %}
+appender.index_indexing_slowlog_rolling.layout.type = ECSJsonLayout
+appender.index_indexing_slowlog_rolling.layout.dataset = elasticsearch.index_indexing_slowlog
+{% else %}
 appender.index_indexing_slowlog_rolling.layout.type = ESJsonLayout
 appender.index_indexing_slowlog_rolling.layout.type_name = index_indexing_slowlog
 appender.index_indexing_slowlog_rolling.layout.esmessagefields = message,took,took_millis,doc_type,id,routing,source
+{% endif %}
 appender.index_indexing_slowlog_rolling.policies.type = Policies
 appender.index_indexing_slowlog_rolling.policies.size.type = SizeBasedTriggeringPolicy
 appender.index_indexing_slowlog_rolling.policies.size.size = 256MB
 appender.index_indexing_slowlog_rolling.strategy.type = DefaultRolloverStrategy
 appender.index_indexing_slowlog_rolling.strategy.max = 4
 
+{% if elasticstack_release | int >= 9 %}
+logger.index_indexing_slowlog.name = index.indexing.slowlog.index
+{% else %}
 logger.index_indexing_slowlog.name = index.indexing.slowlog
+{% endif %}
 logger.index_indexing_slowlog.level = trace
 logger.index_indexing_slowlog.appenderRef.index_indexing_slowlog_rolling.ref = index_indexing_slowlog_rolling
 logger.index_indexing_slowlog.additivity = false

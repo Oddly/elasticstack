@@ -35,7 +35,7 @@ jobs:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
       - name: Install Ansible collection dependencies.
-        run: ansible-galaxy collection install http://172.30.0.172:8082/collections/community-general-12.3.0.tar.gz http://172.30.0.172:8082/collections/community-crypto-3.1.1.tar.gz http://172.30.0.172:8082/collections/ansible-posix-2.1.0.tar.gz
+        run: ansible-galaxy collection install http://${{ secrets.INCUS_HOST }}:8082/collections/community-general-12.3.0.tar.gz http://${{ secrets.INCUS_HOST }}:8082/collections/community-crypto-3.1.1.tar.gz http://${{ secrets.INCUS_HOST }}:8082/collections/ansible-posix-2.1.0.tar.gz
 
       - name: Lint code (yamllint).
         run: |
@@ -44,7 +44,9 @@ jobs:
 
       - name: Lint Role (yamllint).
         run: |
-          yamllint roles/${{ inputs.rolename }}
+          yamllint "roles/${ROLENAME}"
+        env:
+          ROLENAME: ${{ inputs.rolename }}
         if: ${{ inputs.rolename != '' }}
 
       - name: Lint code (ansible-lint).
@@ -54,5 +56,7 @@ jobs:
 
       - name: Lint Role (ansible-lint).
         run: |
-          ansible-lint roles/${{ inputs.rolename }}
+          ansible-lint "roles/${ROLENAME}"
+        env:
+          ROLENAME: ${{ inputs.rolename }}
         if: ${{ inputs.rolename != '' }}

@@ -1,0 +1,101 @@
+---
+- name: Verify Logstash centralized pipeline management configuration
+  hosts: all
+  tasks:
+    - name: Read logstash.yml
+      ansible.builtin.slurp:
+        src: /etc/logstash/logstash.yml
+      register: logstash_yml
+
+    - name: Decode logstash.yml
+      ansible.builtin.set_fact:
+        logstash_config: "{{ logstash_yml.content | b64decode }}"
+
+    # --- Centralized pipeline management ---
+
+    - name: Verify xpack.management.enabled is true
+      ansible.builtin.assert:
+        that:
+          - "'xpack.management.enabled: true' in logstash_config"
+        fail_msg: "xpack.management.enabled not set to true"
+
+    - name: Verify management username
+      ansible.builtin.assert:
+        that:
+          - "'xpack.management.elasticsearch.username: logstash_internal' in logstash_config"
+        fail_msg: "Management username not configured"
+
+    - name: Verify management password
+      ansible.builtin.assert:
+        that:
+          - "'xpack.management.elasticsearch.password: testpassword' in logstash_config"
+        fail_msg: "Management password not configured"
+
+    - name: Verify management ES hosts
+      ansible.builtin.assert:
+        that:
+          - "'es-001.example.com:9200' in logstash_config"
+          - "'es-002.example.com:9200' in logstash_config"
+        fail_msg: "Management ES hosts not configured"
+
+    - name: Verify pipeline IDs
+      ansible.builtin.assert:
+        that:
+          - "'beats' in logstash_config"
+          - "'syslog' in logstash_config"
+          - "'agent-input-pipeline' in logstash_config"
+        fail_msg: "Pipeline IDs not configured"
+
+    # --- Dead letter queue ---
+
+    - name: Verify DLQ is enabled
+      ansible.builtin.assert:
+        that:
+          - "'dead_letter_queue.enable: true' in logstash_config"
+        fail_msg: "Dead letter queue not enabled"
+
+    - name: Verify DLQ retention
+      ansible.builtin.assert:
+        that:
+          - "'dead_letter_queue.retain.age: 7d' in logstash_config"
+        fail_msg: "DLQ retention age not set"
+
+    # --- Log format ---
+
+    - name: Verify log format is json
+      ansible.builtin.assert:
+        that:
+          - "'log.format: json' in logstash_config"
+        fail_msg: "Log format not set to json"
+
+    # --- Monitoring ---
+
+    - name: Verify monitoring is disabled
+      ansible.builtin.assert:
+        that:
+          - "'monitoring.enabled: false' in logstash_config"
+        fail_msg: "Monitoring not disabled"
+
+    # --- Extra config ---
+
+    - name: Verify extra_config settings are rendered
+      ansible.builtin.assert:
+        that:
+          - "'queue.checkpoint.writes' in logstash_config"
+          - "'xpack.management.elasticsearch.sniffing' in logstash_config"
+          - "'xpack.management.logstash.poll_interval' in logstash_config"
+          - "'xpack.management.elasticsearch.ssl.certificate_authority' in logstash_config"
+        fail_msg: "Extra config settings not rendered in logstash.yml"
+
+    # --- Verify no local pipelines ---
+
+    - name: Check no pipeline config directory
+      ansible.builtin.stat:
+        path: /etc/logstash/conf.d/main
+      register: pipeline_dir
+
+    - name: Warn if local pipeline configs exist
+      ansible.builtin.debug:
+        msg: "Local pipeline configs should not exist with centralized management"
+      when: pipeline_dir.stat.exists and (not pipeline_dir.stat.isdir or pipeline_dir.stat.size > 0)
+      changed_when: true

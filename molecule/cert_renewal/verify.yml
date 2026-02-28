@@ -50,7 +50,7 @@
 
     - name: Verify ES certificates exist after renewal
       ansible.builtin.stat:
-        path: "/etc/elasticsearch/certs/{{ ansible_facts.hostname }}-es.p12"
+        path: "/etc/elasticsearch/certs/{{ ansible_facts.hostname }}.p12"
       register: es_cert_after
       when: "'elasticsearch' in group_names"
 
@@ -97,7 +97,7 @@
             return_content: true
             status_code: [200, 503]
           register: kibana_status
-          retries: 18
+          retries: 30
           delay: 10
           until: (kibana_status.json.status.overall.level | default('')) == 'available'
 

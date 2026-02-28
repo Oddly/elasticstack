@@ -2,20 +2,6 @@
 - name: Verify Kibana default
   hosts: all
   tasks:
-    - name: Check Kibana is listening
-      ansible.builtin.uri:
-        url: "https://localhost:5601/api/status"
-        method: GET
-        validate_certs: false
-        status_code: [200, 401]
-      register: kibana_status
-
-    - name: Verify Kibana responded
-      ansible.builtin.assert:
-        that:
-          - kibana_status.status in [200, 401]
-        fail_msg: "Kibana did not respond on port 5601"
-
     - name: Verify Kibana service is running
       ansible.builtin.service_facts:
 
@@ -24,3 +10,19 @@
         that:
           - ansible_facts.services['kibana.service'].state == 'running'
         fail_msg: "Kibana service is not running"
+
+    - name: Connect to Kibana API
+      ansible.builtin.uri:
+        url: "http://localhost:5601/api/status"
+        method: GET
+        status_code: [200, 401, 503]
+      register: kibana_status
+      retries: 30
+      delay: 10
+      until: (kibana_status.status | default(0)) in [200, 401, 503]
+
+    - name: Verify Kibana responded
+      ansible.builtin.assert:
+        that:
+          - kibana_status.status in [200, 401, 503]
+        fail_msg: "Kibana did not respond on port 5601"

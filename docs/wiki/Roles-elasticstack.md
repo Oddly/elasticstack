@@ -221,32 +221,6 @@ Apply workaround for RPM package installation issues on certain RHEL versions.
 elasticstack_rpm_workaround: false  # default
 ```
 
-### Python Dependencies
-
-#### elasticstack_install_python_client
-
-Install the Python `elasticsearch` client library. Needed by Ansible modules that interact with the Elasticsearch API (user/role management, health checks, etc.).
-
-```yaml
-elasticstack_install_python_client: true  # default
-```
-
-#### elasticstack_force_pip
-
-Force installation of the Python elasticsearch client via `pip` even if a system package exists. Useful when the system package is too old.
-
-```yaml
-elasticstack_force_pip: false  # default
-```
-
-#### elasticstack_manage_pip
-
-Let the role install `pip` itself if it's not already available.
-
-```yaml
-elasticstack_manage_pip: false  # default
-```
-
 ### Debugging
 
 #### elasticstack_no_log
@@ -283,16 +257,6 @@ PASSWORD <username> = <password>
 ```
 
 The `fetch_password.yml` shared task extracts a specific user's password with `grep "PASSWORD <user> " | awk '{print $4}'` and registers it as an Ansible fact. All password fetches delegate to the CA host and respect `elasticstack_no_log` to suppress output.
-
-### Python client installation
-
-The role installs the Python `elasticsearch` library, which Ansible modules need for API operations (creating users, roles, health checks). The installation follows a priority chain:
-
-1. System package (`python3-elasticsearch`) — preferred, installed via apt/yum
-2. Pip install — used if `elasticstack_force_pip: true` or if the system package version is below 8.0.0
-3. If `elasticstack_manage_pip: true`, the role installs pip itself first
-
-The pip install uses version constraints to match the Elastic release: `elasticsearch>=<release>,<<release+1>`.
 
 ### Ansible version check
 

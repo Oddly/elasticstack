@@ -1,0 +1,94 @@
+---
+# Common prepare tasks included by all scenario prepare.yml files.
+# Sets up the local distro package cache and installs base packages.
+# Requires distro_cache_url to be set as a play var (from DISTRO_CACHE_URL env).
+
+# --- Repo cache configuration ---
+
+- name: Point Rocky repos at local cache
+  ansible.builtin.copy:
+    dest: /etc/yum.repos.d/rocky.repo
+    mode: "0644"
+    content: |
+      [baseos]
+      name=Rocky Linux $releasever - BaseOS (cached)
+      baseurl={{ distro_cache_url }}/rocky/$releasever/BaseOS/$basearch/os/
+      gpgcheck=1
+      gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-$releasever
+
+      [appstream]
+      name=Rocky Linux $releasever - AppStream (cached)
+      baseurl={{ distro_cache_url }}/rocky/$releasever/AppStream/$basearch/os/
+      gpgcheck=1
+      gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-$releasever
+
+      [extras]
+      name=Rocky Linux $releasever - Extras (cached)
+      baseurl={{ distro_cache_url }}/rocky/$releasever/extras/$basearch/os/
+      gpgcheck=1
+      gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-$releasever
+  when: ansible_facts.os_family == "RedHat"
+
+- name: Clean dnf cache after repo change
+  ansible.builtin.command: dnf clean all
+  changed_when: false
+  when: ansible_facts.os_family == "RedHat"
+
+- name: Write Debian sources.list for local cache
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list
+    mode: "0644"
+    content: |
+      deb {{ distro_cache_url }}/debian/ {{ ansible_distribution_release }} main contrib non-free
+      deb {{ distro_cache_url }}/debian/ {{ ansible_distribution_release }}-updates main contrib non-free
+      deb {{ distro_cache_url }}/debian-security/ {{ ansible_distribution_release }}-security main contrib non-free
+  when:
+    - ansible_facts.os_family == "Debian"
+    - ansible_distribution == "Debian"
+
+- name: Write Ubuntu sources.list for local cache
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list
+    mode: "0644"
+    content: |
+      deb {{ distro_cache_url }}/ubuntu/ {{ ansible_distribution_release }} main restricted universe multiverse
+      deb {{ distro_cache_url }}/ubuntu/ {{ ansible_distribution_release }}-updates main restricted universe multiverse
+      deb {{ distro_cache_url }}/ubuntu-security/ {{ ansible_distribution_release }}-security main restricted universe multiverse
+  when:
+    - ansible_facts.os_family == "Debian"
+    - ansible_distribution == "Ubuntu"
+
+# --- Package installation ---
+
+- name: Install packages for RHEL
+  ansible.builtin.package:
+    name:
+      - iproute
+      - NetworkManager
+  when: ansible_facts.os_family == "RedHat"
+
+- name: Start NetworkManager
+  ansible.builtin.service:
+    name: NetworkManager
+    state: started
+    enabled: true
+  when: ansible_facts.os_family == "RedHat"
+
+- name: Install packages for Debian
+  ansible.builtin.apt:
+    name:
+      - gpg
+      - gpg-agent
+      - procps
+      - curl
+      - iproute2
+    update_cache: true
+  when: ansible_facts.os_family == "Debian"
+
+- name: Install common packages
+  ansible.builtin.package:
+    name:
+      - git
+      - openssl
+      - unzip
+      - systemd
