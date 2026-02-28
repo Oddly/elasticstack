@@ -18,7 +18,7 @@ platforms:
       - elasticsearch
       - kibana
     distro: "${MOLECULE_DISTRO:-debian12}"
-    memory_mb: 4608
+    memory_mb: 5632
 provisioner:
   name: ansible
   env:
