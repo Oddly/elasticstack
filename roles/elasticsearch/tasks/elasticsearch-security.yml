@@ -362,6 +362,40 @@
         - elasticstack_logstash_group_name is defined
         - groups[elasticstack_logstash_group_name] | default([]) | length > 0
 
+    # -- Preserve Kibana encryption keys before CA directory is wiped --
+    # The CA backup removes the entire elasticstack_ca_dir, which also
+    # contains Kibana encryption key files. If those are regenerated,
+    # Kibana can't decrypt its existing saved objects and enters 503.
+    - name: Check for Kibana encryption keys before CA backup
+      ansible.builtin.stat:
+        path: "{{ elasticstack_ca_dir }}/{{ item }}"
+      loop:
+        - encryption_key
+        - savedobjects_encryption_key
+      register: _kibana_enckeys_before_backup
+      when:
+        - inventory_hostname == elasticstack_ca_host
+        - "'renew_ca' in ansible_run_tags or elasticstack_ca_will_expire_soon | bool"
+      tags:
+        - renew_ca
+
+    - name: Preserve Kibana encryption keys before CA backup
+      ansible.builtin.copy:
+        src: "{{ elasticstack_ca_dir }}/{{ item.item }}"
+        dest: "/tmp/.kibana_preserved_{{ item.item }}"
+        remote_src: true
+        mode: "0600"
+      loop: "{{ _kibana_enckeys_before_backup.results | default([]) }}"
+      when:
+        - inventory_hostname == elasticstack_ca_host
+        - "'renew_ca' in ansible_run_tags or elasticstack_ca_will_expire_soon | bool"
+        - item.stat is defined
+        - item.stat.exists
+      loop_control:
+        label: "{{ item.item }}"
+      tags:
+        - renew_ca
+
     # -- Backup CA directory on CA host --
     - name: Backup CA directory on CA host
       ansible.builtin.include_tasks:

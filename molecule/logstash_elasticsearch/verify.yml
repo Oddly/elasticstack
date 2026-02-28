@@ -108,7 +108,9 @@
     - name: Show Logstash pipeline stats
       ansible.builtin.debug:
         msg: "Pipeline loaded — in: {{ logstash_stats.json.pipelines.main.events.in }}, out: {{ logstash_stats.json.pipelines.main.events.out }}"
-      when: "'logstash' in group_names"
+      when:
+        - "'logstash' in group_names"
+        - logstash_stats.json is defined
 
     - name: Verify Logstash output config has ES connection
       ansible.builtin.command: grep -l "ssl_enabled" /etc/logstash/conf.d/main/90-output.conf

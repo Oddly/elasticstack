@@ -263,6 +263,34 @@
         group: elasticsearch
         mode: "0700"
 
+    - name: Check for preserved encryption keys from CA renewal
+      ansible.builtin.stat:
+        path: "/tmp/.kibana_preserved_{{ item }}"
+      loop:
+        - encryption_key
+        - savedobjects_encryption_key
+      register: _preserved_enckeys
+
+    - name: Restore encryption keys preserved during CA renewal
+      ansible.builtin.copy:
+        src: "/tmp/.kibana_preserved_{{ item.item }}"
+        dest: "{{ elasticstack_ca_dir }}/{{ item.item }}"
+        remote_src: true
+        mode: "0600"
+      loop: "{{ _preserved_enckeys.results }}"
+      when: item.stat.exists
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Clean up preserved encryption key copies
+      ansible.builtin.file:
+        path: "/tmp/.kibana_preserved_{{ item.item }}"
+        state: absent
+      loop: "{{ _preserved_enckeys.results }}"
+      when: item.stat.exists
+      loop_control:
+        label: "{{ item.item }}"
+
     - name: Generate encryption key
       ansible.builtin.shell: >
         set -o pipefail;
