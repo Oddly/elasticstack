@@ -38,6 +38,13 @@ logstash_config_path_logs: /var/log/logstash
 # logstash_http_host: "127.0.0.1"
 # logstash_http_port: 9600-9700
 
+# @var logstash_pipeline_buffer_type:description: >
+#   Pipeline buffer type ('direct' or 'heap'). Logstash 9.x changed the default
+#   from 'direct' to 'heap', which increases JVM heap pressure. Set explicitly
+#   when upgrading from 8.x with tight heap sizing.
+# @end
+# logstash_pipeline_buffer_type: ""
+
 # === Pipeline Management ===
 
 # @var logstash_manage_pipelines:description: Let the role manage pipelines.yml and pipeline config files

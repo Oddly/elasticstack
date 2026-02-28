@@ -1,5 +1,8 @@
 server.host: "0.0.0.0"
 server.publicBaseUrl: "http{% if kibana_tls | bool %}s{% endif %}://{{ elasticstack_kibana_host | default( ansible_facts.fqdn ) }}:{{ elasticstack_kibana_port }}"
+{% if kibana_server_protocol is defined and kibana_server_protocol | length > 0 %}
+server.protocol: "{{ kibana_server_protocol }}"
+{% endif %}
 
 {% if elasticstack_full_stack is defined and elasticstack_full_stack | bool %}
     {%- if kibana_sniff_on_start | bool %}

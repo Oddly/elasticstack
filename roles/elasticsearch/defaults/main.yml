@@ -65,8 +65,8 @@ elasticsearch_api_host: localhost
 #   -Djava.io.tmpdir=/var/tmp/elasticsearch
 # @end
 elasticsearch_jvm_custom_parameters: ''
-# @var elasticsearch_heap_dump_path:description: Directory for JVM heap dump files on OutOfMemoryError
-elasticsearch_heap_dump_path: "/var/lib/elasticsearch"
+# @var elasticsearch_heap_dump_path:description: Directory for JVM heap dump files on OutOfMemoryError. Upstream default changed to /var/log/elasticsearch in 9.x
+elasticsearch_heap_dump_path: "{{ '/var/log/elasticsearch' if (elasticstack_release | int >= 9) else '/var/lib/elasticsearch' }}"
 
 # @var elasticsearch_jna_workaround:description: Apply JNA temporary directory workaround for systems with noexec /tmp
 elasticsearch_jna_workaround: false

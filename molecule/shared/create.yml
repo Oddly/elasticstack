@@ -124,7 +124,7 @@
         REMOTE_SCRIPT
       changed_when: true
       register: _launch_result
-      retries: 60
+      retries: 360
       delay: 30
       until: _launch_result.rc == 0
 
