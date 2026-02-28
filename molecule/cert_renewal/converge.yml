@@ -15,7 +15,7 @@
     elasticstack_no_log: false
     elasticsearch_heap: "1"
     logstash_heap: "512m"
-    kibana_node_max_old_space_size: 512
+    kibana_node_max_old_space_size: 1024
     logstash_pipeline_unsafe_shutdown: true
   tasks:
     - name: Include Elastic repos
@@ -109,7 +109,7 @@
     elasticstack_no_log: false
     elasticsearch_heap: "1"
     logstash_heap: "512m"
-    kibana_node_max_old_space_size: 512
+    kibana_node_max_old_space_size: 1024
     logstash_pipeline_unsafe_shutdown: true
     # Force certificate renewal
     elasticstack_ca_will_expire_soon: true
