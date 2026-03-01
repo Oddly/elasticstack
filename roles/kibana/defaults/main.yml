@@ -25,10 +25,6 @@ kibana_manage_yaml: true
 kibana_security: true
 # @var kibana_tls:description: Enable TLS on the Kibana web interface itself (serve Kibana over HTTPS)
 kibana_tls: false
-# @var kibana_tls_cert:description: Path to the TLS certificate file for the Kibana web interface
-kibana_tls_cert: /etc/kibana/certs/cert.pem
-# @var kibana_tls_key:description: Path to the TLS private key file for the Kibana web interface
-kibana_tls_key: /etc/kibana/certs/key.pem
 # @var kibana_tls_key_passphrase:description: Passphrase for the Kibana TLS private key
 kibana_tls_key_passphrase: PleaseChangeMe
 # @var kibana_keystore_password:description: Password to encrypt the Kibana keystore file. Empty means no encryption (same as ES default)
