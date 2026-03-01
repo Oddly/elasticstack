@@ -129,13 +129,14 @@
 - name: Wait for Kibana to be ready
   when: not ansible_check_mode
   block:
-    - name: Wait for Kibana port with service health check
+    - name: Wait for Kibana HTTP with service health check
       ansible.builtin.shell:
         cmd: |
           if ! systemctl is-active --quiet kibana; then
             exit 2
           fi
-          if ss -tln | grep -q ':5601 '; then
+          HTTP_CODE=$(curl -sk -o /dev/null -w '%{http_code}' http://localhost:5601/api/status 2>/dev/null) || true
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
             exit 0
           fi
           exit 1
@@ -156,16 +157,16 @@
     - name: Fail with Kibana diagnostics (service crashed)
       ansible.builtin.fail:
         msg: |
-          Kibana service died while waiting for port 5601.
+          Kibana service died while waiting for HTTP readiness.
 
           Recent log output:
           {{ _kibana_wait_journal.stdout }}
       when: _kibana_wait_result.rc | default(0) == 2
 
-    - name: Fail with Kibana diagnostics (port timeout)
+    - name: Fail with Kibana diagnostics (HTTP timeout)
       ansible.builtin.fail:
         msg: |
-          Kibana port 5601 did not become available within 300s.
+          Kibana HTTP did not become ready within 300s.
           Service state: {{ _kibana_wait_result.stdout | default('unknown') }}
 
           Recent log output:
