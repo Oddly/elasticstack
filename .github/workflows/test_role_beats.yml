@@ -22,6 +22,9 @@ on:
       - '.github/workflows/test_role_beats.yml'
       - 'molecule/beats_**'
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

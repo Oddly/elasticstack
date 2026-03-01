@@ -17,6 +17,9 @@ on:
       - '.github/workflows/test_elasticsearch_modules.yml'
       - 'molecule/elasticsearch_test_modules/*'
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
