@@ -1,3 +1,5 @@
+# {{ ansible_managed }}
+
 input {
 {% if logstash_input_beats | default(true) | bool %}
   beats {

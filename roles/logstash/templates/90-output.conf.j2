@@ -1,3 +1,5 @@
+# {{ ansible_managed }}
+
 output {
 {% if logstash_output_elasticsearch | default(true) | bool %}
   elasticsearch {

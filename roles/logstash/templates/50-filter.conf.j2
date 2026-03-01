@@ -1,3 +1,5 @@
+# {{ ansible_managed }}
+
 {% if logstash_filters | default('') | length > 0 or logstash_filter_files | default([]) | length > 0 %}
 filter {
 {% if logstash_ident | default(true) | bool %}

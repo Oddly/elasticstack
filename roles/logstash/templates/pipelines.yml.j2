@@ -1,4 +1,6 @@
 ---
+{{ ansible_managed | comment }}
+
 - pipeline.id: main
   path.config: "/etc/logstash/conf.d/main/*.conf"
   queue.type: {{ logstash_queue_type }}
