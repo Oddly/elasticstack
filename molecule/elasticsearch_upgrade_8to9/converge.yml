@@ -90,7 +90,7 @@
         body_format: json
         body:
           test_field: "pre-upgrade-data"
-          timestamp: "{{ ansible_date_time.iso8601 }}"
+          timestamp: "{{ ansible_facts.date_time.iso8601 }}"
         validate_certs: false
         status_code: [200, 201]
       register: index_result

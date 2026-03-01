@@ -19,7 +19,7 @@
 - name: "Create timestamped backup - {{ _backup_path }}"
   ansible.builtin.copy:
     src: "{{ _backup_path }}"
-    dest: "{{ _backup_path }}_{{ ansible_date_time.iso8601_micro }}"
+    dest: "{{ _backup_path }}_{{ ansible_facts.date_time.iso8601_micro }}"
     mode: preserve
     remote_src: "{{ _backup_target != 'localhost' }}"
   when: elasticstack_backup_stat.stat.exists
