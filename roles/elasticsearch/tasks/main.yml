@@ -118,6 +118,10 @@
 - name: Install openssl if security is activated
   ansible.builtin.package:
     name: openssl
+  register: _openssl_install
+  until: _openssl_install is success
+  retries: 3
+  delay: 10
   when: elasticsearch_security | bool
 
 # the following should be done by the rpm but failed with 7.4

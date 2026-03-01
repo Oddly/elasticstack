@@ -20,6 +20,10 @@
       - python3-cryptography
       - python3-packaging
       - openssl
+  register: _security_packages_install
+  until: _security_packages_install is success
+  retries: 3
+  delay: 10
   tags:
     - certificates
     - renew_ca
