@@ -5,6 +5,9 @@ on:
     - cron: "0 9 1 * *"  # First of each month at 09:00 UTC
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   check-eol:
     runs-on: ubuntu-latest

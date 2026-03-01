@@ -153,7 +153,7 @@
       'elasticsearch' +
       ((elasticstack_versionseparator +
       elasticstack_version |
-      string ) if (elasticstack_version is defined and elasticstack_version | length > 0) else '') |
+      string ) if (elasticstack_version is defined and elasticstack_version | length > 0 and elasticstack_version != 'latest') else '') |
       replace(' ', '')
       }}
 
@@ -164,6 +164,7 @@
 - name: Write config before rolling upgrade
   when:
     - elasticstack_version is defined
+    - elasticstack_version != 'latest'
     - ansible_facts.packages['elasticsearch'] is defined
     - ansible_facts.packages['elasticsearch'][0].version is defined
     - elasticstack_version is version(ansible_facts.packages['elasticsearch'][0].version, '>')
@@ -213,6 +214,7 @@
   when:
     - "hostvars[item].inventory_hostname == inventory_hostname"
     - elasticstack_version is defined
+    - elasticstack_version != 'latest'
     - ansible_facts.packages['elasticsearch'][0].version is defined
     - elasticstack_password.stdout is defined
     - elasticstack_version is version( ansible_facts.packages['elasticsearch'][0].version, '>')
@@ -220,6 +222,7 @@
 - name: Install Elasticsearch - rpm - full stack
   ansible.builtin.package:
     name: "{{ elasticsearch_package }}"
+    state: "{{ 'latest' if (elasticstack_version | default('') == 'latest') else 'present' }}"
     enablerepo:
       - 'elastic-{{ elasticstack_release }}.x'
   register: _elasticsearch_install_rpm_full
@@ -233,6 +236,7 @@
 - name: Install Elasticsearch - rpm - standalone
   ansible.builtin.package:
     name: "{{ elasticsearch_package }}"
+    state: "{{ 'latest' if (elasticstack_version | default('') == 'latest') else 'present' }}"
   register: _elasticsearch_install_rpm
   until: _elasticsearch_install_rpm is success
   retries: 3
@@ -244,6 +248,7 @@
 - name: Install Elasticsearch - deb
   ansible.builtin.package:
     name: "{{ elasticsearch_package }}"
+    state: "{{ 'latest' if (elasticstack_version | default('') == 'latest') else 'present' }}"
   register: _elasticsearch_install_deb
   until: _elasticsearch_install_deb is success
   retries: 3
