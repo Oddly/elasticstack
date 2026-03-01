@@ -4,35 +4,13 @@
   vars:
     elasticstack_elasticsearch_http_port: 9200
   tasks:
-    - name: Fetch Elastic password
-      ansible.builtin.shell: |
-        set -o pipefail
-        grep "PASSWORD elastic " /usr/share/elasticsearch/initial_passwords |
-        awk {' print $4 '}
-      args:
-        executable: /bin/bash
-      register: elastic_pass
-      changed_when: false
+    - name: Fetch elastic password
+      ansible.builtin.include_tasks: ../shared/verify_fetch_password.yml
 
     # ── Cluster health and API checks ──────────────────────────────
 
     - name: Check cluster health
-      ansible.builtin.uri:
-        url: "https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health"
-        method: GET
-        force_basic_auth: true
-        user: elastic
-        password: "{{ elastic_pass.stdout }}"
-        return_content: true
-        status_code: 200
-        validate_certs: false
-      register: health
-
-    - name: Verify cluster health is green or yellow
-      ansible.builtin.assert:
-        that:
-          - health.json.status in ['green', 'yellow']
-        fail_msg: "Cluster health is {{ health.json.status }}, expected green or yellow"
+      ansible.builtin.include_tasks: ../shared/verify_es_health.yml
 
     - name: Verify cluster name is custom
       ansible.builtin.assert:
