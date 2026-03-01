@@ -1,20 +1,14 @@
 ---
 # handlers file for logstash
 - name: Restart Logstash
-  ansible.builtin.service:
-    name: logstash
-    state: restarted
-    daemon_reload: true
+  ansible.builtin.include_tasks: restart_and_verify_logstash.yml
   when:
     - not ansible_check_mode
     - logstash_enable | bool
     - not logstash_freshstart.changed | bool
 
 - name: Restart Logstash noauto
-  ansible.builtin.service:
-    name: logstash
-    state: restarted
-    daemon_reload: true
+  ansible.builtin.include_tasks: restart_and_verify_logstash.yml
   when:
     - not ansible_check_mode
     - not logstash_config_autoreload

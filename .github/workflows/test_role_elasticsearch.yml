@@ -73,6 +73,10 @@ jobs:
         release:
           - 8
           - 9
+        include:
+          - distro: debian13
+            scenario: elasticsearch_diagnostics
+            release: 9
 
     steps:
       - name: Check out code
