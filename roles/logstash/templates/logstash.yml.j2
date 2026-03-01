@@ -5,16 +5,9 @@ config.reload.interval: {{ logstash_config_autoreload_interval }}
 {% endif %}
 path.logs: {{ logstash_config_path_logs }}
 {% if logstash_http_host is defined %}
-{% if elasticstack_release | int >= 9 %}
 api.http.host: {{ logstash_http_host }}
 {% if logstash_http_port is defined %}
 api.http.port: {{ logstash_http_port }}
-{% endif %}
-{% else %}
-http.host: {{ logstash_http_host }}
-{% if logstash_http_port is defined %}
-http.port: {{ logstash_http_port }}
-{% endif %}
 {% endif %}
 {% endif %}
 {% if logstash_global_ecs is defined %}
@@ -61,7 +54,7 @@ xpack.management.pipeline.id: {{ logstash_xpack_management_pipeline_id | to_json
 {% if logstash_extra_config is defined and logstash_extra_config %}
 {%   set _managed_keys = [
        'path.data', 'path.logs', 'config.reload.automatic', 'config.reload.interval',
-       'http.host', 'http.port', 'api.http.host', 'api.http.port',
+       'api.http.host', 'api.http.port',
        'pipeline.ecs_compatibility', 'pipeline.unsafe_shutdown', 'pipeline.buffer.type',
        'dead_letter_queue.enable', 'dead_letter_queue.retain.age',
        'log.format', 'xpack.monitoring.enabled', 'xpack.monitoring.allow_legacy_collection',

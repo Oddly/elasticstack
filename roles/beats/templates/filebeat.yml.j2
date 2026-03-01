@@ -2,8 +2,6 @@ filebeat.inputs:
 
 {% if beats_filebeat_log_input | bool %}
 {% for input in beats_filebeat_log_inputs %}
-{# Beats 9.x removed 'log' input type - must use 'filestream' instead #}
-{% if elasticstack_release | int >= 9 %}
 - type: filestream
   id: {{ input }}
   enabled: true
@@ -40,48 +38,10 @@ filebeat.inputs:
         match: {{ beats_filebeat_log_inputs[input].multiline.match }}
 {% endif %}
 {% endif %}
-{% else %}
-- type: log
-  enabled: true
-  paths:
-{% for path in beats_filebeat_log_inputs[input].paths %}
-    - {{ path }}
-{% endfor %}
-{% if beats_fields is defined or beats_filebeat_log_inputs[input].fields is defined %}
-  fields:
-{% if beats_fields is defined %}
-{% for field in beats_fields %}
-    {{ field }}
-{% endfor %}
-{% endif %}
-{% if beats_filebeat_log_inputs[input].fields is defined %}
-{% for field in beats_filebeat_log_inputs[input].fields %}
-    {{ field }}: {{ beats_filebeat_log_inputs[input].fields[field] }}
-{% endfor %}
-{% endif %}
-{% endif %}
-{% if beats_filebeat_log_inputs[input].multiline is defined %}
-  multiline:
-{% if beats_filebeat_log_inputs[input].multiline.type is defined %}
-    type: {{ beats_filebeat_log_inputs[input].multiline.type }}
-{% endif %}
-{% if beats_filebeat_log_inputs[input].multiline.pattern is defined %}
-    pattern: '{{ beats_filebeat_log_inputs[input].multiline.pattern }}'
-{% endif %}
-{% if beats_filebeat_log_inputs[input].multiline.negate is defined %}
-    negate: {{ beats_filebeat_log_inputs[input].multiline.negate }}
-{% endif %}
-{% if beats_filebeat_log_inputs[input].multiline.match is defined %}
-    match: {{ beats_filebeat_log_inputs[input].multiline.match }}
-{% endif %}
-{% endif %}
-{% endif %}
 
 {% endfor %}
 {% endif %}
 {% if beats_filebeat_mysql_slowlog_input | bool %}
-{# Beats 9.x removed 'log' input type - must use 'filestream' instead #}
-{% if elasticstack_release | int >= 9 %}
 - type: filestream
   id: mysql-slowlog
   enabled: true
@@ -96,19 +56,6 @@ filebeat.inputs:
     mysql:
       logtype: slowquery
   fields_under_root: true
-{% else %}
-- type: log
-  enabled: true
-  paths:
-    - /var/log/mysql/*-slow.log
-  multiline.pattern: '^\#[[:space:]]Time'
-  multiline.negate: true
-  multiline.match: after
-  fields:
-    mysql:
-      logtype: slowquery
-  fields_under_root: true
-{% endif %}
 {% endif %}
 {% if beats_filebeat_syslog_tcp | bool %}
 - type: tcp
@@ -168,8 +115,6 @@ filebeat.inputs:
 {% endfor %}
 {% endif %}
 {% if beats_filebeat_docker | bool %}
-{# Beats 9.x removed 'docker' input type - must use 'filestream' with container parser #}
-{% if elasticstack_release | int >= 9 %}
 - type: filestream
   id: docker-containers
   enabled: true
@@ -183,12 +128,6 @@ filebeat.inputs:
   prospector.scanner.symlinks: true
   parsers:
     - container: ~
-{% else %}
-- type: docker
-  containers.ids: "{{ beats_filebeat_docker_ids }}"
-  cri.parse_flags: true
-  combine_partial: true
-{% endif %}
 
 {% endif %}
 {% for input in beats_filebeat_extra_inputs %}
