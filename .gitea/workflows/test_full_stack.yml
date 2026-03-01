@@ -13,6 +13,15 @@ on:
           - warning
           - debug
   pull_request:
+    paths:
+      - 'roles/**'
+      - 'molecule/elasticstack_*/**'
+      - 'molecule/es_kibana/**'
+      - 'molecule/logstash_elasticsearch/**'
+      - 'molecule/cert_renewal/**'
+      - 'molecule/shared/**'
+      - 'plugins/**'
+      - '.gitea/workflows/test_full_stack.yml'
   merge_group:
   schedule:
     - cron: "0 4 * * *"
