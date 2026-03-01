@@ -40,12 +40,13 @@
       'kibana' +
       ((elasticstack_versionseparator +
       elasticstack_version |
-      string ) if (elasticstack_version is defined and elasticstack_version | length > 0) else '') |
+      string ) if (elasticstack_version is defined and elasticstack_version | length > 0 and elasticstack_version != 'latest') else '') |
       replace(' ', '') }}
 
 - name: Install Kibana - rpm - full stack
   ansible.builtin.package:
     name: "{{ kibana_package }}"
+    state: "{{ 'latest' if (elasticstack_version | default('') == 'latest') else 'present' }}"
     enablerepo:
       - 'elastic-{{ elasticstack_release }}.x'
   register: _kibana_install_rpm_full
@@ -61,6 +62,7 @@
 - name: Install Kibana - rpm - standalone
   ansible.builtin.package:
     name: "{{ kibana_package }}"
+    state: "{{ 'latest' if (elasticstack_version | default('') == 'latest') else 'present' }}"
   register: _kibana_install_rpm
   until: _kibana_install_rpm is success
   retries: 3
@@ -74,6 +76,7 @@
 - name: Install Kibana - deb
   ansible.builtin.package:
     name: "{{ kibana_package }}"
+    state: "{{ 'latest' if (elasticstack_version | default('') == 'latest') else 'present' }}"
   register: _kibana_install_deb
   until: _kibana_install_deb is success
   retries: 3

@@ -21,6 +21,8 @@ on:
       - 'roles/beats/**'
       - '.github/workflows/test_role_beats.yml'
       - 'molecule/beats_**'
+  schedule:
+    - cron: "30 5 * * *"
 
 permissions:
   contents: read
@@ -59,14 +61,7 @@ jobs:
       fail-fast: false
       max-parallel: 10
       matrix:
-        distro:
-          - rockylinux9
-          - rockylinux10
-          - ubuntu2204
-          - ubuntu2404
-          - debian11
-          - debian12
-          - debian13
+        distro: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && fromJSON('["rockylinux10","debian13"]') || fromJSON('["rockylinux9","rockylinux10","ubuntu2204","ubuntu2404","debian11","debian12","debian13"]') }}
         scenario: [beats_default, beats_peculiar, beats_advanced, beats_security]
         release: [8, 9]
 
