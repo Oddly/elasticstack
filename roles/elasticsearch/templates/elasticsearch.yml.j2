@@ -27,7 +27,7 @@ http.publish_port: {{ elasticsearch_http_publish_port }}
 {% endif %}
 
 {% if elasticsearch_node_types is defined %}
-node.roles: [ {% for type in elasticsearch_node_types %}{{ type }}{% if not loop.last %}, {% endif %}{% endfor %} ]
+node.roles: {{ elasticsearch_node_types | to_json }}
 {% endif %}
 
 {% if groups[elasticstack_elasticsearch_group_name] | length == 1 %}
