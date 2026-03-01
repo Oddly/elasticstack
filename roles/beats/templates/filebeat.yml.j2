@@ -168,10 +168,27 @@ filebeat.inputs:
 {% endfor %}
 {% endif %}
 {% if beats_filebeat_docker | bool %}
+{# Beats 9.x removed 'docker' input type - must use 'filestream' with container parser #}
+{% if elasticstack_release | int >= 9 %}
+- type: filestream
+  id: docker-containers
+  enabled: true
+{% if beats_filebeat_docker_ids == "*" %}
+  paths:
+    - /var/lib/docker/containers/*/*.log
+{% else %}
+  paths:
+    - /var/lib/docker/containers/{{ beats_filebeat_docker_ids }}/*.log
+{% endif %}
+  prospector.scanner.symlinks: true
+  parsers:
+    - container: ~
+{% else %}
 - type: docker
   containers.ids: "{{ beats_filebeat_docker_ids }}"
   cri.parse_flags: true
   combine_partial: true
+{% endif %}
 
 {% endif %}
 {% for input in beats_filebeat_extra_inputs %}
