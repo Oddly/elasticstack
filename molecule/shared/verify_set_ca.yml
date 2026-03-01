@@ -1,0 +1,6 @@
+---
+# Set the elasticsearch_ca fact to the first host in the ES group.
+- name: Set elasticsearch_ca variable
+  ansible.builtin.set_fact:
+    elasticsearch_ca: "{{ groups[elasticstack_elasticsearch_group_name][0] }}"
+  when: elasticsearch_ca is undefined

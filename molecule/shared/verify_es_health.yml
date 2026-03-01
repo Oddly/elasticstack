@@ -1,0 +1,32 @@
+---
+# Check Elasticsearch cluster health via the REST API.
+# Required variables:
+#   elastic_pass: registered result with .stdout containing the password
+# Optional variables:
+#   _verify_es_port: HTTP port (default: 9200)
+#   _verify_es_status: expected status — 'green' or 'yellow' (default: green)
+#   _verify_run_once: run once across hosts (default: false)
+#   _verify_when: additional when condition (default: true)
+- name: Elasticsearch health check
+  ansible.builtin.uri:
+    url: "https://localhost:{{ _verify_es_port | default(elasticstack_elasticsearch_http_port | default(9200)) }}/_cluster/health"
+    method: GET
+    force_basic_auth: true
+    user: elastic
+    password: "{{ elastic_pass.stdout }}"
+    return_content: true
+    status_code: 200
+    validate_certs: false
+  register: health
+  until: health.json.status | default('red') in ['green', 'yellow']
+  retries: 6
+  delay: 10
+  run_once: "{{ _verify_run_once | default(false) }}"  # noqa: run-once[task]
+  when: _verify_when | default(true) | bool
+
+- name: Assert cluster is {{ _verify_es_status | default('green') }}
+  ansible.builtin.assert:
+    that: health.json.status == "{{ _verify_es_status | default('green') }}"
+    fail_msg: "Cluster health is {{ health.json.status }}, expected {{ _verify_es_status | default('green') }}"
+  run_once: "{{ _verify_run_once | default(false) }}"  # noqa: run-once[task]
+  when: _verify_when | default(true) | bool
