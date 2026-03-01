@@ -198,7 +198,7 @@
     - name: Detect latest available Elasticsearch 9.x version (RHEL)
       ansible.builtin.shell: >
         set -o pipefail &&
-        dnf info --available elasticsearch 2>/dev/null | grep '^Version' | awk '{print $3}'
+        dnf info --available elasticsearch 2>/dev/null | grep '^Version' | awk '{print $3}' | head -1
       args:
         executable: /bin/bash
       register: _es_candidate_version_rhel
