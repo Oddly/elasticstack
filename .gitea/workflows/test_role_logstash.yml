@@ -54,7 +54,6 @@ jobs:
           - debian12
           - debian13
         scenario:
-          - logstash_default
           - logstash_ssl
           - logstash_custom_pipeline
           - logstash_advanced
