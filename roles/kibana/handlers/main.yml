@@ -10,4 +10,5 @@
     state: restarted
   when:
     - not ansible_check_mode
+    - kibana_enable | bool
     - not kibana_freshstart.changed | bool

@@ -355,6 +355,8 @@
     group: root
     mode: "0644"
     backup: "{{ logstash_config_backup }}"
+  notify:
+    - Restart Logstash
   when:
     - logstash_manage_pipelines | bool
     - not logstash_no_pipelines | bool

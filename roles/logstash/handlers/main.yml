@@ -6,6 +6,7 @@
     state: restarted
     daemon_reload: true
   when:
+    - not ansible_check_mode
     - logstash_enable | bool
     - not logstash_freshstart.changed | bool
 
@@ -14,4 +15,7 @@
     name: logstash
     state: restarted
     daemon_reload: true
-  when: not logstash_config_autoreload and logstash_enable | bool
+  when:
+    - not ansible_check_mode
+    - not logstash_config_autoreload
+    - logstash_enable | bool

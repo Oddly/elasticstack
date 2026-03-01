@@ -5,13 +5,13 @@ server.protocol: "{{ kibana_server_protocol }}"
 {% endif %}
 
 {% if elasticstack_full_stack is defined and elasticstack_full_stack | bool %}
-    {%- if kibana_sniff_on_start | bool %}
+    {%- if kibana_sniff_on_start | bool and elasticstack_release | int < 9 %}
 elasticsearch.sniffOnStart: true
     {%- endif %}
-    {%- if kibana_sniff_on_connection_fault | bool +%}
+    {%- if kibana_sniff_on_connection_fault | bool and elasticstack_release | int < 9 +%}
 elasticsearch.sniffOnConnectionFault: true
     {%- endif %}
-    {%- if kibana_sniff_interval is defined +%}
+    {%- if kibana_sniff_interval is defined and elasticstack_release | int < 9 +%}
 elasticsearch.sniffInterval: {{ kibana_sniff_interval }}
     {%- endif %}
     {%- if kibana_security | bool +%}

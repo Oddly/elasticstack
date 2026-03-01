@@ -6,6 +6,7 @@
     name: filebeat
     state: restarted
   when:
+    - not ansible_check_mode
     - beats_filebeat | bool
     - beats_filebeat_enable | bool
 
@@ -14,6 +15,7 @@
     name: auditbeat
     state: restarted
   when:
+    - not ansible_check_mode
     - beats_auditbeat | bool
     - beats_auditbeat_enable | bool
 
@@ -22,5 +24,6 @@
     name: metricbeat
     state: restarted
   when:
+    - not ansible_check_mode
     - beats_metricbeat | bool
     - beats_metricbeat_enable | bool
