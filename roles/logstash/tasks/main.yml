@@ -29,13 +29,6 @@
     name: oddly.elasticstack.elasticstack
   when: not hostvars[inventory_hostname]._elasticstack_role_imported | default(false)
 
-- name: Update apt cache
-  ansible.builtin.apt:
-    update_cache: true
-    cache_valid_time: 600
-  changed_when: false
-  when: ansible_facts.os_family == 'Debian'
-
 - name: Set up Elasticsearch hosts from inventory
   ansible.builtin.set_fact:
     _logstash_es_hosts: "{{ logstash_elasticsearch_hosts }}"
