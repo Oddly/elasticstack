@@ -170,6 +170,7 @@ logger.index_indexing_slowlog.additivity = false
 {% endif %}
 
 ######## Audit Log ############################################################
+{% if elasticsearch_logging_audit | bool and elasticsearch_security | bool %}
 
 appender.audit_rolling.type = RollingFile
 appender.audit_rolling.name = audit_rolling
@@ -203,3 +204,4 @@ logger.samlxml_decrypt.name = org.opensaml.xmlsec.encryption.support.Decrypter
 logger.samlxml_decrypt.level = fatal
 logger.saml2_decrypt.name = org.opensaml.saml.saml2.encryption.Decrypter
 logger.saml2_decrypt.level = fatal
+{% endif %}

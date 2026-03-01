@@ -208,6 +208,7 @@
     - "hostvars[item].inventory_hostname == inventory_hostname"
     - elasticstack_version is defined
     - elasticstack_version != 'latest'
+    - ansible_facts.packages['elasticsearch'] is defined
     - ansible_facts.packages['elasticsearch'][0].version is defined
     - elasticstack_password.stdout is defined
     - elasticstack_version is version( ansible_facts.packages['elasticsearch'][0].version, '>')

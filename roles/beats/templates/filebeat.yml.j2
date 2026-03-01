@@ -154,7 +154,7 @@ output.elasticsearch:
   username: "elastic"
   password: "{{ beats_writer_password.stdout }}"
   ssl.enabled: true
-  ssl.verification_mode: none
+  ssl.verification_mode: {{ beats_ssl_verification_mode }}
   ssl.certificate_authorities: ["/etc/beats/certs/ca.crt"]
 {% else %}
 {% if elasticstack_full_stack | bool %}

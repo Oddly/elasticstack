@@ -13,3 +13,4 @@
     - not ansible_check_mode
     - not logstash_config_autoreload
     - logstash_enable | bool
+    - not logstash_freshstart.changed | bool
