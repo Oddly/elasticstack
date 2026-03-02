@@ -129,9 +129,11 @@
             dest: /usr/local/share/ca-certificates/test-ca.crt
             remote_src: true
             mode: "0644"
+          register: _ca_copy_deb
         - name: Update CA trust store
           ansible.builtin.command: update-ca-certificates
-          changed_when: true
+          changed_when: _ca_copy_deb is changed
+          when: _ca_copy_deb is changed
 
     - name: Add CA to system trust store (RedHat)
       when: ansible_facts.os_family == 'RedHat'
@@ -142,9 +144,11 @@
             dest: /etc/pki/ca-trust/source/anchors/test-ca.crt
             remote_src: true
             mode: "0644"
+          register: _ca_copy_rh
         - name: Update CA trust store
           ansible.builtin.command: update-ca-trust
-          changed_when: true
+          changed_when: _ca_copy_rh is changed
+          when: _ca_copy_rh is changed
 
 - name: Converge — ES + Kibana with external certs, CA in system trust store
   hosts: all
