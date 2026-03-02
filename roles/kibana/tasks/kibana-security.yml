@@ -201,14 +201,18 @@
         dest: /etc/systemd/system/kibana.service.d/node-ca-certs.conf
         mode: "0644"
       when: not (_kibana_has_ca | bool)
-      notify: Restart Kibana
+      notify:
+        - Reload systemd
+        - Restart Kibana
 
     - name: Remove NODE_EXTRA_CA_CERTS override when CA is provided
       ansible.builtin.file:
         path: /etc/systemd/system/kibana.service.d/node-ca-certs.conf
         state: absent
       when: _kibana_has_ca | bool
-      notify: Restart Kibana
+      notify:
+        - Reload systemd
+        - Restart Kibana
 
 # ============================================================
 # Auto-generated certificates (elasticsearch_ca)

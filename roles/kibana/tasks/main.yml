@@ -116,6 +116,10 @@
     - (elasticstack_full_stack | default(false) | bool and kibana_security | bool) or
       kibana_tls | bool
 
+- name: Reload systemd before start
+  ansible.builtin.systemd:
+    daemon_reload: true
+
 - name: Start Kibana
   ansible.builtin.service:
     name: kibana
