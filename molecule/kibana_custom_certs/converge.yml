@@ -189,3 +189,32 @@
       ansible.builtin.include_role:
         name: oddly.elasticstack.kibana
       when: "'kibana' in group_names"
+
+    # Node.js (Kibana) doesn't use the OS trust store by default.
+    # Set NODE_EXTRA_CA_CERTS so it picks up the CA we added above.
+    - name: Point Kibana Node.js at system CA
+      when: "'kibana' in group_names"
+      block:
+        - name: Create Kibana systemd override directory
+          ansible.builtin.file:
+            path: /etc/systemd/system/kibana.service.d
+            state: directory
+            mode: "0755"
+
+        - name: Set NODE_EXTRA_CA_CERTS for Kibana
+          ansible.builtin.copy:
+            content: |
+              [Service]
+              Environment=NODE_EXTRA_CA_CERTS={{ '/usr/local/share/ca-certificates/test-ca.crt'
+                if ansible_facts.os_family == 'Debian'
+                else '/etc/pki/ca-trust/source/anchors/test-ca.crt' }}
+            dest: /etc/systemd/system/kibana.service.d/ca-certs.conf
+            mode: "0644"
+          register: _kibana_node_ca
+
+        - name: Restart Kibana with CA env
+          ansible.builtin.systemd:
+            name: kibana
+            state: restarted
+            daemon_reload: true
+          when: _kibana_node_ca is changed
