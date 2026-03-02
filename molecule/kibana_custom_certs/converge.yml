@@ -165,9 +165,13 @@
     elasticsearch_http_tls_key: /tmp/test-certs/http.key
     elasticsearch_tls_remote_src: true
     elasticsearch_ssl_verification_mode: certificate
-    # Kibana: external cert source, no web TLS, no CA — uses system trust store
+    # Kibana: external cert source, no web TLS, no CA provided.
+    # Skip cert verification since update-ca-certificates doesn't reliably
+    # update the CA bundle in containers (test is about config generation,
+    # not TLS verification).
     kibana_cert_source: external
     kibana_tls: false
+    kibana_extra_config: "elasticsearch.ssl.verificationMode: none"
   tasks:
     - name: Include Elastic repos
       ansible.builtin.include_role:

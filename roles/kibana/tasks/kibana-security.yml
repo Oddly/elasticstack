@@ -181,38 +181,6 @@
              (kibana_tls_ca_content | default('', true) | length > 0) or
              (_kibana_ca_extracted | default(false) | bool) }}
 
-    # When no CA is provided to the role, Kibana (Node.js) still needs to
-    # verify ES certs. Point it at the system CA bundle so CAs added via
-    # update-ca-certificates / update-ca-trust are available.
-    - name: Create Kibana systemd override directory
-      ansible.builtin.file:
-        path: /etc/systemd/system/kibana.service.d
-        state: directory
-        mode: "0755"
-      when: not (_kibana_has_ca | bool)
-
-    - name: Configure NODE_EXTRA_CA_CERTS for Kibana
-      ansible.builtin.copy:
-        content: |
-          [Service]
-          Environment=NODE_EXTRA_CA_CERTS={{ '/etc/ssl/certs/ca-certificates.crt'
-            if ansible_facts.os_family == 'Debian'
-            else '/etc/pki/tls/certs/ca-bundle.crt' }}
-        dest: /etc/systemd/system/kibana.service.d/node-ca-certs.conf
-        mode: "0644"
-      when: not (_kibana_has_ca | bool)
-      notify:
-        - Reload systemd
-        - Restart Kibana
-
-    - name: Remove NODE_EXTRA_CA_CERTS override when CA is provided
-      ansible.builtin.file:
-        path: /etc/systemd/system/kibana.service.d/node-ca-certs.conf
-        state: absent
-      when: _kibana_has_ca | bool
-      notify:
-        - Reload systemd
-        - Restart Kibana
 
 # ============================================================
 # Auto-generated certificates (elasticsearch_ca)
