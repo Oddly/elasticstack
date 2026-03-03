@@ -51,6 +51,8 @@ jobs:
         -o ControlMaster=auto
         -o ControlPersist=300s
         -o PreferredAuthentications=publickey
+        -o ServerAliveInterval=30
+        -o ServerAliveCountMax=3
 
     strategy:
       fail-fast: false
