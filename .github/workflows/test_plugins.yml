@@ -75,6 +75,8 @@ jobs:
         run: |
           echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections" >> "$GITHUB_ENV"
           echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule" >> "$GITHUB_ENV"
+          echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/ssh-cp"
 
       - name: Install collection
         run: |
@@ -115,6 +117,8 @@ jobs:
         run: |
           echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections" >> "$GITHUB_ENV"
           echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule" >> "$GITHUB_ENV"
+          echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/ssh-cp"
 
       - name: Install collection
         run: |
@@ -157,6 +161,8 @@ jobs:
         run: |
           echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections" >> "$GITHUB_ENV"
           echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule" >> "$GITHUB_ENV"
+          echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/ssh-cp"
 
       - name: Install collection
         run: |
@@ -197,6 +203,8 @@ jobs:
         run: |
           echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections" >> "$GITHUB_ENV"
           echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule" >> "$GITHUB_ENV"
+          echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/ssh-cp"
 
       - name: Install collection
         run: |
@@ -239,6 +247,8 @@ jobs:
         run: |
           echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections" >> "$GITHUB_ENV"
           echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule" >> "$GITHUB_ENV"
+          echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/ssh-cp"
 
       - name: Install collection
         run: |
