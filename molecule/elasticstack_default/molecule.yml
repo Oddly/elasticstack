@@ -7,14 +7,14 @@ dependency:
 driver:
   name: default
 platforms:
-  - name: "elasticstack${ELASTIC_RELEASE:-9}-cluster1-${MOLECULE_DISTRO:-debian12}"
+  - name: "elasticstack${ELASTIC_RELEASE:-9}-cluster1-${MOLECULE_DISTRO:-debian12}${MOLECULE_RUN_SUFFIX}"
     groups:
       - beats
       - logstash
       - elasticsearch
     distro: "${MOLECULE_DISTRO:-debian12}"
     memory_mb: 7680
-  - name: "elasticstack${ELASTIC_RELEASE:-9}-cluster2-${MOLECULE_DISTRO:-debian12}"
+  - name: "elasticstack${ELASTIC_RELEASE:-9}-cluster2-${MOLECULE_DISTRO:-debian12}${MOLECULE_RUN_SUFFIX}"
     groups:
       - beats
       - kibana
@@ -39,7 +39,7 @@ provisioner:
       all:
         ansible_python_interpreter: /usr/bin/python3
     host_vars:
-      elasticstack${ELASTIC_RELEASE:-9}-cluster2-${MOLECULE_DISTRO:-debian12}:
+      elasticstack${ELASTIC_RELEASE:-9}-cluster2-${MOLECULE_DISTRO:-debian12}${MOLECULE_RUN_SUFFIX}:
         elasticsearch_tls_key_passphrase: UniqueHostPassword
 
   # Just enable temporarily. Sometimes it's useful, but most of the time it's

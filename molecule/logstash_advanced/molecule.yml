@@ -7,7 +7,7 @@ dependency:
 driver:
   name: default
 platforms:
-  - name: "ls-adv-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}"
+  - name: "ls-adv-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
     groups:
       - logstash
     distro: "${MOLECULE_DISTRO:-debian12}"

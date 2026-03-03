@@ -9,12 +9,12 @@ dependency:
 driver:
   name: default
 platforms:
-  - name: "es-upg89-n1-${MOLECULE_DISTRO:-debian11}"
+  - name: "es-upg89-n1-${MOLECULE_DISTRO:-debian11}${MOLECULE_RUN_SUFFIX}"
     groups:
       - elasticsearch
     distro: "${MOLECULE_DISTRO:-debian11}"
     memory_mb: 3328
-  - name: "es-upg89-n2-${MOLECULE_DISTRO:-debian11}"
+  - name: "es-upg89-n2-${MOLECULE_DISTRO:-debian11}${MOLECULE_RUN_SUFFIX}"
     groups:
       - elasticsearch
     distro: "${MOLECULE_DISTRO:-debian11}"

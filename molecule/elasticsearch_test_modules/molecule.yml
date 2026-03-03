@@ -7,7 +7,7 @@ dependency:
 driver:
   name: default
 platforms:
-  - name: "es-mod-${MOLECULE_DISTRO:-debian11}-r${ELASTIC_RELEASE:-9}"
+  - name: "es-mod-${MOLECULE_DISTRO:-debian11}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
     groups:
       - elasticsearch
     distro: "${MOLECULE_DISTRO:-debian11}"
