@@ -7,7 +7,7 @@ dependency:
 driver:
   name: default
 platforms:
-  - name: "es-extcrt-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}"
+  - name: "es-extcrt-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
     groups:
       - elasticsearch
     distro: "${MOLECULE_DISTRO:-debian12}"

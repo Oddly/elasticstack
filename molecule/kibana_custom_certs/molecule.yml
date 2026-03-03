@@ -7,12 +7,12 @@ dependency:
 driver:
   name: default
 platforms:
-  - name: "kib-extcrt-es1-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}"
+  - name: "kib-extcrt-es1-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
     groups:
       - elasticsearch
     distro: "${MOLECULE_DISTRO:-debian12}"
     memory_mb: 3328
-  - name: "kib-extcrt-kb1-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}"
+  - name: "kib-extcrt-kb1-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
     groups:
       - kibana
     distro: "${MOLECULE_DISTRO:-debian12}"

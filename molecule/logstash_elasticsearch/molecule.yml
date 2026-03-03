@@ -7,12 +7,12 @@ dependency:
 driver:
   name: default
 platforms:
-  - name: "ls-es-es1-${MOLECULE_DISTRO:-debian11}-r${ELASTIC_RELEASE:-9}"
+  - name: "ls-es-es1-${MOLECULE_DISTRO:-debian11}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
     groups:
       - elasticsearch
     distro: "${MOLECULE_DISTRO:-debian11}"
     memory_mb: 3328
-  - name: "ls-es-ls1-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}"
+  - name: "ls-es-ls1-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
     groups:
       - logstash
     distro: "${MOLECULE_DISTRO:-debian12}"

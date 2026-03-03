@@ -76,6 +76,7 @@ jobs:
           echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections" >> "$GITHUB_ENV"
           echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule" >> "$GITHUB_ENV"
           echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp" >> "$GITHUB_ENV"
+          echo "MOLECULE_RUN_SUFFIX=-${GITHUB_RUN_ID: -6}" >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/ssh-cp"
 
       - name: Install collection
@@ -118,6 +119,7 @@ jobs:
           echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections" >> "$GITHUB_ENV"
           echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule" >> "$GITHUB_ENV"
           echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp" >> "$GITHUB_ENV"
+          echo "MOLECULE_RUN_SUFFIX=-${GITHUB_RUN_ID: -6}" >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/ssh-cp"
 
       - name: Install collection
@@ -162,6 +164,7 @@ jobs:
           echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections" >> "$GITHUB_ENV"
           echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule" >> "$GITHUB_ENV"
           echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp" >> "$GITHUB_ENV"
+          echo "MOLECULE_RUN_SUFFIX=-${GITHUB_RUN_ID: -6}" >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/ssh-cp"
 
       - name: Install collection
@@ -204,6 +207,7 @@ jobs:
           echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections" >> "$GITHUB_ENV"
           echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule" >> "$GITHUB_ENV"
           echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp" >> "$GITHUB_ENV"
+          echo "MOLECULE_RUN_SUFFIX=-${GITHUB_RUN_ID: -6}" >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/ssh-cp"
 
       - name: Install collection
@@ -248,6 +252,7 @@ jobs:
           echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections" >> "$GITHUB_ENV"
           echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule" >> "$GITHUB_ENV"
           echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp" >> "$GITHUB_ENV"
+          echo "MOLECULE_RUN_SUFFIX=-${GITHUB_RUN_ID: -6}" >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/ssh-cp"
 
       - name: Install collection
