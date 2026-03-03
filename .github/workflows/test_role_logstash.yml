@@ -87,6 +87,8 @@ jobs:
         run: |
           echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections" >> "$GITHUB_ENV"
           echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule" >> "$GITHUB_ENV"
+          echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/ssh-cp"
 
       - name: Install collection
         run: |
@@ -135,6 +137,11 @@ jobs:
           MOLECULE_SSH_KEY: ${{ runner.temp }}/molecule_id_ed25519
           DISTRO_CACHE_URL: http://${{ secrets.REGISTRY_HOST }}:8081
 
-      - name: Clean up SSH key
+      - name: Clean up SSH state
         if: always()
-        run: rm -f ${{ runner.temp }}/molecule_id_ed25519
+        run: |
+          # Kill orphaned ProxyCommand SSH processes from this job
+          pkill -f "${{ runner.temp }}/molecule_id_ed25519" 2>/dev/null || true
+          # Remove ControlMaster sockets and SSH key
+          rm -rf "${{ runner.temp }}/ssh-cp"
+          rm -f "${{ runner.temp }}/molecule_id_ed25519"
