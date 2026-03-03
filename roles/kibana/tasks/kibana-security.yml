@@ -157,8 +157,8 @@
       when:
         - kibana_tls_ca_file | length == 0
         - kibana_tls_ca_content | default('', true) | length == 0
-        - _kibana_ca_extracted | bool
-        - _kibana_cert_format == 'pem'
+        - _kibana_ca_extracted | default(false) | bool
+        - (_kibana_cert_format | default('')) == 'pem'
 
     - name: Write extracted CA chain
       ansible.builtin.copy:
@@ -170,8 +170,8 @@
       when:
         - kibana_tls_ca_file | length == 0
         - kibana_tls_ca_content | default('', true) | length == 0
-        - _kibana_ca_extracted | bool
-        - _kibana_cert_format == 'pem'
+        - _kibana_ca_extracted | default(false) | bool
+        - (_kibana_cert_format | default('')) == 'pem'
       notify: Restart Kibana
 
     - name: Set effective CA availability fact
@@ -180,6 +180,7 @@
           {{ (kibana_tls_ca_file | length > 0) or
              (kibana_tls_ca_content | default('', true) | length > 0) or
              (_kibana_ca_extracted | default(false) | bool) }}
+
 
 # ============================================================
 # Auto-generated certificates (elasticsearch_ca)

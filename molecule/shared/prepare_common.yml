@@ -1,7 +1,8 @@
 ---
 # Common prepare tasks included by all scenario prepare.yml files.
 # Sets up the local distro package cache and installs base packages.
-# Requires distro_cache_url to be set as a play var (from DISTRO_CACHE_URL env).
+# When distro_cache_url is set (from DISTRO_CACHE_URL env), overrides repo config
+# to use the local cache. When unset, keeps the pre-baked image repos as-is.
 
 # --- Repo cache configuration ---
 
@@ -27,12 +28,16 @@
       baseurl={{ distro_cache_url }}/rocky/$releasever/extras/$basearch/os/
       gpgcheck=1
       gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-$releasever
-  when: ansible_facts.os_family == "RedHat"
+  when:
+    - ansible_facts.os_family == "RedHat"
+    - distro_cache_url | default('') | length > 0
 
 - name: Clean dnf cache after repo change
   ansible.builtin.command: dnf clean all
   changed_when: false
-  when: ansible_facts.os_family == "RedHat"
+  when:
+    - ansible_facts.os_family == "RedHat"
+    - distro_cache_url | default('') | length > 0
 
 - name: Write Debian sources.list for local cache
   ansible.builtin.copy:
@@ -45,6 +50,7 @@
   when:
     - ansible_facts.os_family == "Debian"
     - ansible_distribution == "Debian"
+    - distro_cache_url | default('') | length > 0
 
 - name: Write Ubuntu sources.list for local cache
   ansible.builtin.copy:
@@ -57,6 +63,7 @@
   when:
     - ansible_facts.os_family == "Debian"
     - ansible_distribution == "Ubuntu"
+    - distro_cache_url | default('') | length > 0
 
 # --- Package installation ---
 
