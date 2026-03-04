@@ -68,6 +68,9 @@
         password: "{{ elastic_pass.stdout }}"
         validate_certs: false
       register: es_info
+      retries: 5
+      delay: 5
+      until: es_info.status | default(0) == 200
 
     - name: Verify ES 8.10.x is running
       ansible.builtin.assert:
@@ -89,6 +92,10 @@
           version: "8.10"
         validate_certs: false
         status_code: [200, 201]
+      register: _index_result
+      retries: 5
+      delay: 5
+      until: _index_result.status | default(0) in [200, 201]
 
     - name: Refresh index
       ansible.builtin.uri:
@@ -98,6 +105,10 @@
         user: elastic
         password: "{{ elastic_pass.stdout }}"
         validate_certs: false
+      register: _refresh_result
+      retries: 3
+      delay: 5
+      until: _refresh_result.status | default(0) == 200
 
 - name: Upgrade to latest Elasticsearch 8.x (required before 9.x)
   hosts: all
