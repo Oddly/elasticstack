@@ -30,14 +30,14 @@
       gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-$releasever
   when:
     - ansible_facts.os_family == "RedHat"
-    - distro_cache_url | default('') | length > 0
+    - distro_cache_url | default('') is regex('^https?://[^:/]+')
 
 - name: Clean dnf cache after repo change
   ansible.builtin.command: dnf clean all
   changed_when: false
   when:
     - ansible_facts.os_family == "RedHat"
-    - distro_cache_url | default('') | length > 0
+    - distro_cache_url | default('') is regex('^https?://[^:/]+')
 
 - name: Write Debian sources.list for local cache
   ansible.builtin.copy:
@@ -49,8 +49,8 @@
       deb {{ distro_cache_url }}/debian-security/ {{ ansible_distribution_release }}-security main contrib non-free
   when:
     - ansible_facts.os_family == "Debian"
-    - ansible_distribution == "Debian"
-    - distro_cache_url | default('') | length > 0
+    - ansible_facts.distribution == "Debian"
+    - distro_cache_url | default('') is regex('^https?://[^:/]+')
 
 - name: Write Ubuntu sources.list for local cache
   ansible.builtin.copy:
@@ -62,8 +62,8 @@
       deb {{ distro_cache_url }}/ubuntu-security/ {{ ansible_distribution_release }}-security main restricted universe multiverse
   when:
     - ansible_facts.os_family == "Debian"
-    - ansible_distribution == "Ubuntu"
-    - distro_cache_url | default('') | length > 0
+    - ansible_facts.distribution == "Ubuntu"
+    - distro_cache_url | default('') is regex('^https?://[^:/]+')
 
 # --- Package installation ---
 

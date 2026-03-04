@@ -35,7 +35,6 @@ homepage: https://github.com/Oddly/elasticstack
 issues: https://github.com/Oddly/elasticstack/issues
 build_ignore:
   - .config
-  - .gitea
   - .github
   - .cache
   - .venv

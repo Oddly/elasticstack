@@ -26,8 +26,8 @@
       c=open(sys.argv[1]).read();
       print(re.sub(r"\$\{(\w+)(?::-([^}]*))?\}",lambda m:os.environ.get(m.group(1),m.group(2) or ""),c),end="")'
     molecule_yml: "{{ lookup('pipe', _resolve_envsubst ~ ' ' ~ molecule_scenario_directory ~ '/molecule.yml') | from_yaml }}"
-    gitea_run_id: "{{ lookup('env', 'GITHUB_RUN_ID') | default('', true) }}"
-    gitea_repository: "{{ lookup('env', 'GITHUB_REPOSITORY') | default('', true) }}"
+    ci_run_id: "{{ lookup('env', 'GITHUB_RUN_ID') | default('', true) }}"
+    ci_repository: "{{ lookup('env', 'GITHUB_REPOSITORY') | default('', true) }}"
     _ssh_cmd: >-
       ssh -o StrictHostKeyChecking=no -o BatchMode=yes
       -i {{ molecule_ssh_key }} root@{{ incus_host }}
@@ -35,8 +35,10 @@
     # memory_mb explicitly; this default covers mixed ES+KB containers
     # like kibana_default that don't specify their own limit.
     incus_default_memory_mb: "{{ lookup('env', 'INCUS_DEFAULT_MEMORY_MB') | default(4096, true) | int }}"
-    # Memory reserved for host OS and Incus overhead (MB).
-    incus_reserve_mb: "{{ lookup('env', 'INCUS_RESERVE_MB') | default(8192, true) | int }}"
+    # Memory reserved for host OS, Incus daemon, runners, and overhead (MB).
+    # 12 GB accounts for ~20 runner processes, dnsmasq, sshd, LVM, and
+    # kernel page cache that isn't reclaimable under cgroup pressure.
+    incus_reserve_mb: "{{ lookup('env', 'INCUS_RESERVE_MB') | default(12288, true) | int }}"
     # Total memory this batch of containers needs (MB).
     _needed_mb: "{{ molecule_yml.platforms | map(attribute='memory_mb', default=incus_default_memory_mb) | map('int') | sum }}"
     # Incus storage pool for containers.  LVM thin on NVMe gives CoW
@@ -118,8 +120,8 @@
           -c security.privileged=true \
           -c user.managed-by=molecule \
           -c user.created-at={{ now(utc=true).strftime("%Y-%m-%dT%H:%M:%SZ") }} \
-          {{ "-c user.gitea-run-id=" ~ gitea_run_id if gitea_run_id else "" }} \
-          {{ "-c user.gitea-repository=" ~ gitea_repository if gitea_repository else "" }} < /dev/null || exit 1
+          {{ "-c user.ci-run-id=" ~ ci_run_id if ci_run_id else "" }} \
+          {{ "-c user.ci-repository=" ~ ci_repository if ci_repository else "" }} < /dev/null || exit 1
         {% endfor %}
         REMOTE_SCRIPT
       changed_when: true
@@ -154,7 +156,6 @@
       ansible.builtin.command:
         cmd: >-
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes
-          -o "ProxyCommand=ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=10 -i {{ molecule_ssh_key }} -W %h:%p root@{{ incus_host }}"
           -i {{ molecule_ssh_key }}
           root@{{ _instance_addresses[item.name] }} true
       loop: "{{ molecule_yml.platforms }}"

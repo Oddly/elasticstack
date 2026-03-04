@@ -20,7 +20,7 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -t ed25519 ${{ secrets.INCUS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
-      - name: Run smart cleanup (checks Gitea API for orphaned containers)
+      - name: Run smart cleanup (checks GitHub API for orphaned containers)
         run: |
           SSH="ssh -o StrictHostKeyChecking=no -o BatchMode=yes -i ${{ runner.temp }}/molecule_id_ed25519 root@${INCUS_HOST}"
           $SSH /usr/local/bin/cleanup-molecule-containers.sh
