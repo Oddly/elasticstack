@@ -5,12 +5,20 @@
       - gpg
       - gpg-agent
     state: present
+  register: _gpg_install_deb
+  until: _gpg_install_deb is success
+  retries: 3
+  delay: 10
 
 - name: Ensure Elastic Stack key is available (Debian)
   ansible.builtin.get_url:
     url: "{{ elasticstack_repo_key }}"
     dest: /usr/share/keyrings/elasticsearch.asc
     mode: "0644"
+  register: _elastic_key_download
+  until: _elastic_key_download is success
+  retries: 3
+  delay: 10
 
 - name: Ensure Elastic Stack apt repo is absent (Debian legacy format)
   ansible.builtin.file:

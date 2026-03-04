@@ -7,6 +7,10 @@
   ansible.builtin.package:
     name: gnupg
     state: present
+  register: _gpg_install_rh
+  until: _gpg_install_rh is success
+  retries: 3
+  delay: 10
 
 - name: Workaround for EL > 8
   when:
@@ -27,6 +31,10 @@
         - name: Install crypto-policies-scripts
           ansible.builtin.package:
             name: crypto-policies-scripts
+          register: _crypto_policies_install
+          until: _crypto_policies_install is success
+          retries: 3
+          delay: 10
 
         # since we don't expect to have that workaround for long
         # we can skip having idempotency checks fixed
