@@ -35,7 +35,7 @@
       ansible.builtin.set_fact:
         "{{ _cert_days_fact | default('elasticstack_cert_expiration_days') }}": >-
           {{ (((elasticstack_cert_info.not_valid_after | regex_replace('[+-]\d{2}:\d{2}$', ''))
-          | to_datetime('%Y-%m-%d %H:%M:%S')) - (ansible_date_time.date
+          | to_datetime('%Y-%m-%d %H:%M:%S')) - (ansible_facts.date_time.date
           | to_datetime('%Y-%m-%d'))).days }}
 
     - name: "Set certificate expiry fact - {{ _cert_expiry_fact }}"
