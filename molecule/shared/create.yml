@@ -156,7 +156,6 @@
       ansible.builtin.command:
         cmd: >-
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes
-          -o "ProxyCommand=ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=10 -i {{ molecule_ssh_key }} -W %h:%p root@{{ incus_host }}"
           -i {{ molecule_ssh_key }}
           root@{{ _instance_addresses[item.name] }} true
       loop: "{{ molecule_yml.platforms }}"

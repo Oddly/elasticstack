@@ -24,11 +24,7 @@ provisioner:
   connection_options:
     ansible_connection: ssh
     ansible_user: root
-    ansible_ssh_common_args: >-
-      -o StrictHostKeyChecking=no
-      -o "ProxyCommand=ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=10
-      -i ${MOLECULE_SSH_KEY:-~/.ssh/molecule_id_ed25519}
-      -W %h:%p root@${INCUS_HOST:-172.30.0.172}"
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
   inventory:
     group_vars:
       all:
