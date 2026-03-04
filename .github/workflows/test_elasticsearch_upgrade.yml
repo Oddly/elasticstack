@@ -12,18 +12,8 @@ on:
           - info
           - warning
           - debug
-  push:
-    branches:
-      - main
-    paths:
-      - 'roles/elasticsearch/tasks/elasticsearch-rolling-upgrade.yml'
-      - 'roles/elasticsearch/tasks/main.yml'
-      - 'roles/elasticsearch/handlers/main.yml'
-      - 'molecule/elasticsearch_upgrade_8to9/**'
-      - 'molecule/elasticsearch_upgrade_8to9_single/**'
-      - '.github/workflows/test_elasticsearch_upgrade.yml'
   schedule:
-    - cron: "0 2 * * 0"  # Every Sunday at 02:00 UTC
+    - cron: "0 2 * * *"  # Daily at 02:00 UTC
 
 permissions:
   contents: read

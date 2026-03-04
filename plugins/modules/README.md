@@ -20,30 +20,18 @@ The oddly.elasticstack.cert_info module gathers information about pkcs12 certifi
 - python-cryptography >= 2.5.0 on the remote node
 
 ### Tested python-cryptography versions >= 2.5
-- 2.5
-- 3.0
-- 3.1
-- 3.2
-- 3.3
-- 3.4
-- 35.0.0
-- 36.0.0
-- 38.0.0
-- 40.0.1
+- 42.0.0+
+- 44.0.0+
+- 46.0.0+
 
 ### Tested python versions
-- 2.7
-- 3.5
-- 3.6
-- 3.7
-- 3.8
-- 3.10
+- 3.11
+- 3.12
 
 ### Tested ansible-core versions
-- 2.11
-- 2.12
-- 2.13
-- 2.14
+- 2.18
+- 2.19
+- 2.20
 
 ### Security measures
 - Only supported extensions with its available values will be returned. The available keys and values are applied in the code with the `SUPPORTED_EXTENSIONS` dictionary. The module will loop through it, and only if found, it will save it to the `results` variable.
