@@ -36,10 +36,9 @@
     # like kibana_default that don't specify their own limit.
     incus_default_memory_mb: "{{ lookup('env', 'INCUS_DEFAULT_MEMORY_MB') | default(4096, true) | int }}"
     # Memory reserved for host OS, Incus daemon, runners, and overhead (MB).
-    # 20 GB accounts for ~20 runner processes, dnsmasq, sshd, LVM, kernel
-    # page tables, slab caches, and memory pressure overhead when running
-    # 30+ containers with JVM workloads (ES/Logstash/Kibana).
-    incus_reserve_mb: "{{ lookup('env', 'INCUS_RESERVE_MB') | default(20480, true) | int }}"
+    # 12 GB accounts for ~20 runner processes, dnsmasq, sshd, LVM, and
+    # kernel page cache that isn't reclaimable under cgroup pressure.
+    incus_reserve_mb: "{{ lookup('env', 'INCUS_RESERVE_MB') | default(12288, true) | int }}"
     # Total memory this batch of containers needs (MB).
     _needed_mb: "{{ molecule_yml.platforms | map(attribute='memory_mb', default=incus_default_memory_mb) | map('int') | sum }}"
     # Incus storage pool for containers.  LVM thin on NVMe gives CoW
