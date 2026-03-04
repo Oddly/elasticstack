@@ -788,10 +788,15 @@
       ansible.builtin.shell: >
         set -o pipefail;
         /usr/share/elasticsearch/bin/elasticsearch-setup-passwords auto -b >
-        {{ elasticstack_initial_passwords }}
+        {{ elasticstack_initial_passwords }}.tmp &&
+        mv {{ elasticstack_initial_passwords }}.tmp {{ elasticstack_initial_passwords }}
       args:
         executable: /bin/bash
         creates: "{{ elasticstack_initial_passwords }}"
+      register: _setup_passwords_result
+      until: _setup_passwords_result.rc | default(1) == 0
+      retries: 10
+      delay: 15
       when: inventory_hostname == elasticstack_ca_host
       no_log: "{{ elasticstack_no_log }}"
 

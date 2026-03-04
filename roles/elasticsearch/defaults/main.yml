@@ -26,6 +26,8 @@ elasticsearch_logging_json_file: true
 elasticsearch_logging_slowlog: true
 # @var elasticsearch_logging_deprecation:description: Enable deprecation log appender
 elasticsearch_logging_deprecation: true
+# @var elasticsearch_logging_audit:description: Enable security audit log appender. Only meaningful when elasticsearch_security is true
+elasticsearch_logging_audit: true
 
 # @var elasticsearch_security:description: Enable Elasticsearch security features (TLS, authentication, RBAC)
 elasticsearch_security: true

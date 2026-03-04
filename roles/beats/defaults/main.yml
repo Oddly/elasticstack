@@ -41,6 +41,8 @@ beats_tls_key: "{{ beats_ca_dir }}/{{ inventory_hostname }}-beats.key"
 beats_tls_cert: "{{ beats_ca_dir }}/{{ inventory_hostname }}-beats.crt"
 # @var beats_tls_cacert:description: Path to the CA certificate for TLS verification
 beats_tls_cacert: "{{ beats_ca_dir }}/ca.crt"
+# @var beats_ssl_verification_mode:description: SSL verification mode for Beats output to Elasticsearch (full, certificate, none)
+beats_ssl_verification_mode: certificate
 # @var beats_tls_key_passphrase:description: Passphrase for the Beat TLS private key
 beats_tls_key_passphrase: BeatsChangeMe
 

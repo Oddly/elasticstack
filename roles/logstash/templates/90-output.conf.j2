@@ -1,13 +1,3 @@
-{% if logstash_ident | default(true) | bool %}
-filter {
-  mutate {
-    add_field => {
-      "{{ logstash_ident_field_name | default('[logstash][instance]') }}" => "{{ ansible_facts.hostname }}"
-    }
-  }
-}
-
-{% endif %}
 output {
 {% if logstash_output_elasticsearch | default(true) | bool %}
   elasticsearch {
