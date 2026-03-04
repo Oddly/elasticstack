@@ -52,12 +52,14 @@ jobs:
       ANSIBLE_DISPLAY_SKIPPED_HOSTS: 'false'
       ANSIBLE_TRANSFER_METHOD: sftp
       ANSIBLE_SSH_RETRIES: '5'
+      ANSIBLE_HOST_KEY_CHECKING: 'false'
+      ANSIBLE_INJECT_FACTS_AS_VARS: 'false'
+      ANSIBLE_TIMEOUT: '60'
+      ANSIBLE_FORKS: '10'
       ANSIBLE_SSH_ARGS: >-
         -o ControlMaster=auto
-        -o ControlPersist=300s
+        -o ControlPersist=60s
         -o PreferredAuthentications=publickey
-        -o ServerAliveInterval=30
-        -o ServerAliveCountMax=3
 
     strategy:
       fail-fast: false
@@ -134,7 +136,7 @@ jobs:
       - name: Clean up SSH state
         if: always()
         run: |
-          # Kill orphaned ProxyCommand SSH processes from this job
+          # Kill orphaned SSH processes from this job
           pkill -f "${{ runner.temp }}/molecule_id_ed25519" 2>/dev/null || true
           # Remove ControlMaster sockets and SSH key
           rm -rf "${{ runner.temp }}/ssh-cp"
