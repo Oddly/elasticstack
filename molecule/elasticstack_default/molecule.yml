@@ -13,14 +13,14 @@ platforms:
       - logstash
       - elasticsearch
     distro: "${MOLECULE_DISTRO:-debian12}"
-    memory_mb: 7680
+    memory_mb: 10240
   - name: "elasticstack${ELASTIC_RELEASE:-9}-cluster2-${MOLECULE_DISTRO:-debian12}${MOLECULE_RUN_SUFFIX}"
     groups:
       - beats
       - kibana
       - elasticsearch
     distro: "${MOLECULE_DISTRO:-debian12}"
-    memory_mb: 7680
+    memory_mb: 10240
 provisioner:
   name: ansible
   env:
