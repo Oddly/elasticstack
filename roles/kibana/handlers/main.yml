@@ -5,9 +5,7 @@
     daemon_reload: true
 
 - name: Restart Kibana
-  ansible.builtin.service:
-    name: kibana
-    state: restarted
+  ansible.builtin.include_tasks: restart_and_verify_kibana.yml
   when:
     - not ansible_check_mode
     - kibana_enable | bool

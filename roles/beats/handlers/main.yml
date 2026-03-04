@@ -2,27 +2,27 @@
 # handlers file for beats
 #
 - name: Restart Filebeat
-  ansible.builtin.service:
-    name: filebeat
-    state: restarted
+  ansible.builtin.include_tasks: restart_and_verify_beat.yml
+  vars:
+    _beat_service_name: filebeat
   when:
     - not ansible_check_mode
     - beats_filebeat | bool
     - beats_filebeat_enable | bool
 
 - name: Restart Auditbeat
-  ansible.builtin.service:
-    name: auditbeat
-    state: restarted
+  ansible.builtin.include_tasks: restart_and_verify_beat.yml
+  vars:
+    _beat_service_name: auditbeat
   when:
     - not ansible_check_mode
     - beats_auditbeat | bool
     - beats_auditbeat_enable | bool
 
 - name: Restart Metricbeat
-  ansible.builtin.service:
-    name: metricbeat
-    state: restarted
+  ansible.builtin.include_tasks: restart_and_verify_beat.yml
+  vars:
+    _beat_service_name: metricbeat
   when:
     - not ansible_check_mode
     - beats_metricbeat | bool

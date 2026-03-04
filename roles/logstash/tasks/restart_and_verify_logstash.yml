@@ -1,0 +1,32 @@
+---
+
+- name: Restart and verify Logstash
+  block:
+    - name: Restart Logstash service
+      ansible.builtin.service:
+        name: logstash
+        state: restarted
+        daemon_reload: true
+
+    - name: Verify Logstash is running
+      ansible.builtin.systemd:
+        name: logstash
+      register: _logstash_service_state
+      until: _logstash_service_state.status.ActiveState == 'active'
+      retries: 5
+      delay: 3
+
+  rescue:
+    - name: Get recent Logstash journal output
+      ansible.builtin.command:
+        cmd: journalctl -u logstash --no-pager -n 50
+      register: _logstash_journal
+      changed_when: false
+
+    - name: Fail with Logstash startup diagnostics
+      ansible.builtin.fail:
+        msg: |
+          Logstash failed to start.
+
+          Recent log output:
+          {{ _logstash_journal.stdout }}

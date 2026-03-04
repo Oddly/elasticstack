@@ -5,9 +5,46 @@
   delegate_to: "{{ item }}"
   changed_when: false
 
-- name: Restart Kibana
-  ansible.builtin.service:
-    name: kibana
-    state: restarted
-  delegate_to: "{{ item }}"
+- name: Restart and wait for Kibana
   when: "'kibana' in hostvars[item].ansible_facts.packages | default({})"
+  block:
+    - name: Restart Kibana service
+      ansible.builtin.service:
+        name: kibana
+        state: restarted
+      delegate_to: "{{ item }}"
+
+    - name: Wait for Kibana HTTP readiness after restart
+      ansible.builtin.shell:
+        cmd: |
+          if ! systemctl is-active --quiet kibana; then
+            exit 2
+          fi
+          HTTP_CODE=$(curl -sk -o /dev/null -w '%{http_code}' http://localhost:5601/api/status 2>/dev/null) || true
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
+            exit 0
+          fi
+          exit 1
+      delegate_to: "{{ item }}"
+      register: _kibana_handler_wait
+      until: _kibana_handler_wait.rc == 0
+      retries: 60
+      delay: 5
+      changed_when: false
+      failed_when: _kibana_handler_wait.rc == 2
+
+  rescue:
+    - name: Get recent Kibana journal output
+      ansible.builtin.command:
+        cmd: journalctl -u kibana --no-pager -n 50
+      register: _kibana_handler_journal
+      delegate_to: "{{ item }}"
+      changed_when: false
+
+    - name: Fail with Kibana startup diagnostics
+      ansible.builtin.fail:
+        msg: |
+          Kibana failed to start after restart by elasticsearch handler.
+
+          Recent log output:
+          {{ _kibana_handler_journal.stdout }}

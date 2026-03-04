@@ -1,0 +1,65 @@
+---
+- name: Install Elasticsearch with good config
+  hosts: all
+  vars:
+    elasticstack_full_stack: false
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    elasticsearch_heap: "1"
+    elasticstack_no_log: false
+  tasks:
+    - name: Include Elastic repos role
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.repos
+
+    - name: Include Elasticsearch role
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elasticsearch
+
+    - name: CI — set lenient disk watermarks
+      ansible.builtin.include_tasks: ../shared/set_ci_watermarks.yml
+
+- name: Test startup failure diagnostics
+  hosts: all
+  tasks:
+    - name: Back up good config
+      ansible.builtin.copy:
+        src: /etc/elasticsearch/elasticsearch.yml
+        dest: /etc/elasticsearch/elasticsearch.yml.good
+        remote_src: true
+        mode: "0644"
+
+    - name: Test bad config produces fast failure with diagnostics
+      block:
+        - name: Inject bad setting into elasticsearch.yml
+          ansible.builtin.lineinfile:
+            path: /etc/elasticsearch/elasticsearch.yml
+            line: "bogus.nonexistent.setting: true"
+
+        - name: Attempt restart with bad config (should fail with diagnostics)
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env', 'ANSIBLE_COLLECTIONS_PATH') | default(lookup('env', 'HOME') + '/.ansible/collections', true) }}/ansible_collections/oddly/elasticstack/roles/elasticsearch/tasks/restart_and_verify_elasticsearch.yml"
+
+        - name: This should not be reached
+          ansible.builtin.fail:
+            msg: "restart_and_verify_elasticsearch.yml did not fail on bad config"
+
+      rescue:
+        - name: Assert failure includes diagnostic log output
+          ansible.builtin.assert:
+            that:
+              - ansible_failed_result.msg is defined
+              - "'Recent log output' in ansible_failed_result.msg"
+            fail_msg: >-
+              Expected failure message with 'Recent log output', got:
+              {{ ansible_failed_result.msg | default('no message') }}
+
+    - name: Restore good config
+      ansible.builtin.copy:
+        src: /etc/elasticsearch/elasticsearch.yml.good
+        dest: /etc/elasticsearch/elasticsearch.yml
+        remote_src: true
+        mode: "0644"
+
+    - name: Restart Elasticsearch with restored config
+      ansible.builtin.include_tasks:
+        file: "{{ lookup('env', 'ANSIBLE_COLLECTIONS_PATH') | default(lookup('env', 'HOME') + '/.ansible/collections', true) }}/ansible_collections/oddly/elasticstack/roles/elasticsearch/tasks/restart_and_verify_elasticsearch.yml"

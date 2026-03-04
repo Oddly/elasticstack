@@ -126,13 +126,50 @@
     - not ansible_check_mode
   register: kibana_freshstart
 
-# the following is useful when running tests or extra tasks that need to
-# have Kibana running. Escape it on Rocky8, because it gets time out with Elastic 8
-
-- name: Wait for Kibana to start
-  ansible.builtin.wait_for:
-    host: localhost
-    port: 5601
-    timeout: 300
+- name: Wait for Kibana to be ready
   when: not ansible_check_mode
+  block:
+    - name: Wait for Kibana HTTP with service health check
+      ansible.builtin.shell:
+        cmd: |
+          if ! systemctl is-active --quiet kibana; then
+            exit 2
+          fi
+          HTTP_CODE=$(curl -sk -o /dev/null -w '%{http_code}' http://localhost:5601/api/status 2>/dev/null) || true
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
+            exit 0
+          fi
+          exit 1
+      register: _kibana_wait_result
+      until: _kibana_wait_result.rc == 0
+      retries: 60
+      delay: 5
+      changed_when: false
+      failed_when: _kibana_wait_result.rc == 2
+
+  rescue:
+    - name: Get recent Kibana journal output
+      ansible.builtin.command:
+        cmd: journalctl -u kibana --no-pager -n 50
+      register: _kibana_wait_journal
+      changed_when: false
+
+    - name: Fail with Kibana diagnostics (service crashed)
+      ansible.builtin.fail:
+        msg: |
+          Kibana service died while waiting for HTTP readiness.
+
+          Recent log output:
+          {{ _kibana_wait_journal.stdout }}
+      when: _kibana_wait_result.rc | default(0) == 2
+
+    - name: Fail with Kibana diagnostics (HTTP timeout)
+      ansible.builtin.fail:
+        msg: |
+          Kibana HTTP did not become ready within 300s.
+          Service state: {{ _kibana_wait_result.stdout | default('unknown') }}
+
+          Recent log output:
+          {{ _kibana_wait_journal.stdout }}
+      when: _kibana_wait_result.rc | default(0) != 2
 
