@@ -36,11 +36,15 @@
           retries: 3
           delay: 10
 
-        # since we don't expect to have that workaround for long
-        # we can skip having idempotency checks fixed
+        - name: Check current crypto policy
+          ansible.builtin.command: update-crypto-policies --show
+          register: _crypto_policy
+          changed_when: false
+
         - name: Set Crypto policies to legacy
           ansible.builtin.command: "update-crypto-policies --set LEGACY"
-          changed_when: false
+          changed_when: true
+          when: _crypto_policy.stdout != 'LEGACY'
 
 - name: Ensure Elastic repository key is available (RedHat)
   ansible.builtin.rpm_key:
