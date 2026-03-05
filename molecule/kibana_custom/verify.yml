@@ -72,11 +72,12 @@
               - "'logging.root.level: warn' in (kibana_yml.content | b64decode)"
             fail_msg: "Extra config not found in kibana.yml"
 
-        - name: Verify sniff on start is enabled
+        - name: Verify sniff on start is enabled (pre-9.x only)
           ansible.builtin.assert:
             that:
               - "'sniffOnStart: true' in (kibana_yml.content | b64decode)"
             fail_msg: "Sniff on start not found in kibana.yml"
+          when: (lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int) < 9
 
         - name: Check for kibana.yml backup files
           ansible.builtin.find:

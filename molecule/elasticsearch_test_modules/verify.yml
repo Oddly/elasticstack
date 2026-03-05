@@ -21,6 +21,9 @@
         validate_certs: false
         return_content: true
       register: es_info
+      retries: 5
+      delay: 5
+      until: es_info.status | default(0) == 200
 
     - name: Test 1 - Create role via REST API
       ansible.builtin.uri:
@@ -43,6 +46,9 @@
                 - write
         status_code: [200]
       register: role_create
+      retries: 3
+      delay: 5
+      until: role_create.status | default(0) == 200
 
     - name: Verify role creation succeeded
       ansible.builtin.assert:
@@ -68,6 +74,9 @@
           enabled: true
         status_code: [200]
       register: user_create
+      retries: 3
+      delay: 5
+      until: user_create.status | default(0) == 200
 
     - name: Verify user creation succeeded
       ansible.builtin.assert:
@@ -97,6 +106,9 @@
                 - write
         status_code: [200]
       register: role_update
+      retries: 3
+      delay: 5
+      until: role_update.status | default(0) == 200
 
     - name: Verify role was updated (not re-created)
       ansible.builtin.assert:
@@ -112,6 +124,9 @@
         force_basic_auth: true
         validate_certs: false
       register: role_check
+      retries: 3
+      delay: 5
+      until: role_check.status | default(0) == 200
 
     - name: Assert read_ccr in cluster privileges
       ansible.builtin.assert:
@@ -129,6 +144,9 @@
         validate_certs: false
         status_code: [200]
       register: user_delete
+      retries: 3
+      delay: 5
+      until: user_delete.status | default(0) == 200
 
     - name: Verify user deletion succeeded
       ansible.builtin.assert:
@@ -146,6 +164,9 @@
         validate_certs: false
         status_code: [200]
       register: role_delete
+      retries: 3
+      delay: 5
+      until: role_delete.status | default(0) == 200
 
     - name: Verify role deletion succeeded
       ansible.builtin.assert:

@@ -71,6 +71,9 @@
         return_content: true
         validate_certs: false
       register: es_info
+      retries: 5
+      delay: 5
+      until: es_info.status | default(0) == 200
 
     - name: Verify ES 8.x is running
       ansible.builtin.assert:
@@ -94,6 +97,9 @@
         validate_certs: false
         status_code: [200, 201]
       register: index_result
+      retries: 5
+      delay: 5
+      until: index_result.status | default(0) in [200, 201]
 
     - name: Display indexing result
       ansible.builtin.debug:
@@ -107,9 +113,14 @@
         user: elastic
         password: "{{ elastic_pass.stdout }}"
         validate_certs: false
+      register: _refresh_result
+      retries: 3
+      delay: 5
+      until: _refresh_result.status | default(0) == 200
 
 - name: Upgrade to Elasticsearch 9.x (with config change to exercise handler suppression)
   hosts: all
+  serial: 1
   vars:
     elasticstack_full_stack: false
     elasticstack_release: 9

@@ -50,7 +50,7 @@ beats_tls_key_passphrase: BeatsChangeMe
 
 # @var beats_filebeat_elastic_monitoring:description: Enable Elastic monitoring (X-Pack) for Filebeat
 beats_filebeat_elastic_monitoring: false
-# @var beats_filebeat_output:description: Output destination for Filebeat ('logstash' or 'elasticsearch')
+# @var beats_filebeat_output:description: Output destination for Filebeat ('logstash', 'elasticsearch', or 'file')
 beats_filebeat_output: logstash
 # @var beats_filebeat_syslog_udp:description: Enable a UDP syslog input in Filebeat
 beats_filebeat_syslog_udp: false

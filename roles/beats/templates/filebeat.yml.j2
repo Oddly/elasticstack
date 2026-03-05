@@ -183,12 +183,17 @@ output.logstash:
   ssl.certificate: {{ beats_tls_cert }}
 {% endif %}
 {% endif %}
+{% if beats_filebeat_output == "file" %}
+output.file:
+  path: {{ beats_filebeat_output_file_path | default("/tmp/filebeat-output") }}
+  filename: filebeat
+{% endif %}
 
 {% if beats_logging == "file" %}
 logging.level: {{ beats_loglevel }}
 logging.to_files: true
 logging.files:
-  path: {{ beats_logpath }}/filebeat.log
+  path: {{ beats_logpath }}
   name: filebeat
   keepfiles: {{ beats_logging_keepfiles }}
   permissions: {{ beats_logging_permissions }}

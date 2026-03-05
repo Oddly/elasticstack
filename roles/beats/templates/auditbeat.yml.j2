@@ -77,7 +77,7 @@ output.logstash:
 logging.level: {{ beats_loglevel }}
 logging.to_files: true
 logging.files:
-  path: {{ beats_logpath }}/auditbeat.log
+  path: {{ beats_logpath }}
   name: auditbeat
   keepfiles: {{ beats_logging_keepfiles }}
   permissions: {{ beats_logging_permissions }}

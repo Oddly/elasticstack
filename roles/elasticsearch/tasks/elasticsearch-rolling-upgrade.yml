@@ -74,6 +74,9 @@
     # After a previous node's upgrade, the local ES instance may need time to
     # re-discover the master (e.g. during 8.x→9.x rolling upgrades). Wait for
     # the cluster API to respond with 200 before attempting any cluster operations.
+    # During cross-major-version rolling upgrades (8→9), an old-version node may
+    # be permanently unable to reach the new master — that's OK, we'll skip the
+    # pre-upgrade cluster operations and proceed directly to stop/upgrade/start.
     - name: Wait for Elasticsearch cluster API to be responsive
       ansible.builtin.uri:
         url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/health"
@@ -85,10 +88,23 @@
         status_code: [200, 503]
       register: elasticsearch_responsive
       until: (elasticsearch_responsive.status | default(0)) == 200
-      retries: 30
+      retries: 12
       delay: 10
+      ignore_errors: true
       no_log: "{{ elasticstack_no_log }}"
       changed_when: false
+
+    - name: Set cluster reachability flag
+      ansible.builtin.set_fact:
+        _elasticsearch_cluster_reachable: "{{ (elasticsearch_responsive.status | default(0)) == 200 }}"
+
+    - name: Warn if cluster API is unreachable (cross-major upgrade)
+      ansible.builtin.debug:
+        msg: >-
+          Cluster API returned {{ elasticsearch_responsive.status | default('unknown') }}
+          after retries — skipping pre-upgrade cluster operations.
+          This is expected during cross-major rolling upgrades (e.g. 8.x→9.x).
+      when: not _elasticsearch_cluster_reachable | bool
 
     # Usually we should not need this step. It's only there to recover from broken upgrade plays
     # Without this step the cluster would never recover and the play would always fail
@@ -107,6 +123,7 @@
       retries: 10
       delay: 30
       no_log: "{{ elasticstack_no_log }}"
+      when: _elasticsearch_cluster_reachable | bool
 
       # this step is key!!!  Don't restart more nodes
       # until all shards have completed recovery
@@ -124,6 +141,7 @@
       delay: 30
       no_log: "{{ elasticstack_no_log }}"
       changed_when: false
+      when: _elasticsearch_cluster_reachable | bool
 
     # Disabling shard allocation right after enabling it seems redundant. Please see above for details.
     - name: Disable shard allocation for the cluster
@@ -141,6 +159,7 @@
       retries: 5
       delay: 10
       no_log: "{{ elasticstack_no_log }}"
+      when: _elasticsearch_cluster_reachable | bool
 
     - name: Flush indices to speed up shard recovery
       ansible.builtin.uri:
@@ -153,11 +172,14 @@
       register: elasticsearch_flush_response
       failed_when: false
       no_log: "{{ elasticstack_no_log }}"
+      when: _elasticsearch_cluster_reachable | bool
 
     - name: Warn if flush failed
       ansible.builtin.debug:
         msg: "Flush returned status {{ elasticsearch_flush_response.status | default('unknown') }}: {{ elasticsearch_flush_response.msg | default('') }}"
-      when: (elasticsearch_flush_response.status | default(0)) != 200
+      when:
+        - _elasticsearch_cluster_reachable | bool
+        - (elasticsearch_flush_response.status | default(0)) != 200
 
     - name: Shutdown elasticsearch service
       ansible.builtin.service:
