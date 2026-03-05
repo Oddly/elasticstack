@@ -12,6 +12,11 @@ on:
           - info
           - warning
           - debug
+  pull_request:
+    paths:
+      - 'roles/elasticsearch/**'
+      - '.github/workflows/test_elasticsearch_upgrade.yml'
+      - 'molecule/elasticsearch_upgrade*/**'
   schedule:
     - cron: "0 2 * * *"  # Daily at 02:00 UTC
 

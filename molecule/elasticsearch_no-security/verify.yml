@@ -1,12 +1,21 @@
 ---
-# This is an example playbook to execute Ansible tests.
-
 - name: Verify
   hosts: all
   vars:
     elasticstack_elasticsearch_http_port: 9200
     elasticstack_elasticsearch_group_name: elasticsearchXYZ
   tasks:
+
+    - name: Check that security is disabled in elasticsearch.yml
+      ansible.builtin.slurp:
+        src: /etc/elasticsearch/elasticsearch.yml
+      register: _es_config
+
+    - name: Assert xpack.security.enabled is false
+      ansible.builtin.assert:
+        that:
+          - "'xpack.security.enabled: false' in (_es_config.content | b64decode)"
+        fail_msg: "xpack.security.enabled: false not found in elasticsearch.yml"
 
 # Remember, this is the no-security scenario. So no https
 # The comment below will create an exception for KICS security scan
@@ -19,10 +28,15 @@
         status_code: 200
         validate_certs: false
       register: result
-      until: result.json.status == "green"
+      until: result.json.status is defined and result.json.status in ["green", "yellow"]
       retries: 6
       delay: 10
-      when: groups[elasticstack_elasticsearch_group_name] | length > 1
+
+    - name: Assert cluster is healthy
+      ansible.builtin.assert:
+        that:
+          - result.json.status in ["green", "yellow"]
+        fail_msg: "Cluster health is {{ result.json.status | default('unknown') }}"
 
     - name: Node check
       ansible.builtin.uri:
@@ -33,7 +47,6 @@
         status_code: 200
         validate_certs: false
       register: nodes
-      when: groups[elasticstack_elasticsearch_group_name] | length > 1
 
     - name: Check if all Nodes see each other
       ansible.builtin.assert:
