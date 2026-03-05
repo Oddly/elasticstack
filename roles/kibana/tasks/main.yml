@@ -126,6 +126,13 @@
     - not ansible_check_mode
   register: kibana_freshstart
 
+# Flush any pending restart handler (e.g. from cert renewal or config changes)
+# BEFORE waiting for Kibana to be ready. Without this, the wait task deadlocks:
+# Kibana has stale TLS state in memory, the handler would fix it, but handlers
+# only fire at play end — which never comes because the wait task blocks.
+- name: Flush handlers before readiness check
+  ansible.builtin.meta: flush_handlers
+
 - name: Wait for Kibana to be ready
   when: not ansible_check_mode
   block:
