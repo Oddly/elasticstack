@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/elastic-logo.svg" alt="Elastic Stack" width="120">
+  <img src="docs/assets/elastic-logo.svg" alt="Elastic Stack" width="120">
   <p><strong>oddly.elasticstack</strong></p>
   <p>
     Deploy and manage the Elastic Stack with Ansible.<br>
