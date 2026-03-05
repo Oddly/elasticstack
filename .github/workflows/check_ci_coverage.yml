@@ -1,0 +1,27 @@
+---
+name: Check CI coverage
+on:
+  pull_request:
+    paths:
+      - 'molecule/**'
+      - '.github/workflows/test_*.yml'
+      - 'scripts/check-ci-coverage.sh'
+      - '.github/workflows/check_ci_coverage.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-ci-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Run CI coverage check
+        run: bash scripts/check-ci-coverage.sh

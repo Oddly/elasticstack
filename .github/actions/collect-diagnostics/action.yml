@@ -2,8 +2,9 @@
 name: Collect diagnostic logs
 description: >
   Collects diagnostics from molecule Incus containers on test failure:
-  service logs, journal, systemctl status, ES cluster health, and
-  runner system info.
+  service logs, journal, systemctl status, ES cluster health, cgroup
+  memory events, dmesg, and runner system info. Produces an OOM-REPORT.txt
+  summary when memory-related failures are detected.
 
 inputs:
   artifact-name:
@@ -22,10 +23,14 @@ runs:
         INCUS_HOST="${INCUS_HOST:?INCUS_HOST secret must be set}"
         SSH_KEY="${MOLECULE_SSH_KEY:-~/.ssh/molecule_id_ed25519}"
 
+        ssh_host() {
+          ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 \
+            -i "$SSH_KEY" "root@${INCUS_HOST}" "$@" 2>/dev/null || true
+        }
+
         # Discover running Incus containers managed by molecule
-        containers=$(ssh -o StrictHostKeyChecking=no -o BatchMode=yes \
-          -i "$SSH_KEY" "root@${INCUS_HOST}" \
-          "incus list --format csv -c n,s | grep ',RUNNING' | cut -d, -f1" 2>/dev/null || true)
+        containers=$(ssh_host \
+          "incus list --format csv -c n,s | grep ',RUNNING' | cut -d, -f1" || true)
 
         for name in $containers; do
           dir="$diag/service-logs/$name"
@@ -33,14 +38,16 @@ runs:
 
           # Helper: run command inside Incus container via SSH
           run_in() {
-            ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 \
-              -i "$SSH_KEY" "root@${INCUS_HOST}" \
-              "incus exec $name -- bash -c '$1'" 2>/dev/null || true
+            ssh_host "incus exec $name -- bash -c '$1'"
           }
 
           # System journal (last 1000 lines)
           run_in 'journalctl --no-pager -n 1000 2>/dev/null' \
             > "$dir/journal.log" 2>&1 || true
+
+          # dmesg (kernel OOM killer messages)
+          run_in 'dmesg -T 2>/dev/null || dmesg 2>/dev/null' \
+            > "$dir/dmesg.log" 2>&1 || true
 
           # Service status
           for svc in elasticsearch logstash kibana redis filebeat auditbeat metricbeat; do
@@ -51,6 +58,10 @@ runs:
           # Elasticsearch logs
           run_in 'cat /var/log/elasticsearch/*.log 2>/dev/null' \
             > "$dir/elasticsearch.log" 2>&1 || true
+
+          # Elasticsearch GC logs
+          run_in 'cat /var/log/elasticsearch/gc.log 2>/dev/null | tail -200' \
+            > "$dir/es-gc.log" 2>&1 || true
 
           # Logstash logs
           run_in 'cat /var/log/logstash/logstash-plain.log /var/log/logstash/logstash-slowlog-plain.log 2>/dev/null' \
@@ -94,12 +105,11 @@ runs:
           } > "$dir/container-resources.txt" 2>&1 || true
         done
 
-        # Container memory report (cgroup v2 stats from Incus host)
-        ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 \
-          -i "$SSH_KEY" "root@${INCUS_HOST}" bash -s << 'MEMSCRIPT' \
+        # Container memory report with cgroup OOM events (from Incus host)
+        ssh_host bash -s << 'MEMSCRIPT' \
           > "$diag/container-memory-report.txt" 2>&1 || true
-        printf "%-50s %10s %10s %10s %10s %10s\n" \
-          "CONTAINER" "CURRENT" "PEAK" "ANON" "FILE" "LIMIT"
+        printf "%-50s %10s %10s %10s %10s %10s  %s\n" \
+          "CONTAINER" "CURRENT" "PEAK" "ANON" "FILE" "LIMIT" "OOM_EVENTS"
         echo "---"
         for c in $(incus list -f csv -c ns 2>/dev/null | grep ",RUNNING" | cut -d, -f1 | sort); do
           cgdir="/sys/fs/cgroup/lxc.payload.${c}"
@@ -109,8 +119,13 @@ runs:
           anon=$(($(awk '/^anon /{print $2}' "$cgdir/memory.stat") / 1048576))
           file=$(($(awk '/^file /{print $2}' "$cgdir/memory.stat") / 1048576))
           limit=$(incus config get "$c" limits.memory 2>/dev/null)
-          printf "%-50s %8dMB %8dMB %8dMB %8dMB %10s\n" \
-            "$c" "$current" "$peak" "$anon" "$file" "$limit"
+          oom=$(awk '/^oom /{print $2}' "$cgdir/memory.events" 2>/dev/null || echo 0)
+          oom_kill=$(awk '/^oom_kill /{print $2}' "$cgdir/memory.events" 2>/dev/null || echo 0)
+          oom_info=""
+          [ "$oom" != "0" ] && oom_info="oom=${oom}"
+          [ "$oom_kill" != "0" ] && oom_info="${oom_info:+$oom_info }oom_kill=${oom_kill}"
+          printf "%-50s %8dMB %8dMB %8dMB %8dMB %10s  %s\n" \
+            "$c" "$current" "$peak" "$anon" "$file" "$limit" "$oom_info"
         done
         MEMSCRIPT
 
@@ -124,6 +139,93 @@ runs:
 
         # Ansible log from molecule
         cp /var/log/ansible.log "$diag/ansible.log" 2>/dev/null || true
+
+    - name: OOM detection summary
+      shell: bash
+      run: |
+        diag="/tmp/molecule-diagnostics"
+        report="$diag/OOM-REPORT.txt"
+        found_oom=false
+
+        {
+          echo "========================================"
+          echo "  OOM / Memory Pressure Detection Report"
+          echo "========================================"
+          echo
+
+          # Check cgroup memory events from container-memory-report.txt
+          if [ -f "$diag/container-memory-report.txt" ]; then
+            while IFS= read -r line; do
+              if echo "$line" | grep -qE 'oom(_kill)?=[1-9]'; then
+                echo "[CGROUP OOM] $line"
+                found_oom=true
+              fi
+              # Flag containers where peak is >90% of limit
+              # Columns: NAME CURRENT PEAK ANON FILE LIMIT OOM_EVENTS
+              # Values have MB suffix (e.g. "3173MB"), limit is raw from Incus (e.g. "4096MiB")
+              if echo "$line" | grep -qE '^[a-z].*MB'; then
+                container=$(echo "$line" | awk '{print $1}')
+                peak=$(echo "$line" | awk '{print $3}' | grep -oE '[0-9]+')
+                limit=$(echo "$line" | awk '{print $6}' | grep -oE '[0-9]+')
+                if [ -n "$peak" ] && [ -n "$limit" ] && [ "$limit" -gt 0 ] 2>/dev/null; then
+                  pct=$((peak * 100 / limit))
+                  if [ "$pct" -ge 90 ]; then
+                    echo "[MEMORY PRESSURE] $container: peak ${peak}MB / ${limit}MB (${pct}%)"
+                    found_oom=true
+                  fi
+                fi
+              fi
+            done < "$diag/container-memory-report.txt"
+          fi
+
+          # Check ES logs for OutOfMemoryError
+          for eslog in "$diag"/service-logs/*/elasticsearch.log; do
+            [ -f "$eslog" ] || continue
+            container=$(basename "$(dirname "$eslog")")
+            if grep -q "OutOfMemoryError" "$eslog" 2>/dev/null; then
+              echo
+              echo "[ES OOM] $container — OutOfMemoryError in elasticsearch.log:"
+              grep -A2 "OutOfMemoryError" "$eslog" | head -10
+              found_oom=true
+            fi
+          done
+
+          # Check dmesg for kernel OOM killer
+          for dlog in "$diag"/service-logs/*/dmesg.log; do
+            [ -f "$dlog" ] || continue
+            container=$(basename "$(dirname "$dlog")")
+            if grep -qi "oom-killer\|out of memory\|killed process" "$dlog" 2>/dev/null; then
+              echo
+              echo "[KERNEL OOM] $container — OOM killer in dmesg:"
+              grep -i "oom-killer\|out of memory\|killed process" "$dlog" | head -10
+              found_oom=true
+            fi
+          done
+
+          # Check journal for OOM
+          for jlog in "$diag"/service-logs/*/journal.log; do
+            [ -f "$jlog" ] || continue
+            container=$(basename "$(dirname "$jlog")")
+            if grep -qi "oom-kill\|out.of.memory\|cannot allocate memory" "$jlog" 2>/dev/null; then
+              echo
+              echo "[JOURNAL OOM] $container — memory issue in journal:"
+              grep -i "oom-kill\|out.of.memory\|cannot allocate memory" "$jlog" | head -5
+              found_oom=true
+            fi
+          done
+
+          echo
+          if $found_oom; then
+            echo "*** OOM ISSUES DETECTED — see details above ***"
+          else
+            echo "No OOM issues detected."
+          fi
+        } > "$report"
+
+        # Print to CI log for immediate visibility
+        echo "::group::OOM Detection Report"
+        cat "$report"
+        echo "::endgroup::"
 
     - name: Upload diagnostics
       uses: actions/upload-artifact@v4
