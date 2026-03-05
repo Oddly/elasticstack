@@ -9,13 +9,13 @@
     <a href="https://github.com/Oddly/elasticstack/actions/workflows/test_full_stack.yml"><img src="https://github.com/Oddly/elasticstack/actions/workflows/test_full_stack.yml/badge.svg" alt="Full Stack Tests"></a>
     <a href="https://github.com/Oddly/elasticstack/actions/workflows/test_elasticsearch_modules.yml"><img src="https://github.com/Oddly/elasticstack/actions/workflows/test_elasticsearch_modules.yml/badge.svg" alt="ES Module Tests"></a>
     <a href="https://github.com/Oddly/elasticstack/actions/workflows/test_linting.yml"><img src="https://github.com/Oddly/elasticstack/actions/workflows/test_linting.yml/badge.svg" alt="Linting"></a>
-    <a href="https://github.com/Oddly/elasticstack/wiki"><img src="https://img.shields.io/badge/docs-wiki-blue" alt="Documentation"></a>
+    <a href="https://oddly.github.io/elasticstack/"><img src="https://img.shields.io/badge/docs-site-blue" alt="Documentation"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-green" alt="License"></a>
   </p>
   <p>
-    <a href="https://github.com/Oddly/elasticstack/wiki/Getting-Started">Getting started</a> &middot;
-    <a href="https://github.com/Oddly/elasticstack/wiki/Architecture">Architecture</a> &middot;
-    <a href="https://github.com/Oddly/elasticstack/wiki">Documentation</a> &middot;
+    <a href="https://oddly.github.io/elasticstack/getting-started/">Getting started</a> &middot;
+    <a href="https://oddly.github.io/elasticstack/architecture/">Architecture</a> &middot;
+    <a href="https://oddly.github.io/elasticstack/">Documentation</a> &middot;
     <a href="https://github.com/Oddly/elasticstack/issues">Issues</a>
   </p>
 </div>
@@ -82,18 +82,18 @@ all:
 
 Roles run in order. Each one uses inventory group names to find the other services. After the run, initial passwords are in `/usr/share/elasticsearch/initial_passwords` on the first ES host.
 
-See the **[getting started guide](https://github.com/Oddly/elasticstack/wiki/Getting-Started)** for single-node setups, disabling security, package mirrors, and more.
+See the **[getting started guide](https://oddly.github.io/elasticstack/getting-started/)** for single-node setups, disabling security, package mirrors, and more.
 
 ## Roles
 
 | Role | Purpose |
 |------|---------|
-| [`repos`](https://github.com/Oddly/elasticstack/wiki/Roles-repos) | APT/YUM repository and GPG key setup |
-| [`elasticsearch`](https://github.com/Oddly/elasticstack/wiki/Roles-elasticsearch) | Cluster formation, JVM tuning, security setup, rolling upgrades |
-| [`kibana`](https://github.com/Oddly/elasticstack/wiki/Roles-kibana) | Web UI, Elasticsearch connection, optional HTTPS frontend |
-| [`logstash`](https://github.com/Oddly/elasticstack/wiki/Roles-logstash) | Pipeline management, queue config, ES user/role creation |
-| [`beats`](https://github.com/Oddly/elasticstack/wiki/Roles-beats) | Filebeat, Metricbeat, Auditbeat with syslog, journald, Docker inputs |
-| [`elasticstack`](https://github.com/Oddly/elasticstack/wiki/Roles-elasticstack) | Shared defaults inherited by all roles (ports, groups, CA, repos) |
+| [`repos`](https://oddly.github.io/elasticstack/roles/repos/) | APT/YUM repository and GPG key setup |
+| [`elasticsearch`](https://oddly.github.io/elasticstack/roles/elasticsearch/) | Cluster formation, JVM tuning, security setup, rolling upgrades |
+| [`kibana`](https://oddly.github.io/elasticstack/roles/kibana/) | Web UI, Elasticsearch connection, optional HTTPS frontend |
+| [`logstash`](https://oddly.github.io/elasticstack/roles/logstash/) | Pipeline management, queue config, ES user/role creation |
+| [`beats`](https://oddly.github.io/elasticstack/roles/beats/) | Filebeat, Metricbeat, Auditbeat with syslog, journald, Docker inputs |
+| [`elasticstack`](https://oddly.github.io/elasticstack/roles/elasticstack/) | Shared defaults inherited by all roles (ports, groups, CA, repos) |
 
 ## Supported platforms
 
@@ -107,10 +107,10 @@ See the **[getting started guide](https://github.com/Oddly/elasticstack/wiki/Get
 
 ## Documentation
 
-Full documentation lives in the **[wiki](https://github.com/Oddly/elasticstack/wiki)**:
+Full documentation lives on the **[docs site](https://oddly.github.io/elasticstack/)**:
 
-- **[Getting started](https://github.com/Oddly/elasticstack/wiki/Getting-Started)** — single-node and multi-node walkthroughs
-- **[Architecture](https://github.com/Oddly/elasticstack/wiki/Architecture)** — data flow, TLS PKI, security init, rolling upgrades, retry budgets, container workarounds
+- **[Getting started](https://oddly.github.io/elasticstack/getting-started/)** — single-node and multi-node walkthroughs
+- **[Architecture](https://oddly.github.io/elasticstack/architecture/)** — data flow, TLS PKI, security init, rolling upgrades, retry budgets, container workarounds
 - **Role reference** — every variable, operational note, and task flow diagram for each role
 
 ## Contributing

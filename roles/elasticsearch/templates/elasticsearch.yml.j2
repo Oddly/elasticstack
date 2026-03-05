@@ -106,7 +106,7 @@ xpack.security.http.ssl.truststore.path: certs/{{ inventory_hostname_short }}.p1
 {% endif %}
 {% endif %}
 {% endif %}
-{% if not elasticsearch_security | bool and elasticstack_release | int < 9 %}
+{% if not elasticsearch_security | bool %}
 xpack.security.enabled: false
 {% endif %}
 
