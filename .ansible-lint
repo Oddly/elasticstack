@@ -4,6 +4,8 @@ exclude_paths:
   - .venv/
   - venv/
   - molecule/shared/
+  - mkdocs.yml
+  - docs/
 
 warn_list:
   - experimental

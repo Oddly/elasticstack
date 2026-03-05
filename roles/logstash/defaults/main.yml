@@ -30,12 +30,15 @@ logstash_manage_logging: false
 
 # @var logstash_config_autoreload:description: Automatically reload pipeline configuration when files change
 logstash_config_autoreload: true
+# @var logstash_config_autoreload_interval:description: How often Logstash checks for pipeline config changes when autoreload is enabled
 # logstash_config_autoreload_interval: 3s
 # @var logstash_config_path_data:description: Filesystem path for Logstash persistent data (queue, dead letter queue)
 logstash_config_path_data: /var/lib/logstash
 # @var logstash_config_path_logs:description: Filesystem path for Logstash log files
 logstash_config_path_logs: /var/log/logstash
+# @var logstash_http_host:description: Bind address for the Logstash monitoring API. Only written to logstash.yml when defined
 # logstash_http_host: "127.0.0.1"
+# @var logstash_http_port:description: Port range for the Logstash monitoring API. Only written to logstash.yml when defined
 # logstash_http_port: 9600-9700
 
 # @var logstash_pipeline_buffer_type:description: >
@@ -64,7 +67,9 @@ logstash_input_beats: true
 logstash_input_beats_port: 5044
 # @var logstash_input_beats_ssl:description: Enable TLS on the Beats input. Inherits from logstash_beats_tls for backwards compatibility
 logstash_input_beats_ssl: "{{ logstash_beats_tls | default(omit) }}"
-# logstash_input_beats_client_auth: required  # required | optional | none
+# @var logstash_input_beats_client_auth:description: Client TLS authentication mode for the Beats input (required | optional | none)
+# logstash_input_beats_client_auth: required
+# @var logstash_input_beats_timeout:description: Idle timeout for Beats input connections. Connections idle longer than this are closed
 # logstash_input_beats_timeout: 60s
 
 # @var logstash_input_elastic_agent:description: Enable the Elastic Agent input plugin
@@ -114,7 +119,9 @@ logstash_elasticsearch_index: ""
 logstash_validate_after_inactivity: 300
 # @var logstash_sniffing:description: Enable Elasticsearch node sniffing to discover all cluster members
 logstash_sniffing: false
+# @var logstash_sniffing_delay:description: Seconds between ES sniffing requests when sniffing is enabled
 # logstash_sniffing_delay: 5
+# @var logstash_sniffing_path:description: ES API path used for node sniffing
 # logstash_sniffing_path: "/_nodes/http"
 
 # @var logstash_extra_outputs:description: Raw Logstash output config appended to the output section of the pipeline
