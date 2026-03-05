@@ -31,10 +31,13 @@
       register: es_info
 
     - name: Verify ES version matches expected release
+      vars:
+        _expected_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) }}"
       ansible.builtin.assert:
         that:
-          - es_info.json.version.number is version('9.0.0', '>=')
-        fail_msg: "Expected ES 9.x, got {{ es_info.json.version.number }}"
+          - es_info.json.version.number is version(_expected_release ~ '.0.0', '>=')
+          - es_info.json.version.number is version((_expected_release | int + 1) ~ '.0.0', '<')
+        fail_msg: "Expected ES {{ _expected_release }}.x, got {{ es_info.json.version.number }}"
 
     # ── Service state checks ──────────────────────────────────────
 

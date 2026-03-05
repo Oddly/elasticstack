@@ -120,6 +120,7 @@
 
 - name: Upgrade to Elasticsearch 9.x (with config change to exercise handler suppression)
   hosts: all
+  serial: 1
   vars:
     elasticstack_full_stack: false
     elasticstack_release: 9

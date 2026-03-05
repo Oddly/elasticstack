@@ -90,7 +90,7 @@
       until: (elasticsearch_responsive.status | default(0)) == 200
       retries: 12
       delay: 10
-      failed_when: false
+      ignore_errors: true
       no_log: "{{ elasticstack_no_log }}"
       changed_when: false
 
