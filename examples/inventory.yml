@@ -1,0 +1,21 @@
+---
+# Example inventory for the Elastic Stack.
+# Adjust hosts, IPs, and group assignments to match your environment.
+
+all:
+  children:
+    elasticsearch:
+      hosts:
+        es1: { ansible_host: 10.0.1.10 }
+        es2: { ansible_host: 10.0.1.11 }
+        es3: { ansible_host: 10.0.1.12 }
+    kibana:
+      hosts:
+        kb1: { ansible_host: 10.0.1.20 }
+    logstash:
+      hosts:
+        ls1: { ansible_host: 10.0.1.30 }
+    beats:
+      hosts:
+        bt1: { ansible_host: 10.0.1.40 }
+        bt2: { ansible_host: 10.0.1.41 }

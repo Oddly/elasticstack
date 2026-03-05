@@ -1,0 +1,196 @@
+---
+# Full Elastic Stack deployment example.
+#
+# This playbook deploys Elasticsearch, Kibana, Logstash, and Beats across
+# inventory groups. Copy it, uncomment what you need, and update passwords.
+#
+# Inventory groups expected:
+#   elasticsearch   — Elasticsearch nodes
+#   kibana          — Kibana nodes
+#   logstash        — Logstash nodes
+#   beats           — Beats agents
+#
+# Usage:
+#   ansible-playbook -i inventory.yml examples/full-stack.yml
+
+- name: Deploy Elastic Stack
+  hosts: all
+  vars:
+    # ==========================================================================
+    # General settings
+    # ==========================================================================
+
+    # Major release: 8 or 9
+    elasticstack_release: 9
+
+    # Enable Elastic repos (set false if packages are pre-installed)
+    # elasticstack_enable_repos: true
+
+    # Enable security (TLS + authentication). Set false for dev/test only.
+    # elasticstack_security: true
+
+    # Auto-discover services from inventory groups
+    # elasticstack_full_stack: true
+
+    # Suppress secrets from Ansible output (disable for debugging)
+    # elasticstack_no_log: true
+
+    # ==========================================================================
+    # Passwords — CHANGE THESE
+    # ==========================================================================
+
+    # CA private key passphrase
+    elasticstack_ca_pass: "CHANGE-ME-ca-passphrase"
+
+    # Elasticsearch bootstrap password (used for initial setup, built-in users)
+    elasticsearch_bootstrap_pw: "CHANGE-ME-bootstrap-password"
+
+    # TLS key passphrases per service
+    elasticsearch_tls_key_passphrase: "CHANGE-ME-es-key-passphrase"
+    # kibana_tls_key_passphrase: "CHANGE-ME-kibana-key-passphrase"
+    # logstash_tls_key_passphrase: "CHANGE-ME-logstash-key-passphrase"
+    # beats_tls_key_passphrase: "CHANGE-ME-beats-key-passphrase"
+
+    # Logstash writer user password (used by Logstash to write to Elasticsearch)
+    # logstash_user_password: "CHANGE-ME-logstash-writer-password"
+
+    # ==========================================================================
+    # Elasticsearch
+    # ==========================================================================
+
+    # Cluster name
+    # elasticsearch_clustername: "elasticsearch"
+
+    # JVM heap size (e.g. "1g", "4g"). Auto-calculated if unset.
+    # elasticsearch_heap: "4g"
+
+    # Custom JVM parameters (one per line)
+    # elasticsearch_jvm_custom_parameters: |
+    #   -XX:+UseG1GC
+
+    # Data and log paths
+    # elasticsearch_datapath: "/var/lib/elasticsearch"
+    # elasticsearch_logpath: "/var/log/elasticsearch"
+    # elasticsearch_create_datapath: false
+    # elasticsearch_create_logpath: false
+
+    # Memory lock (requires PAM limits)
+    # elasticsearch_memory_lock: false
+
+    # Certificate source: "elasticsearch_ca" (managed) or "external"
+    # elasticsearch_cert_source: "elasticsearch_ca"
+
+    # External certificates (only when cert_source: external)
+    # elasticsearch_transport_tls_certificate: "/path/to/transport.crt"
+    # elasticsearch_transport_tls_key: "/path/to/transport.key"
+    # elasticsearch_http_tls_certificate: "/path/to/http.crt"
+    # elasticsearch_http_tls_key: "/path/to/http.key"
+    # elasticsearch_tls_ca_certificate: "/path/to/ca.crt"
+
+    # CORS (for direct browser access)
+    # elasticsearch_http_cors_enabled: false
+    # elasticsearch_http_cors_allow_origin: "https://my-app.example.com"
+
+    # ==========================================================================
+    # Kibana
+    # ==========================================================================
+
+    # Enable HTTPS on Kibana frontend (default: HTTP)
+    # kibana_tls: false
+
+    # Node.js heap size (e.g. "2048")
+    # kibana_node_max_old_space_size: ""
+
+    # Certificate source: "elasticsearch_ca" (managed) or "external"
+    # kibana_cert_source: "elasticsearch_ca"
+
+    # ==========================================================================
+    # Logstash
+    # ==========================================================================
+
+    # JVM heap size
+    # logstash_heap: "1g"
+
+    # Queue type: "persisted" (disk-backed) or "memory"
+    # logstash_queue_type: "persisted"
+    # logstash_queue_max_bytes: "1gb"
+
+    # Input: Beats protocol (default) or Elastic Agent
+    # logstash_input_beats: true
+    # logstash_input_elastic_agent: false
+
+    # Extra inputs (raw Logstash config)
+    # logstash_extra_inputs: |
+    #   http {
+    #     port => 8080
+    #   }
+
+    # Custom filters (raw Logstash config)
+    # logstash_filters: |
+    #   grok {
+    #     match => { "message" => "%{COMMONAPACHELOG}" }
+    #   }
+
+    # Completely override the pipeline (ignores input/filter/output templates)
+    # logstash_custom_pipeline: |
+    #   input { ... }
+    #   filter { ... }
+    #   output { ... }
+
+    # Extra outputs (raw Logstash config, added alongside default ES output)
+    # logstash_extra_outputs: ""
+
+    # Plugins to install
+    # logstash_plugins:
+    #   - logstash-filter-grok
+
+    # Logstash writer role and user in Elasticsearch
+    # logstash_role_name: "logstash_writer"
+    # logstash_user_name: "logstash_writer"
+
+    # ==========================================================================
+    # Beats
+    # ==========================================================================
+
+    # Which agents to enable
+    # beats_filebeat: true
+    # beats_metricbeat: false
+    # beats_auditbeat: false
+
+    # Filebeat output: "logstash" or "elasticsearch"
+    # beats_filebeat_output: "logstash"
+
+    # Filebeat inputs
+    # beats_filebeat_log_input: true
+    # beats_filebeat_journald: false
+    # beats_filebeat_syslog_udp: false
+    # beats_filebeat_syslog_tcp: false
+    # beats_filebeat_docker: false
+
+    # Queue type: "mem" or "disk"
+    # beats_queue_type: "mem"
+
+  tasks:
+    - name: Set up Elastic repositories
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.repos
+
+    - name: Deploy Elasticsearch
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elasticsearch
+      when: "'elasticsearch' in group_names"
+
+    - name: Deploy Kibana
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.kibana
+      when: "'kibana' in group_names"
+
+    - name: Deploy Logstash
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.logstash
+      when: "'logstash' in group_names"
+
+    - name: Deploy Beats
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.beats
+      when: "'beats' in group_names"
