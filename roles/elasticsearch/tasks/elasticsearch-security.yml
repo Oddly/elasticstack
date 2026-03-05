@@ -721,11 +721,14 @@
             mode: "0600"
           no_log: "{{ elasticstack_no_log }}"
 
-        - name: Re-stat passwords file after recovery
-          ansible.builtin.stat:
-            path: "{{ elasticstack_initial_passwords }}"
-          register: elasticsearch_passwords_file
-          delegate_to: "{{ elasticstack_ca_host }}"
+    # Re-stat outside the block so the variable is always a stat result.
+    # When a block is skipped, Ansible clobbers register variables inside it
+    # with {skipped: true} dicts, losing the original .stat attributes.
+    - name: Re-stat passwords file after recovery attempt
+      ansible.builtin.stat:
+        path: "{{ elasticstack_initial_passwords }}"
+      delegate_to: "{{ elasticstack_ca_host }}"
+      register: elasticsearch_passwords_file
 
     - name: Fail if bootstrap password check failed and recovery was not attempted
       ansible.builtin.fail:
