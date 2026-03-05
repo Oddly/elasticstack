@@ -94,7 +94,7 @@ jobs:
           PY_COLORS: '1'
 
   unit-test:
-    needs: [pycodestyle, sanity]
+    needs: pycodestyle
     runs-on: self-hosted
     timeout-minutes: 15
 
@@ -142,7 +142,7 @@ jobs:
           ANSIBLE_FORCE_COLOR: '1'
 
   python:
-    needs: unit-test
+    needs: pycodestyle
     runs-on: self-hosted
     timeout-minutes: 15
 
@@ -180,7 +180,7 @@ jobs:
           ANSIBLE_FORCE_COLOR: '1'
 
   ansible-core:
-    needs: python
+    needs: pycodestyle
     runs-on: self-hosted
     timeout-minutes: 15
 
@@ -223,7 +223,7 @@ jobs:
           ANSIBLE_FORCE_COLOR: '1'
 
   python-cryptography:
-    needs: ansible-core
+    needs: pycodestyle
     runs-on: self-hosted
     timeout-minutes: 15
 
