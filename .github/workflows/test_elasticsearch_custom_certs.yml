@@ -14,14 +14,10 @@ on:
           - debug
   pull_request:
     paths:
+      - 'roles/elasticsearch/**'
+      - 'roles/elasticstack/tasks/certs/**'
       - '.github/workflows/test_elasticsearch_custom_certs.yml'
-      - 'molecule/elasticsearch_custom_certs/*'
-      - 'molecule/elasticsearch_custom_certs_minimal/*'
-      - 'roles/elasticstack/tasks/certs/cert_validate.yml'
-      - 'roles/elasticstack/tasks/certs/cert_expiry_warn.yml'
-      - 'roles/elasticsearch/tasks/elasticsearch-security.yml'
-      - 'roles/elasticsearch/tasks/elasticsearch-keystore.yml'
-      - 'roles/elasticsearch/templates/elasticsearch.yml.j2'
+      - 'molecule/elasticsearch_custom_certs*/**'
   schedule:
     - cron: "30 2 * * *"
 

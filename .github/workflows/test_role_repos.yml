@@ -103,8 +103,31 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -t ed25519 ${{ secrets.INCUS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
-      - name: Test with molecule
-        run: molecule test -s ${{ matrix.scenario }} --destroy=never
+      - name: Converge
+        run: molecule converge -s ${{ matrix.scenario }}
+        env:
+          MOLECULE_DISTRO: ${{ matrix.distro }}
+          ELASTIC_RELEASE: ${{ matrix.release }}
+          ELASTICSTACK_REPO_BASE_URL: http://elastic-cache.chiark.dev:8080
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'
+          ANSIBLE_DIFF_ALWAYS: 'true'
+          ANSIBLE_CALLBACKS_ENABLED: profile_tasks
+          INCUS_HOST: ${{ secrets.INCUS_HOST }}
+          MOLECULE_SSH_KEY: ${{ runner.temp }}/molecule_id_ed25519
+          DISTRO_CACHE_URL: http://${{ secrets.REGISTRY_HOST }}:8081
+
+      - name: Verify
+        run: molecule verify -s ${{ matrix.scenario }}
+        env:
+          MOLECULE_DISTRO: ${{ matrix.distro }}
+          ELASTIC_RELEASE: ${{ matrix.release }}
+          INCUS_HOST: ${{ secrets.INCUS_HOST }}
+          MOLECULE_SSH_KEY: ${{ runner.temp }}/molecule_id_ed25519
+          DISTRO_CACHE_URL: http://${{ secrets.REGISTRY_HOST }}:8081
+
+      - name: Idempotence check
+        run: molecule idempotence -s ${{ matrix.scenario }}
         env:
           MOLECULE_DISTRO: ${{ matrix.distro }}
           ELASTIC_RELEASE: ${{ matrix.release }}
