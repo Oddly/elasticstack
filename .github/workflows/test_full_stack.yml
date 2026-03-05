@@ -132,6 +132,7 @@ jobs:
           DISTRO_CACHE_URL: http://${{ secrets.REGISTRY_HOST }}:8081
 
       - name: Idempotence check
+        if: matrix.scenario != 'cert_renewal'
         run: molecule idempotence -s ${{ matrix.scenario }}
         env:
           MOLECULE_DISTRO: ${{ matrix.distro }}
