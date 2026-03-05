@@ -158,6 +158,19 @@ graph TD
 
 The role sets lenient disk watermarks (97/98/99%) during the upgrade to prevent CI and small-disk environments from blocking shard allocation.
 
+### Post-upgrade: LogsDB
+
+Upgraded clusters have `logsdb.prior_logs_usage: true` set internally, which causes `cluster.logsdb.enabled` to default to `false`. Fresh 9.x installs get LogsDB enabled by default. If you want the same behaviour on an upgraded cluster, enable it manually after the upgrade completes:
+
+```
+PUT _cluster/settings
+{ "persistent": { "cluster.logsdb.enabled": true } }
+
+POST logs-*/_rollover
+```
+
+LogsDB uses synthetic `_source`, which reorders fields, deduplicates arrays, and sorts leaf arrays. Test your dashboards and detection rules before enabling it in production.
+
 ## Inventory group mapping
 
 | Default group name | Used by | Override variable |

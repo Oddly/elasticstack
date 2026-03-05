@@ -678,6 +678,68 @@
       until: (elasticsearch_api_status_bootstrap.json | default({})).cluster_name is defined
       retries: 30
       delay: 10
+      ignore_errors: true
+
+    # If the bootstrap password doesn't work, a previous setup-passwords run
+    # may have partially completed (native realm initialized but passwords
+    # file never written). Reset the elastic user password to recover.
+    - name: Recover elastic user after interrupted security setup
+      when:
+        - not elasticsearch_passwords_file.stat.exists | bool
+        - elasticsearch_api_status_bootstrap is failed
+        - inventory_hostname == elasticstack_ca_host
+      block:
+        - name: Reset elastic user password via elasticsearch-reset-password
+          ansible.builtin.command: >
+            /usr/share/elasticsearch/bin/elasticsearch-reset-password
+            -u elastic -b -s
+          register: _elastic_reset_pw
+          changed_when: true
+          no_log: "{{ elasticstack_no_log }}"
+
+        - name: Verify API access with recovered password
+          ansible.builtin.uri:
+            url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}"
+            user: elastic
+            password: "{{ _elastic_reset_pw.stdout }}"
+            validate_certs: "{{ elasticsearch_validate_api_certs }}"
+            force_basic_auth: true
+          register: _elastic_recovery_check
+          until: (_elastic_recovery_check.json | default({})).cluster_name is defined
+          retries: 5
+          delay: 5
+          no_log: "{{ elasticstack_no_log }}"
+
+        - name: Write recovered password to initial_passwords file
+          ansible.builtin.copy:
+            dest: "{{ elasticstack_initial_passwords }}"
+            content: |
+              Changed password for user elastic
+              PASSWORD elastic = {{ _elastic_reset_pw.stdout }}
+            owner: root
+            group: root
+            mode: "0600"
+          no_log: "{{ elasticstack_no_log }}"
+
+    # Re-stat outside the block so the variable is always a stat result.
+    # When a block is skipped, Ansible clobbers register variables inside it
+    # with {skipped: true} dicts, losing the original .stat attributes.
+    - name: Re-stat passwords file after recovery attempt
+      ansible.builtin.stat:
+        path: "{{ elasticstack_initial_passwords }}"
+      delegate_to: "{{ elasticstack_ca_host }}"
+      register: elasticsearch_passwords_file
+
+    - name: Fail if bootstrap password check failed and recovery was not attempted
+      ansible.builtin.fail:
+        msg: >-
+          Bootstrap password authentication failed and this is not the CA host,
+          so automatic recovery cannot run here. Check the elastic user
+          credentials on {{ elasticstack_ca_host }}.
+      when:
+        - not elasticsearch_passwords_file.stat.exists | bool
+        - elasticsearch_api_status_bootstrap is failed
+        - inventory_hostname != elasticstack_ca_host
 
     # We need this check twice. One to wait for the API to be actually available. And a second time to
     # check the actual return code. Should not cause a huge delay.
@@ -784,7 +846,9 @@
       ansible.builtin.set_fact:
         elasticsearch_cluster_set_up: true
 
-    - name: Create initial passwords
+    # ES 8.x: elasticsearch-setup-passwords creates all built-in user passwords
+    # ES 9.x: setup-passwords is removed; use elasticsearch-reset-password per user
+    - name: Create initial passwords (ES 8.x)
       ansible.builtin.shell: >
         set -o pipefail;
         /usr/share/elasticsearch/bin/elasticsearch-setup-passwords auto -b >
@@ -797,11 +861,50 @@
       until: _setup_passwords_result.rc | default(1) == 0
       retries: 10
       delay: 15
-      when: inventory_hostname == elasticstack_ca_host
+      when:
+        - inventory_hostname == elasticstack_ca_host
+        - elasticstack_release | int < 9
       no_log: "{{ elasticstack_no_log }}"
 
-    # It would be better to create and set the permissions before generating the passwords. But this would
-    # break the logic that relies on the file being absent when no passwords are set
+    - name: Create initial passwords (ES 9.x)
+      when:
+        - inventory_hostname == elasticstack_ca_host
+        - elasticstack_release | int >= 9
+      block:
+        - name: Check if passwords file already exists
+          ansible.builtin.stat:
+            path: "{{ elasticstack_initial_passwords }}"
+          register: _pw_file_check
+
+        - name: Reset built-in user passwords
+          ansible.builtin.command: >
+            /usr/share/elasticsearch/bin/elasticsearch-reset-password
+            -u {{ item }} -b -s
+          loop:
+            - elastic
+            - kibana_system
+            - logstash_system
+            - beats_system
+            - remote_monitoring_user
+          register: _reset_password_results
+          changed_when: true
+          no_log: "{{ elasticstack_no_log }}"
+          when: not _pw_file_check.stat.exists
+
+        - name: Write passwords file
+          ansible.builtin.copy:
+            dest: "{{ elasticstack_initial_passwords }}"
+            content: |
+              {% for result in _reset_password_results.results %}
+              Changed password for user {{ result.item }}
+              PASSWORD {{ result.item }} = {{ result.stdout }}
+              {% endfor %}
+            owner: root
+            group: root
+            mode: "0600"
+          no_log: "{{ elasticstack_no_log }}"
+          when: not _pw_file_check.stat.exists
+
     - name: Set permissions on passwords file
       ansible.builtin.file:
         path: "{{ elasticstack_initial_passwords }}"
