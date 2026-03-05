@@ -455,6 +455,34 @@
     - renew_ca
     - renew_es_cert
 
+# ES 9.x auto-security writes SSL keystore entries during package install.
+# When security is disabled these reference undefined config keys and ES
+# refuses to start. Strip them before the first service start.
+- name: Clean auto-security keystore entries when security is disabled
+  when: not elasticsearch_security | bool
+  block:
+    - name: Check keystore exists (no-security)
+      ansible.builtin.stat:
+        path: /etc/elasticsearch/elasticsearch.keystore
+      register: _es_keystore_nosec
+
+    - name: List keystore entries (no-security)
+      ansible.builtin.command: /usr/share/elasticsearch/bin/elasticsearch-keystore list
+      changed_when: false
+      register: _es_keystore_entries_nosec
+      when: _es_keystore_nosec.stat.exists
+
+    - name: Remove orphaned SSL keystore entries
+      ansible.builtin.command: >
+        /usr/share/elasticsearch/bin/elasticsearch-keystore remove {{ item }}
+      loop: "{{ _es_keystore_entries_nosec.stdout_lines | default([]) | select('match', 'xpack\\.security\\.') | list }}"
+      loop_control:
+        label: "{{ item }}"
+      changed_when: true
+      when:
+        - _es_keystore_nosec.stat.exists
+        - _es_keystore_entries_nosec.stdout_lines is defined
+
 - name: Start Elasticsearch
   ansible.builtin.service:
     name: elasticsearch
