@@ -10,8 +10,8 @@
 
 # @var logstash_heap:description: >
 #   JVM heap size for Logstash (e.g. '1g', '512m').
-#   When set, a jvm.options.d override is deployed; when empty, the
-#   package default (usually 1g) is left in place.
+#   When set, the heap values in jvm.options are updated; when empty,
+#   the package default (usually 1g) is left in place.
 # @end
 logstash_heap: ""
 
