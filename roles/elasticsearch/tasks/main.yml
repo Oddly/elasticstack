@@ -31,6 +31,32 @@
     - '{{ ansible_facts.os_family }}_{{ ansible_facts.distribution_major_version }}.yml'
     - '{{ ansible_facts.os_family }}.yml'
 
+- name: Detect cgroup memory limit
+  ansible.builtin.slurp:
+    src: /sys/fs/cgroup/memory.max
+  register: _es_cgroup_memory
+  failed_when: false
+  changed_when: false
+
+# In containers the kernel exposes host RAM via /proc/meminfo but the actual
+# usable memory is capped by the cgroup limit.  When the cgroup limit is lower
+# than physical RAM, recalculate heap from the cgroup limit so ES doesn't OOM.
+# Only recalculate when the user has not explicitly set elasticsearch_heap
+# (detected by comparing with the default formula based on memtotal_mb).
+- name: Recalculate heap from cgroup memory limit
+  vars:
+    _es_cgroup_bytes: "{{ (_es_cgroup_memory.content | b64decode | trim) | int }}"
+    _es_cgroup_mb: "{{ (_es_cgroup_bytes | int) // 1048576 }}"
+    _es_default_heap: "{{ [[(ansible_facts.memtotal_mb // 1024) // 2, 30] | min, 1] | max }}"
+  ansible.builtin.set_fact:
+    elasticsearch_heap: >-
+      {{ [[(_es_cgroup_mb | int) // 1024 // 2, 30] | min, 1] | max }}
+  when:
+    - _es_cgroup_memory.content is defined
+    - (_es_cgroup_memory.content | b64decode | trim) != 'max'
+    - _es_cgroup_bytes | int < (ansible_facts.memtotal_mb | int) * 1048576
+    - elasticsearch_heap | int == _es_default_heap | int
+
 - name: Set node name if not overriden by user
   ansible.builtin.set_fact:
     elasticsearch_nodename: "{{ ansible_facts.hostname }}"
@@ -540,7 +566,12 @@
 
 - name: Show Info about heap
   ansible.builtin.debug:
-    msg: "Using {{ elasticsearch_heap | int * 1024 }} of {{ ansible_facts.memtotal_mb }} MB as heap for Elasticsearch"
+    msg: >-
+      Using {{ elasticsearch_heap | int * 1024 }} of
+      {{ (_es_cgroup_memory.content is defined and (_es_cgroup_memory.content | b64decode | trim) != 'max')
+         | ternary((_es_cgroup_memory.content | b64decode | trim) | int // 1048576 ~ ' MB (cgroup limit)',
+                   ansible_facts.memtotal_mb ~ ' MB') }}
+      as heap for Elasticsearch
   when: elasticsearch_heap is defined and (elasticsearch_heap | string | length > 0)
 
 - name: Show hint about passwords
