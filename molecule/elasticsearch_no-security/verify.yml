@@ -47,6 +47,9 @@
         status_code: 200
         validate_certs: false
       register: nodes
+      until: nodes.status == 200
+      retries: 3
+      delay: 5
 
     - name: Check if all Nodes see each other
       ansible.builtin.assert:

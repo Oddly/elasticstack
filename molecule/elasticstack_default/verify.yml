@@ -169,6 +169,9 @@
         status_code: 200
         validate_certs: false
       register: nodes
+      until: nodes.status | default(0) == 200
+      retries: 3
+      delay: 5
       when: groups[elasticstack_elasticsearch_group_name] | length > 1
 
     - name: Check if all Nodes see each other
