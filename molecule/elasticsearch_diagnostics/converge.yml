@@ -60,6 +60,17 @@
         remote_src: true
         mode: "0644"
 
+    # systemd may refuse to restart a recently-failed service; clear the
+    # failure state and give ES a moment to release node locks.
+    - name: Reset systemd failure state before recovery restart
+      ansible.builtin.command:
+        cmd: systemctl reset-failed elasticsearch.service
+      changed_when: false
+
+    - name: Wait for node lock to be released
+      ansible.builtin.pause:
+        seconds: 5
+
     - name: Restart Elasticsearch with restored config
       ansible.builtin.include_tasks:
         file: "{{ lookup('env', 'ANSIBLE_COLLECTIONS_PATH') | default(lookup('env', 'HOME') + '/.ansible/collections', true) }}/ansible_collections/oddly/elasticstack/roles/elasticsearch/tasks/restart_and_verify_elasticsearch.yml"
