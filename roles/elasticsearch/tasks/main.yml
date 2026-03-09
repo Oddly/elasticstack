@@ -561,6 +561,7 @@
 - name: Apply persistent cluster settings  # noqa: run-once[task]
   when:
     - _es_effective_cluster_settings | length > 0
+    - elasticsearch_security | bool | ternary(elasticstack_password is defined and (elasticstack_password.stdout | default('') | length > 0), true)
     - not ansible_check_mode
   run_once: true
   delegate_to: "{{ elasticstack_ca_host | default(inventory_hostname) }}"
