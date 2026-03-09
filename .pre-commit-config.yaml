@@ -4,5 +4,6 @@ repos:
     rev: v25.4.0
     hooks:
       - id: ansible-lint
+        pass_filenames: false
         additional_dependencies:
           - ansible

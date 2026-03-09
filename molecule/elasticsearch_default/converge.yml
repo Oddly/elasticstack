@@ -9,6 +9,7 @@
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticsearch_heap: "1"
     elasticstack_no_log: false
+    elasticsearch_elastic_password: "TestPassword123!"
     elasticsearch_cluster_settings:
       action.destructive_requires_name: "true"
   tasks:
