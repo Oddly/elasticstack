@@ -327,7 +327,7 @@ elasticsearch_cert_will_expire_soon: false
 `elasticsearch_cert_expiration_buffer` is the number of days before certificate expiry at which the role triggers automatic renewal. At 30 days (default), the role regenerates certificates during any playbook run that happens within 30 days of expiry. Set this higher than your longest expected gap between playbook runs.
 
 !!! tip
-    Certificate renewal requires a rolling restart of the cluster. The role handles this automatically, but plan renewal windows during low-traffic periods. You can trigger immediate renewal with `--tags renew_es_cert`.
+    Elasticsearch automatically reloads SSL certificates from disk, so certificate renewal does not require an Elasticsearch restart. Kibana (Node.js) does need a restart to pick up new certificates, and the role handles this automatically. You can trigger immediate renewal with `--tags renew_es_cert`.
 
 `elasticsearch_cert_will_expire_soon` is an internal flag set by the role during execution. Do not set this manually.
 
@@ -433,7 +433,7 @@ The role validates that you have an odd number of master-eligible nodes. An even
 
 ### Heap auto-calculation
 
-The default heap formula is `min(max(memtotal_mb / 1024 / 2, 1), 30)` -- half of system RAM in GB, floored at 1 GB, capped at 30 GB. The 30 GB cap follows Elastic's recommendation to stay below the compressed ordinary object pointers (oops) threshold. Set `elasticsearch_check_calculation: true` to print the calculated value during a run without making changes.
+The default heap formula is `min(max(memtotal_mb / 1024 / 2, 1), 30)` -- half of system RAM in GB, floored at 1 GB, capped at 30 GB. The 30 GB cap follows Elastic's recommendation to stay below the compressed ordinary object pointers (oops) threshold. In containers with a cgroup memory limit lower than the host's physical RAM, the role recalculates heap from the cgroup limit instead of `memtotal_mb`. This prevents containers from allocating heap based on host RAM (e.g. 30 GB heap in a 4 GB container). The recalculation only applies when `elasticsearch_heap` has not been explicitly overridden. Set `elasticsearch_check_calculation: true` to print the calculated value during a run without making changes.
 
 ### PAM limits
 
