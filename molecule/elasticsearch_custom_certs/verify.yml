@@ -84,16 +84,53 @@
           - ca_cert_stat.stat.exists
         fail_msg: "CA certificate file not found"
 
-    - name: Check elasticsearch.yml has PEM config
-      ansible.builtin.command:
-        cmd: grep 'xpack.security.transport.ssl.certificate' /etc/elasticsearch/elasticsearch.yml
-      register: es_yml_check
-      changed_when: false
+    - name: Read elasticsearch.yml
+      ansible.builtin.slurp:
+        src: /etc/elasticsearch/elasticsearch.yml
+      register: es_yml_raw
 
-    - name: Verify PEM-style config (not keystore)
+    - name: Parse elasticsearch.yml content
+      ansible.builtin.set_fact:
+        _es_config: "{{ es_yml_raw.content | b64decode }}"
+
+    - name: Verify PEM-style transport config
       ansible.builtin.assert:
         that:
-          - "'transport.crt' in es_yml_check.stdout"
+          - "'xpack.security.transport.ssl.certificate' in _es_config"
+          - "'xpack.security.transport.ssl.key' in _es_config"
+        fail_msg: "Expected PEM-style transport SSL config in elasticsearch.yml"
+
+    - name: Verify CA referenced in both transport and HTTP sections (issue #78)
+      ansible.builtin.assert:
+        that:
+          - "'transport.ssl.certificate_authorities' in _es_config"
+          - "'http.ssl.certificate_authorities' in _es_config"
         fail_msg: >-
-          Expected PEM-style transport config in elasticsearch.yml.
-          Got: {{ es_yml_check.stdout }}
+          certificate_authorities missing from elasticsearch.yml — CA was
+          configured but the template omitted it (first-install rendering bug).
+
+    - name: Verify verification_mode is not 'none'
+      ansible.builtin.assert:
+        that:
+          - "'verification_mode: none' not in _es_config"
+        fail_msg: "SSL verification_mode is 'none' — certs provide no security"
+
+    - name: Verify cert paths in config match files on disk
+      ansible.builtin.stat:
+        path: "/etc/elasticsearch/{{ item }}"
+      register: _cert_path_check
+      loop:
+        - "certs/{{ inventory_hostname }}-transport.crt"
+        - "certs/{{ inventory_hostname }}-transport.key"
+        - "certs/{{ inventory_hostname }}-http.crt"
+        - "certs/{{ inventory_hostname }}-http.key"
+        - certs/ca.crt
+
+    - name: Assert all referenced cert files exist
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+        fail_msg: "{{ item.item }} referenced in config but not on disk"
+      loop: "{{ _cert_path_check.results }}"
+      loop_control:
+        label: "{{ item.item }}"
