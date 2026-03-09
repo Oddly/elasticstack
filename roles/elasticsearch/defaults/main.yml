@@ -14,7 +14,13 @@ elasticsearch_ml_enabled: true
 elasticsearch_config_backup: false
 # @var elasticsearch_manage_yaml:description: Let the role manage elasticsearch.yml. Set to false to manage it yourself
 elasticsearch_manage_yaml: true
-# @var elasticsearch_manage_logging:description: Let the role manage log4j2.properties for Elasticsearch logging
+# @var elasticsearch_manage_logging:description: >
+#   Let the role manage log4j2.properties for Elasticsearch logging.
+#   Default is false because the Elasticsearch package ships a well-tuned
+#   log4j2.properties that works out of the box. Only set to true when you
+#   need granular control over individual appenders (console, file, JSON,
+#   slow log, deprecation, audit) via the elasticsearch_logging_* variables.
+# @end
 elasticsearch_manage_logging: false
 # @var elasticsearch_logging_console:description: Enable console (stdout) log appender. Usually off for daemon mode
 elasticsearch_logging_console: false
@@ -77,21 +83,6 @@ elasticsearch_jna_workaround: false
 elasticsearch_memory_lock: false
 # @var elasticsearch_systemd_override_type_exec:description: Override systemd service Type to exec. Enable for Docker-in-Docker environments where sd_notify is non-functional
 elasticsearch_systemd_override_type_exec: false
-# @var elasticsearch_action_destructive_requires_name:description: Require explicit index names for destructive operations (prevents accidental wildcard deletes)
-elasticsearch_action_destructive_requires_name: false
-# @var elasticsearch_recovery_max_bytes_per_sec:description: Throttle shard recovery speed to prevent network saturation. Empty = Elasticsearch default
-elasticsearch_recovery_max_bytes_per_sec: ""
-
-# @var elasticsearch_http_cors_enabled:description: Enable CORS on the HTTP interface
-elasticsearch_http_cors_enabled: false
-# @var elasticsearch_http_cors_allow_origin:description: CORS allowed origins. Must be set when CORS is enabled
-elasticsearch_http_cors_allow_origin: ""
-# @var elasticsearch_http_cors_allow_methods:description: CORS allowed HTTP methods
-elasticsearch_http_cors_allow_methods: "OPTIONS, HEAD, GET, POST, PUT, DELETE"
-# @var elasticsearch_http_cors_allow_headers:description: CORS allowed headers
-elasticsearch_http_cors_allow_headers: "X-Requested-With, Content-Type, Content-Length, Authorization, kbn-xsrf"
-# @var elasticsearch_http_cors_allow_credentials:description: Whether to send CORS credentials (cookies, auth headers)
-elasticsearch_http_cors_allow_credentials: false
 
 # @var elasticsearch_cluster_settings:description: >
 #   Persistent cluster settings applied via PUT _cluster/settings after the
@@ -165,6 +156,17 @@ elasticsearch_http_ssl_keystore_path: ""
 elasticsearch_validate_api_certs: false
 
 elasticsearch_unsafe_upgrade_restart: false
+
+# @var elasticsearch_extra_config:description: >
+#   Additional key-value pairs merged into elasticsearch.yml. Keys that
+#   conflict with dedicated role variables (e.g. cluster.name) are
+#   silently dropped — use the dedicated variables instead.
+# @var elasticsearch_extra_config:example: >
+# elasticsearch_extra_config:
+#   indices.queries.cache.size: "5%"
+#   thread_pool.write.queue_size: 500
+# @end
+elasticsearch_extra_config: {}
 
 # @var elasticsearch_freshstart:description: Internal flag tracking whether this is a fresh installation. Do not set manually
 elasticsearch_freshstart:

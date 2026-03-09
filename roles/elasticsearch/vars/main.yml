@@ -1,2 +1,38 @@
 ---
 # vars file for elasticsearch
+
+# Keys managed by dedicated role variables in elasticsearch.yml.j2.
+# Used in both the template (to filter elasticsearch_extra_config) and
+# the warning task (to detect conflicts). Defined once here to avoid duplication.
+_elasticsearch_managed_keys:
+  - node.name
+  - path.data
+  - path.logs
+  - cluster.name
+  - network.host
+  - http.port
+  - transport.port
+  - http.publish_host
+  - http.publish_port
+  - node.roles
+  - discovery.type
+  - discovery.seed_hosts
+  - cluster.initial_master_nodes
+  - node.attr.temp
+  - xpack.ml.enabled
+  - xpack.security.enabled
+  - xpack.security.enrollment.enabled
+  - xpack.security.transport.ssl.enabled
+  - xpack.security.transport.ssl.verification_mode
+  - xpack.security.transport.ssl.certificate
+  - xpack.security.transport.ssl.key
+  - xpack.security.transport.ssl.certificate_authorities
+  - xpack.security.transport.ssl.keystore.path
+  - xpack.security.transport.ssl.truststore.path
+  - xpack.security.http.ssl.enabled
+  - xpack.security.http.ssl.certificate
+  - xpack.security.http.ssl.key
+  - xpack.security.http.ssl.certificate_authorities
+  - xpack.security.http.ssl.keystore.path
+  - xpack.security.http.ssl.truststore.path
+  - bootstrap.memory_lock

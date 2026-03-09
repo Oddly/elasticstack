@@ -160,27 +160,11 @@
           - "'/mnt/es-snapshots' in es_yml.content | b64decode"
         fail_msg: "Snapshot repo path /mnt/es-snapshots not found in elasticsearch.yml"
 
-    - name: Count occurrences of indices.recovery.max_bytes_per_sec
-      ansible.builtin.shell: |
-        grep -c 'indices.recovery.max_bytes_per_sec' /etc/elasticsearch/elasticsearch.yml
-      args:
-        executable: /bin/bash
-      register: recovery_count
-      changed_when: false
-
-    - name: Assert indices.recovery.max_bytes_per_sec appears exactly once (conflict filtering works)
+    - name: Assert indices.recovery.max_bytes_per_sec from extra_config
       ansible.builtin.assert:
         that:
-          - recovery_count.stdout | int == 1
-        fail_msg: >-
-          indices.recovery.max_bytes_per_sec appears {{ recovery_count.stdout }} times
-          (expected 1 — conflict filtering should remove the duplicate from elasticsearch_extra_config)
-
-    - name: Assert dedicated variable value wins (50mb, not 100mb from extra_config)
-      ansible.builtin.assert:
-        that:
-          - "'indices.recovery.max_bytes_per_sec: 50mb' in es_yml.content | b64decode"
-        fail_msg: "Expected 50mb from dedicated variable, not 100mb from elasticsearch_extra_config"
+          - "'indices.recovery.max_bytes_per_sec' in es_yml.content | b64decode"
+        fail_msg: "indices.recovery.max_bytes_per_sec not found (should come from elasticsearch_extra_config)"
 
     # ── Config backup ─────────────────────────────────────────────
 
@@ -246,33 +230,18 @@
           - "'LimitMEMLOCK=infinity' in memlock_content.content | b64decode"
         fail_msg: "LimitMEMLOCK=infinity not in memlock.conf"
 
-    # ── Destructive requires name ─────────────────────────────────
+    # ── extra_config pass-through settings ──────────────────────────
 
-    - name: Verify action.destructive_requires_name is in elasticsearch.yml
+    - name: Verify extra_config settings are rendered in elasticsearch.yml
       ansible.builtin.assert:
         that:
-          - "'action.destructive_requires_name: true' in es_yml.content | b64decode"
-        fail_msg: "action.destructive_requires_name not found in elasticsearch.yml"
-
-    # ── Recovery throttle ─────────────────────────────────────────
-
-    - name: Verify indices.recovery.max_bytes_per_sec is in elasticsearch.yml
-      ansible.builtin.assert:
-        that:
-          - "'indices.recovery.max_bytes_per_sec: 50mb' in es_yml.content | b64decode"
-        fail_msg: "indices.recovery.max_bytes_per_sec not found in elasticsearch.yml"
-
-    # ── CORS settings ─────────────────────────────────────────────
-
-    - name: Verify CORS settings in elasticsearch.yml
-      ansible.builtin.assert:
-        that:
-          - "'http.cors.enabled: true' in es_yml.content | b64decode"
+          - "'action.destructive_requires_name' in es_yml.content | b64decode"
+          - "'http.cors.enabled' in es_yml.content | b64decode"
           - "'http.cors.allow-origin' in es_yml.content | b64decode"
           - "'http.cors.allow-methods' in es_yml.content | b64decode"
           - "'http.cors.allow-headers' in es_yml.content | b64decode"
           - "'http.cors.allow-credentials' in es_yml.content | b64decode"
-        fail_msg: "CORS settings not found in elasticsearch.yml"
+        fail_msg: "extra_config pass-through settings not found in elasticsearch.yml"
 
     # ── File permissions ──────────────────────────────────────────
 

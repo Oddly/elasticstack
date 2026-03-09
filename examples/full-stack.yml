@@ -87,9 +87,11 @@
     # elasticsearch_http_tls_key: "/path/to/http.key"
     # elasticsearch_tls_ca_certificate: "/path/to/ca.crt"
 
-    # CORS (for direct browser access)
-    # elasticsearch_http_cors_enabled: false
-    # elasticsearch_http_cors_allow_origin: "https://my-app.example.com"
+    # Extra elasticsearch.yml settings (any key the API supports)
+    # elasticsearch_extra_config:
+    #   http.cors.enabled: true
+    #   http.cors.allow-origin: "https://my-app.example.com"
+    #   action.destructive_requires_name: true
 
     # ==========================================================================
     # Kibana

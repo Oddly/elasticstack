@@ -209,17 +209,6 @@ elasticsearch_systemd_override_type_exec: false
 
 `elasticsearch_systemd_override_type_exec` creates a systemd drop-in that changes the Elasticsearch service from `Type=notify` to `Type=exec`. Elasticsearch 8.19+ and 9.x use `Type=notify` with a `systemd-entrypoint` binary that sends `READY=1`. In container environments (Docker-in-Docker, some LXC setups), the sd_notify socket doesn't work -- systemd never receives the ready signal, waits 900 seconds, then kills the process even though Elasticsearch is fully operational. The role's own health-check retries handle readiness detection when this override is active.
 
-### Advanced Cluster Settings
-
-```yaml
-elasticsearch_action_destructive_requires_name: false
-elasticsearch_recovery_max_bytes_per_sec: ""
-```
-
-`elasticsearch_action_destructive_requires_name` sets `action.destructive_requires_name: true` in `elasticsearch.yml`, requiring explicit index names for delete operations. When enabled, wildcard patterns like `_all` or `*` are rejected. Recommended for production to prevent accidental mass deletion.
-
-`elasticsearch_recovery_max_bytes_per_sec` throttles shard recovery bandwidth (e.g., `"100mb"`). When empty (the default), Elasticsearch uses its internal default (40 MB/s). Increase this on fast networks to speed up recovery after node restarts, or decrease it on shared networks to prevent saturation.
-
 ### Persistent Cluster Settings
 
 ```yaml
@@ -237,7 +226,6 @@ elasticsearch_cluster_settings:
 ```
 
 Any setting supported by the [cluster settings API](https://www.elastic.co/docs/reference/elasticsearch/rest-api/cluster/update-cluster-settings) can be used. Values can be strings, numbers, booleans, or nested objects — the YAML dict is serialized to JSON directly.
-
 ### Temperature Attribute
 
 ```yaml
@@ -349,29 +337,6 @@ elasticsearch_cert_will_expire_soon: false
 
 `elasticsearch_cert_will_expire_soon` is an internal flag set by the role during execution. Do not set this manually.
 
-### CORS Configuration
-
-```yaml
-elasticsearch_http_cors_enabled: false
-elasticsearch_http_cors_allow_origin: ""
-elasticsearch_http_cors_allow_methods: "OPTIONS, HEAD, GET, POST, PUT, DELETE"
-elasticsearch_http_cors_allow_headers: "X-Requested-With, Content-Type, Content-Length, Authorization, kbn-xsrf"
-elasticsearch_http_cors_allow_credentials: false
-```
-
-`elasticsearch_http_cors_enabled` enables Cross-Origin Resource Sharing on the Elasticsearch HTTP interface. Only needed when browser-based tools (Elasticsearch Head, Cerebro, custom dashboards) access Elasticsearch directly rather than through Kibana or a reverse proxy.
-
-`elasticsearch_http_cors_allow_origin` sets the permitted origins. Required when CORS is enabled. Use a specific origin (`"https://dashboard.example.com"`) for production, or `"*"` for development (allows all origins). A regex is also accepted: `"/https?://localhost(:[0-9]+)?/"`.
-
-`elasticsearch_http_cors_allow_methods` lists the HTTP methods allowed in CORS requests. The default covers all standard Elasticsearch API methods.
-
-`elasticsearch_http_cors_allow_headers` lists the headers allowed in CORS requests. The default includes `kbn-xsrf` for Kibana compatibility and `Authorization` for basic auth.
-
-`elasticsearch_http_cors_allow_credentials` controls whether the `Access-Control-Allow-Credentials` header is sent. Enable this when clients need to send cookies or HTTP authentication headers in cross-origin requests.
-
-!!! warning
-    Enabling CORS with `allow_origin: "*"` and `allow_credentials: true` is a security risk. Browsers will send authenticated requests to your cluster from any website. Always use specific origins in production.
-
 ### Logging Configuration
 
 These variables control the `log4j2.properties` template. They only take effect when `elasticsearch_manage_logging: true`.
@@ -408,14 +373,17 @@ elasticsearch_logging_audit: true
 ### Extra Configuration
 
 ```yaml
-# elasticsearch_extra_config:     # undefined by default
-#   xpack.monitoring.collection.enabled: true
-#   thread_pool.search.size: 30
+elasticsearch_extra_config:
+  action.destructive_requires_name: true
+  indices.recovery.max_bytes_per_sec: "100mb"
+  http.cors.enabled: true
+  http.cors.allow-origin: "https://dashboard.example.com"
+  thread_pool.search.size: 30
 ```
 
-`elasticsearch_extra_config` is a dictionary of arbitrary `elasticsearch.yml` settings that the role doesn't manage through dedicated variables. The template renders these as top-level YAML keys. Any keys that conflict with settings managed by dedicated role variables (like `cluster.name`, `network.host`, security settings, etc.) are silently filtered out, and the role emits a warning telling you to use the dedicated variable instead.
+`elasticsearch_extra_config` is a dictionary of arbitrary `elasticsearch.yml` settings. Any valid Elasticsearch configuration key can go here — CORS, recovery throttling, destructive action guards, thread pool tuning, monitoring, plugin settings, etc. The template renders these as top-level YAML keys.
 
-This is the escape hatch for settings not covered by other role variables, such as thread pool tuning, monitoring collection, or plugin-specific configuration.
+Keys that conflict with settings managed by dedicated role variables (like `cluster.name`, `network.host`, security/TLS settings, `bootstrap.memory_lock`) are silently filtered out, and the role emits a warning telling you to use the dedicated variable instead.
 
 ### Rolling Upgrades
 
