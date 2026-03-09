@@ -8,12 +8,8 @@
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
-from ansible.module_utils.basic import (
-    missing_required_lib,
-    to_text,
-    to_native,
-    to_bytes
-)
+from ansible.module_utils.basic import missing_required_lib
+from ansible.module_utils.common.text.converters import to_text, to_native, to_bytes
 
 try:
     from cryptography.hazmat.primitives.serialization import pkcs12
