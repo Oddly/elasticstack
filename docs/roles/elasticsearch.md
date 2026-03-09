@@ -226,6 +226,15 @@ elasticsearch_cluster_settings:
 ```
 
 Any setting supported by the [cluster settings API](https://www.elastic.co/docs/reference/elasticsearch/rest-api/cluster/update-cluster-settings) can be used. Values can be strings, numbers, booleans, or nested objects — the YAML dict is serialized to JSON directly.
+
+### LogsDB
+
+```yaml
+elasticsearch_logsdb: true   # default: true for 9.x, false for 8.x
+```
+
+`elasticsearch_logsdb` enables the LogsDB index mode for `logs-*-*` data streams by setting `cluster.logsdb.enabled: true` as a persistent cluster setting. LogsDB uses synthetic `_source` reconstruction and optimized doc_values compression for up to 4x storage savings with under 5% indexing overhead. Fresh 9.x installs enable this by default, but 8.x-to-9.x upgrades do not — this variable ensures consistent behavior. Requires ES 8.17+ (LogsDB GA). Existing backing indices remain in standard mode until ILM deletes them; new backing indices pick up LogsDB on their next rollover.
+
 ### Temperature Attribute
 
 ```yaml
@@ -248,6 +257,7 @@ Any setting supported by the [cluster settings API](https://www.elastic.co/docs/
 elasticsearch_security: true
 elasticsearch_http_security: true
 elasticsearch_bootstrap_pw: PleaseChangeMe
+elasticsearch_elastic_password: ""
 elasticsearch_ssl_verification_mode: full
 elasticsearch_tls_key_passphrase: PleaseChangeMeIndividually
 elasticsearch_validate_api_certs: false
@@ -255,6 +265,8 @@ elasticsearch_validate_api_certs: false
 
 !!! warning
     Both `elasticsearch_bootstrap_pw` and `elasticsearch_tls_key_passphrase` ship with placeholder defaults. Change them before deploying to any environment. The bootstrap password is only used once during initial security setup, but the TLS key passphrase protects every node's private key for the life of the cluster. Use Ansible Vault or a secrets manager.
+
+`elasticsearch_elastic_password` sets a user-defined password for the `elastic` superuser. When set, the role changes the auto-generated password to this value after initial security setup and uses it for all subsequent API calls. Leave empty to keep using the auto-generated password from the `initial_passwords` file. The `initial_passwords` file is preserved for other built-in users (kibana_system, beats_system, etc.).
 
 `elasticsearch_security` is the main security toggle. When enabled, the role generates a certificate authority, creates per-node TLS certificates, configures transport and HTTP encryption, initializes the `elastic` superuser password, and enables RBAC. Elasticsearch 8.x and later require security -- the role fails the play if you try to disable it on 8.x+.
 

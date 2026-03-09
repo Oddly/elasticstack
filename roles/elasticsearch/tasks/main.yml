@@ -539,16 +539,29 @@
 
 - name: Show hint about passwords
   ansible.builtin.debug:
-    msg: "Remember, your temporary passwords can be found on {{ elasticstack_ca_host }} in {{ elasticstack_initial_passwords }}"
+    msg: >-
+      {{ 'Elastic password set to user-defined value. Other service passwords are in '
+         ~ elasticstack_initial_passwords
+         if elasticsearch_elastic_password | default('') | length > 0
+         else 'Remember, your temporary passwords can be found on '
+         ~ elasticstack_ca_host ~ ' in ' ~ elasticstack_initial_passwords }}
   when:
     - elasticsearch_security | bool
     - inventory_hostname == elasticstack_ca_host
 
 # -- Persistent cluster settings via _cluster/settings API --
 
+- name: Build effective cluster settings
+  ansible.builtin.set_fact:
+    _es_effective_cluster_settings: >-
+      {{ (elasticsearch_logsdb | bool)
+         | ternary({'cluster.logsdb.enabled': 'true'}, {})
+         | combine(elasticsearch_cluster_settings | default({})) }}
+
 - name: Apply persistent cluster settings  # noqa: run-once[task]
   when:
-    - elasticsearch_cluster_settings | default({}) | length > 0
+    - _es_effective_cluster_settings | length > 0
+    - elasticsearch_security | bool | ternary(elasticstack_password is defined and (elasticstack_password.stdout | default('') | length > 0), true)
     - not ansible_check_mode
   run_once: true
   delegate_to: "{{ elasticstack_ca_host | default(inventory_hostname) }}"
@@ -572,7 +585,7 @@
         _current: "{{ _es_current_cluster_settings.json.persistent }}"
         _needs_update: >-
           {% set ns = namespace(changed=false) %}
-          {% for key, value in elasticsearch_cluster_settings.items() %}
+          {% for key, value in _es_effective_cluster_settings.items() %}
           {%   if _current.get(key) is none or _current[key] | string != value | string %}
           {%     set ns.changed = true %}
           {%   endif %}
@@ -585,7 +598,7 @@
         method: PUT
         body_format: json
         body:
-          persistent: "{{ elasticsearch_cluster_settings }}"
+          persistent: "{{ _es_effective_cluster_settings }}"
         user: "{{ 'elastic' if elasticsearch_security | bool else omit }}"
         password: "{{ elasticstack_password.stdout if elasticsearch_security | bool else omit }}"
         force_basic_auth: "{{ elasticsearch_security | bool }}"

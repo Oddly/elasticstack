@@ -45,6 +45,9 @@
     # Elasticsearch bootstrap password (used for initial setup, built-in users)
     elasticsearch_bootstrap_pw: "CHANGE-ME-bootstrap-password"
 
+    # User-defined elastic superuser password (optional — replaces auto-generated)
+    # elasticsearch_elastic_password: "CHANGE-ME-elastic-password"
+
     # TLS key passphrases per service
     elasticsearch_tls_key_passphrase: "CHANGE-ME-es-key-passphrase"
     # kibana_tls_key_passphrase: "CHANGE-ME-kibana-key-passphrase"

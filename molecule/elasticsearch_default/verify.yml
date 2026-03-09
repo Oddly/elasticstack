@@ -4,6 +4,8 @@
   tasks:
     - name: Fetch elastic password
       ansible.builtin.include_tasks: ../shared/verify_fetch_password.yml
+      vars:
+        _verify_elastic_password: "TestPassword123!"
 
     - name: Check cluster health
       ansible.builtin.include_tasks: ../shared/verify_es_health.yml
@@ -16,6 +18,30 @@
           - health.json.number_of_nodes == groups['elasticsearch'] | length
         fail_msg: "Expected {{ groups['elasticsearch'] | length }} nodes, got {{ health.json.number_of_nodes }}"
       run_once: true  # noqa: run-once[task]
+
+    - name: Verify auto-generated password no longer works  # noqa: run-once[task]
+      block:
+        - name: Read auto-generated password from file  # noqa: run-once[task]
+          ansible.builtin.shell: |
+            set -o pipefail
+            grep "PASSWORD elastic " /usr/share/elasticsearch/initial_passwords |
+            awk {' print $4 '}
+          args:
+            executable: /bin/bash
+          register: _old_pass
+          changed_when: false
+          run_once: true
+
+        - name: Try API with old password (should fail)  # noqa: run-once[task]
+          ansible.builtin.uri:
+            url: "https://localhost:9200/"
+            user: elastic
+            password: "{{ _old_pass.stdout }}"
+            force_basic_auth: true
+            validate_certs: false
+            status_code: 401
+          run_once: true
+          when: _old_pass.stdout != "TestPassword123!"
 
     - name: Read cluster settings  # noqa: run-once[task]
       ansible.builtin.uri:
@@ -34,5 +60,14 @@
           - cluster_settings.json.persistent['action.destructive_requires_name'] == 'true'
         fail_msg: >-
           elasticsearch_cluster_settings not applied.
+          Got: {{ cluster_settings.json.persistent }}
+      run_once: true
+
+    - name: Verify LogsDB is enabled (9.x default)  # noqa: run-once[task]
+      ansible.builtin.assert:
+        that:
+          - cluster_settings.json.persistent['cluster.logsdb.enabled'] == 'true'
+        fail_msg: >-
+          LogsDB not enabled.
           Got: {{ cluster_settings.json.persistent }}
       run_once: true

@@ -39,6 +39,13 @@ elasticsearch_logging_audit: true
 elasticsearch_security: true
 # @var elasticsearch_bootstrap_pw:description: Bootstrap password for the elastic superuser during initial cluster setup
 elasticsearch_bootstrap_pw: PleaseChangeMe
+# @var elasticsearch_elastic_password:description: >
+#   User-defined password for the elastic superuser. When set, the role
+#   changes the auto-generated password after initial security setup and
+#   uses this value for all subsequent API calls. Leave empty to keep the
+#   auto-generated password from the initial_passwords file.
+# @end
+elasticsearch_elastic_password: ""
 # @var elasticsearch_http_security:description: Enable TLS on the Elasticsearch HTTP interface (port 9200)
 elasticsearch_http_security: true
 # @var elasticsearch_http_protocol:description: Protocol for Elasticsearch HTTP API. Automatically set to https when security is enabled
@@ -84,13 +91,20 @@ elasticsearch_memory_lock: false
 # @var elasticsearch_systemd_override_type_exec:description: Override systemd service Type to exec. Enable for Docker-in-Docker environments where sd_notify is non-functional
 elasticsearch_systemd_override_type_exec: false
 
+# @var elasticsearch_logsdb:description: >
+#   Enable LogsDB index mode for logs-*-* data streams. Uses synthetic _source
+#   and optimized compression for ~4x storage savings. Fresh 9.x installs enable
+#   this by default; 8.x→9.x upgrades do not. Set to true to match 9.x default
+#   behavior. Requires ES 8.17+ (LogsDB GA). Applied as a persistent cluster setting.
+# @end
+elasticsearch_logsdb: "{{ elasticstack_release | int >= 9 }}"
+
 # @var elasticsearch_cluster_settings:description: >
 #   Persistent cluster settings applied via PUT _cluster/settings after the
 #   cluster is healthy. Accepts any setting the cluster settings API supports.
 #   Only applied when non-empty. Runs once per play on the CA host.
 #   Example:
 #     elasticsearch_cluster_settings:
-#       cluster.logsdb.enabled: true
 #       indices.recovery.max_bytes_per_sec: "100mb"
 elasticsearch_cluster_settings: {}
 
