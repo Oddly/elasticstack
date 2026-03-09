@@ -150,7 +150,6 @@
         group: elasticsearch
         mode: "0640"
       when: _elasticsearch_transport_content_mode | bool
-      notify: Restart Elasticsearch
 
     - name: Copy transport certificate (from file)
       ansible.builtin.copy:
@@ -161,7 +160,6 @@
         mode: "0640"
         remote_src: "{{ elasticsearch_tls_remote_src }}"
       when: not (_elasticsearch_transport_content_mode | bool)
-      notify: Restart Elasticsearch
 
     - name: Write transport key (from content)
       ansible.builtin.copy:
@@ -171,7 +169,6 @@
         group: elasticsearch
         mode: "0640"
       when: _elasticsearch_transport_content_mode | bool
-      notify: Restart Elasticsearch
 
     - name: Copy transport key (from file, PEM only)
       ansible.builtin.copy:
@@ -184,7 +181,6 @@
       when:
         - not (_elasticsearch_transport_content_mode | bool)
         - _elasticsearch_transport_cert_format == 'pem'
-      notify: Restart Elasticsearch
 
     # -- HTTP cert/key (falls back to transport if not set separately) --
 
@@ -198,7 +194,6 @@
       when:
         - _elasticsearch_http_content_mode | bool
         - elasticsearch_http_security | bool
-      notify: Restart Elasticsearch
 
     - name: Copy HTTP certificate (from file)
       ansible.builtin.copy:
@@ -211,7 +206,6 @@
       when:
         - not (_elasticsearch_http_content_mode | bool)
         - elasticsearch_http_security | bool
-      notify: Restart Elasticsearch
 
     - name: Write HTTP key (from content)
       ansible.builtin.copy:
@@ -223,7 +217,6 @@
       when:
         - _elasticsearch_http_content_mode | bool
         - elasticsearch_http_security | bool
-      notify: Restart Elasticsearch
 
     - name: Copy HTTP key (from file, PEM only)
       ansible.builtin.copy:
@@ -237,7 +230,6 @@
         - not (_elasticsearch_http_content_mode | bool)
         - elasticsearch_http_security | bool
         - _elasticsearch_http_cert_format == 'pem'
-      notify: Restart Elasticsearch
 
     # -- CA certificate --
 
@@ -249,7 +241,6 @@
         group: elasticsearch
         mode: "0640"
       when: elasticsearch_tls_ca_certificate_content | default('', true) | length > 0
-      notify: Restart Elasticsearch
 
     - name: Copy CA certificate (from file)
       ansible.builtin.copy:
@@ -262,7 +253,6 @@
       when:
         - elasticsearch_tls_ca_certificate_content | default('', true) | length == 0
         - elasticsearch_tls_ca_certificate | length > 0
-      notify: Restart Elasticsearch
 
     # Extract CA chain from the already-deployed transport cert on the node.
     # Uses copy+content for idempotency (only writes when content changes).
@@ -289,7 +279,6 @@
         - elasticsearch_tls_ca_certificate | length == 0
         - elasticsearch_tls_ca_certificate_content | default('', true) | length == 0
         - _elasticsearch_transport_ca_extracted | bool
-      notify: Restart Elasticsearch
 
     - name: Set effective CA availability fact
       ansible.builtin.set_fact:
@@ -583,7 +572,6 @@
         _cert_group: elasticsearch
         _cert_mode: "0640"
         _cert_notify:
-          - Restart Elasticsearch
           - Restart kibana if available for elasticsearch certificates
       tags:
         - certificates
@@ -606,7 +594,6 @@
         _cert_group: elasticsearch
         _cert_mode: "0640"
         _cert_notify:
-          - Restart Elasticsearch
           - Restart kibana if available for elasticsearch certificates
       tags:
         - certificates

@@ -293,7 +293,9 @@
     _elasticsearch_external_has_ca: true
   when:
     - elasticsearch_cert_source == 'external'
-    - _existing_ca_cert.stat.exists | default(false)
+    - (_existing_ca_cert.stat.exists | default(false)) or
+      (elasticsearch_tls_ca_certificate | default('') | length > 0) or
+      (elasticsearch_tls_ca_certificate_content | default('') | length > 0)
 
 - name: Warn about conflicting keys in elasticsearch_extra_config
   ansible.builtin.debug:
