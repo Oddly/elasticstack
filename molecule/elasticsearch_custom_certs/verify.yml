@@ -100,7 +100,7 @@
           - "'xpack.security.transport.ssl.key' in _es_config"
         fail_msg: "Expected PEM-style transport SSL config in elasticsearch.yml"
 
-    - name: Verify CA referenced in both transport and HTTP sections (issue #78)
+    - name: Verify CA referenced in both transport and HTTP sections
       ansible.builtin.assert:
         that:
           - "'transport.ssl.certificate_authorities' in _es_config"
