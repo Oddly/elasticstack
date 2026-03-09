@@ -93,6 +93,16 @@ elasticsearch_http_cors_allow_headers: "X-Requested-With, Content-Type, Content-
 # @var elasticsearch_http_cors_allow_credentials:description: Whether to send CORS credentials (cookies, auth headers)
 elasticsearch_http_cors_allow_credentials: false
 
+# @var elasticsearch_cluster_settings:description: >
+#   Persistent cluster settings applied via PUT _cluster/settings after the
+#   cluster is healthy. Accepts any setting the cluster settings API supports.
+#   Only applied when non-empty. Runs once per play on the CA host.
+#   Example:
+#     elasticsearch_cluster_settings:
+#       cluster.logsdb.enabled: true
+#       indices.recovery.max_bytes_per_sec: "100mb"
+elasticsearch_cluster_settings: {}
+
 # @var elasticsearch_initialized_file:description: Marker file path that indicates the cluster has been initialized
 elasticsearch_initialized_file: "{{ elasticstack_initial_passwords | dirname }}/cluster_initialized"
 # @var elasticsearch_tls_key_passphrase:description: Passphrase for the Elasticsearch node TLS private key

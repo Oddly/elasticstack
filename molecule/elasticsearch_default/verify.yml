@@ -16,3 +16,23 @@
           - health.json.number_of_nodes == groups['elasticsearch'] | length
         fail_msg: "Expected {{ groups['elasticsearch'] | length }} nodes, got {{ health.json.number_of_nodes }}"
       run_once: true  # noqa: run-once[task]
+
+    - name: Read cluster settings  # noqa: run-once[task]
+      ansible.builtin.uri:
+        url: "https://localhost:9200/_cluster/settings?flat_settings=true"
+        method: GET
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        force_basic_auth: true
+        validate_certs: false
+      register: cluster_settings
+      run_once: true
+
+    - name: Verify cluster settings were applied  # noqa: run-once[task]
+      ansible.builtin.assert:
+        that:
+          - cluster_settings.json.persistent['action.destructive_requires_name'] == 'true'
+        fail_msg: >-
+          elasticsearch_cluster_settings not applied.
+          Got: {{ cluster_settings.json.persistent }}
+      run_once: true
