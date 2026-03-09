@@ -41,7 +41,7 @@
         group: root
         mode: "0644"
       when:
-        - elasticstack_release | int > 7
+        - elasticstack_release | int >= 8
 
     - name: Enable Ingest Pipelines
       ansible.builtin.shell: >

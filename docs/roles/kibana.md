@@ -37,7 +37,7 @@ graph TD
 ```yaml
 kibana_enable: true
 kibana_manage_yaml: true
-kibana_config_backup: true
+kibana_config_backup: false
 ```
 
 `kibana_enable` controls whether the Kibana service is enabled and started. Set to `false` if you want to install and configure Kibana without starting it (for example, during an image build).

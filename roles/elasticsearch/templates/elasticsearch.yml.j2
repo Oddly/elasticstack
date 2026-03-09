@@ -113,19 +113,6 @@ xpack.security.enabled: false
 {% if elasticsearch_memory_lock | bool %}
 bootstrap.memory_lock: true
 {% endif %}
-{% if elasticsearch_action_destructive_requires_name | bool %}
-action.destructive_requires_name: true
-{% endif %}
-{% if elasticsearch_recovery_max_bytes_per_sec | default('', true) | length > 0 %}
-indices.recovery.max_bytes_per_sec: {{ elasticsearch_recovery_max_bytes_per_sec }}
-{% endif %}
-{% if elasticsearch_http_cors_enabled | bool %}
-http.cors.enabled: true
-http.cors.allow-origin: {{ elasticsearch_http_cors_allow_origin }}
-http.cors.allow-methods: {{ elasticsearch_http_cors_allow_methods }}
-http.cors.allow-headers: {{ elasticsearch_http_cors_allow_headers }}
-http.cors.allow-credentials: {{ elasticsearch_http_cors_allow_credentials | lower }}
-{% endif %}
 
 {% if elasticsearch_fs_repo is defined %}
 path:
@@ -137,24 +124,9 @@ path:
 {% endif %}
 
 {# Filter elasticsearch_extra_config to remove keys already managed by dedicated role variables #}
-{% if elasticsearch_extra_config is defined %}
-{%   set _managed_keys = [
-       'node.name', 'path.data', 'path.logs', 'cluster.name', 'network.host',
-       'http.port', 'transport.port', 'http.publish_host', 'http.publish_port',
-       'node.roles', 'discovery.type', 'discovery.seed_hosts', 'cluster.initial_master_nodes',
-       'node.attr.temp', 'xpack.ml.enabled', 'xpack.security.enabled',
-       'xpack.security.enrollment.enabled', 'xpack.security.transport.ssl.enabled',
-       'xpack.security.transport.ssl.verification_mode', 'xpack.security.transport.ssl.certificate',
-       'xpack.security.transport.ssl.key', 'xpack.security.transport.ssl.certificate_authorities',
-       'xpack.security.transport.ssl.keystore.path', 'xpack.security.transport.ssl.truststore.path',
-       'xpack.security.http.ssl.enabled', 'xpack.security.http.ssl.certificate',
-       'xpack.security.http.ssl.key', 'xpack.security.http.ssl.certificate_authorities',
-       'xpack.security.http.ssl.keystore.path', 'xpack.security.http.ssl.truststore.path',
-       'bootstrap.memory_lock', 'action.destructive_requires_name',
-       'indices.recovery.max_bytes_per_sec', 'http.cors.enabled', 'http.cors.allow-origin',
-       'http.cors.allow-methods', 'http.cors.allow-headers', 'http.cors.allow-credentials'
-     ] %}
-{%   set _filtered = elasticsearch_extra_config | dict2items | rejectattr('key', 'in', _managed_keys) | list | items2dict %}
+{# _elasticsearch_managed_keys is defined in vars/main.yml #}
+{% if elasticsearch_extra_config is defined and elasticsearch_extra_config %}
+{%   set _filtered = elasticsearch_extra_config | dict2items | rejectattr('key', 'in', _elasticsearch_managed_keys) | list | items2dict %}
 {%   if _filtered %}
 {{ _filtered | to_nice_yaml(indent=2, sort_keys=False) }}
 {%   endif %}

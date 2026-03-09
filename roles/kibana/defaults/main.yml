@@ -17,7 +17,7 @@ kibana_node_max_old_space_size: ""
 # @var kibana_enable:description: Whether to enable and start the Kibana service
 kibana_enable: true
 # @var kibana_config_backup:description: Create a backup of kibana.yml before overwriting
-kibana_config_backup: true
+kibana_config_backup: false
 # @var kibana_manage_yaml:description: Let the role manage kibana.yml. Set to false to manage it yourself
 kibana_manage_yaml: true
 
@@ -69,9 +69,15 @@ kibana_tls_remote_src: false
 # @end
 # kibana_server_protocol: ""
 
-# @var kibana_sniff_on_start:description: Discover all Elasticsearch nodes in the cluster on Kibana startup
+# @var kibana_sniff_on_start:description: >
+#   Discover all Elasticsearch nodes in the cluster on Kibana startup.
+#   Deprecated: removed in Elasticsearch/Kibana 9.x. Will be dropped in a future release.
+# @end
 kibana_sniff_on_start: false
-# @var kibana_sniff_on_connection_fault:description: Re-discover Elasticsearch nodes when a connection fault is detected
+# @var kibana_sniff_on_connection_fault:description: >
+#   Re-discover Elasticsearch nodes when a connection fault is detected.
+#   Deprecated: removed in Elasticsearch/Kibana 9.x. Will be dropped in a future release.
+# @end
 kibana_sniff_on_connection_fault: false
 
 # @var kibana_freshstart:description: Internal flag tracking whether this is a fresh installation. Do not set manually
