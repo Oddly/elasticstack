@@ -220,6 +220,24 @@ elasticsearch_recovery_max_bytes_per_sec: ""
 
 `elasticsearch_recovery_max_bytes_per_sec` throttles shard recovery bandwidth (e.g., `"100mb"`). When empty (the default), Elasticsearch uses its internal default (40 MB/s). Increase this on fast networks to speed up recovery after node restarts, or decrease it on shared networks to prevent saturation.
 
+### Persistent Cluster Settings
+
+```yaml
+elasticsearch_cluster_settings: {}
+```
+
+`elasticsearch_cluster_settings` applies persistent cluster settings via the `PUT _cluster/settings` API after the cluster is healthy. Unlike `elasticsearch_extra_config` (which writes to `elasticsearch.yml` and requires a restart), cluster settings take effect immediately at runtime and apply cluster-wide. The task reads current settings first and only sends the PUT when values differ.
+
+```yaml
+elasticsearch_cluster_settings:
+  cluster.logsdb.enabled: true
+  indices.recovery.max_bytes_per_sec: "100mb"
+  cluster.routing.allocation.disk.watermark.low: "90%"
+  cluster.routing.allocation.disk.watermark.high: "95%"
+```
+
+Any setting supported by the [cluster settings API](https://www.elastic.co/docs/reference/elasticsearch/rest-api/cluster/update-cluster-settings) can be used. Values can be strings, numbers, booleans, or nested objects — the YAML dict is serialized to JSON directly.
+
 ### Temperature Attribute
 
 ```yaml

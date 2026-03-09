@@ -9,6 +9,8 @@
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticsearch_heap: "1"
     elasticstack_no_log: false
+    elasticsearch_cluster_settings:
+      action.destructive_requires_name: "true"
   tasks:
     - name: Include Elastics repos role
       ansible.builtin.include_role:
