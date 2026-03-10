@@ -580,7 +580,7 @@
 
     - name: Check if settings already match
       ansible.builtin.set_fact:
-        _es_cluster_settings_changed: "{{ _needs_update }}"
+        _es_cluster_settings_changed: "{{ _needs_update | trim }}"
       vars:
         _current: "{{ _es_current_cluster_settings.json.persistent }}"
         _needs_update: >-

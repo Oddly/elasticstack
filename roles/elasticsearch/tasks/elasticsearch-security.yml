@@ -747,13 +747,6 @@
       retries: 30
       delay: 10
 
-    - name: Use user-defined elastic password
-      ansible.builtin.set_fact:
-        elasticstack_password:
-          stdout: "{{ elasticsearch_elastic_password }}"
-      no_log: "{{ elasticstack_no_log }}"
-      when: elasticsearch_elastic_password | default('') | length > 0
-
     - name: Fetch Elastic password from file
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/fetch_password.yml"
@@ -761,8 +754,21 @@
         _password_user: elastic
         _password_fact: elasticstack_password
       when:
-        - elasticsearch_elastic_password | default('') | length == 0
         - elasticsearch_passwords_file.stat.exists | bool
+
+    # On fresh install the passwords file doesn't exist yet, so the fetch
+    # above is skipped.  But the elasticstack shared role may have already
+    # set elasticstack_password to the user-defined value — which hasn't
+    # actually been applied to ES yet.  Clear it so the API check below
+    # is safely skipped (the bootstrap-password check already confirmed
+    # the cluster is reachable).
+    - name: Clear premature user-defined password on fresh install
+      ansible.builtin.set_fact:
+        elasticstack_password:
+          stdout: ""
+      when:
+        - not elasticsearch_passwords_file.stat.exists | bool
+        - elasticsearch_elastic_password | default('') | length > 0
 
     - name: Check for API availability with elastic password
       ansible.builtin.uri:
@@ -773,13 +779,46 @@
         force_basic_auth: true
       register: elasticsearch_api_status
       changed_when: false
+      failed_when: false
       no_log: "{{ elasticstack_no_log }}"
       when:
         - elasticstack_password is defined
         - elasticstack_password.stdout | default('') | length > 0
-      until: (elasticsearch_api_status.json | default({})).cluster_name is defined
+      until: >-
+        (elasticsearch_api_status.json | default({})).cluster_name is defined
+        or (elasticsearch_api_status.status | default(0)) == 401
       retries: 20
       delay: 10
+
+    # If the auto-generated password returned 401, the user-defined
+    # password was already applied in a previous run.  Switch to it.
+    - name: Switch to user-defined password after prior change
+      ansible.builtin.set_fact:
+        elasticstack_password:
+          stdout: "{{ elasticsearch_elastic_password }}"
+      no_log: "{{ elasticstack_no_log }}"
+      when:
+        - elasticsearch_elastic_password | default('') | length > 0
+        - elasticsearch_api_status is defined
+        - (elasticsearch_api_status.status | default(0)) == 401
+
+    - name: Verify API availability with user-defined password
+      ansible.builtin.uri:
+        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}"
+        user: elastic
+        password: "{{ elasticstack_password.stdout }}"
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
+        force_basic_auth: true
+      register: elasticsearch_api_status
+      changed_when: false
+      no_log: "{{ elasticstack_no_log }}"
+      when:
+        - elasticsearch_elastic_password | default('') | length > 0
+        - elasticsearch_api_status is defined
+        - (elasticsearch_api_status.status | default(0)) == 401
+      until: (elasticsearch_api_status.json | default({})).cluster_name is defined
+      retries: 10
+      delay: 5
 
     - name: Work around low resources on CI/CD nodes
       when: ansible_facts.virtualization_type in ["container", "docker", "lxc"]
@@ -802,7 +841,7 @@
                 cluster.routing.allocation.disk.watermark.flood_stage.frozen: "99%"
             body_format: json
             user: elastic
-            password: "{{ elasticstack_password.stdout | default(elasticsearch_bootstrap_pw) }}"
+            password: "{{ (elasticstack_password.stdout | default('')) or elasticsearch_bootstrap_pw }}"
             validate_certs: "{{ elasticsearch_validate_api_certs }}"
             force_basic_auth: true
           register: elasticsearch_watermark_response
@@ -915,7 +954,7 @@
       when:
         - inventory_hostname == elasticstack_ca_host
         - elasticsearch_elastic_password | default('') | length > 0
-        - elasticsearch_freshstart_security.changed | bool
+        - elasticstack_password.stdout | default('') != elasticsearch_elastic_password
       block:
         - name: Fetch auto-generated elastic password
           ansible.builtin.include_tasks:

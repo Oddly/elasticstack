@@ -4,6 +4,8 @@
 # scenarios where disk space is constrained. Runs once per cluster.
 #
 # Requires: Elasticsearch running with security enabled.
+# Uses elasticstack_password (set by the elasticsearch role) when
+# available, falls back to reading from the initial_passwords file.
 - name: Read elastic password for watermark setup
   ansible.builtin.shell: |
     set -o pipefail
@@ -15,6 +17,7 @@
   changed_when: false
   no_log: true
   run_once: true
+  when: elasticstack_password is not defined or elasticstack_password.stdout | default('') | length == 0
 
 - name: Set lenient disk watermarks (CI)
   ansible.builtin.uri:
@@ -28,7 +31,7 @@
         cluster.routing.allocation.disk.watermark.flood_stage.frozen: "99%"
     body_format: json
     user: elastic
-    password: "{{ _ci_elastic_pass.stdout }}"
+    password: "{{ elasticstack_password.stdout | default(_ci_elastic_pass.stdout | default('')) }}"
     validate_certs: false
     force_basic_auth: true
   register: _ci_watermark_result
