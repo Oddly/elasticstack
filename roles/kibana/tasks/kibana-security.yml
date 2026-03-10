@@ -67,6 +67,15 @@
             _validate_ca_extracted_fact: _kibana_ca_extracted
           when: not (_kibana_content_mode | bool)
 
+        # -- Ensure cert directory exists before deploying --
+        - name: Create certificate directory
+          ansible.builtin.file:
+            path: /etc/kibana/certs
+            state: directory
+            owner: root
+            group: kibana
+            mode: "0750"
+
         # -- Deploy certificates --
 
         - name: Write Kibana certificate (from content)
