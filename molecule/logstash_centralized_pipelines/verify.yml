@@ -76,6 +76,20 @@
           - "'monitoring.enabled: false' in logstash_config"
         fail_msg: "Monitoring not disabled"
 
+    # --- HTTP API binding ---
+
+    - name: Verify HTTP host is set
+      ansible.builtin.assert:
+        that:
+          - "'api.http.host: 127.0.0.1' in logstash_config"
+        fail_msg: "api.http.host not set to 127.0.0.1 in logstash.yml"
+
+    - name: Verify HTTP port is set
+      ansible.builtin.assert:
+        that:
+          - "'api.http.port: 9600' in logstash_config"
+        fail_msg: "api.http.port not set to 9600 in logstash.yml"
+
     # --- Extra config ---
 
     - name: Verify extra_config settings are rendered

@@ -54,6 +54,13 @@
     # Queue configuration (disk queue)
     beats_queue_type: disk
     beats_queue_disk_max_size: 512MB
+    # Extra inputs (verify rendering of beats_filebeat_extra_inputs)
+    beats_filebeat_extra_inputs:
+      - type: filestream
+        enabled: true
+        id: extra-test
+        paths:
+          - /var/log/extra-test.log
   tasks:
     - name: Include Elastic repos role
       ansible.builtin.include_role:

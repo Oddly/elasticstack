@@ -226,3 +226,23 @@
         that:
           - "'config.reload.automatic: true' in (logstash_yml.content | b64decode)"
         fail_msg: "Config autoreload not found in logstash.yml"
+
+    - name: Verify pipeline.unsafe_shutdown is set
+      ansible.builtin.assert:
+        that:
+          - "'pipeline.unsafe_shutdown' in (logstash_yml.content | b64decode)"
+        fail_msg: "pipeline.unsafe_shutdown not found in logstash.yml"
+
+    # --- JVM heap verification ---
+
+    - name: Read Logstash JVM options
+      ansible.builtin.slurp:
+        src: /etc/logstash/jvm.options
+      register: logstash_jvm
+
+    - name: Verify Logstash heap is set to 512m
+      ansible.builtin.assert:
+        that:
+          - "'-Xms512m' in (logstash_jvm.content | b64decode)"
+          - "'-Xmx512m' in (logstash_jvm.content | b64decode)"
+        fail_msg: "Logstash heap not set to 512m"
