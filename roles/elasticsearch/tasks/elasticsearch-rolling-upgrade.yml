@@ -1,10 +1,11 @@
-# Ansible
+# Rolling Upgrade of Elasticsearch
 #
-# Rolling Upgrade of Elasticsearch with security on
-# Source from: author: Jeff Steinmetz, @jeffsteinmetz; Bin Li, @holysoros
-# Modifications: author: Daniel Neuberger @netways.de
-# More modifications: NETWAYS Professional Services GmbH
-# latest tested with Ansible 2.9 and later
+# Follows the official Elastic upgrade procedure:
+#   https://www.elastic.co/docs/deploy-manage/upgrade/deployment-or-cluster/elasticsearch
+#
+# Recommended inventory ordering for multi-tier clusters:
+#   frozen → cold → warm → hot → other data → ingest/coordinating → master
+# The play must use serial: 1 so nodes upgrade one at a time.
 
 ---
 
@@ -143,12 +144,15 @@
       changed_when: false
       when: _elasticsearch_cluster_reachable | bool
 
-    # Disabling shard allocation right after enabling it seems redundant. Please see above for details.
+    # Disable replica allocation so the cluster doesn't waste I/O replicating
+    # shards that will come back when the node restarts.  Use "primaries" rather
+    # than "none" per the official upgrade docs — primaries still need to be
+    # assigned for indexing to continue during the upgrade.
     - name: Disable shard allocation for the cluster
       ansible.builtin.uri:
         url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/settings"
         method: PUT
-        body: '{ "persistent": { "cluster.routing.allocation.enable": "none" }}'
+        body: '{ "persistent": { "cluster.routing.allocation.enable": "primaries" }}'
         body_format: json
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
@@ -160,6 +164,25 @@
       delay: 10
       no_log: "{{ elasticstack_no_log }}"
       when: _elasticsearch_cluster_reachable | bool
+
+    # Put ML into upgrade mode so jobs are suspended gracefully and model
+    # state is saved.  This is idempotent — calling it when already in
+    # upgrade mode or when ML is disabled is a no-op (returns 200).
+    - name: Set ML upgrade mode
+      ansible.builtin.uri:
+        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_ml/set_upgrade_mode?enabled=true"
+        method: POST
+        user: elastic
+        password: "{{ elasticstack_password.stdout }}"
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
+        force_basic_auth: true
+        status_code: [200]
+      register: _elasticsearch_ml_upgrade_mode
+      failed_when: false
+      no_log: "{{ elasticstack_no_log }}"
+      when:
+        - _elasticsearch_cluster_reachable | bool
+        - elasticsearch_ml_enabled | bool
 
     - name: Flush indices to speed up shard recovery
       ansible.builtin.uri:
@@ -276,6 +299,24 @@
       delay: 30
       no_log: "{{ elasticstack_no_log }}"
       changed_when: false
+
+    # Take ML out of upgrade mode so jobs resume on the upgraded node.
+    - name: Disable ML upgrade mode
+      ansible.builtin.uri:
+        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_ml/set_upgrade_mode?enabled=false"
+        method: POST
+        user: elastic
+        password: "{{ elasticstack_password.stdout }}"
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
+        force_basic_auth: true
+        status_code: [200]
+      register: _elasticsearch_ml_upgrade_mode_off
+      failed_when: false
+      no_log: "{{ elasticstack_no_log }}"
+      when:
+        - elasticsearch_ml_enabled | bool
+        - _elasticsearch_ml_upgrade_mode is defined
+        - (_elasticsearch_ml_upgrade_mode.status | default(0)) == 200
 
     - name: Record that rolling upgrade performed its own restart
       ansible.builtin.set_fact:
