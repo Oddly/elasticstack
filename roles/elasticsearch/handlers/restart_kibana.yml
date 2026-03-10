@@ -8,6 +8,13 @@
 - name: Restart and wait for Kibana
   when: "'kibana' in hostvars[item].ansible_facts.packages | default({})"
   block:
+    - name: Reset Kibana failed state before restart
+      ansible.builtin.command:
+        cmd: systemctl reset-failed kibana.service
+      delegate_to: "{{ item }}"
+      changed_when: false
+      failed_when: false
+
     - name: Restart Kibana service
       ansible.builtin.service:
         name: kibana

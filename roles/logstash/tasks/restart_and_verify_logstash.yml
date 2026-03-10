@@ -2,6 +2,12 @@
 
 - name: restart_and_verify_logstash | Restart and verify Logstash
   block:
+    - name: restart_and_verify_logstash | Reset Logstash failed state before restart
+      ansible.builtin.command:
+        cmd: systemctl reset-failed logstash.service
+      changed_when: false
+      failed_when: false
+
     - name: restart_and_verify_logstash | Restart Logstash service
       ansible.builtin.service:
         name: logstash

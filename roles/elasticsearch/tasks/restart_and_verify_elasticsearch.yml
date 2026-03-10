@@ -2,6 +2,12 @@
 
 - name: restart_and_verify_elasticsearch | Restart and verify Elasticsearch
   block:
+    - name: restart_and_verify_elasticsearch | Reset Elasticsearch failed state before restart
+      ansible.builtin.command:
+        cmd: systemctl reset-failed elasticsearch.service
+      changed_when: false
+      failed_when: false
+
     - name: restart_and_verify_elasticsearch | Restart Elasticsearch service
       ansible.builtin.service:
         name: elasticsearch

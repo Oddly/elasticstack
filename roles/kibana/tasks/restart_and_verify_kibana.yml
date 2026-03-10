@@ -2,6 +2,12 @@
 
 - name: restart_and_verify_kibana | Restart and verify Kibana
   block:
+    - name: restart_and_verify_kibana | Reset Kibana failed state before restart
+      ansible.builtin.command:
+        cmd: systemctl reset-failed kibana.service
+      changed_when: false
+      failed_when: false
+
     - name: restart_and_verify_kibana | Restart Kibana service
       ansible.builtin.service:
         name: kibana
