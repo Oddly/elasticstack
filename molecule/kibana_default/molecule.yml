@@ -7,8 +7,8 @@ dependency:
 driver:
   name: default
 platforms:
-  - name: "kib-def-${MOLECULE_DISTRO:-debian11}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
-    distro: "${MOLECULE_DISTRO:-debian11}"
+  - name: "kib-def-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
+    distro: "${MOLECULE_DISTRO:-debian12}"
 provisioner:
   name: ansible
   env:

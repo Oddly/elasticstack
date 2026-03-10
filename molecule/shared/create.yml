@@ -46,7 +46,6 @@
     incus_storage_pool: "{{ lookup('env', 'INCUS_STORAGE_POOL') | default('lvm-pool', true) }}"
     # Pre-baked local images with SSH + python3 + authorized_keys ready.
     incus_images:
-      debian11: "molecule-debian-11"
       debian12: "molecule-debian-12"
       debian13: "molecule-debian-13"
       rockylinux9: "molecule-rockylinux-9"

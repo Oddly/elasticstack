@@ -7,20 +7,20 @@ dependency:
 driver:
   name: default
 platforms:
-  - name: "es-calc1-${MOLECULE_DISTRO:-debian11}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
+  - name: "es-calc1-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
     groups:
       - elasticsearch
-    distro: "${MOLECULE_DISTRO:-debian11}"
+    distro: "${MOLECULE_DISTRO:-debian12}"
     memory_mb: 4096
-  - name: "es-calc2-${MOLECULE_DISTRO:-debian11}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
+  - name: "es-calc2-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
     groups:
       - elasticsearch
-    distro: "${MOLECULE_DISTRO:-debian11}"
+    distro: "${MOLECULE_DISTRO:-debian12}"
     memory_mb: 4096
-  - name: "es-calc3-${MOLECULE_DISTRO:-debian11}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
+  - name: "es-calc3-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
     groups:
       - elasticsearch
-    distro: "${MOLECULE_DISTRO:-debian11}"
+    distro: "${MOLECULE_DISTRO:-debian12}"
     memory_mb: 4096
 provisioner:
   name: ansible
