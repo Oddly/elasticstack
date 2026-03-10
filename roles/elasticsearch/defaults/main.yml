@@ -182,9 +182,8 @@ elasticsearch_unsafe_upgrade_restart: false
 # @end
 elasticsearch_extra_config: {}
 
-# @var elasticsearch_freshstart:description: Internal flag tracking whether this is a fresh installation. Do not set manually
-elasticsearch_freshstart:
-  changed: false
-# @var elasticsearch_freshstart_security:description: Internal flag tracking whether security was just initialized. Do not set manually
-elasticsearch_freshstart_security:
-  changed: false
+# @var elasticsearch_fs_repo:description: >
+#   List of filesystem paths registered as snapshot repositories in
+#   elasticsearch.yml (path.repo). Leave empty to disable.
+# @end
+elasticsearch_fs_repo: []

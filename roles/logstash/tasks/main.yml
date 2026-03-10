@@ -59,7 +59,7 @@
 
 - name: Set up security flag
   ansible.builtin.set_fact:
-    _logstash_security: "{{ logstash_security | default(elasticstack_full_stack | default(false)) }}"
+    _logstash_security: "{{ logstash_security | default(elasticstack_security | default(false)) }}"
   tags:
     - certificates
     - renew_ca
@@ -373,5 +373,5 @@
     state: started
     enabled: true
   when: logstash_enable | bool
-  register: logstash_freshstart
+  register: _logstash_freshstart
 

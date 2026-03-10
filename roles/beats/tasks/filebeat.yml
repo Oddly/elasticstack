@@ -20,7 +20,7 @@
     - beats_configuration
 
 - name: filebeat | Configure modules
-  when: beats_filebeat_modules is defined
+  when: beats_filebeat_modules | length > 0
   tags:
     - configuration
     - beats_filebeat_configuration

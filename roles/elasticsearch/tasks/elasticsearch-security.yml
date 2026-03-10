@@ -609,7 +609,7 @@
     name: elasticsearch
     state: started
     enabled: true
-  register: elasticsearch_freshstart_security
+  register: _elasticsearch_freshstart_security
   when: not ansible_check_mode
 
 - name: elasticsearch-security | Wait for all instances to start
@@ -618,8 +618,8 @@
 
 - name: elasticsearch-security | Restart if Elasticsearch was already running
   when:
-    - not elasticsearch_freshstart.changed | bool
-    - not elasticsearch_freshstart_security.changed | bool
+    - not _elasticsearch_freshstart.changed | bool
+    - not _elasticsearch_freshstart_security.changed | bool
   block:
     - name: elasticsearch-security | Force all notified handlers to run at this point, not waiting for normal sync points
       ansible.builtin.meta: flush_handlers

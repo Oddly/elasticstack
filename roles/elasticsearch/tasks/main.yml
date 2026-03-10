@@ -22,6 +22,13 @@
     name: oddly.elasticstack.elasticstack
   when: not hostvars[inventory_hostname]._elasticstack_role_imported | default(false)
 
+- name: main | Propagate stack-level security setting
+  ansible.builtin.set_fact:
+    elasticsearch_security: "{{ elasticstack_security | bool }}"
+  when:
+    - elasticstack_full_stack | bool
+    - not elasticstack_security | bool
+
 - name: Check-set-parameters
   ansible.builtin.include_tasks: elasticsearch-parameters.yml
 
@@ -477,7 +484,7 @@
     name: elasticsearch
     state: started
     enabled: true
-  register: elasticsearch_freshstart
+  register: _elasticsearch_freshstart
   when: not ansible_check_mode
 
 # The comment in the following task will disable KICS security checks for this

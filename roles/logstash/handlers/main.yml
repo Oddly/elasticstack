@@ -5,7 +5,7 @@
   when:
     - not ansible_check_mode
     - logstash_enable | bool
-    - not logstash_freshstart.changed | bool
+    - not _logstash_freshstart.changed | bool
 
 - name: Restart Logstash noauto
   ansible.builtin.include_tasks: restart_and_verify_logstash.yml
@@ -13,4 +13,4 @@
     - not ansible_check_mode
     - not logstash_config_autoreload
     - logstash_enable | bool
-    - not logstash_freshstart.changed | bool
+    - not _logstash_freshstart.changed | bool

@@ -36,3 +36,10 @@ _elasticsearch_managed_keys:
   - xpack.security.http.ssl.keystore.path
   - xpack.security.http.ssl.truststore.path
   - bootstrap.memory_lock
+
+# Internal sentinel values — prevent handler errors on first run.
+# These are overwritten by task register output; users must never set them.
+_elasticsearch_freshstart:
+  changed: false
+_elasticsearch_freshstart_security:
+  changed: false

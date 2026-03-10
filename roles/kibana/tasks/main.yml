@@ -5,6 +5,13 @@
     name: oddly.elasticstack.elasticstack
   when: not hostvars[inventory_hostname]._elasticstack_role_imported | default(false)
 
+- name: main | Propagate stack-level security setting
+  ansible.builtin.set_fact:
+    kibana_security: "{{ elasticstack_security | bool }}"
+  when:
+    - elasticstack_full_stack | bool
+    - not elasticstack_security | bool
+
 - name: Set common password for common certificates
   ansible.builtin.set_fact:
     kibana_tls_key_passphrase: "{{ elasticstack_cert_pass }}"
@@ -124,7 +131,7 @@
   when:
     - kibana_enable | bool
     - not ansible_check_mode
-  register: kibana_freshstart
+  register: _kibana_freshstart
 
 # Flush any pending restart handler (e.g. from cert renewal or config changes)
 # BEFORE waiting for Kibana to be ready. Without this, the wait task deadlocks:

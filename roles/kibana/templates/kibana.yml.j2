@@ -42,6 +42,6 @@ server.ssl.keystore.path: "/etc/kibana/certs/{{ inventory_hostname }}-kibana.p12
 {% endif %}
 {% endif %}
 
-{% if kibana_extra_config is defined %}
-{{ kibana_extra_config }}
+{% if kibana_extra_config is defined and kibana_extra_config %}
+{{ kibana_extra_config | to_nice_yaml(indent=2, sort_keys=False) }}
 {% endif %}

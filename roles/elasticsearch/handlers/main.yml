@@ -5,8 +5,8 @@
   when:
     - not ansible_check_mode
     - elasticsearch_enable | bool
-    - not elasticsearch_freshstart.changed | bool
-    - not elasticsearch_freshstart_security.changed | bool
+    - not _elasticsearch_freshstart.changed | bool
+    - not _elasticsearch_freshstart_security.changed | bool
     - not _elasticsearch_rolling_upgrade_performed | default(false) | bool
 
 - name: Restart kibana if available for elasticsearch certificates
