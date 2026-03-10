@@ -983,6 +983,18 @@
               stdout: "{{ elasticsearch_elastic_password }}"
           no_log: "{{ elasticstack_no_log }}"
 
+    # On fresh install the passwords file was just created but elasticstack_password
+    # may still be unset (the shared role couldn't fetch it because the file didn't
+    # exist yet).  Fetch now so downstream tasks (cluster settings, watermarks) work.
+    - name: Fetch elastic password after initial setup
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/fetch_password.yml"
+      vars:
+        _password_user: elastic
+        _password_fact: elasticstack_password
+      when:
+        - elasticstack_password is not defined or (elasticstack_password.stdout | default('') | length == 0)
+
 # Maybe make sure that Elasticsearch is using the right protocol http(s) to connect, even in newly setup clusters
 
 # -- Certificate expiry warnings --

@@ -531,9 +531,11 @@
   ansible.builtin.debug:
     msg: >-
       Using {{ elasticsearch_heap | int * 1024 }} of
-      {{ (_es_cgroup_memory.content is defined and (_es_cgroup_memory.content | b64decode | trim) != 'max')
-         | ternary((_es_cgroup_memory.content | b64decode | trim) | int // 1048576 ~ ' MB (cgroup limit)',
-                   ansible_facts.memtotal_mb ~ ' MB') }}
+      {% if _es_cgroup_memory.content is defined and (_es_cgroup_memory.content | b64decode | trim) != 'max' %}
+      {{ (_es_cgroup_memory.content | b64decode | trim) | int // 1048576 }} MB (cgroup limit)
+      {% else %}
+      {{ ansible_facts.memtotal_mb }} MB
+      {% endif %}
       as heap for Elasticsearch
   when: elasticsearch_heap is defined and (elasticsearch_heap | string | length > 0)
 
