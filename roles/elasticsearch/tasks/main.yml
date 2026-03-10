@@ -34,7 +34,7 @@
 - name: Detect cgroup memory limit
   ansible.builtin.slurp:
     src: /sys/fs/cgroup/memory.max
-  register: _es_cgroup_memory
+  register: _elasticsearch_cgroup_memory
   failed_when: false
   changed_when: false
 
@@ -45,15 +45,15 @@
 # (detected by comparing with the default formula based on memtotal_mb).
 - name: Recalculate heap from cgroup memory limit
   vars:
-    _es_cgroup_bytes: "{{ (_es_cgroup_memory.content | b64decode | trim) | int }}"
+    _es_cgroup_bytes: "{{ (_elasticsearch_cgroup_memory.content | b64decode | trim) | int }}"
     _es_cgroup_mb: "{{ (_es_cgroup_bytes | int) // 1048576 }}"
     _es_default_heap: "{{ [[(ansible_facts.memtotal_mb // 1024) // 2, 30] | min, 1] | max }}"
   ansible.builtin.set_fact:
     elasticsearch_heap: >-
       {{ [[(_es_cgroup_mb | int) // 1024 // 2, 30] | min, 1] | max }}
   when:
-    - _es_cgroup_memory.content is defined
-    - (_es_cgroup_memory.content | b64decode | trim) != 'max'
+    - _elasticsearch_cgroup_memory.content is defined
+    - (_elasticsearch_cgroup_memory.content | b64decode | trim) != 'max'
     - _es_cgroup_bytes | int < (ansible_facts.memtotal_mb | int) * 1048576
     - elasticsearch_heap | int == _es_default_heap | int
 
@@ -144,8 +144,8 @@
 - name: Install openssl if security is activated
   ansible.builtin.package:
     name: openssl
-  register: _openssl_install
-  until: _openssl_install is success
+  register: _elasticsearch_openssl_install
+  until: _elasticsearch_openssl_install is success
   retries: 3
   delay: 10
   when: elasticsearch_security | bool
@@ -176,7 +176,7 @@
       'elasticsearch' +
       ((elasticstack_versionseparator +
       elasticstack_version |
-      string ) if (elasticstack_version is defined and elasticstack_version | length > 0 and elasticstack_version != 'latest') else '') |
+      string) if (elasticstack_version is defined and elasticstack_version | length > 0 and elasticstack_version != 'latest') else '') |
       replace(' ', '')
       }}
 
@@ -285,7 +285,7 @@
 - name: Detect existing external CA for template rendering
   ansible.builtin.stat:
     path: /etc/elasticsearch/certs/ca.crt
-  register: _existing_ca_cert
+  register: _elasticsearch_existing_ca_cert
   when: elasticsearch_cert_source == 'external'
 
 - name: Set external CA availability for initial template render
@@ -293,7 +293,7 @@
     _elasticsearch_external_has_ca: true
   when:
     - elasticsearch_cert_source == 'external'
-    - (_existing_ca_cert.stat.exists | default(false)) or
+    - (_elasticsearch_existing_ca_cert.stat.exists | default(false)) or
       (elasticsearch_tls_ca_certificate | default('') | length > 0) or
       (elasticsearch_tls_ca_certificate_content | default('') | length > 0)
 
@@ -453,24 +453,24 @@
     - name: Check keystore exists (no-security)
       ansible.builtin.stat:
         path: /etc/elasticsearch/elasticsearch.keystore
-      register: _es_keystore_nosec
+      register: _elasticsearch_keystore_nosec
 
     - name: List keystore entries (no-security)
       ansible.builtin.command: /usr/share/elasticsearch/bin/elasticsearch-keystore list
       changed_when: false
-      register: _es_keystore_entries_nosec
-      when: _es_keystore_nosec.stat.exists
+      register: _elasticsearch_keystore_entries_nosec
+      when: _elasticsearch_keystore_nosec.stat.exists
 
     - name: Remove orphaned SSL keystore entries
       ansible.builtin.command: >
         /usr/share/elasticsearch/bin/elasticsearch-keystore remove {{ item }}
-      loop: "{{ _es_keystore_entries_nosec.stdout_lines | default([]) | select('match', 'xpack\\.security\\.') | list }}"
+      loop: "{{ _elasticsearch_keystore_entries_nosec.stdout_lines | default([]) | select('match', 'xpack\\.security\\.') | list }}"
       loop_control:
         label: "{{ item }}"
       changed_when: true
       when:
-        - _es_keystore_nosec.stat.exists
-        - _es_keystore_entries_nosec.stdout_lines is defined
+        - _elasticsearch_keystore_nosec.stat.exists
+        - _elasticsearch_keystore_entries_nosec.stdout_lines is defined
 
 - name: Start Elasticsearch
   ansible.builtin.service:
@@ -531,8 +531,8 @@
   ansible.builtin.debug:
     msg: >-
       Using {{ elasticsearch_heap | int * 1024 }} of
-      {% if _es_cgroup_memory.content is defined and (_es_cgroup_memory.content | b64decode | trim) != 'max' %}
-      {{ (_es_cgroup_memory.content | b64decode | trim) | int // 1048576 }} MB (cgroup limit)
+      {% if _elasticsearch_cgroup_memory.content is defined and (_elasticsearch_cgroup_memory.content | b64decode | trim) != 'max' %}
+      {{ (_elasticsearch_cgroup_memory.content | b64decode | trim) | int // 1048576 }} MB (cgroup limit)
       {% else %}
       {{ ansible_facts.memtotal_mb }} MB
       {% endif %}
@@ -555,14 +555,14 @@
 
 - name: Build effective cluster settings
   ansible.builtin.set_fact:
-    _es_effective_cluster_settings: >-
+    _elasticsearch_effective_cluster_settings: >-
       {{ (elasticsearch_logsdb | bool)
          | ternary({'cluster.logsdb.enabled': 'true'}, {})
          | combine(elasticsearch_cluster_settings | default({})) }}
 
 - name: Apply persistent cluster settings  # noqa: run-once[task]
   when:
-    - _es_effective_cluster_settings | length > 0
+    - _elasticsearch_effective_cluster_settings | length > 0
     - elasticsearch_security | bool | ternary(elasticstack_password is defined and (elasticstack_password.stdout | default('') | length > 0), true)
     - not ansible_check_mode
   run_once: true
@@ -577,17 +577,17 @@
         force_basic_auth: "{{ elasticsearch_security | bool }}"
         validate_certs: "{{ elasticsearch_validate_api_certs }}"
         return_content: true
-      register: _es_current_cluster_settings
+      register: _elasticsearch_current_cluster_settings
       no_log: "{{ elasticstack_no_log }}"
 
     - name: Check if settings already match
       ansible.builtin.set_fact:
-        _es_cluster_settings_changed: "{{ _needs_update | trim }}"
+        _elasticsearch_cluster_settings_changed: "{{ _needs_update | trim }}"
       vars:
-        _current: "{{ _es_current_cluster_settings.json.persistent }}"
+        _current: "{{ _elasticsearch_current_cluster_settings.json.persistent }}"
         _needs_update: >-
           {% set ns = namespace(changed=false) %}
-          {% for key, value in _es_effective_cluster_settings.items() %}
+          {% for key, value in _elasticsearch_effective_cluster_settings.items() %}
           {%   if _current.get(key) is none or _current[key] | string != value | string %}
           {%     set ns.changed = true %}
           {%   endif %}
@@ -600,12 +600,12 @@
         method: PUT
         body_format: json
         body:
-          persistent: "{{ _es_effective_cluster_settings }}"
+          persistent: "{{ _elasticsearch_effective_cluster_settings }}"
         user: "{{ 'elastic' if elasticsearch_security | bool else omit }}"
         password: "{{ elasticstack_password.stdout if elasticsearch_security | bool else omit }}"
         force_basic_auth: "{{ elasticsearch_security | bool }}"
         validate_certs: "{{ elasticsearch_validate_api_certs }}"
         status_code: 200
       no_log: "{{ elasticstack_no_log }}"
-      when: _es_cluster_settings_changed | bool
+      when: _elasticsearch_cluster_settings_changed | bool
       changed_when: true

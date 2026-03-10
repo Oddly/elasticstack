@@ -10,6 +10,7 @@
     - name: Wait for Elasticsearch port with service health check
       ansible.builtin.shell:
         cmd: |
+          set -o pipefail
           if ! systemctl is-active --quiet elasticsearch; then
             exit 2
           fi
@@ -17,18 +18,19 @@
             exit 0
           fi
           exit 1
-      register: _es_wait_result
-      until: _es_wait_result.rc == 0
+        executable: /bin/bash
+      register: _elasticsearch_wait_result
+      until: _elasticsearch_wait_result.rc == 0
       retries: 120
       delay: 5
       changed_when: false
-      failed_when: _es_wait_result.rc == 2
+      failed_when: _elasticsearch_wait_result.rc == 2
 
   rescue:
     - name: Get recent Elasticsearch journal output
       ansible.builtin.command:
         cmd: journalctl -u elasticsearch --no-pager -n 50
-      register: _es_wait_journal
+      register: _elasticsearch_wait_journal
       changed_when: false
 
     - name: Fail with Elasticsearch diagnostics (service crashed)
@@ -37,15 +39,15 @@
           Elasticsearch service died while waiting for port {{ elasticstack_elasticsearch_http_port }}.
 
           Recent log output:
-          {{ _es_wait_journal.stdout }}
-      when: _es_wait_result.rc | default(0) == 2
+          {{ _elasticsearch_wait_journal.stdout }}
+      when: _elasticsearch_wait_result.rc | default(0) == 2
 
     - name: Fail with Elasticsearch diagnostics (port timeout)
       ansible.builtin.fail:
         msg: |
           Elasticsearch port {{ elasticstack_elasticsearch_http_port }} did not become available within 600s.
-          Service state: {{ _es_wait_result.stdout | default('unknown') }}
+          Service state: {{ _elasticsearch_wait_result.stdout | default('unknown') }}
 
           Recent log output:
-          {{ _es_wait_journal.stdout }}
-      when: _es_wait_result.rc | default(0) != 2
+          {{ _elasticsearch_wait_journal.stdout }}
+      when: _elasticsearch_wait_result.rc | default(0) != 2

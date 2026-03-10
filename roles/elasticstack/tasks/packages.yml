@@ -20,8 +20,8 @@
       - python3-cryptography
       - python3-packaging
       - openssl
-  register: _security_packages_install
-  until: _security_packages_install is success
+  register: _elasticstack_security_packages_install
+  until: _elasticstack_security_packages_install is success
   retries: 3
   delay: 10
   tags:

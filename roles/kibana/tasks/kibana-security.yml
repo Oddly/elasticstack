@@ -292,7 +292,7 @@
       loop:
         - encryption_key
         - savedobjects_encryption_key
-      register: _preserved_enckeys
+      register: _kibana_preserved_enckeys
 
     - name: Restore encryption keys preserved during CA renewal
       ansible.builtin.copy:
@@ -300,7 +300,7 @@
         dest: "{{ elasticstack_ca_dir }}/{{ item.item }}"
         remote_src: true
         mode: "0600"
-      loop: "{{ _preserved_enckeys.results }}"
+      loop: "{{ _kibana_preserved_enckeys.results }}"
       when: item.stat.exists
       loop_control:
         label: "{{ item.item }}"
@@ -309,7 +309,7 @@
       ansible.builtin.file:
         path: "/tmp/.kibana_preserved_{{ item.item }}"
         state: absent
-      loop: "{{ _preserved_enckeys.results }}"
+      loop: "{{ _kibana_preserved_enckeys.results }}"
       when: item.stat.exists
       loop_control:
         label: "{{ item.item }}"

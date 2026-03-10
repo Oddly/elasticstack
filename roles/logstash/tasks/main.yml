@@ -102,7 +102,7 @@
       'logstash' +
       ((elasticstack_versionseparator +
       elasticstack_version |
-      string ) if (elasticstack_version is defined and elasticstack_version | length > 0 and elasticstack_version != 'latest') else '') |
+      string) if (elasticstack_version is defined and elasticstack_version | length > 0 and elasticstack_version != 'latest') else '') |
       replace(' ', '')
       }}
   when:

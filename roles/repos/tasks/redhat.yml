@@ -7,8 +7,8 @@
   ansible.builtin.package:
     name: gnupg
     state: present
-  register: _gpg_install_rh
-  until: _gpg_install_rh is success
+  register: _repos_gpg_install_rh
+  until: _repos_gpg_install_rh is success
   retries: 3
   delay: 10
 
@@ -31,20 +31,20 @@
         - name: Install crypto-policies-scripts
           ansible.builtin.package:
             name: crypto-policies-scripts
-          register: _crypto_policies_install
-          until: _crypto_policies_install is success
+          register: _repos_crypto_policies_install
+          until: _repos_crypto_policies_install is success
           retries: 3
           delay: 10
 
         - name: Check current crypto policy
           ansible.builtin.command: update-crypto-policies --show
-          register: _crypto_policy
+          register: _repos_crypto_policy
           changed_when: false
 
         - name: Set Crypto policies to legacy
           ansible.builtin.command: "update-crypto-policies --set LEGACY"
           changed_when: true
-          when: _crypto_policy.stdout != 'LEGACY'
+          when: _repos_crypto_policy.stdout != 'LEGACY'
 
 - name: Ensure Elastic repository key is available (RedHat)
   ansible.builtin.rpm_key:

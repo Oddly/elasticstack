@@ -261,7 +261,7 @@
         cmd: >-
           awk '/-----BEGIN CERTIFICATE-----/{n++} n>1'
           /etc/elasticsearch/certs/{{ inventory_hostname }}-transport.crt
-      register: _extracted_ca_chain
+      register: _elasticsearch_extracted_ca_chain
       changed_when: false
       when:
         - elasticsearch_tls_ca_certificate | length == 0
@@ -270,7 +270,7 @@
 
     - name: Write extracted CA chain
       ansible.builtin.copy:
-        content: "{{ _extracted_ca_chain.stdout }}\n"
+        content: "{{ _elasticsearch_extracted_ca_chain.stdout }}\n"
         dest: /etc/elasticsearch/certs/ca.crt
         owner: root
         group: elasticsearch
@@ -296,16 +296,16 @@
         excludes:
           - "{{ inventory_hostname }}-transport.p12"
           - "{{ inventory_hostname }}-http.p12"
-      register: _stale_p12_files
+      register: _elasticsearch_stale_p12_files
 
     - name: Remove stale auto-generated P12 files
       ansible.builtin.file:
         path: "{{ item.path }}"
         state: absent
-      loop: "{{ _stale_p12_files.files }}"
+      loop: "{{ _elasticsearch_stale_p12_files.files }}"
       loop_control:
         label: "{{ item.path | basename }}"
-      when: _stale_p12_files.files | length > 0
+      when: _elasticsearch_stale_p12_files.files | length > 0
 
     # -- Keystore setup for external certs --
 
@@ -361,7 +361,7 @@
       loop:
         - encryption_key
         - savedobjects_encryption_key
-      register: _kibana_enckeys_before_backup
+      register: _elasticsearch_kibana_enckeys_before_backup
       when:
         - inventory_hostname == elasticstack_ca_host
         - "'renew_ca' in ansible_run_tags or elasticstack_ca_will_expire_soon | bool"
@@ -374,7 +374,7 @@
         dest: "/tmp/.kibana_preserved_{{ item.item }}"
         remote_src: true
         mode: "0600"
-      loop: "{{ _kibana_enckeys_before_backup.results | default([]) }}"
+      loop: "{{ _elasticsearch_kibana_enckeys_before_backup.results | default([]) }}"
       when:
         - inventory_hostname == elasticstack_ca_host
         - "'renew_ca' in ansible_run_tags or elasticstack_ca_will_expire_soon | bool"
@@ -680,7 +680,7 @@
           ansible.builtin.command: >
             /usr/share/elasticsearch/bin/elasticsearch-reset-password
             -u elastic -b -s
-          register: _elastic_reset_pw
+          register: _elasticsearch_elastic_reset_pw
           changed_when: true
           no_log: "{{ elasticstack_no_log }}"
 
@@ -688,11 +688,11 @@
           ansible.builtin.uri:
             url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}"
             user: elastic
-            password: "{{ _elastic_reset_pw.stdout }}"
+            password: "{{ _elasticsearch_elastic_reset_pw.stdout }}"
             validate_certs: "{{ elasticsearch_validate_api_certs }}"
             force_basic_auth: true
-          register: _elastic_recovery_check
-          until: (_elastic_recovery_check.json | default({})).cluster_name is defined
+          register: _elasticsearch_elastic_recovery_check
+          until: (_elasticsearch_elastic_recovery_check.json | default({})).cluster_name is defined
           retries: 5
           delay: 5
           no_log: "{{ elasticstack_no_log }}"
@@ -702,7 +702,7 @@
             dest: "{{ elasticstack_initial_passwords }}"
             content: |
               Changed password for user elastic
-              PASSWORD elastic = {{ _elastic_reset_pw.stdout }}
+              PASSWORD elastic = {{ _elasticsearch_elastic_reset_pw.stdout }}
             owner: root
             group: root
             mode: "0600"
@@ -762,7 +762,7 @@
     # actually been applied to ES yet.  Clear it so the API check below
     # is safely skipped (the bootstrap-password check already confirmed
     # the cluster is reachable).
-    - name: Clear premature user-defined password on fresh install
+    - name: Clear premature user-defined password on fresh install  # noqa: var-naming[no-role-prefix]
       ansible.builtin.set_fact:
         elasticstack_password:
           stdout: ""
@@ -792,7 +792,7 @@
 
     # If the auto-generated password returned 401, the user-defined
     # password was already applied in a previous run.  Switch to it.
-    - name: Switch to user-defined password after prior change
+    - name: Switch to user-defined password after prior change  # noqa: var-naming[no-role-prefix]
       ansible.builtin.set_fact:
         elasticstack_password:
           stdout: "{{ elasticsearch_elastic_password }}"
@@ -894,8 +894,8 @@
       args:
         executable: /bin/bash
         creates: "{{ elasticstack_initial_passwords }}"
-      register: _setup_passwords_result
-      until: _setup_passwords_result.rc | default(1) == 0
+      register: _elasticsearch_setup_passwords_result
+      until: _elasticsearch_setup_passwords_result.rc | default(1) == 0
       retries: 10
       delay: 15
       when:
@@ -911,7 +911,7 @@
         - name: Check if passwords file already exists
           ansible.builtin.stat:
             path: "{{ elasticstack_initial_passwords }}"
-          register: _pw_file_check
+          register: _elasticsearch_pw_file_check
 
         - name: Reset built-in user passwords
           ansible.builtin.command: >
@@ -923,16 +923,16 @@
             - logstash_system
             - beats_system
             - remote_monitoring_user
-          register: _reset_password_results
+          register: _elasticsearch_reset_password_results
           changed_when: true
           no_log: "{{ elasticstack_no_log }}"
-          when: not _pw_file_check.stat.exists
+          when: not _elasticsearch_pw_file_check.stat.exists
 
         - name: Write passwords file
           ansible.builtin.copy:
             dest: "{{ elasticstack_initial_passwords }}"
             content: |
-              {% for result in _reset_password_results.results %}
+              {% for result in _elasticsearch_reset_password_results.results %}
               Changed password for user {{ result.item }}
               PASSWORD {{ result.item }} = {{ result.stdout }}
               {% endfor %}
@@ -940,7 +940,7 @@
             group: root
             mode: "0600"
           no_log: "{{ elasticstack_no_log }}"
-          when: not _pw_file_check.stat.exists
+          when: not _elasticsearch_pw_file_check.stat.exists
 
     - name: Set permissions on passwords file
       ansible.builtin.file:
@@ -977,7 +977,7 @@
             status_code: 200
           no_log: "{{ elasticstack_no_log }}"
 
-        - name: Set elastic password fact to user-defined value
+        - name: Set elastic password fact to user-defined value  # noqa: var-naming[no-role-prefix]
           ansible.builtin.set_fact:
             elasticstack_password:
               stdout: "{{ elasticsearch_elastic_password }}"

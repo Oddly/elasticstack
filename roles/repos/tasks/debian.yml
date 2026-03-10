@@ -5,8 +5,8 @@
       - gpg
       - gpg-agent
     state: present
-  register: _gpg_install_deb
-  until: _gpg_install_deb is success
+  register: _repos_gpg_install_deb
+  until: _repos_gpg_install_deb is success
   retries: 3
   delay: 10
 
@@ -15,8 +15,8 @@
     url: "{{ elasticstack_repo_key }}"
     dest: /usr/share/keyrings/elasticsearch.asc
     mode: "0644"
-  register: _elastic_key_download
-  until: _elastic_key_download is success
+  register: _repos_elastic_key_download
+  until: _repos_elastic_key_download is success
   retries: 3
   delay: 10
 

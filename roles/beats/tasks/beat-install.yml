@@ -12,7 +12,7 @@
       _beat_name +
       ((elasticstack_versionseparator +
       elasticstack_version |
-      string ) if (elasticstack_version is defined and elasticstack_version | length > 0) else '') |
+      string) if (elasticstack_version is defined and elasticstack_version | length > 0) else '') |
       replace(' ', '') }}
 
 - name: "Install rpm full-stack package for {{ _beat_name }}"
