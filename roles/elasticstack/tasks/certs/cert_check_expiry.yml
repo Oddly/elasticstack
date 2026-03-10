@@ -16,34 +16,34 @@
 #   {{ _cert_expiry_fact }}:  true if cert expires within buffer
 #   {{ _cert_days_fact }}:    days until expiration
 
-- name: Check if certificate exists
+- name: certs | cert_check_expiry | Check if certificate exists
   ansible.builtin.stat:
     path: "{{ _cert_path }}"
   register: elasticstack_cert_stat
 
-- name: Check certificate expiry
+- name: certs | cert_check_expiry | Check certificate expiry
   when: elasticstack_cert_stat.stat.exists
   block:
-    - name: Get certificate info
+    - name: certs | cert_check_expiry | Get certificate info
       oddly.elasticstack.cert_info:
         path: "{{ _cert_path }}"
         passphrase: "{{ _cert_pass | default(omit, true) }}"
         format: "{{ _cert_format | default('p12') }}"
       register: elasticstack_cert_info
 
-    - name: Calculate days until expiration
+    - name: certs | cert_check_expiry | Calculate days until expiration
       ansible.builtin.set_fact:
         "{{ _cert_days_fact | default('elasticstack_cert_expiration_days') }}": >-
           {{ (((elasticstack_cert_info.not_valid_after | regex_replace('[+-]\d{2}:\d{2}$', ''))
           | to_datetime('%Y-%m-%d %H:%M:%S')) - (ansible_facts.date_time.date
           | to_datetime('%Y-%m-%d'))).days }}
 
-    - name: "Set certificate expiry fact - {{ _cert_expiry_fact }}"
+    - name: certs | cert_check_expiry | Set certificate expiry fact - {{ _cert_expiry_fact }}
       ansible.builtin.set_fact:
         "{{ _cert_expiry_fact }}": true
       when: (hostvars[inventory_hostname][_cert_days_fact | default('elasticstack_cert_expiration_days')]) | int <= _cert_buffer_days | int
 
-    - name: Show certificate renewal message
+    - name: certs | cert_check_expiry | Show certificate renewal message
       ansible.builtin.debug:
         msg: >-
           Certificate {{ _cert_path }} will expire in {{ hostvars[inventory_hostname][_cert_days_fact | default('elasticstack_cert_expiration_days')] }} days.

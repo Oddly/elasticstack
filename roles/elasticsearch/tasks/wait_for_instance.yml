@@ -1,13 +1,13 @@
 ---
 
-- name: Wait for Elasticsearch to be ready
+- name: wait_for_instance | Wait for Elasticsearch to be ready
   when: not ansible_check_mode
   tags:
     - certificates
     - renew_ca
     - renew_es_cert
   block:
-    - name: Wait for Elasticsearch port with service health check
+    - name: wait_for_instance | Wait for Elasticsearch port with service health check
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
@@ -27,13 +27,13 @@
       failed_when: _elasticsearch_wait_result.rc == 2
 
   rescue:
-    - name: Get recent Elasticsearch journal output
+    - name: wait_for_instance | Get recent Elasticsearch journal output
       ansible.builtin.command:
         cmd: journalctl -u elasticsearch --no-pager -n 50
       register: _elasticsearch_wait_journal
       changed_when: false
 
-    - name: Fail with Elasticsearch diagnostics (service crashed)
+    - name: wait_for_instance | Fail with Elasticsearch diagnostics (service crashed)
       ansible.builtin.fail:
         msg: |
           Elasticsearch service died while waiting for port {{ elasticstack_elasticsearch_http_port }}.
@@ -42,7 +42,7 @@
           {{ _elasticsearch_wait_journal.stdout }}
       when: _elasticsearch_wait_result.rc | default(0) == 2
 
-    - name: Fail with Elasticsearch diagnostics (port timeout)
+    - name: wait_for_instance | Fail with Elasticsearch diagnostics (port timeout)
       ansible.builtin.fail:
         msg: |
           Elasticsearch port {{ elasticstack_elasticsearch_http_port }} did not become available within 600s.

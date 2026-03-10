@@ -1,14 +1,14 @@
 ---
 
-- name: Restart and verify Elasticsearch
+- name: restart_and_verify_elasticsearch | Restart and verify Elasticsearch
   block:
-    - name: Restart Elasticsearch service
+    - name: restart_and_verify_elasticsearch | Restart Elasticsearch service
       ansible.builtin.service:
         name: elasticsearch
         state: restarted
         daemon_reload: true
 
-    - name: Verify Elasticsearch is running
+    - name: restart_and_verify_elasticsearch | Verify Elasticsearch is running
       ansible.builtin.systemd:
         name: elasticsearch
       register: _elasticsearch_service_state
@@ -17,13 +17,13 @@
       delay: 3
 
   rescue:
-    - name: Get recent Elasticsearch journal output
+    - name: restart_and_verify_elasticsearch | Get recent Elasticsearch journal output
       ansible.builtin.command:
         cmd: journalctl -u elasticsearch --no-pager -n 50
       register: _elasticsearch_journal
       changed_when: false
 
-    - name: Fail with Elasticsearch startup diagnostics
+    - name: restart_and_verify_elasticsearch | Fail with Elasticsearch startup diagnostics
       ansible.builtin.fail:
         msg: |
           Elasticsearch failed to start.

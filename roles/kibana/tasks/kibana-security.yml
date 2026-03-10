@@ -4,21 +4,21 @@
 # External certificates
 # ============================================================
 
-- name: Handle external certificates
+- name: kibana-security | Handle external certificates
   when: kibana_cert_source == 'external'
   block:
 
     # -- Kibana web UI certificate (only when kibana_tls is enabled) --
 
-    - name: Handle Kibana web UI certificates
+    - name: kibana-security | Handle Kibana web UI certificates
       when: kibana_tls | bool
       block:
         # -- Detect content mode vs file mode --
-        - name: Detect content mode for Kibana
+        - name: kibana-security | Detect content mode for Kibana
           ansible.builtin.set_fact:
             _kibana_content_mode: "{{ kibana_tls_certificate_content | default('', true) | length > 0 }}"
 
-        - name: Validate certificate is provided
+        - name: kibana-security | Validate certificate is provided
           ansible.builtin.assert:
             that:
               - (kibana_tls_certificate_file | length > 0) or
@@ -28,13 +28,13 @@
               kibana_tls_certificate_file or kibana_tls_certificate_content
 
         # -- Content mode: set format to PEM --
-        - name: Set format facts for content mode
+        - name: kibana-security | Set format facts for content mode
           ansible.builtin.set_fact:
             _kibana_cert_format: pem
             _kibana_ca_extracted: false
           when: _kibana_content_mode | bool
 
-        - name: Check for CA chain in certificate content
+        - name: kibana-security | Check for CA chain in certificate content
           ansible.builtin.set_fact:
             _kibana_ca_extracted: true
           when:
@@ -43,7 +43,7 @@
               kibana_tls_certificate_content | default('')
               | regex_findall('-----BEGIN CERTIFICATE-----') | length > 1
 
-        - name: Validate key content is provided (content mode)
+        - name: kibana-security | Validate key content is provided (content mode)
           ansible.builtin.assert:
             that:
               - kibana_tls_key_content | default('', true) | length > 0
@@ -53,7 +53,7 @@
           when: _kibana_content_mode | bool
 
         # -- File mode: validate and detect format --
-        - name: Validate Kibana certificate (file mode)
+        - name: kibana-security | Validate Kibana certificate (file mode)
           ansible.builtin.include_tasks:
             file: "{{ role_path }}/../elasticstack/tasks/certs/cert_validate.yml"
           vars:
@@ -68,7 +68,7 @@
           when: not (_kibana_content_mode | bool)
 
         # -- Ensure cert directory exists before deploying --
-        - name: Create certificate directory
+        - name: kibana-security | Create certificate directory
           ansible.builtin.file:
             path: /etc/kibana/certs
             state: directory
@@ -78,7 +78,7 @@
 
         # -- Deploy certificates --
 
-        - name: Write Kibana certificate (from content)
+        - name: kibana-security | Write Kibana certificate (from content)
           ansible.builtin.copy:
             content: "{{ kibana_tls_certificate_content }}"
             dest: "/etc/kibana/certs/{{ inventory_hostname }}-kibana.crt"
@@ -88,7 +88,7 @@
           when: _kibana_content_mode | bool
           notify: Restart Kibana
 
-        - name: Copy Kibana certificate (from file)
+        - name: kibana-security | Copy Kibana certificate (from file)
           ansible.builtin.copy:
             src: "{{ kibana_tls_certificate_file }}"
             dest: "/etc/kibana/certs/{{ inventory_hostname }}-kibana{{ '.p12' if _kibana_cert_format == 'p12' else '.crt' }}"
@@ -99,7 +99,7 @@
           when: not (_kibana_content_mode | bool)
           notify: Restart Kibana
 
-        - name: Write Kibana key (from content)
+        - name: kibana-security | Write Kibana key (from content)
           ansible.builtin.copy:
             content: "{{ kibana_tls_key_content }}"
             dest: "/etc/kibana/certs/{{ inventory_hostname }}-kibana.key"
@@ -109,7 +109,7 @@
           when: _kibana_content_mode | bool
           notify: Restart Kibana
 
-        - name: Copy Kibana key (from file, PEM only)
+        - name: kibana-security | Copy Kibana key (from file, PEM only)
           ansible.builtin.copy:
             src: "{{ _kibana_resolved_key }}"
             dest: "/etc/kibana/certs/{{ inventory_hostname }}-kibana.key"
@@ -124,7 +124,7 @@
 
     # -- CA certificate (always handled, independent of kibana_tls) --
 
-    - name: Create certificate directory
+    - name: kibana-security | Create certificate directory
       ansible.builtin.file:
         path: /etc/kibana/certs
         state: directory
@@ -132,7 +132,7 @@
         group: kibana
         mode: "0750"
 
-    - name: Write CA certificate (from content)
+    - name: kibana-security | Write CA certificate (from content)
       ansible.builtin.copy:
         content: "{{ kibana_tls_ca_content }}"
         dest: /etc/kibana/certs/ca.crt
@@ -142,7 +142,7 @@
       when: kibana_tls_ca_content | default('', true) | length > 0
       notify: Restart Kibana
 
-    - name: Copy CA certificate (from file)
+    - name: kibana-security | Copy CA certificate (from file)
       ansible.builtin.copy:
         src: "{{ kibana_tls_ca_file }}"
         dest: /etc/kibana/certs/ca.crt
@@ -156,7 +156,7 @@
       notify: Restart Kibana
 
     # Extract CA chain from the already-deployed cert on the node
-    - name: Read CA chain from PEM bundle
+    - name: kibana-security | Read CA chain from PEM bundle
       ansible.builtin.shell:
         cmd: >-
           awk '/-----BEGIN CERTIFICATE-----/{n++} n>1'
@@ -169,7 +169,7 @@
         - _kibana_ca_extracted | default(false) | bool
         - (_kibana_cert_format | default('')) == 'pem'
 
-    - name: Write extracted CA chain
+    - name: kibana-security | Write extracted CA chain
       ansible.builtin.copy:
         content: "{{ _kibana_extracted_ca_chain.stdout }}\n"
         dest: /etc/kibana/certs/ca.crt
@@ -183,7 +183,7 @@
         - (_kibana_cert_format | default('')) == 'pem'
       notify: Restart Kibana
 
-    - name: Set effective CA availability fact
+    - name: kibana-security | Set effective CA availability fact
       ansible.builtin.set_fact:
         _kibana_has_ca: >-
           {{ (kibana_tls_ca_file | length > 0) or
@@ -195,11 +195,11 @@
 # Auto-generated certificates (elasticsearch_ca)
 # ============================================================
 
-- name: Handle auto-generated certificates
+- name: kibana-security | Handle auto-generated certificates
   when: kibana_cert_source == 'elasticsearch_ca'
   block:
     # -- Check Kibana certificate expiry --
-    - name: Check Kibana certificate expiry
+    - name: kibana-security | Check Kibana certificate expiry
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/certs/cert_check_expiry.yml"
         apply:
@@ -216,7 +216,7 @@
         - renew_kibana_cert
 
     # -- Backup Kibana certs on node --
-    - name: Backup Kibana certs on node
+    - name: kibana-security | Backup Kibana certs on node
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
         apply:
@@ -232,7 +232,7 @@
         - renew_kibana_cert
 
     # -- Backup Kibana cert on CA host --
-    - name: Backup Kibana cert on CA host
+    - name: kibana-security | Backup Kibana cert on CA host
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
         apply:
@@ -248,7 +248,7 @@
         - renew_kibana_cert
 
     # -- Backup Kibana cert on Ansible controller --
-    - name: Backup Kibana cert on Ansible controller
+    - name: kibana-security | Backup Kibana cert on Ansible controller
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
         apply:
@@ -269,7 +269,7 @@
 # ============================================================
 
 # -- Encryption keys (Kibana-specific, kept inline) --
-- name: Block for key generation
+- name: kibana-security | Block for key generation
   delegate_to: "{{ elasticstack_ca_host }}"
   run_once: true
   tags:
@@ -277,7 +277,7 @@
     - renew_ca
     - renew_kibana_cert
   block:
-    - name: Ensure CA directory exists for encryption keys
+    - name: kibana-security | Ensure CA directory exists for encryption keys
       ansible.builtin.file:
         path: "{{ elasticstack_ca_dir }}"
         state: directory
@@ -286,7 +286,7 @@
         mode: "0700"
       check_mode: false
 
-    - name: Check for preserved encryption keys from CA renewal
+    - name: kibana-security | Check for preserved encryption keys from CA renewal
       ansible.builtin.stat:
         path: "/tmp/.kibana_preserved_{{ item }}"
       loop:
@@ -294,7 +294,7 @@
         - savedobjects_encryption_key
       register: _kibana_preserved_enckeys
 
-    - name: Restore encryption keys preserved during CA renewal
+    - name: kibana-security | Restore encryption keys preserved during CA renewal
       ansible.builtin.copy:
         src: "/tmp/.kibana_preserved_{{ item.item }}"
         dest: "{{ elasticstack_ca_dir }}/{{ item.item }}"
@@ -305,7 +305,7 @@
       loop_control:
         label: "{{ item.item }}"
 
-    - name: Clean up preserved encryption key copies
+    - name: kibana-security | Clean up preserved encryption key copies
       ansible.builtin.file:
         path: "/tmp/.kibana_preserved_{{ item.item }}"
         state: absent
@@ -314,7 +314,7 @@
       loop_control:
         label: "{{ item.item }}"
 
-    - name: Generate encryption key
+    - name: kibana-security | Generate encryption key
       ansible.builtin.shell: >
         set -o pipefail;
         openssl rand -base64 36 >
@@ -325,13 +325,13 @@
       changed_when: false
       check_mode: false
 
-    - name: Fetch encryption key
+    - name: kibana-security | Fetch encryption key
       ansible.builtin.slurp:
         src: "{{ elasticstack_ca_dir }}/encryption_key"
       register: kibana_encryption_key
       check_mode: false
 
-    - name: Generate saved objects encryption key
+    - name: kibana-security | Generate saved objects encryption key
       ansible.builtin.shell: >
         set -o pipefail;
         openssl rand -base64 36 >
@@ -342,18 +342,18 @@
       changed_when: false
       check_mode: false
 
-    - name: Fetch saved objects encryption key
+    - name: kibana-security | Fetch saved objects encryption key
       ansible.builtin.slurp:
         src: "{{ elasticstack_ca_dir }}/savedobjects_encryption_key"
       register: kibana_savedobjects_encryption_key
       check_mode: false
 
 # -- Auto-generated cert tasks (only for elasticsearch_ca) --
-- name: Handle auto-generated Kibana certificate distribution
+- name: kibana-security | Handle auto-generated Kibana certificate distribution
   when: kibana_cert_source == 'elasticsearch_ca'
   block:
     # -- Create Kibana certificate directory (Kibana-specific path/perms) --
-    - name: Create certificate directory
+    - name: kibana-security | Create certificate directory
       ansible.builtin.file:
         path: /etc/kibana/certs
         state: directory
@@ -366,7 +366,7 @@
         - renew_kibana_cert
 
     # -- Generate Kibana certificate --
-    - name: Generate Kibana certificate
+    - name: kibana-security | Generate Kibana certificate
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/certs/cert_generate.yml"
         apply:
@@ -387,7 +387,7 @@
         - renew_kibana_cert
 
     # -- Distribute Kibana certificate --
-    - name: Distribute Kibana certificate
+    - name: kibana-security | Distribute Kibana certificate
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/certs/cert_distribute.yml"
         apply:
@@ -409,7 +409,7 @@
         - renew_kibana_cert
 
 # -- Fetch Kibana password --
-- name: Fetch Kibana password
+- name: kibana-security | Fetch Kibana password
   ansible.builtin.include_tasks:
     file: "{{ role_path }}/../elasticstack/tasks/fetch_password.yml"
   vars:
@@ -417,7 +417,7 @@
     _password_fact: kibana_password
 
 # -- Distribute CA certificate to Kibana nodes --
-- name: Distribute CA certificate to Kibana nodes
+- name: kibana-security | Distribute CA certificate to Kibana nodes
   ansible.builtin.include_tasks:
     file: "{{ role_path }}/../elasticstack/tasks/certs/cert_distribute.yml"
     apply:
@@ -440,7 +440,7 @@
     - renew_kibana_cert
 
 # -- Certificate expiry warning --
-- name: Check Kibana certificate expiry warning
+- name: kibana-security | Check Kibana certificate expiry warning
   ansible.builtin.include_tasks:
     file: "{{ role_path }}/../elasticstack/tasks/certs/cert_expiry_warn.yml"
   vars:

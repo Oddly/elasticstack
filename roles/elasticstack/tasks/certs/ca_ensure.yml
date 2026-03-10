@@ -11,7 +11,7 @@
 # The passphrase is passed on the command line but the task uses no_log
 # to prevent Ansible from recording it, and the process lifetime is brief.
 
-- name: Create CA directory
+- name: certs | ca_ensure | Create CA directory
   ansible.builtin.file:
     path: "{{ elasticstack_ca_dir }}"
     owner: root
@@ -23,7 +23,7 @@
     - renew_ca
     - renew_es_cert
 
-- name: Create CA
+- name: certs | ca_ensure | Create CA
   ansible.builtin.command: >
     /usr/share/elasticsearch/bin/elasticsearch-certutil ca
     --ca-dn "{{ elasticstack_ca_name }}"

@@ -1,11 +1,11 @@
 ---
 
-- name: Install Metricbeat
+- name: metricbeat | Install Metricbeat
   ansible.builtin.include_tasks: beat-install.yml
   vars:
     _beat_name: metricbeat
 
-- name: Configure Metricbeat
+- name: metricbeat | Configure Metricbeat
   ansible.builtin.template:
     src: metricbeat.yml.j2
     dest: /etc/metricbeat/metricbeat.yml
@@ -19,14 +19,14 @@
     - beats_metricbeat_configuration
     - beats_configuration
 
-- name: Enable modules
+- name: metricbeat | Enable modules
   ansible.builtin.command: "/usr/bin/metricbeat modules enable {{ item }}"
   args:
     creates: "/etc/metricbeat/modules.d/{{ item }}.yml"
   loop: "{{ beats_metricbeat_modules }}"
   when: beats_metricbeat_modules is defined
 
-- name: Enable Ingest Pipelines
+- name: metricbeat | Enable Ingest Pipelines
   ansible.builtin.shell: >
     /usr/bin/metricbeat setup --pipelines --index-management &&
     /usr/bin/metricbeat version > /etc/metricbeat/pipelines_created
@@ -40,7 +40,7 @@
     - beats_metricbeat_modules is defined
     - beats_metricbeat_output == "elasticsearch"
 
-- name: Start Metricbeat
+- name: metricbeat | Start Metricbeat
   ansible.builtin.service:
     name: metricbeat
     state: started

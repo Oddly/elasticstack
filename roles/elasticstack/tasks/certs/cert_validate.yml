@@ -13,14 +13,14 @@
 #   _validate_key_fact           Fact name to store resolved key path
 #   _validate_ca_extracted_fact  Fact name for whether CA was auto-extracted from chain
 
-- name: "Check certificate file exists — {{ _validate_service }}"
+- name: certs | cert_validate | Check certificate file exists — {{ _validate_service }}
   ansible.builtin.stat:
     path: "{{ _validate_cert_path }}"
   register: _elasticstack_validate_cert_stat
   delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
   become: false
 
-- name: "Fail if certificate file missing — {{ _validate_service }}"
+- name: certs | cert_validate | Fail if certificate file missing — {{ _validate_service }}
   ansible.builtin.fail:
     msg: >-
       Certificate file not found: {{ _validate_cert_path }}
@@ -29,7 +29,7 @@
 
 # --- Format detection ---
 
-- name: "Probe for PEM format — {{ _validate_service }}"
+- name: certs | cert_validate | Probe for PEM format — {{ _validate_service }}
   ansible.builtin.command:
     cmd: openssl x509 -in {{ _validate_cert_path }} -noout
   register: _elasticstack_validate_pem_probe
@@ -38,7 +38,7 @@
   delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
   become: false
 
-- name: "Probe for P12 format — {{ _validate_service }}"
+- name: certs | cert_validate | Probe for P12 format — {{ _validate_service }}
   ansible.builtin.command:
     cmd: >-
       openssl pkcs12 -in {{ _validate_cert_path }} -noout
@@ -51,7 +51,7 @@
   no_log: true
   when: _elasticstack_validate_pem_probe.rc != 0
 
-- name: "Fail if format unrecognised — {{ _validate_service }}"
+- name: certs | cert_validate | Fail if format unrecognised — {{ _validate_service }}
   ansible.builtin.fail:
     msg: >-
       Unsupported certificate format for {{ _validate_service }}.
@@ -60,46 +60,46 @@
     - _elasticstack_validate_pem_probe.rc != 0
     - (_elasticstack_validate_p12_probe.rc | default(1)) != 0
 
-- name: "Set detected format fact — {{ _validate_service }}"
+- name: certs | cert_validate | Set detected format fact — {{ _validate_service }}
   ansible.builtin.set_fact:
     "{{ _validate_format_fact }}": "{{ 'pem' if _elasticstack_validate_pem_probe.rc == 0 else 'p12' }}"
 
 # --- PEM key auto-detection ---
 
-- name: "Derive key path from certificate path — {{ _validate_service }}"
+- name: certs | cert_validate | Derive key path from certificate path — {{ _validate_service }}
   when:
     - (_validate_key_path | default('', true)) | length == 0
     - _elasticstack_validate_pem_probe.rc == 0
   block:
-    - name: "Compute derived key path — {{ _validate_service }}"
+    - name: certs | cert_validate | Compute derived key path — {{ _validate_service }}
       ansible.builtin.set_fact:
         _elasticstack_validate_derived_key: "{{ _validate_cert_path | regex_replace('\\.(crt|pem|cert)$', '.key') }}"
 
-    - name: "Check derived key exists — {{ _validate_service }}"
+    - name: certs | cert_validate | Check derived key exists — {{ _validate_service }}
       ansible.builtin.stat:
         path: "{{ _elasticstack_validate_derived_key }}"
       register: _elasticstack_validate_derived_key_stat
       delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
       become: false
 
-    - name: "Fail if derived key not found — {{ _validate_service }}"
+    - name: certs | cert_validate | Fail if derived key not found — {{ _validate_service }}
       ansible.builtin.fail:
         msg: >-
           Could not find key file {{ _elasticstack_validate_derived_key }} (derived from cert path).
           Set the corresponding *_tls_key variable explicitly.
       when: not _elasticstack_validate_derived_key_stat.stat.exists
 
-    - name: "Set resolved key fact — {{ _validate_service }}"
+    - name: certs | cert_validate | Set resolved key fact — {{ _validate_service }}
       ansible.builtin.set_fact:
         "{{ _validate_key_fact }}": "{{ _elasticstack_validate_derived_key }}"
 
-- name: "Set explicit key fact — {{ _validate_service }}"
+- name: certs | cert_validate | Set explicit key fact — {{ _validate_service }}
   ansible.builtin.set_fact:
     "{{ _validate_key_fact }}": "{{ _validate_key_path }}"
   when:
     - (_validate_key_path | default('', true)) | length > 0
 
-- name: "Set empty key fact for P12 — {{ _validate_service }}"
+- name: certs | cert_validate | Set empty key fact for P12 — {{ _validate_service }}
   ansible.builtin.set_fact:
     "{{ _validate_key_fact }}": ""
   when:
@@ -107,10 +107,10 @@
 
 # --- PEM CA chain extraction ---
 
-- name: "Check for CA chain in PEM bundle — {{ _validate_service }}"
+- name: certs | cert_validate | Check for CA chain in PEM bundle — {{ _validate_service }}
   when: _elasticstack_validate_pem_probe.rc == 0
   block:
-    - name: "Count PEM blocks in certificate file — {{ _validate_service }}"
+    - name: certs | cert_validate | Count PEM blocks in certificate file — {{ _validate_service }}
       ansible.builtin.command:
         cmd: grep -c 'BEGIN CERTIFICATE' {{ _validate_cert_path }}
       register: _elasticstack_validate_pem_count
@@ -118,18 +118,18 @@
       delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
       become: false
 
-    - name: "Set CA extracted fact — {{ _validate_service }}"
+    - name: certs | cert_validate | Set CA extracted fact — {{ _validate_service }}
       ansible.builtin.set_fact:
         "{{ _validate_ca_extracted_fact }}": "{{ (_elasticstack_validate_pem_count.stdout | int) > 1 }}"
 
-- name: "Set CA extracted fact for P12 — {{ _validate_service }}"
+- name: certs | cert_validate | Set CA extracted fact for P12 — {{ _validate_service }}
   ansible.builtin.set_fact:
     "{{ _validate_ca_extracted_fact }}": false
   when: _elasticstack_validate_pem_probe.rc != 0
 
 # --- Certificate expiry check ---
 
-- name: "Check certificate has not expired — {{ _validate_service }}"
+- name: certs | cert_validate | Check certificate has not expired — {{ _validate_service }}
   ansible.builtin.command:
     cmd: openssl x509 -in {{ _validate_cert_path }} -noout -checkend 0
   register: _elasticstack_validate_expiry_check
@@ -139,7 +139,7 @@
   become: false
   when: _elasticstack_validate_pem_probe.rc == 0
 
-- name: "Fail if certificate already expired — {{ _validate_service }}"
+- name: certs | cert_validate | Fail if certificate already expired — {{ _validate_service }}
   ansible.builtin.fail:
     msg: >-
       {{ _validate_service }} certificate {{ _validate_cert_path }} has already expired.
@@ -150,12 +150,12 @@
 
 # --- PEM key-cert match verification ---
 
-- name: "Verify key matches certificate — {{ _validate_service }}"
+- name: certs | cert_validate | Verify key matches certificate — {{ _validate_service }}
   when:
     - _elasticstack_validate_pem_probe.rc == 0
     - lookup('vars', _validate_key_fact) | length > 0
   block:
-    - name: "Get certificate modulus — {{ _validate_service }}"
+    - name: certs | cert_validate | Get certificate modulus — {{ _validate_service }}
       ansible.builtin.shell:
         cmd: set -o pipefail && openssl x509 -in {{ _validate_cert_path }} -noout -modulus 2>/dev/null | openssl md5
         executable: /bin/bash
@@ -164,7 +164,7 @@
       delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
       become: false
 
-    - name: "Get key modulus — {{ _validate_service }}"
+    - name: certs | cert_validate | Get key modulus — {{ _validate_service }}
       ansible.builtin.shell:
         cmd: >-
           set -o pipefail &&
@@ -180,7 +180,7 @@
       no_log: true
 
     # If RSA modulus failed, try EC key
-    - name: "Get EC key fingerprint — {{ _validate_service }}"
+    - name: certs | cert_validate | Get EC key fingerprint — {{ _validate_service }}
       ansible.builtin.shell:
         cmd: >-
           set -o pipefail &&
@@ -196,7 +196,7 @@
       no_log: true
       when: _elasticstack_validate_key_modulus.rc != 0
 
-    - name: "Get EC cert public key fingerprint — {{ _validate_service }}"
+    - name: certs | cert_validate | Get EC cert public key fingerprint — {{ _validate_service }}
       ansible.builtin.shell:
         cmd: set -o pipefail && openssl x509 -in {{ _validate_cert_path }} -noout -pubkey 2>/dev/null | openssl md5
         executable: /bin/bash
@@ -206,7 +206,7 @@
       become: false
       when: _elasticstack_validate_key_modulus.rc != 0
 
-    - name: "Fail if RSA key does not match certificate — {{ _validate_service }}"
+    - name: certs | cert_validate | Fail if RSA key does not match certificate — {{ _validate_service }}
       ansible.builtin.fail:
         msg: >-
           {{ _validate_service }} private key does not match the certificate.
@@ -216,7 +216,7 @@
         - _elasticstack_validate_key_modulus.rc == 0
         - _elasticstack_validate_cert_modulus.stdout != _elasticstack_validate_key_modulus.stdout
 
-    - name: "Fail if EC key does not match certificate — {{ _validate_service }}"
+    - name: certs | cert_validate | Fail if EC key does not match certificate — {{ _validate_service }}
       ansible.builtin.fail:
         msg: >-
           {{ _validate_service }} private key does not match the certificate.
@@ -230,10 +230,10 @@
 
 # --- SAN hostname check (warn only) ---
 
-- name: "Check SAN for hostname match — {{ _validate_service }}"
+- name: certs | cert_validate | Check SAN for hostname match — {{ _validate_service }}
   when: _elasticstack_validate_pem_probe.rc == 0
   block:
-    - name: "Extract SAN from certificate — {{ _validate_service }}"
+    - name: certs | cert_validate | Extract SAN from certificate — {{ _validate_service }}
       ansible.builtin.shell:
         cmd: openssl x509 -in {{ _validate_cert_path }} -noout -ext subjectAltName 2>/dev/null || true
         executable: /bin/bash
@@ -242,7 +242,7 @@
       delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
       become: false
 
-    - name: "Warn if SAN does not include this node — {{ _validate_service }}"
+    - name: certs | cert_validate | Warn if SAN does not include this node — {{ _validate_service }}
       ansible.builtin.debug:
         msg: >-
           Certificate SAN does not include this node's hostname

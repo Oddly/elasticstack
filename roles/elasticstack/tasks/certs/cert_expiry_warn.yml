@@ -11,15 +11,15 @@
 #   _warn_cert_format     'pem' or 'p12' (default: 'p12')
 #   _warn_cert_source     'elasticsearch_ca' or 'external' (default: 'elasticsearch_ca')
 
-- name: "Check certificate file exists — {{ _warn_service_name }}"
+- name: certs | cert_expiry_warn | Check certificate file exists — {{ _warn_service_name }}
   ansible.builtin.stat:
     path: "{{ _warn_cert_path }}"
   register: _elasticstack_warn_cert_file
 
-- name: "Check certificate expiry — {{ _warn_service_name }}"
+- name: certs | cert_expiry_warn | Check certificate expiry — {{ _warn_service_name }}
   when: _elasticstack_warn_cert_file.stat.exists
   block:
-    - name: "Read certificate info — {{ _warn_service_name }}"
+    - name: certs | cert_expiry_warn | Read certificate info — {{ _warn_service_name }}
       oddly.elasticstack.cert_info:
         path: "{{ _warn_cert_path }}"
         passphrase: "{{ _warn_cert_pass | default(omit, true) }}"
@@ -27,7 +27,7 @@
       register: _elasticstack_warn_cert_result
       ignore_errors: true  # noqa: ignore-errors
 
-    - name: "Calculate days until certificate expires — {{ _warn_service_name }}"
+    - name: certs | cert_expiry_warn | Calculate days until certificate expires — {{ _warn_service_name }}
       ansible.builtin.set_fact:
         _elasticstack_warn_days_remaining: >-
           {{ ((((_elasticstack_warn_cert_result.not_valid_after | regex_replace('[+-]\d{2}:\d{2}$', ''))
@@ -35,7 +35,7 @@
           | to_datetime('%Y-%m-%d'))).days) }}
       when: _elasticstack_warn_cert_result is succeeded
 
-    - name: "Certificate expires soon — {{ _warn_service_name }}"
+    - name: certs | cert_expiry_warn | Certificate expires soon — {{ _warn_service_name }}
       ansible.builtin.debug:
         msg: >-
           Certificate {{ _warn_cert_path }} on {{ inventory_hostname }}
