@@ -15,8 +15,10 @@ on:
   pull_request:
     paths:
       - 'roles/elasticsearch/**'
-      - '.github/workflows/test_elasticsearch_upgrade.yml'
+      - 'roles/elasticstack/**'
       - 'molecule/elasticsearch_upgrade*/**'
+      - 'molecule/shared/**'
+      - '.github/workflows/test_elasticsearch_upgrade.yml'
   schedule:
     - cron: "0 2 * * *"  # Daily at 02:00 UTC
 

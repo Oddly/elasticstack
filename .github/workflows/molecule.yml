@@ -1,63 +1,37 @@
 ---
-name: Test ElasticStack
+name: Molecule Test
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      logLevel:
-        description: 'Log level'
+      scenarios:
         required: true
-        default: 'warning'
-        type: choice
-        options:
-          - info
-          - warning
-          - debug
-  pull_request:
-  merge_group:
-  schedule:
-    - cron: "0 4 * * 2,4,6"  # Tue/Thu/Sat — 48 jobs, alternate with ES/logstash
+        type: string
+        description: JSON array of scenario names
+      distros:
+        required: true
+        type: string
+        description: JSON array of distro identifiers
+      releases:
+        type: string
+        default: '["8","9"]'
+        description: JSON array of Elastic major versions
+      timeout:
+        type: number
+        default: 45
+      max-parallel:
+        type: number
+        default: 10
+      skip-idempotence:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      should_test: ${{ steps.filter.outputs.should_test }}
-    steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
-      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
-        id: filter
-        with:
-          filters: |
-            should_test:
-              - 'roles/elasticstack/**'
-              - 'molecule/elasticstack_*/**'
-              - 'molecule/es_kibana/**'
-              - 'molecule/logstash_elasticsearch/**'
-              - 'molecule/cert_renewal/**'
-              - 'molecule/shared/**'
-              - 'plugins/**'
-              - '.github/workflows/test_full_stack.yml'
-
-  lint_full:
-    needs: changes
-    if: needs.changes.outputs.should_test == 'true' || github.event_name != 'pull_request'
-    uses: ./.github/workflows/test_linting.yml
-    with:
-      rolename: ''
-    secrets: inherit
-
-  molecule_full_stack_every_os:
+  molecule:
     runs-on: self-hosted
-    needs: [changes, lint_full]
-    if: needs.changes.outputs.should_test == 'true' || github.event_name != 'pull_request'
-    timeout-minutes: 120
+    timeout-minutes: ${{ inputs.timeout }}
 
     env:
       COLLECTION_NAMESPACE: oddly
@@ -79,18 +53,11 @@ jobs:
 
     strategy:
       fail-fast: false
+      max-parallel: ${{ inputs.max-parallel }}
       matrix:
-        distro: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && fromJSON('["rockylinux9","debian13"]') || fromJSON('["rockylinux9","ubuntu2204","ubuntu2404","debian12","debian13"]') }}
-        scenario:
-          - elasticstack_default
-          - es_kibana
-          - logstash_elasticsearch
-          - cert_renewal
-        release:
-          - 8
-          - 9
-        # Rocky 10 excluded: EPEL 10 does not ship Redis yet.
-        # Rocky 10 is still tested via the ES modules workflow.
+        distro: ${{ fromJSON(inputs.distros) }}
+        scenario: ${{ fromJSON(inputs.scenarios) }}
+        release: ${{ fromJSON(inputs.releases) }}
 
     steps:
       - name: Check out code
@@ -146,7 +113,7 @@ jobs:
           DISTRO_CACHE_URL: http://${{ secrets.REGISTRY_HOST }}:8081
 
       - name: Idempotence check
-        if: matrix.scenario != 'cert_renewal'
+        if: ${{ !inputs.skip-idempotence }}
         run: molecule idempotence -s ${{ matrix.scenario }}
         env:
           MOLECULE_DISTRO: ${{ matrix.distro }}
@@ -188,21 +155,3 @@ jobs:
           # Remove ControlMaster sockets and SSH key
           rm -rf "${{ runner.temp }}/ssh-cp"
           rm -f "${{ runner.temp }}/molecule_id_ed25519"
-
-  full_stack_gate:
-    runs-on: ubuntu-latest
-    needs: [changes, lint_full, molecule_full_stack_every_os]
-    if: always()
-    steps:
-      - name: Check results
-        run: |
-          # If no relevant files changed, tests were skipped — that's OK
-          if [[ "${{ needs.changes.outputs.should_test }}" != "true" && "${{ github.event_name }}" == "pull_request" ]]; then
-            echo "No relevant changes — skipping full stack gate"
-            exit 0
-          fi
-          if [[ "${{ needs.lint_full.result }}" != "success" ]] || \
-             [[ "${{ needs.molecule_full_stack_every_os.result }}" != "success" ]]; then
-            echo "Required jobs failed"
-            exit 1
-          fi
