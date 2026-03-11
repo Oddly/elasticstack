@@ -1,6 +1,8 @@
 ---
 - name: Verify Elasticsearch default cluster
   hosts: elasticsearch
+  vars:
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
   tasks:
     - name: Fetch elastic password
       ansible.builtin.include_tasks: ../shared/verify_fetch_password.yml
@@ -71,3 +73,4 @@
           LogsDB not enabled.
           Got: {{ cluster_settings.json.persistent }}
       run_once: true
+      when: elasticstack_release | int >= 9
