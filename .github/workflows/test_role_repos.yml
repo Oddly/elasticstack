@@ -13,14 +13,12 @@ on:
           - warning
           - debug
   pull_request:
-    branches:
-      - 'feature/**'
-      - 'fix/**'
-      - '!doc/**'
     paths:
       - 'roles/repos/**'
-      - '.github/workflows/test_role_repos.yml'
+      - 'roles/elasticstack/**'
       - 'molecule/repos_**'
+      - 'molecule/shared/**'
+      - '.github/workflows/test_role_repos.yml'
   schedule:
     - cron: "0 1 * * *"
 

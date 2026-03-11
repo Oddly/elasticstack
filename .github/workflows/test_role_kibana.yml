@@ -13,14 +13,12 @@ on:
           - warning
           - debug
   pull_request:
-    branches:
-      - 'feature/**'
-      - 'fix/**'
-      - '!doc/**'
     paths:
       - 'roles/kibana/**'
-      - '.github/workflows/test_role_kibana.yml'
+      - 'roles/elasticstack/**'
       - 'molecule/kibana_**'
+      - 'molecule/shared/**'
+      - '.github/workflows/test_role_kibana.yml'
   schedule:
     - cron: "30 3 * * *"
 

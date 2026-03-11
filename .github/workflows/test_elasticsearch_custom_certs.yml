@@ -15,9 +15,10 @@ on:
   pull_request:
     paths:
       - 'roles/elasticsearch/**'
-      - 'roles/elasticstack/tasks/certs/**'
-      - '.github/workflows/test_elasticsearch_custom_certs.yml'
+      - 'roles/elasticstack/**'
       - 'molecule/elasticsearch_custom_certs*/**'
+      - 'molecule/shared/**'
+      - '.github/workflows/test_elasticsearch_custom_certs.yml'
   schedule:
     - cron: "30 2 * * *"
 
