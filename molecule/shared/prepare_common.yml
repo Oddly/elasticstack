@@ -99,3 +99,5 @@
       - openssl
       - unzip
       - systemd
+      - python3-cryptography
+      - python3-packaging
