@@ -20,7 +20,7 @@ on:
       - 'molecule/shared/**'
       - '.github/workflows/test_role_logstash.yml'
   schedule:
-    - cron: "0 5 * * *"
+    - cron: "0 5 * * 1,3,5"  # Mon/Wed/Fri — 72 jobs, alternate with full_stack
 
 permissions:
   contents: read

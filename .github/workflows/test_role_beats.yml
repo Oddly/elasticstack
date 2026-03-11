@@ -20,7 +20,7 @@ on:
       - 'molecule/shared/**'
       - '.github/workflows/test_role_beats.yml'
   schedule:
-    - cron: "30 5 * * *"
+    - cron: "30 5 * * 2,4,6"  # Tue/Thu/Sat — 48 jobs, alternate with logstash
 
 permissions:
   contents: read
