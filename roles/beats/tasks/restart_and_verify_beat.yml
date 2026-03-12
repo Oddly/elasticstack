@@ -1,31 +1,31 @@
 ---
 
-- name: "Restart and verify beat — {{ _beat_service_name }}"  # noqa: name[template]
+- name: restart_and_verify_beat | "Restart and verify beat — {{ _beat_service_name }}"  # noqa: name[template]
   block:
-    - name: "Restart beat service — {{ _beat_service_name }}"  # noqa: name[template]
+    - name: restart_and_verify_beat | "Restart beat service — {{ _beat_service_name }}"  # noqa: name[template]
       ansible.builtin.service:
         name: "{{ _beat_service_name }}"
         state: restarted
 
-    - name: "Verify beat service is running — {{ _beat_service_name }}"  # noqa: name[template]
+    - name: restart_and_verify_beat | "Verify beat service is running — {{ _beat_service_name }}"  # noqa: name[template]
       ansible.builtin.systemd:
         name: "{{ _beat_service_name }}"
-      register: _beat_service_state
-      until: _beat_service_state.status.ActiveState == 'active'
+      register: _beats_service_state
+      until: _beats_service_state.status.ActiveState == 'active'
       retries: 5
       delay: 3
 
   rescue:
-    - name: "Get recent journal output — {{ _beat_service_name }}"  # noqa: name[template]
+    - name: restart_and_verify_beat | "Get recent journal output — {{ _beat_service_name }}"  # noqa: name[template]
       ansible.builtin.command:
         cmd: "journalctl -u {{ _beat_service_name }} --no-pager -n 50"
-      register: _beat_journal
+      register: _beats_journal
       changed_when: false
 
-    - name: "Fail with startup diagnostics — {{ _beat_service_name }}"  # noqa: name[template]
+    - name: restart_and_verify_beat | "Fail with startup diagnostics — {{ _beat_service_name }}"  # noqa: name[template]
       ansible.builtin.fail:
         msg: |
           {{ _beat_service_name }} failed to start.
 
           Recent log output:
-          {{ _beat_journal.stdout }}
+          {{ _beats_journal.stdout }}

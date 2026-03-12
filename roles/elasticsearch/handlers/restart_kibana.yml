@@ -8,6 +8,13 @@
 - name: Restart and wait for Kibana
   when: "'kibana' in hostvars[item].ansible_facts.packages | default({})"
   block:
+    - name: Reset Kibana failed state before restart
+      ansible.builtin.command:
+        cmd: systemctl reset-failed kibana.service
+      delegate_to: "{{ item }}"
+      changed_when: false
+      failed_when: false
+
     - name: Restart Kibana service
       ansible.builtin.service:
         name: kibana
@@ -26,18 +33,18 @@
           fi
           exit 1
       delegate_to: "{{ item }}"
-      register: _kibana_handler_wait
-      until: _kibana_handler_wait.rc == 0
+      register: _elasticsearch_kibana_handler_wait
+      until: _elasticsearch_kibana_handler_wait.rc == 0
       retries: 60
       delay: 5
       changed_when: false
-      failed_when: _kibana_handler_wait.rc == 2
+      failed_when: _elasticsearch_kibana_handler_wait.rc == 2
 
   rescue:
     - name: Get recent Kibana journal output
       ansible.builtin.command:
         cmd: journalctl -u kibana --no-pager -n 50
-      register: _kibana_handler_journal
+      register: _elasticsearch_kibana_handler_journal
       delegate_to: "{{ item }}"
       changed_when: false
 
@@ -47,4 +54,4 @@
           Kibana failed to start after restart by elasticsearch handler.
 
           Recent log output:
-          {{ _kibana_handler_journal.stdout }}
+          {{ _elasticsearch_kibana_handler_journal.stdout }}

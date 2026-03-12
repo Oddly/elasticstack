@@ -1,19 +1,19 @@
 ---
-- name: Determine certificate management mode
+- name: logstash-security | Determine certificate management mode
   ansible.builtin.set_fact:
     _logstash_cert_mode: "{{ logstash_cert_source | default('elasticsearch_ca') }}"
 
-- name: Handle external certificates
+- name: logstash-security | Handle external certificates
   when: _logstash_cert_mode == 'external'
   block:
-    - name: Validate external certificate paths are provided
+    - name: logstash-security | Validate external certificate paths are provided
       ansible.builtin.assert:
         that:
           - logstash_tls_certificate_file is defined
           - logstash_tls_key_file is defined
         fail_msg: "External cert mode requires logstash_tls_certificate_file and logstash_tls_key_file"
 
-    - name: Create certificate directory
+    - name: logstash-security | Create certificate directory
       ansible.builtin.file:
         state: directory
         path: "{{ logstash_certs_dir }}"
@@ -21,7 +21,7 @@
         group: logstash
         mode: "0750"
 
-    - name: Copy external certificate
+    - name: logstash-security | Copy external certificate
       ansible.builtin.copy:
         src: "{{ logstash_tls_certificate_file }}"
         dest: "{{ logstash_certs_dir }}/{{ inventory_hostname }}-server.crt"
@@ -32,7 +32,7 @@
       notify:
         - Restart Logstash
 
-    - name: Copy external key
+    - name: logstash-security | Copy external key
       ansible.builtin.copy:
         src: "{{ logstash_tls_key_file }}"
         dest: "{{ logstash_certs_dir }}/{{ inventory_hostname }}-pkcs8.key"
@@ -43,7 +43,7 @@
       notify:
         - Restart Logstash
 
-    - name: Copy external CA certificate
+    - name: logstash-security | Copy external CA certificate
       ansible.builtin.copy:
         src: "{{ logstash_tls_ca_file }}"
         dest: "{{ logstash_certs_dir }}/ca.crt"
@@ -55,11 +55,11 @@
       notify:
         - Restart Logstash
 
-- name: Handle Elasticsearch CA certificates
+- name: logstash-security | Handle Elasticsearch CA certificates
   when: _logstash_cert_mode == 'elasticsearch_ca'
   block:
     # -- Check Logstash certificate expiry --
-    - name: Check Logstash certificate expiry
+    - name: logstash-security | Check Logstash certificate expiry
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/certs/cert_check_expiry.yml"
         apply:
@@ -74,7 +74,7 @@
         - certificates
 
     # -- Determine if renewal is needed (Logstash-specific combined logic) --
-    - name: Determine if certificate renewal is needed
+    - name: logstash-security | Determine if certificate renewal is needed
       ansible.builtin.set_fact:
         _logstash_needs_cert_renewal: >-
           {{ (not (elasticstack_cert_stat.stat.exists | default(false))) or
@@ -82,7 +82,7 @@
              (logstash_cert_will_expire_soon | default(false) | bool) }}
 
     # -- Backup and remove existing certificates --
-    - name: Backup Logstash cert directory
+    - name: logstash-security | Backup Logstash cert directory
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
       vars:
@@ -92,7 +92,7 @@
         - _logstash_needs_cert_renewal | bool
         - elasticstack_cert_stat.stat.exists | default(false)
 
-    - name: Remove old certificate on CA host
+    - name: logstash-security | Remove old certificate on CA host
       ansible.builtin.file:
         path: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}-ls.p12"
         state: absent
@@ -101,7 +101,7 @@
         - _logstash_needs_cert_renewal | bool
         - elasticstack_cert_stat.stat.exists | default(false)
 
-    - name: Remove old PEM certificate zip on CA host
+    - name: logstash-security | Remove old PEM certificate zip on CA host
       ansible.builtin.file:
         path: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}-ls.zip"
         state: absent
@@ -111,10 +111,10 @@
         - elasticstack_cert_stat.stat.exists | default(false)
 
     # -- Generate and distribute certificates --
-    - name: Generate and distribute certificates
+    - name: logstash-security | Generate and distribute certificates
       when: _logstash_needs_cert_renewal | bool
       block:
-        - name: Create certificate directory
+        - name: logstash-security | Create certificate directory
           ansible.builtin.file:
             state: directory
             path: "{{ logstash_certs_dir }}"
@@ -125,7 +125,7 @@
             - certificates
 
         # -- P12 certificate --
-        - name: Generate P12 certificate for Logstash
+        - name: logstash-security | Generate P12 certificate for Logstash
           ansible.builtin.include_tasks:
             file: "{{ role_path }}/../elasticstack/tasks/certs/cert_generate.yml"
             apply:
@@ -141,7 +141,7 @@
           tags:
             - certificates
 
-        - name: Distribute P12 certificate to Logstash host
+        - name: logstash-security | Distribute P12 certificate to Logstash host
           ansible.builtin.include_tasks:
             file: "{{ role_path }}/../elasticstack/tasks/certs/cert_distribute.yml"
             apply:
@@ -156,7 +156,7 @@
           tags:
             - certificates
 
-        - name: Copy P12 as keystore
+        - name: logstash-security | Copy P12 as keystore
           ansible.builtin.copy:
             src: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/certs/{{ inventory_hostname }}/{{ ansible_facts.hostname }}-ls.p12"
             dest: "{{ logstash_certs_dir }}/keystore.pfx"
@@ -169,7 +169,7 @@
             - certificates
 
         # -- PEM certificate (kept inline, zip+PKCS8 flow is Logstash-specific) --
-        - name: Generate PEM certificate for Logstash
+        - name: logstash-security | Generate PEM certificate for Logstash
           ansible.builtin.include_tasks:
             file: "{{ role_path }}/../elasticstack/tasks/certs/cert_generate.yml"
             apply:
@@ -186,7 +186,7 @@
           tags:
             - certificates
 
-        - name: Fetch PEM certificate zip to controller
+        - name: logstash-security | Fetch PEM certificate zip to controller
           ansible.builtin.fetch:
             src: "{{ elasticstack_ca_dir }}/{{ ansible_facts.hostname }}-ls.zip"
             dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/certs/{{ inventory_hostname }}/{{ ansible_facts.hostname }}-ls.zip"
@@ -195,7 +195,7 @@
           tags:
             - certificates
 
-        - name: Extract PEM certificate on Logstash host
+        - name: logstash-security | Extract PEM certificate on Logstash host
           ansible.builtin.unarchive:
             src: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/certs/{{ inventory_hostname }}/{{ ansible_facts.hostname }}-ls.zip"
             dest: "{{ logstash_certs_dir }}/"
@@ -205,7 +205,7 @@
           tags:
             - certificates
 
-        - name: Copy server certificate to standard location
+        - name: logstash-security | Copy server certificate to standard location
           ansible.builtin.copy:
             src: "{{ logstash_certs_dir }}/{{ ansible_facts.hostname }}/{{ ansible_facts.hostname }}.crt"
             dest: "{{ logstash_certs_dir }}/{{ inventory_hostname }}-server.crt"
@@ -216,7 +216,7 @@
           tags:
             - certificates
 
-        - name: Copy encrypted key
+        - name: logstash-security | Copy encrypted key
           ansible.builtin.copy:
             src: "{{ logstash_certs_dir }}/{{ ansible_facts.hostname }}/{{ ansible_facts.hostname }}.key"
             dest: "{{ logstash_certs_dir }}/{{ inventory_hostname }}.key"
@@ -227,7 +227,7 @@
           tags:
             - certificates
 
-        - name: Create unencrypted PKCS8 key for Logstash
+        - name: logstash-security | Create unencrypted PKCS8 key for Logstash
           ansible.builtin.command: >
             openssl pkcs8
             -in {{ logstash_certs_dir }}/{{ inventory_hostname }}.key
@@ -241,7 +241,7 @@
           tags:
             - certificates
 
-        - name: Set permissions on PKCS8 key
+        - name: logstash-security | Set permissions on PKCS8 key
           ansible.builtin.file:
             path: "{{ logstash_certs_dir }}/{{ inventory_hostname }}-pkcs8.key"
             owner: root
@@ -251,7 +251,7 @@
             - certificates
 
         # -- CA certificate distribution --
-        - name: Distribute CA certificate to Logstash host
+        - name: logstash-security | Distribute CA certificate to Logstash host
           ansible.builtin.include_tasks:
             file: "{{ role_path }}/../elasticstack/tasks/certs/cert_distribute.yml"
             apply:
@@ -268,10 +268,10 @@
           tags:
             - certificates
 
-- name: Handle standalone certificates
+- name: logstash-security | Handle standalone certificates
   when: _logstash_cert_mode == 'standalone'
   block:
-    - name: Create certificate directory
+    - name: logstash-security | Create certificate directory
       ansible.builtin.file:
         state: directory
         path: "{{ logstash_certs_dir }}"
@@ -281,7 +281,7 @@
       tags:
         - certificates
 
-    - name: Generate standalone CA key
+    - name: logstash-security | Generate standalone CA key
       ansible.builtin.command:
         cmd: >-
           openssl genrsa -out {{ logstash_certs_dir }}/standalone-ca.key 4096
@@ -289,7 +289,7 @@
       tags:
         - certificates
 
-    - name: Generate standalone CA certificate
+    - name: logstash-security | Generate standalone CA certificate
       ansible.builtin.command:
         cmd: >-
           openssl req -x509 -new -nodes
@@ -301,7 +301,7 @@
       tags:
         - certificates
 
-    - name: Generate server key
+    - name: logstash-security | Generate server key
       ansible.builtin.command:
         cmd: >-
           openssl genrsa -out {{ logstash_certs_dir }}/{{ inventory_hostname }}.key 2048
@@ -309,7 +309,7 @@
       tags:
         - certificates
 
-    - name: Generate server certificate
+    - name: logstash-security | Generate server certificate
       ansible.builtin.shell: |
         set -e
         openssl req -new \
@@ -331,7 +331,7 @@
       tags:
         - certificates
 
-    - name: Create PKCS8 key for Logstash
+    - name: logstash-security | Create PKCS8 key for Logstash
       ansible.builtin.command: >
         openssl pkcs8
         -topk8
@@ -345,7 +345,7 @@
       tags:
         - certificates
 
-    - name: Set permissions on standalone certificates
+    - name: logstash-security | Set permissions on standalone certificates
       ansible.builtin.file:
         path: "{{ item }}"
         owner: root
@@ -359,7 +359,7 @@
       tags:
         - certificates
 
-    - name: Create PKCS12 keystore for ES output
+    - name: logstash-security | Create PKCS12 keystore for ES output
       ansible.builtin.command: >
         openssl pkcs12 -export
         -in {{ logstash_certs_dir }}/{{ inventory_hostname }}-server.crt
@@ -375,7 +375,7 @@
       tags:
         - certificates
 
-    - name: Set keystore permissions
+    - name: logstash-security | Set keystore permissions
       ansible.builtin.file:
         path: "{{ logstash_certs_dir }}/keystore.pfx"
         owner: root
@@ -384,7 +384,7 @@
       tags:
         - certificates
 
-    - name: Distribute ES CA certificate to Logstash host
+    - name: logstash-security | Distribute ES CA certificate to Logstash host
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/certs/cert_distribute.yml"
         apply:
@@ -401,26 +401,26 @@
       tags:
         - certificates
 
-- name: Manage Elasticsearch user and role
+- name: logstash-security | Manage Elasticsearch user and role
   when: _logstash_cert_mode in ['elasticsearch_ca', 'standalone']
   block:
-    - name: Validate logstash user password length
+    - name: logstash-security | Validate logstash user password length
       ansible.builtin.fail:
         msg: "Logstash user password must be at least 6 characters long"
       when: logstash_user_password | length < 6
 
-    - name: Fetch Elastic admin password
+    - name: logstash-security | Fetch Elastic admin password
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/fetch_password.yml"
       vars:
         _password_user: elastic
         _password_fact: _logstash_elastic_password
 
-    - name: Set ES API URL fact
+    - name: logstash-security | Set ES API URL fact
       ansible.builtin.set_fact:
         _logstash_es_url: "https://{{ hostvars[elasticstack_ca_host].ansible_host | default(hostvars[elasticstack_ca_host].inventory_hostname) }}:{{ elasticstack_elasticsearch_http_port }}"
 
-    - name: Create logstash role
+    - name: logstash-security | Create logstash role
       ansible.builtin.uri:
         url: "{{ _logstash_es_url }}/_security/role/{{ logstash_role_name }}"
         method: PUT
@@ -441,7 +441,7 @@
       no_log: "{{ elasticstack_no_log }}"
       when: logstash_create_role | bool
 
-    - name: Create logstash user
+    - name: logstash-security | Create logstash user
       ansible.builtin.uri:
         url: "{{ _logstash_es_url }}/_security/user/{{ logstash_user_name }}"
         method: PUT

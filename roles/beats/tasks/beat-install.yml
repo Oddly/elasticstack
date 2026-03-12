@@ -5,17 +5,17 @@
 # Required variables:
 #   _beat_name: Beat name (e.g. "filebeat", "auditbeat", "metricbeat")
 
-- name: "Construct exact package name for {{ _beat_name }}"
+- name: beat-install | Construct exact package name for {{ _beat_name }}
   ansible.builtin.set_fact:
     beats_package: >-
       {{
       _beat_name +
       ((elasticstack_versionseparator +
       elasticstack_version |
-      string ) if (elasticstack_version is defined and elasticstack_version | length > 0) else '') |
+      string) if (elasticstack_version is defined and elasticstack_version | length > 0) else '') |
       replace(' ', '') }}
 
-- name: "Install rpm full-stack package for {{ _beat_name }}"
+- name: beat-install | Install rpm full-stack package for {{ _beat_name }}
   ansible.builtin.package:
     name: "{{ beats_package }}"
     enablerepo:
@@ -29,7 +29,7 @@
     - ansible_facts.os_family == "RedHat"
     - elasticstack_full_stack | bool
 
-- name: "Install rpm standalone package for {{ _beat_name }}"
+- name: beat-install | Install rpm standalone package for {{ _beat_name }}
   ansible.builtin.package:
     name: "{{ beats_package }}"
   register: beats_install_rpm
@@ -41,7 +41,7 @@
     - ansible_facts.os_family == "RedHat"
     - not elasticstack_full_stack | bool
 
-- name: "Install deb package for {{ _beat_name }}"
+- name: beat-install | Install deb package for {{ _beat_name }}
   ansible.builtin.package:
     name: "{{ beats_package }}"
   register: beats_install_deb
@@ -52,7 +52,7 @@
   when:
     - ansible_facts.os_family == "Debian"
 
-- name: "Install latest rpm full-stack package for {{ _beat_name }}"  # noqa: package-latest
+- name: beat-install | "Install latest rpm full-stack package for {{ _beat_name }}"  # noqa: package-latest
   ansible.builtin.package:
     name: "{{ _beat_name }}"
     state: latest
@@ -69,7 +69,7 @@
     - ansible_facts.os_family == "RedHat"
     - elasticstack_full_stack | bool
 
-- name: "Install latest rpm standalone package for {{ _beat_name }}"  # noqa: package-latest
+- name: beat-install | "Install latest rpm standalone package for {{ _beat_name }}"  # noqa: package-latest
   ansible.builtin.package:
     name: "{{ _beat_name }}"
     state: latest
@@ -84,7 +84,7 @@
     - ansible_facts.os_family == "RedHat"
     - not elasticstack_full_stack | bool
 
-- name: "Install latest deb package for {{ _beat_name }}"  # noqa: package-latest
+- name: beat-install | "Install latest deb package for {{ _beat_name }}"  # noqa: package-latest
   ansible.builtin.package:
     name: "{{ _beat_name }}"
     state: latest

@@ -115,6 +115,18 @@
               - kibana_status.json.status.overall.level == 'available'
             fail_msg: "Kibana status: {{ kibana_status.json.status.overall.level | default('unknown') }}"
 
+        - name: Read kibana.yml
+          ansible.builtin.slurp:
+            src: /etc/kibana/kibana.yml
+          register: kibana_yml
+
+        - name: Verify kibana extra_config is rendered
+          ansible.builtin.assert:
+            that:
+              - "'ops.interval' in (kibana_yml.content | b64decode)"
+              - "'5000' in (kibana_yml.content | b64decode)"
+            fail_msg: "kibana_extra_config (ops.interval: 5000) not found in kibana.yml"
+
     - name: Run Beats checks
       when: "'beats' in group_names"
       block:
@@ -133,6 +145,29 @@
           check_mode: true
           register: metricbeat_svc
           failed_when: metricbeat_svc.changed
+
+        - name: Read filebeat.yml
+          ansible.builtin.slurp:
+            src: /etc/filebeat/filebeat.yml
+          register: filebeat_yml
+
+        - name: Verify beats_fields is rendered in filebeat.yml
+          ansible.builtin.assert:
+            that:
+              - "'testbed' in (filebeat_yml.content | b64decode)"
+              - "'molecule' in (filebeat_yml.content | b64decode)"
+            fail_msg: "beats_fields (testbed: molecule) not found in filebeat.yml"
+
+        - name: Verify system module is enabled
+          ansible.builtin.stat:
+            path: /etc/filebeat/modules.d/system.yml
+          register: _fb_system_module
+
+        - name: Assert filebeat system module file exists
+          ansible.builtin.assert:
+            that:
+              - _fb_system_module.stat.exists
+            fail_msg: "Filebeat system module not enabled despite beats_filebeat_modules: [system]"
 
         - name: Check auditbeat package is installed
           ansible.builtin.package:

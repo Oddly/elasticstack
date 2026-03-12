@@ -35,6 +35,12 @@ beats_logging_permissions: "0644"
 
 # === TLS Certificates ===
 
+# @var beats_ca_dir:description: >
+#   Directory where Beat TLS certificates are stored. Auto-set to
+#   /etc/beats/certs in full_stack mode or /opt/ca otherwise.
+# @end
+beats_ca_dir: "/etc/beats/certs"
+
 # @var beats_tls_key:description: Path to the Beat TLS private key file
 beats_tls_key: "{{ beats_ca_dir }}/{{ inventory_hostname }}-beats.key"
 # @var beats_tls_cert:description: Path to the Beat TLS certificate file
@@ -152,14 +158,13 @@ beats_filebeat_extra_inputs: []
 
 # @var beats_filebeat_mysql_slowlog_input:description: Enable MySQL slow query log input with multiline parsing
 beats_filebeat_mysql_slowlog_input: false
-# @var beats_filebeat_modules:description: List of Filebeat modules to enable
+# @var beats_filebeat_modules:description: List of Filebeat modules to enable. Leave empty to disable module management
 # @var beats_filebeat_modules:example: >
 # beats_filebeat_modules:
 #   - system
 #   - nginx
 # @end
-# beats_filebeat_modules:
-#   - system
+beats_filebeat_modules: []
 
 # === Auditbeat Configuration ===
 

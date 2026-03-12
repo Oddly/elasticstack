@@ -1,26 +1,26 @@
 ---
-- name: Ensure gpg exists, for signing keys
+- name: debian | Ensure gpg exists, for signing keys
   ansible.builtin.apt:
     name:
       - gpg
       - gpg-agent
     state: present
-  register: _gpg_install_deb
-  until: _gpg_install_deb is success
+  register: _repos_gpg_install_deb
+  until: _repos_gpg_install_deb is success
   retries: 3
   delay: 10
 
-- name: Ensure Elastic Stack key is available (Debian)
+- name: debian | Ensure Elastic Stack key is available (Debian)
   ansible.builtin.get_url:
     url: "{{ elasticstack_repo_key }}"
     dest: /usr/share/keyrings/elasticsearch.asc
     mode: "0644"
-  register: _elastic_key_download
-  until: _elastic_key_download is success
+  register: _repos_elastic_key_download
+  until: _repos_elastic_key_download is success
   retries: 3
   delay: 10
 
-- name: Ensure Elastic Stack apt repo is absent (Debian legacy format)
+- name: debian | Ensure Elastic Stack apt repo is absent (Debian legacy format)
   ansible.builtin.file:
     path: /etc/apt/sources.list.d/artifacts_elastic_co_packages_{{ item }}_x_apt.list
     state: absent
@@ -29,7 +29,7 @@
     - "8"
     - "9"
 
-- name: Ensure Elastic Stack apt repository is configured (Debian)
+- name: debian | Ensure Elastic Stack apt repository is configured (Debian)
   ansible.builtin.apt_repository:
     repo: deb [signed-by=/usr/share/keyrings/elasticsearch.asc] {{ elasticstack_repo_base_url }}/packages/{{ elasticstack_release }}.x/apt stable main
     state: present

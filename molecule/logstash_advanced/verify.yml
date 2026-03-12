@@ -123,6 +123,40 @@
           - "'config.reload.automatic: true' in (logstash_yml.content | b64decode)"
         fail_msg: "Config autoreload not enabled"
 
+    - name: Verify pipeline.unsafe_shutdown is set
+      ansible.builtin.assert:
+        that:
+          - "'pipeline.unsafe_shutdown' in (logstash_yml.content | b64decode)"
+        fail_msg: "pipeline.unsafe_shutdown not found in logstash.yml"
+
+    # --- JVM heap verification ---
+
+    - name: Read Logstash JVM options
+      ansible.builtin.slurp:
+        src: /etc/logstash/jvm.options
+      register: logstash_jvm
+
+    - name: Verify Logstash heap is set to 512m
+      ansible.builtin.assert:
+        that:
+          - "'-Xms512m' in (logstash_jvm.content | b64decode)"
+          - "'-Xmx512m' in (logstash_jvm.content | b64decode)"
+        fail_msg: "Logstash heap not set to 512m"
+
+    # --- Ident field name verification ---
+
+    - name: Verify exact ident field name
+      ansible.builtin.assert:
+        that:
+          - "'[logstash][instance]' in (filter_content.content | b64decode)"
+        fail_msg: "Ident field name [logstash][instance] not found in 50-filter.conf"
+
+    - name: Verify exact pipeline identifier field name
+      ansible.builtin.assert:
+        that:
+          - "'[logstash][pipeline]' in (filter_content.content | b64decode)"
+        fail_msg: "Pipeline identifier field name [logstash][pipeline] not found in 50-filter.conf"
+
     # --- Pipelines.yml verification (queue settings are per-pipeline) ---
 
     - name: Read pipelines.yml
@@ -203,6 +237,14 @@
         - name: Fail with context
           ansible.builtin.fail:
             msg: "Logstash port 5044 did not open within timeout."
+
+    # --- HTTP extra input port check ---
+
+    - name: Check Logstash HTTP input is listening on port 8080
+      ansible.builtin.wait_for:
+        port: 8080
+        timeout: 30
+        state: started
 
     # --- Config syntax validation ---
 

@@ -281,6 +281,7 @@ logstash_plugins: []
 
 # === Internal Use ===
 
-# @var logstash_freshstart:description: Internal flag tracking whether this is a fresh installation. Do not set manually
-logstash_freshstart:
-  changed: false
+# @var logstash_pipeline_unsafe_shutdown:description: Allow Logstash to shut down even if there are inflight events in the pipeline
+logstash_pipeline_unsafe_shutdown: false
+# @var logstash_skip_root_check:description: Skip the Logstash 9.x root user upgrade warning check
+logstash_skip_root_check: false

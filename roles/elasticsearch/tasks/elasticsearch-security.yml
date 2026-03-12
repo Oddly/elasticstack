@@ -13,7 +13,7 @@
 # External certificates
 # ============================================================
 
-- name: Validate certificate source setting
+- name: elasticsearch-security | Validate certificate source setting
   ansible.builtin.assert:
     that:
       - elasticsearch_cert_source in ['elasticsearch_ca', 'external']
@@ -21,7 +21,7 @@
       Invalid elasticsearch_cert_source '{{ elasticsearch_cert_source }}'.
       Must be 'elasticsearch_ca' or 'external'.
 
-- name: Handle external certificates
+- name: elasticsearch-security | Handle external certificates
   when: elasticsearch_cert_source == 'external'
   block:
 
@@ -29,14 +29,14 @@
     # Content mode: PEM strings in variables (always PEM format)
     # File mode: paths to cert files (PEM or P12 auto-detected)
 
-    - name: Detect content mode for transport layer
+    - name: elasticsearch-security | Detect content mode for transport layer
       ansible.builtin.set_fact:
         _elasticsearch_transport_content_mode: "{{ elasticsearch_transport_tls_certificate_content | default('', true) | length > 0 }}"
         _elasticsearch_http_content_mode: >-
           {{ (elasticsearch_http_tls_certificate_content | default('', true) | length > 0) or
              (elasticsearch_transport_tls_certificate_content | default('', true) | length > 0) }}
 
-    - name: Validate transport certificate is provided
+    - name: elasticsearch-security | Validate transport certificate is provided
       ansible.builtin.assert:
         that:
           - (elasticsearch_transport_tls_certificate | length > 0) or
@@ -47,7 +47,7 @@
 
     # -- Resolve effective HTTP variables (content takes precedence, then falls back to transport) --
 
-    - name: Resolve effective HTTP cert variables
+    - name: elasticsearch-security | Resolve effective HTTP cert variables
       ansible.builtin.set_fact:
         _elasticsearch_effective_http_cert: "{{ elasticsearch_http_tls_certificate | default(elasticsearch_transport_tls_certificate, true) }}"
         _elasticsearch_effective_http_key: "{{ elasticsearch_http_tls_key | default(elasticsearch_transport_tls_key, true) }}"
@@ -61,10 +61,10 @@
 
     # ---- Content mode: PEM strings in variables ----
 
-    - name: Handle content-mode certificates (transport)
+    - name: elasticsearch-security | Handle content-mode certificates (transport)
       when: _elasticsearch_transport_content_mode | bool
       block:
-        - name: Validate transport key content is provided
+        - name: elasticsearch-security | Validate transport key content is provided
           ansible.builtin.assert:
             that:
               - elasticsearch_transport_tls_key_content | default('', true) | length > 0
@@ -72,30 +72,30 @@
               Content mode requires both certificate and key content.
               Set elasticsearch_transport_tls_key_content.
 
-        - name: Set transport format facts for content mode
+        - name: elasticsearch-security | Set transport format facts for content mode
           ansible.builtin.set_fact:
             _elasticsearch_transport_cert_format: pem
             _elasticsearch_transport_ca_extracted: false
 
-        - name: Check for CA chain in transport content
+        - name: elasticsearch-security | Check for CA chain in transport content
           ansible.builtin.set_fact:
             _elasticsearch_transport_ca_extracted: true
           when: >-
             elasticsearch_transport_tls_certificate_content | default('')
             | regex_findall('-----BEGIN CERTIFICATE-----') | length > 1
 
-    - name: Handle content-mode certificates (HTTP)
+    - name: elasticsearch-security | Handle content-mode certificates (HTTP)
       when:
         - _elasticsearch_http_content_mode | bool
         - elasticsearch_http_security | bool
       block:
-        - name: Set HTTP format facts for content mode
+        - name: elasticsearch-security | Set HTTP format facts for content mode
           ansible.builtin.set_fact:
             _elasticsearch_http_cert_format: pem
 
     # ---- File mode: paths to cert files ----
 
-    - name: Validate transport certificate (file mode)
+    - name: elasticsearch-security | Validate transport certificate (file mode)
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/certs/cert_validate.yml"
       vars:
@@ -109,7 +109,7 @@
         _validate_ca_extracted_fact: _elasticsearch_transport_ca_extracted
       when: not (_elasticsearch_transport_content_mode | bool)
 
-    - name: Validate HTTP certificate (file mode)
+    - name: elasticsearch-security | Validate HTTP certificate (file mode)
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/certs/cert_validate.yml"
       vars:
@@ -125,14 +125,14 @@
         - not (_elasticsearch_http_content_mode | bool)
         - elasticsearch_http_security | bool
 
-    - name: Default HTTP format to transport format when HTTP security disabled
+    - name: elasticsearch-security | Default HTTP format to transport format when HTTP security disabled
       ansible.builtin.set_fact:
         _elasticsearch_http_cert_format: "{{ _elasticsearch_transport_cert_format }}"
       when: not (elasticsearch_http_security | bool)
 
     # ---- Deploy certificates (both modes converge here) ----
 
-    - name: Create certificate directory
+    - name: elasticsearch-security | Create certificate directory
       ansible.builtin.file:
         state: directory
         path: /etc/elasticsearch/certs
@@ -142,7 +142,7 @@
 
     # -- Transport cert/key --
 
-    - name: Write transport certificate (from content)
+    - name: elasticsearch-security | Write transport certificate (from content)
       ansible.builtin.copy:
         content: "{{ elasticsearch_transport_tls_certificate_content }}"
         dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-transport.crt"
@@ -151,7 +151,7 @@
         mode: "0640"
       when: _elasticsearch_transport_content_mode | bool
 
-    - name: Copy transport certificate (from file)
+    - name: elasticsearch-security | Copy transport certificate (from file)
       ansible.builtin.copy:
         src: "{{ elasticsearch_transport_tls_certificate }}"
         dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-transport{{ '.p12' if _elasticsearch_transport_cert_format == 'p12' else '.crt' }}"
@@ -161,7 +161,7 @@
         remote_src: "{{ elasticsearch_tls_remote_src }}"
       when: not (_elasticsearch_transport_content_mode | bool)
 
-    - name: Write transport key (from content)
+    - name: elasticsearch-security | Write transport key (from content)
       ansible.builtin.copy:
         content: "{{ elasticsearch_transport_tls_key_content }}"
         dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-transport.key"
@@ -170,7 +170,7 @@
         mode: "0640"
       when: _elasticsearch_transport_content_mode | bool
 
-    - name: Copy transport key (from file, PEM only)
+    - name: elasticsearch-security | Copy transport key (from file, PEM only)
       ansible.builtin.copy:
         src: "{{ _elasticsearch_transport_resolved_key }}"
         dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-transport.key"
@@ -184,7 +184,7 @@
 
     # -- HTTP cert/key (falls back to transport if not set separately) --
 
-    - name: Write HTTP certificate (from content)
+    - name: elasticsearch-security | Write HTTP certificate (from content)
       ansible.builtin.copy:
         content: "{{ _elasticsearch_effective_http_cert_content }}"
         dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-http.crt"
@@ -195,7 +195,7 @@
         - _elasticsearch_http_content_mode | bool
         - elasticsearch_http_security | bool
 
-    - name: Copy HTTP certificate (from file)
+    - name: elasticsearch-security | Copy HTTP certificate (from file)
       ansible.builtin.copy:
         src: "{{ _elasticsearch_effective_http_cert }}"
         dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-http{{ '.p12' if _elasticsearch_http_cert_format == 'p12' else '.crt' }}"
@@ -207,7 +207,7 @@
         - not (_elasticsearch_http_content_mode | bool)
         - elasticsearch_http_security | bool
 
-    - name: Write HTTP key (from content)
+    - name: elasticsearch-security | Write HTTP key (from content)
       ansible.builtin.copy:
         content: "{{ _elasticsearch_effective_http_key_content }}"
         dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-http.key"
@@ -218,7 +218,7 @@
         - _elasticsearch_http_content_mode | bool
         - elasticsearch_http_security | bool
 
-    - name: Copy HTTP key (from file, PEM only)
+    - name: elasticsearch-security | Copy HTTP key (from file, PEM only)
       ansible.builtin.copy:
         src: "{{ _elasticsearch_http_resolved_key }}"
         dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-http.key"
@@ -233,7 +233,7 @@
 
     # -- CA certificate --
 
-    - name: Write CA certificate (from content)
+    - name: elasticsearch-security | Write CA certificate (from content)
       ansible.builtin.copy:
         content: "{{ elasticsearch_tls_ca_certificate_content }}"
         dest: /etc/elasticsearch/certs/ca.crt
@@ -242,7 +242,7 @@
         mode: "0640"
       when: elasticsearch_tls_ca_certificate_content | default('', true) | length > 0
 
-    - name: Copy CA certificate (from file)
+    - name: elasticsearch-security | Copy CA certificate (from file)
       ansible.builtin.copy:
         src: "{{ elasticsearch_tls_ca_certificate }}"
         dest: /etc/elasticsearch/certs/ca.crt
@@ -256,21 +256,21 @@
 
     # Extract CA chain from the already-deployed transport cert on the node.
     # Uses copy+content for idempotency (only writes when content changes).
-    - name: Read CA chain from PEM bundle (transport cert)
+    - name: elasticsearch-security | Read CA chain from PEM bundle (transport cert)
       ansible.builtin.shell:
         cmd: >-
           awk '/-----BEGIN CERTIFICATE-----/{n++} n>1'
           /etc/elasticsearch/certs/{{ inventory_hostname }}-transport.crt
-      register: _extracted_ca_chain
+      register: _elasticsearch_extracted_ca_chain
       changed_when: false
       when:
         - elasticsearch_tls_ca_certificate | length == 0
         - elasticsearch_tls_ca_certificate_content | default('', true) | length == 0
         - _elasticsearch_transport_ca_extracted | bool
 
-    - name: Write extracted CA chain
+    - name: elasticsearch-security | Write extracted CA chain
       ansible.builtin.copy:
-        content: "{{ _extracted_ca_chain.stdout }}\n"
+        content: "{{ _elasticsearch_extracted_ca_chain.stdout }}\n"
         dest: /etc/elasticsearch/certs/ca.crt
         owner: root
         group: elasticsearch
@@ -280,7 +280,7 @@
         - elasticsearch_tls_ca_certificate_content | default('', true) | length == 0
         - _elasticsearch_transport_ca_extracted | bool
 
-    - name: Set effective CA availability fact
+    - name: elasticsearch-security | Set effective CA availability fact
       ansible.builtin.set_fact:
         _elasticsearch_external_has_ca: >-
           {{ (elasticsearch_tls_ca_certificate | length > 0) or
@@ -289,38 +289,38 @@
 
     # -- Remove stale auto-generated P12 files from a previous elasticsearch_ca deployment --
 
-    - name: Find stale auto-generated P12 certificate files
+    - name: elasticsearch-security | Find stale auto-generated P12 certificate files
       ansible.builtin.find:
         paths: /etc/elasticsearch/certs
         patterns: "*.p12"
         excludes:
           - "{{ inventory_hostname }}-transport.p12"
           - "{{ inventory_hostname }}-http.p12"
-      register: _stale_p12_files
+      register: _elasticsearch_stale_p12_files
 
-    - name: Remove stale auto-generated P12 files
+    - name: elasticsearch-security | Remove stale auto-generated P12 files
       ansible.builtin.file:
         path: "{{ item.path }}"
         state: absent
-      loop: "{{ _stale_p12_files.files }}"
+      loop: "{{ _elasticsearch_stale_p12_files.files }}"
       loop_control:
         label: "{{ item.path | basename }}"
-      when: _stale_p12_files.files | length > 0
+      when: _elasticsearch_stale_p12_files.files | length > 0
 
     # -- Keystore setup for external certs --
 
-    - name: Import Tasks elasticsearch-keystore.yml
+    - name: elasticsearch-security | Import Tasks elasticsearch-keystore.yml
       ansible.builtin.import_tasks: elasticsearch-keystore.yml
 
 # ============================================================
 # Auto-generated certificates (elasticsearch_ca)
 # ============================================================
 
-- name: Handle auto-generated certificates
+- name: elasticsearch-security | Handle auto-generated certificates
   when: elasticsearch_cert_source == 'elasticsearch_ca'
   block:
     # -- Check CA expiry on CA host --
-    - name: Check CA certificate expiry
+    - name: elasticsearch-security | Check CA certificate expiry
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/certs/cert_check_expiry.yml"
         apply:
@@ -339,7 +339,7 @@
 
     # -- Stop Logstash for CA renewal (orchestration, kept inline) --
     # Use default([]) + length > 0 for group checks (Ansible 2.20 compatibility)
-    - name: Stop Logstash
+    - name: elasticsearch-security | Stop Logstash
       ansible.builtin.service:
         name: logstash
         state: stopped
@@ -355,26 +355,26 @@
     # The CA backup removes the entire elasticstack_ca_dir, which also
     # contains Kibana encryption key files. If those are regenerated,
     # Kibana can't decrypt its existing saved objects and enters 503.
-    - name: Check for Kibana encryption keys before CA backup
+    - name: elasticsearch-security | Check for Kibana encryption keys before CA backup
       ansible.builtin.stat:
         path: "{{ elasticstack_ca_dir }}/{{ item }}"
       loop:
         - encryption_key
         - savedobjects_encryption_key
-      register: _kibana_enckeys_before_backup
+      register: _elasticsearch_kibana_enckeys_before_backup
       when:
         - inventory_hostname == elasticstack_ca_host
         - "'renew_ca' in ansible_run_tags or elasticstack_ca_will_expire_soon | bool"
       tags:
         - renew_ca
 
-    - name: Preserve Kibana encryption keys before CA backup
+    - name: elasticsearch-security | Preserve Kibana encryption keys before CA backup
       ansible.builtin.copy:
         src: "{{ elasticstack_ca_dir }}/{{ item.item }}"
         dest: "/tmp/.kibana_preserved_{{ item.item }}"
         remote_src: true
         mode: "0600"
-      loop: "{{ _kibana_enckeys_before_backup.results | default([]) }}"
+      loop: "{{ _elasticsearch_kibana_enckeys_before_backup.results | default([]) }}"
       when:
         - inventory_hostname == elasticstack_ca_host
         - "'renew_ca' in ansible_run_tags or elasticstack_ca_will_expire_soon | bool"
@@ -386,7 +386,7 @@
         - renew_ca
 
     # -- Backup CA directory on CA host --
-    - name: Backup CA directory on CA host
+    - name: elasticsearch-security | Backup CA directory on CA host
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
         apply:
@@ -402,7 +402,7 @@
         - renew_ca
 
     # -- Backup CA cert on Ansible controller --
-    - name: Backup CA cert on Ansible controller
+    - name: elasticsearch-security | Backup CA cert on Ansible controller
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
         apply:
@@ -419,7 +419,7 @@
         - renew_ca
 
     # -- Check ES node certificate expiry --
-    - name: Check Elasticsearch certificate expiry
+    - name: elasticsearch-security | Check Elasticsearch certificate expiry
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/certs/cert_check_expiry.yml"
         apply:
@@ -436,7 +436,7 @@
         - renew_es_cert
 
     # -- Backup ES certs on the node --
-    - name: Backup Elasticsearch certs on node
+    - name: elasticsearch-security | Backup Elasticsearch certs on node
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
         apply:
@@ -452,7 +452,7 @@
         - renew_es_cert
 
     # -- Backup ES cert on CA host --
-    - name: Backup Elasticsearch cert on CA host
+    - name: elasticsearch-security | Backup Elasticsearch cert on CA host
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
         apply:
@@ -468,7 +468,7 @@
         - renew_es_cert
 
     # -- Backup ES cert on Ansible controller --
-    - name: Backup Elasticsearch cert on Ansible controller
+    - name: elasticsearch-security | Backup Elasticsearch cert on Ansible controller
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/certs/cert_backup.yml"
         apply:
@@ -485,11 +485,11 @@
         - renew_es_cert
 
     # -- Keystore setup (kept inline, import_tasks) --
-    - name: Import Tasks elasticsearch-keystore.yml
+    - name: elasticsearch-security | Import Tasks elasticsearch-keystore.yml
       ansible.builtin.import_tasks: elasticsearch-keystore.yml
 
     # -- Create CA on CA host --
-    - name: Ensure CA exists on CA host
+    - name: elasticsearch-security | Ensure CA exists on CA host
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/certs/ca_ensure.yml"
         apply:
@@ -504,7 +504,7 @@
         - renew_es_cert
 
     # -- Generate node certificates on CA host --
-    - name: Generate Elasticsearch node certificate
+    - name: elasticsearch-security | Generate Elasticsearch node certificate
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/certs/cert_generate.yml"
         apply:
@@ -527,7 +527,7 @@
         - renew_es_cert
 
     # -- Extract CA public certificate --
-    - name: Extract CA public certificate
+    - name: elasticsearch-security | Extract CA public certificate
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/certs/ca_extract_public.yml"
         apply:
@@ -544,7 +544,7 @@
         - renew_ca
 
     # -- Create ES certificate directory (ES-specific path/perms, kept inline) --
-    - name: Create certificate directory
+    - name: elasticsearch-security | Create certificate directory
       ansible.builtin.file:
         state: directory
         path: /etc/elasticsearch/certs
@@ -557,7 +557,7 @@
         - renew_es_cert
 
     # -- Distribute CA certificate to ES nodes --
-    - name: Distribute CA certificate to Elasticsearch nodes
+    - name: elasticsearch-security | Distribute CA certificate to Elasticsearch nodes
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/certs/cert_distribute.yml"
         apply:
@@ -579,7 +579,7 @@
         - renew_es_cert
 
     # -- Distribute node certificate to ES nodes --
-    - name: Distribute node certificate to Elasticsearch nodes
+    - name: elasticsearch-security | Distribute node certificate to Elasticsearch nodes
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/certs/cert_distribute.yml"
         apply:
@@ -604,31 +604,31 @@
 # Post-certificate tasks (shared by both cert sources)
 # ============================================================
 
-- name: Start Elasticsearch for security tasks
+- name: elasticsearch-security | Start Elasticsearch for security tasks
   ansible.builtin.service:
     name: elasticsearch
     state: started
     enabled: true
-  register: elasticsearch_freshstart_security
+  register: _elasticsearch_freshstart_security
   when: not ansible_check_mode
 
-- name: Wait for all instances to start
+- name: elasticsearch-security | Wait for all instances to start
   ansible.builtin.include_tasks: wait_for_instance.yml
   loop: "{{ groups[elasticstack_elasticsearch_group_name] }}"
 
-- name: Restart if Elasticsearch was already running
+- name: elasticsearch-security | Restart if Elasticsearch was already running
   when:
-    - not elasticsearch_freshstart.changed | bool
-    - not elasticsearch_freshstart_security.changed | bool
+    - not _elasticsearch_freshstart.changed | bool
+    - not _elasticsearch_freshstart_security.changed | bool
   block:
-    - name: Force all notified handlers to run at this point, not waiting for normal sync points
+    - name: elasticsearch-security | Force all notified handlers to run at this point, not waiting for normal sync points
       ansible.builtin.meta: flush_handlers
       tags:
         - certificates
         - renew_ca
         - renew_es_cert
 
-    - name: Wait for all instances to start
+    - name: elasticsearch-security | Wait for all instances to start
       ansible.builtin.include_tasks: wait_for_instance.yml
       loop: "{{ groups[elasticstack_elasticsearch_group_name] }}"
       tags:
@@ -636,21 +636,21 @@
         - renew_ca
         - renew_es_cert
 
-- name: Check for passwords being set
+- name: elasticsearch-security | Check for passwords being set
   ansible.builtin.stat:
     path: "{{ elasticstack_initial_passwords }}"
   delegate_to: "{{ elasticstack_ca_host }}"
   register: elasticsearch_passwords_file
 
-- name: Setting elasticsearch_http_protocol
+- name: elasticsearch-security | Setting elasticsearch_http_protocol
   ansible.builtin.set_fact:
     elasticsearch_http_protocol: "https"
   when: elasticsearch_http_security
 
-- name: Runtime cluster setup (requires running Elasticsearch)
+- name: elasticsearch-security | Runtime cluster setup (requires running Elasticsearch)
   when: not ansible_check_mode
   block:
-    - name: Check for API with bootstrap password
+    - name: elasticsearch-security | Check for API with bootstrap password
       ansible.builtin.uri:
         url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}"
         user: elastic
@@ -670,39 +670,39 @@
     # If the bootstrap password doesn't work, a previous setup-passwords run
     # may have partially completed (native realm initialized but passwords
     # file never written). Reset the elastic user password to recover.
-    - name: Recover elastic user after interrupted security setup
+    - name: elasticsearch-security | Recover elastic user after interrupted security setup
       when:
         - not elasticsearch_passwords_file.stat.exists | bool
         - elasticsearch_api_status_bootstrap is failed
         - inventory_hostname == elasticstack_ca_host
       block:
-        - name: Reset elastic user password via elasticsearch-reset-password
+        - name: elasticsearch-security | Reset elastic user password via elasticsearch-reset-password
           ansible.builtin.command: >
             /usr/share/elasticsearch/bin/elasticsearch-reset-password
             -u elastic -b -s
-          register: _elastic_reset_pw
+          register: _elasticsearch_elastic_reset_pw
           changed_when: true
           no_log: "{{ elasticstack_no_log }}"
 
-        - name: Verify API access with recovered password
+        - name: elasticsearch-security | Verify API access with recovered password
           ansible.builtin.uri:
             url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}"
             user: elastic
-            password: "{{ _elastic_reset_pw.stdout }}"
+            password: "{{ _elasticsearch_elastic_reset_pw.stdout }}"
             validate_certs: "{{ elasticsearch_validate_api_certs }}"
             force_basic_auth: true
-          register: _elastic_recovery_check
-          until: (_elastic_recovery_check.json | default({})).cluster_name is defined
+          register: _elasticsearch_elastic_recovery_check
+          until: (_elasticsearch_elastic_recovery_check.json | default({})).cluster_name is defined
           retries: 5
           delay: 5
           no_log: "{{ elasticstack_no_log }}"
 
-        - name: Write recovered password to initial_passwords file
+        - name: elasticsearch-security | Write recovered password to initial_passwords file
           ansible.builtin.copy:
             dest: "{{ elasticstack_initial_passwords }}"
             content: |
               Changed password for user elastic
-              PASSWORD elastic = {{ _elastic_reset_pw.stdout }}
+              PASSWORD elastic = {{ _elasticsearch_elastic_reset_pw.stdout }}
             owner: root
             group: root
             mode: "0600"
@@ -711,13 +711,13 @@
     # Re-stat outside the block so the variable is always a stat result.
     # When a block is skipped, Ansible clobbers register variables inside it
     # with {skipped: true} dicts, losing the original .stat attributes.
-    - name: Re-stat passwords file after recovery attempt
+    - name: elasticsearch-security | Re-stat passwords file after recovery attempt
       ansible.builtin.stat:
         path: "{{ elasticstack_initial_passwords }}"
       delegate_to: "{{ elasticstack_ca_host }}"
       register: elasticsearch_passwords_file
 
-    - name: Fail if bootstrap password check failed and recovery was not attempted
+    - name: elasticsearch-security | Fail if bootstrap password check failed and recovery was not attempted
       ansible.builtin.fail:
         msg: >-
           Bootstrap password authentication failed and this is not the CA host,
@@ -731,7 +731,7 @@
     # We need this check twice. One to wait for the API to be actually available. And a second time to
     # check the actual return code. Should not cause a huge delay.
 
-    - name: Check for cluster status with bootstrap password
+    - name: elasticsearch-security | Check for cluster status with bootstrap password
       ansible.builtin.uri:
         url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/health?pretty"
         user: elastic
@@ -747,7 +747,7 @@
       retries: 30
       delay: 10
 
-    - name: Fetch Elastic password from file
+    - name: elasticsearch-security | Fetch Elastic password from file
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/fetch_password.yml"
       vars:
@@ -762,7 +762,7 @@
     # actually been applied to ES yet.  Clear it so the API check below
     # is safely skipped (the bootstrap-password check already confirmed
     # the cluster is reachable).
-    - name: Clear premature user-defined password on fresh install
+    - name: elasticsearch-security | Clear premature user-defined password on fresh install  # noqa: var-naming[no-role-prefix]
       ansible.builtin.set_fact:
         elasticstack_password:
           stdout: ""
@@ -770,7 +770,7 @@
         - not elasticsearch_passwords_file.stat.exists | bool
         - elasticsearch_elastic_password | default('') | length > 0
 
-    - name: Check for API availability with elastic password
+    - name: elasticsearch-security | Check for API availability with elastic password
       ansible.builtin.uri:
         url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}"
         user: elastic
@@ -792,7 +792,7 @@
 
     # If the auto-generated password returned 401, the user-defined
     # password was already applied in a previous run.  Switch to it.
-    - name: Switch to user-defined password after prior change
+    - name: elasticsearch-security | Switch to user-defined password after prior change  # noqa: var-naming[no-role-prefix]
       ansible.builtin.set_fact:
         elasticstack_password:
           stdout: "{{ elasticsearch_elastic_password }}"
@@ -802,7 +802,7 @@
         - elasticsearch_api_status is defined
         - (elasticsearch_api_status.status | default(0)) == 401
 
-    - name: Verify API availability with user-defined password
+    - name: elasticsearch-security | Verify API availability with user-defined password
       ansible.builtin.uri:
         url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}"
         user: elastic
@@ -820,16 +820,16 @@
       retries: 10
       delay: 5
 
-    - name: Work around low resources on CI/CD nodes
+    - name: elasticsearch-security | Work around low resources on CI/CD nodes
       when: ansible_facts.virtualization_type in ["container", "docker", "lxc"]
       block:
-        - name: Remove cache
+        - name: elasticsearch-security | Remove cache
           ansible.builtin.shell:
             cmd: rm -rf /var/cache/*
             executable: /bin/bash
           changed_when: false
 
-        - name: Set lenient disk watermarks for CI containers
+        - name: elasticsearch-security | Set lenient disk watermarks for CI containers
           ansible.builtin.uri:
             url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/settings"
             method: PUT
@@ -854,7 +854,7 @@
     # We need this check twice. One to wait for the API to be actually available. And a second time to
     # check the actual return code. Should not cause a huge delay.
 
-    - name: Check for cluster status with elastic password
+    - name: elasticsearch-security | Check for cluster status with elastic password
       ansible.builtin.uri:
         url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/health?pretty"
         user: elastic
@@ -871,7 +871,7 @@
       retries: 20
       delay: 10
 
-    - name: Leave a file showing that the cluster is set up
+    - name: elasticsearch-security | Leave a file showing that the cluster is set up
       ansible.builtin.template:
         dest: "{{ elasticsearch_initialized_file }}"
         src: elasticsearch_initialized.j2
@@ -879,13 +879,13 @@
         group: root
         mode: "0600"
 
-    - name: Set var that cluster is set up
+    - name: elasticsearch-security | Set var that cluster is set up
       ansible.builtin.set_fact:
         elasticsearch_cluster_set_up: true
 
     # ES 8.x: elasticsearch-setup-passwords creates all built-in user passwords
     # ES 9.x: setup-passwords is removed; use elasticsearch-reset-password per user
-    - name: Create initial passwords (ES 8.x)
+    - name: elasticsearch-security | Create initial passwords (ES 8.x)
       ansible.builtin.shell: >
         set -o pipefail;
         /usr/share/elasticsearch/bin/elasticsearch-setup-passwords auto -b >
@@ -894,8 +894,8 @@
       args:
         executable: /bin/bash
         creates: "{{ elasticstack_initial_passwords }}"
-      register: _setup_passwords_result
-      until: _setup_passwords_result.rc | default(1) == 0
+      register: _elasticsearch_setup_passwords_result
+      until: _elasticsearch_setup_passwords_result.rc | default(1) == 0
       retries: 10
       delay: 15
       when:
@@ -903,17 +903,17 @@
         - elasticstack_release | int < 9
       no_log: "{{ elasticstack_no_log }}"
 
-    - name: Create initial passwords (ES 9.x)
+    - name: elasticsearch-security | Create initial passwords (ES 9.x)
       when:
         - inventory_hostname == elasticstack_ca_host
         - elasticstack_release | int >= 9
       block:
-        - name: Check if passwords file already exists
+        - name: elasticsearch-security | Check if passwords file already exists
           ansible.builtin.stat:
             path: "{{ elasticstack_initial_passwords }}"
-          register: _pw_file_check
+          register: _elasticsearch_pw_file_check
 
-        - name: Reset built-in user passwords
+        - name: elasticsearch-security | Reset built-in user passwords
           ansible.builtin.command: >
             /usr/share/elasticsearch/bin/elasticsearch-reset-password
             -u {{ item }} -b -s
@@ -923,16 +923,16 @@
             - logstash_system
             - beats_system
             - remote_monitoring_user
-          register: _reset_password_results
+          register: _elasticsearch_reset_password_results
           changed_when: true
           no_log: "{{ elasticstack_no_log }}"
-          when: not _pw_file_check.stat.exists
+          when: not _elasticsearch_pw_file_check.stat.exists
 
-        - name: Write passwords file
+        - name: elasticsearch-security | Write passwords file
           ansible.builtin.copy:
             dest: "{{ elasticstack_initial_passwords }}"
             content: |
-              {% for result in _reset_password_results.results %}
+              {% for result in _elasticsearch_reset_password_results.results %}
               Changed password for user {{ result.item }}
               PASSWORD {{ result.item }} = {{ result.stdout }}
               {% endfor %}
@@ -940,9 +940,9 @@
             group: root
             mode: "0600"
           no_log: "{{ elasticstack_no_log }}"
-          when: not _pw_file_check.stat.exists
+          when: not _elasticsearch_pw_file_check.stat.exists
 
-    - name: Set permissions on passwords file
+    - name: elasticsearch-security | Set permissions on passwords file
       ansible.builtin.file:
         path: "{{ elasticstack_initial_passwords }}"
         owner: root
@@ -950,20 +950,20 @@
         mode: "0600"
       when: inventory_hostname == elasticstack_ca_host
 
-    - name: Change elastic password to user-defined value
+    - name: elasticsearch-security | Change elastic password to user-defined value
       when:
         - inventory_hostname == elasticstack_ca_host
         - elasticsearch_elastic_password | default('') | length > 0
         - elasticstack_password.stdout | default('') != elasticsearch_elastic_password
       block:
-        - name: Fetch auto-generated elastic password
+        - name: elasticsearch-security | Fetch auto-generated elastic password
           ansible.builtin.include_tasks:
             file: "{{ role_path }}/../elasticstack/tasks/fetch_password.yml"
           vars:
             _password_user: elastic
             _password_fact: _elasticsearch_initial_password
 
-        - name: Change elastic user password via API
+        - name: elasticsearch-security | Change elastic user password via API
           ansible.builtin.uri:
             url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_security/user/elastic/_password"
             method: POST
@@ -977,7 +977,7 @@
             status_code: 200
           no_log: "{{ elasticstack_no_log }}"
 
-        - name: Set elastic password fact to user-defined value
+        - name: elasticsearch-security | Set elastic password fact to user-defined value  # noqa: var-naming[no-role-prefix]
           ansible.builtin.set_fact:
             elasticstack_password:
               stdout: "{{ elasticsearch_elastic_password }}"
@@ -986,7 +986,7 @@
     # On fresh install the passwords file was just created but elasticstack_password
     # may still be unset (the shared role couldn't fetch it because the file didn't
     # exist yet).  Fetch now so downstream tasks (cluster settings, watermarks) work.
-    - name: Fetch elastic password after initial setup
+    - name: elasticsearch-security | Fetch elastic password after initial setup
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/fetch_password.yml"
       vars:
@@ -998,7 +998,7 @@
 # Maybe make sure that Elasticsearch is using the right protocol http(s) to connect, even in newly setup clusters
 
 # -- Certificate expiry warnings --
-- name: Check transport certificate expiry warning
+- name: elasticsearch-security | Check transport certificate expiry warning
   ansible.builtin.include_tasks:
     file: "{{ role_path }}/../elasticstack/tasks/certs/cert_expiry_warn.yml"
   vars:
@@ -1019,7 +1019,7 @@
     _warn_service_name: "Elasticsearch transport"
     _warn_cert_source: "{{ elasticsearch_cert_source }}"
 
-- name: Check HTTP certificate expiry warning
+- name: elasticsearch-security | Check HTTP certificate expiry warning
   ansible.builtin.include_tasks:
     file: "{{ role_path }}/../elasticstack/tasks/certs/cert_expiry_warn.yml"
   vars:

@@ -11,7 +11,7 @@
 # Optional variables:
 #   _cert_notify: Handler name(s) to notify on change (list or string)
 
-- name: "Fetch certificate from CA host - {{ _cert_src | basename }}"
+- name: certs | cert_distribute | Fetch certificate from CA host - {{ _cert_src | basename }}
   ansible.builtin.fetch:
     src: "{{ _cert_src }}"
     dest: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/certs/{{ inventory_hostname }}/{{ _cert_src | basename }}"
@@ -23,7 +23,7 @@
   tags:
     - certificates
 
-- name: "Copy certificate to target node - {{ _cert_src | basename }}"
+- name: certs | cert_distribute | Copy certificate to target node - {{ _cert_src | basename }}
   ansible.builtin.copy:
     src: "{{ lookup('config', 'DEFAULT_LOCAL_TMP') | dirname }}/certs/{{ inventory_hostname }}/{{ _cert_src | basename }}"
     dest: "{{ _cert_dest }}"
