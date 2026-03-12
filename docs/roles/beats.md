@@ -68,15 +68,12 @@ beats_security: false
 beats_ssl_verification_mode: certificate
 ```
 
-`beats_security` enables TLS for all Beat-to-Elasticsearch and Beat-to-Logstash connections. When enabled, each Beat uses client certificates to authenticate.
+`beats_security` enables TLS for all Beat-to-Elasticsearch and Beat-to-Logstash connections. When enabled, each Beat uses client certificates to authenticate. Although the default is `false`, in full-stack mode (`elasticstack_full_stack: true`) this is automatically set to `true` when `elasticstack_security` is `true`. Set `elasticstack_override_beats_tls: true` to prevent this automatic inheritance.
 
-`beats_ssl_verification_mode` controls the TLS verification mode used for Elasticsearch output connections. Valid values are `full` (verify certificate and hostname), `certificate` (verify certificate only), and `none` (skip verification). Logstash output always uses `full` verification regardless of this setting.
+`beats_ssl_verification_mode` controls the TLS verification mode used for Elasticsearch output connections when `beats_security` is enabled. Valid values are `full` (verify certificate and hostname), `certificate` (verify certificate only), and `none` (skip verification). Logstash output always uses `full` verification regardless of this setting.
 
 !!! warning
     The default passphrase `BeatsChangeMe` (see `beats_tls_key_passphrase` below) should be changed in any non-test deployment.
-
-!!! note
-    In full-stack mode (`elasticstack_full_stack: true`), `beats_security` is automatically set to `true` when `elasticstack_security` is `true`. Set `elasticstack_override_beats_tls: true` to prevent this automatic inheritance.
 
 ### Logging
 

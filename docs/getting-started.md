@@ -21,6 +21,9 @@ collections:
   - name: oddly.elasticstack
 ```
 
+!!! note
+    The default `elasticstack_release` is `8`. All examples below explicitly set it to `9` for new deployments. If you omit it, the collection installs Elastic 8.x packages.
+
 ## Single-node deployment (simplest)
 
 This deploys everything on one host — useful for development and testing.
@@ -53,7 +56,13 @@ all:
 ansible-playbook -i inventory.yml playbook.yml
 ```
 
-After the run completes, Elasticsearch will be listening on `https://localhost:9200` with security enabled. The initial passwords are stored in `/usr/share/elasticsearch/initial_passwords` on the host.
+After the run completes, Elasticsearch will be listening on `https://localhost:9200` with security enabled. The `elastic` superuser password and all built-in user passwords are stored in `/usr/share/elasticsearch/initial_passwords` on the host. You can retrieve the `elastic` password with:
+
+```bash
+grep "PASSWORD elastic" /usr/share/elasticsearch/initial_passwords | awk '{print $4}'
+```
+
+In multi-node deployments, this file lives on the CA host (the first node in the `elasticsearch` group) and other roles fetch passwords from it automatically via `delegate_to`.
 
 ## Multi-node full-stack deployment
 
@@ -110,11 +119,14 @@ For internal networks or development environments where TLS is not needed:
 
 ```yaml
 elasticstack_security: false
+```
+
+In full-stack mode (`elasticstack_full_stack: true`), this cascades to all roles — Elasticsearch, Kibana, Logstash, and Beats all inherit the setting. If you are running roles individually (`elasticstack_full_stack: false`), you also need to set the per-role flags:
+
+```yaml
 elasticsearch_security: false
 beats_security: false
 ```
-
-This disables TLS, authentication, and HTTPS across all roles.
 
 ## Using a package mirror
 

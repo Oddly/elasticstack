@@ -174,7 +174,7 @@ elasticsearch_jna_workaround: false
 elasticsearch_memory_lock: false
 ```
 
-`elasticsearch_heap` is the JVM heap size in gigabytes. Both `-Xms` and `-Xmx` are set to this value (Elastic recommends equal initial and maximum heap). The default formula calculates half of system RAM, capped at 30 GB, with a floor of 1 GB. The 30 GB cap keeps the JVM within compressed ordinary object pointers (oops) territory. For production nodes, 8-16 GB is typical; the default of 2 GB (on a 4 GB host) is fine for development. Override with an integer: `elasticsearch_heap: 16`.
+`elasticsearch_heap` is the JVM heap size in gigabytes. Both `-Xms` and `-Xmx` are set to this value (Elastic recommends equal initial and maximum heap). The default formula calculates half of system RAM, capped at 30 GB, with a floor of 1 GB. The 30 GB cap keeps the JVM within compressed ordinary object pointers (oops) territory. In containers with a cgroup memory limit lower than the host's physical RAM, the role recalculates heap from the cgroup limit instead. For production nodes, 8-16 GB is typical; the default of 2 GB (on a 4 GB host) is fine for development. Override with an integer: `elasticsearch_heap: 16`.
 
 !!! tip
     Set `elasticsearch_check_calculation: true` to print the calculated heap value during a run without making any changes. Useful for verifying auto-calculation on heterogeneous hardware before committing.
@@ -306,7 +306,7 @@ elasticsearch_tls_remote_src: false
 elasticsearch_http_ssl_keystore_path: ""
 ```
 
-`elasticsearch_transport_tls_certificate` is the path to the transport layer (port 9300) TLS certificate. Accepts PEM (`.crt`, `.pem`) or PKCS12 (`.p12`, `.pfx`) -- the format is auto-detected from the file extension.
+`elasticsearch_transport_tls_certificate` is the path to the transport layer (port 9300) TLS certificate. Accepts PEM (`.crt`, `.pem`) or PKCS12 (`.p12`, `.pfx`) -- the format is auto-detected by probing the file content with `openssl` (not from the file extension).
 
 `elasticsearch_transport_tls_key` is the transport private key. For PEM format, this is auto-derived from the certificate path (`.crt` replaced with `.key`) if left empty. Ignored for P12 bundles where the key is included in the keystore.
 
