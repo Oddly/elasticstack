@@ -10,6 +10,14 @@
 
     # -- Kibana web UI certificate (only when kibana_tls is enabled) --
 
+    - name: Create certificate directory
+      ansible.builtin.file:
+        path: /etc/kibana/certs
+        state: directory
+        owner: root
+        group: kibana
+        mode: "0750"
+
     - name: Handle Kibana web UI certificates
       when: kibana_tls | bool
       block:
