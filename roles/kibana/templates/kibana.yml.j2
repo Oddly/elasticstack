@@ -43,5 +43,9 @@ server.ssl.keystore.path: "/etc/kibana/certs/{{ inventory_hostname }}-kibana.p12
 {% endif %}
 
 {% if kibana_extra_config is defined and kibana_extra_config %}
+{% if kibana_extra_config is mapping %}
 {{ kibana_extra_config | to_nice_yaml(indent=2, sort_keys=False) }}
+{% else %}
+{{ kibana_extra_config }}
+{% endif %}
 {% endif %}

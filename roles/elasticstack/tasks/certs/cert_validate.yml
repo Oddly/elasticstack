@@ -18,7 +18,7 @@
     path: "{{ _validate_cert_path }}"
   register: _elasticstack_validate_cert_stat
   delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
-  become: false
+  become: "{{ _validate_remote_src | bool }}"
 
 - name: certs | cert_validate | Fail if certificate file missing — {{ _validate_service }}
   ansible.builtin.fail:
@@ -36,7 +36,7 @@
   failed_when: false
   changed_when: false
   delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
-  become: false
+  become: "{{ _validate_remote_src | bool }}"
 
 - name: certs | cert_validate | Probe for P12 format — {{ _validate_service }}
   ansible.builtin.command:
@@ -47,7 +47,7 @@
   failed_when: false
   changed_when: false
   delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
-  become: false
+  become: "{{ _validate_remote_src | bool }}"
   no_log: true
   when: _elasticstack_validate_pem_probe.rc != 0
 
@@ -80,7 +80,7 @@
         path: "{{ _elasticstack_validate_derived_key }}"
       register: _elasticstack_validate_derived_key_stat
       delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
-      become: false
+      become: "{{ _validate_remote_src | bool }}"
 
     - name: certs | cert_validate | Fail if derived key not found — {{ _validate_service }}
       ansible.builtin.fail:
@@ -116,7 +116,7 @@
       register: _elasticstack_validate_pem_count
       changed_when: false
       delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
-      become: false
+      become: "{{ _validate_remote_src | bool }}"
 
     - name: certs | cert_validate | Set CA extracted fact — {{ _validate_service }}
       ansible.builtin.set_fact:
@@ -136,7 +136,7 @@
   failed_when: false
   changed_when: false
   delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
-  become: false
+  become: "{{ _validate_remote_src | bool }}"
   when: _elasticstack_validate_pem_probe.rc == 0
 
 - name: certs | cert_validate | Fail if certificate already expired — {{ _validate_service }}
@@ -162,7 +162,7 @@
       register: _elasticstack_validate_cert_modulus
       changed_when: false
       delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
-      become: false
+      become: "{{ _validate_remote_src | bool }}"
 
     - name: certs | cert_validate | Get key modulus — {{ _validate_service }}
       ansible.builtin.shell:
@@ -176,7 +176,7 @@
       changed_when: false
       failed_when: false
       delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
-      become: false
+      become: "{{ _validate_remote_src | bool }}"
       no_log: true
 
     # If RSA modulus failed, try EC key
@@ -192,7 +192,7 @@
       changed_when: false
       failed_when: false
       delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
-      become: false
+      become: "{{ _validate_remote_src | bool }}"
       no_log: true
       when: _elasticstack_validate_key_modulus.rc != 0
 
@@ -203,7 +203,7 @@
       register: _elasticstack_validate_ec_cert_fp
       changed_when: false
       delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
-      become: false
+      become: "{{ _validate_remote_src | bool }}"
       when: _elasticstack_validate_key_modulus.rc != 0
 
     - name: certs | cert_validate | Fail if RSA key does not match certificate — {{ _validate_service }}
@@ -240,7 +240,7 @@
       register: _elasticstack_validate_san_output
       changed_when: false
       delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
-      become: false
+      become: "{{ _validate_remote_src | bool }}"
 
     - name: certs | cert_validate | Warn if SAN does not include this node — {{ _validate_service }}
       ansible.builtin.debug:
