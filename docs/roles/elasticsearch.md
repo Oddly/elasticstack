@@ -306,7 +306,7 @@ elasticsearch_tls_remote_src: false
 elasticsearch_http_ssl_keystore_path: ""
 ```
 
-`elasticsearch_transport_tls_certificate` is the path to the transport layer (port 9300) TLS certificate. Accepts PEM (`.crt`, `.pem`) or PKCS12 (`.p12`, `.pfx`) -- the format is auto-detected from the file extension.
+`elasticsearch_transport_tls_certificate` is the path to the transport layer (port 9300) TLS certificate. Accepts PEM (`.crt`, `.pem`) or PKCS12 (`.p12`, `.pfx`) -- the format is auto-detected by probing the file content with `openssl` (not from the file extension).
 
 `elasticsearch_transport_tls_key` is the transport private key. For PEM format, this is auto-derived from the certificate path (`.crt` replaced with `.key`) if left empty. Ignored for P12 bundles where the key is included in the keystore.
 

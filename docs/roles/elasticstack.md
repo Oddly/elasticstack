@@ -211,6 +211,7 @@ The `certs/` directory contains reusable tasks imported by all roles:
 | `cert_check_expiry.yml` | Check certificate expiry and set `*_will_expire_soon` fact |
 | `cert_backup.yml` | Create timestamped backup of certificates before renewal |
 | `cert_distribute.yml` | Fetch cert from CA host to controller, then copy to target node |
+| `cert_validate.yml` | Validate external certificates: format detection (PEM/P12 via openssl probing), key match, expiry check, SAN warning |
 | `fetch_password.yml` | Extract a user's password from the initial passwords file |
 
 ## Tags

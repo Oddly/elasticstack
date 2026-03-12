@@ -137,7 +137,7 @@ kibana_tls_ca_file: ""
 kibana_tls_remote_src: false
 ```
 
-`kibana_tls_certificate_file` is the path to a TLS certificate in PEM (`.crt`/`.pem`) or PKCS12 (`.p12`/`.pfx`) format. The format is auto-detected from the file extension.
+`kibana_tls_certificate_file` is the path to a TLS certificate in PEM (`.crt`/`.pem`) or PKCS12 (`.p12`/`.pfx`) format. The format is auto-detected by probing the file content with `openssl` (not from the file extension).
 
 `kibana_tls_key_file` is the path to the corresponding private key. For PEM certificates, if left empty, the role derives the key path from the certificate path by changing the extension. For PKCS12, this is ignored (the key is inside the P12 file).
 

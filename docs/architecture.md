@@ -91,7 +91,7 @@ Certificate renewal is handled automatically: each role checks certificate expir
 
 ### External certificates
 
-All roles support `*_cert_source: external` to use certificates from any CA (corporate, ACME, Vault PKI). External certs can be provided as file paths or as inline PEM content in variables. The format (PEM vs PKCS12) is auto-detected for file paths; content mode is always PEM.
+All roles support `*_cert_source: external` to use certificates from any CA (corporate, ACME, Vault PKI). External certs can be provided as file paths or as inline PEM content in variables. For file paths, the format (PEM vs PKCS12) is auto-detected by probing the file content with `openssl` — not from the file extension. Content mode is always PEM.
 
 Elasticsearch supports separate transport and HTTP layer certificates — useful when transport uses an internal CA while HTTP uses a public ACME cert. HTTP falls back to transport if not specified.
 
