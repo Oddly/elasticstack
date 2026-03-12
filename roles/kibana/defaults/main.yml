@@ -80,6 +80,12 @@ kibana_sniff_on_start: false
 # @end
 kibana_sniff_on_connection_fault: false
 
-# @var kibana_freshstart:description: Internal flag tracking whether this is a fresh installation. Do not set manually
-kibana_freshstart:
-  changed: false
+# @var kibana_extra_config:description: >
+#   Dictionary of additional kibana.yml settings not covered by dedicated
+#   variables. Keys are written as-is into kibana.yml.
+# @var kibana_extra_config:example: >
+# kibana_extra_config:
+#   server.maxPayload: 1048576
+#   xpack.reporting.enabled: false
+# @end
+kibana_extra_config: {}

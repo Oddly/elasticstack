@@ -7,7 +7,7 @@
 #   _cert_ca_out:   Output path for CA cert (PEM)
 #   _cert_pass:     Passphrase for the P12 file
 
-- name: "Extract CA public certificate - {{ _cert_p12_path | basename }}"
+- name: certs | ca_extract_public | Extract CA public certificate - {{ _cert_p12_path | basename }}
   ansible.builtin.shell:
     cmd: >
       set -o pipefail &&

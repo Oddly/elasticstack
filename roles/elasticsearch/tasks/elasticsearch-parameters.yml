@@ -1,5 +1,5 @@
 ---
-- name: Warn when security is disabled
+- name: elasticsearch-parameters | Warn when security is disabled
   ansible.builtin.debug:
     msg: >-
       Elasticsearch security is disabled. TLS, authentication, and RBAC will not be configured.

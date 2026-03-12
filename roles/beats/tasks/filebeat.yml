@@ -1,11 +1,11 @@
 ---
 
-- name: Install Filebeat
+- name: filebeat | Install Filebeat
   ansible.builtin.include_tasks: beat-install.yml
   vars:
     _beat_name: filebeat
 
-- name: Configure Filebeat
+- name: filebeat | Configure Filebeat
   ansible.builtin.template:
     src: filebeat.yml.j2
     dest: /etc/filebeat/filebeat.yml
@@ -19,21 +19,21 @@
     - beats_filebeat_configuration
     - beats_configuration
 
-- name: Configure modules
-  when: beats_filebeat_modules is defined
+- name: filebeat | Configure modules
+  when: beats_filebeat_modules | length > 0
   tags:
     - configuration
     - beats_filebeat_configuration
     - beats_configuration
   block:
 
-    - name: Enable modules
+    - name: filebeat | Enable modules
       ansible.builtin.command: "filebeat modules enable {{ item }}"
       args:
         creates: "/etc/filebeat/modules.d/{{ item }}.yml"
       loop: "{{ beats_filebeat_modules }}"
 
-    - name: Enable System module
+    - name: filebeat | Enable System module
       ansible.builtin.template:
         src: filebeat-system.yml.j2
         dest: /etc/filebeat/modules.d/system.yml
@@ -43,7 +43,7 @@
       when:
         - elasticstack_release | int >= 8
 
-    - name: Enable Ingest Pipelines
+    - name: filebeat | Enable Ingest Pipelines
       ansible.builtin.shell: >
         /usr/bin/filebeat setup --pipelines &&
         /usr/bin/filebeat version > /etc/filebeat/{{ item }}_pipeline_created
@@ -53,7 +53,7 @@
       notify:
         - Restart Filebeat
 
-- name: Start Filebeat
+- name: filebeat | Start Filebeat
   ansible.builtin.service:
     name: filebeat
     state: started

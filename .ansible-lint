@@ -9,14 +9,11 @@ exclude_paths:
 
 warn_list:
   - experimental
-  - jinja[spacing]
   - key-order[task]
   - name[casing]
   - name[missing]
   - package-latest
-  - risky-shell-pipe
   - schema[meta]
-  - var-naming[no-role-prefix]
 
 skip_list:
   - command-instead-of-module

@@ -3,55 +3,55 @@
 # See https://github.com/elastic/elasticsearch/issues/85876
 # for more information why this is needed
 
-- name: Ensure gpg exists, for signing keys
+- name: redhat | Ensure gpg exists, for signing keys
   ansible.builtin.package:
     name: gnupg
     state: present
-  register: _gpg_install_rh
-  until: _gpg_install_rh is success
+  register: _repos_gpg_install_rh
+  until: _repos_gpg_install_rh is success
   retries: 3
   delay: 10
 
-- name: Workaround for EL > 8
+- name: redhat | Workaround for EL > 8
   when:
     - ansible_facts.distribution_major_version | int >= 9
   block:
 
-    - name: Show a warning
+    - name: redhat | Show a warning
       ansible.builtin.debug:
         msg: "For this workaround to work, please set elasticstack_rpm_workaround to true"
       when:
         - not elasticstack_rpm_workaround | bool
 
-    - name: Enable workaround for rpm keys
+    - name: redhat | Enable workaround for rpm keys
       when:
         - elasticstack_rpm_workaround | bool
       block:
 
-        - name: Install crypto-policies-scripts
+        - name: redhat | Install crypto-policies-scripts
           ansible.builtin.package:
             name: crypto-policies-scripts
-          register: _crypto_policies_install
-          until: _crypto_policies_install is success
+          register: _repos_crypto_policies_install
+          until: _repos_crypto_policies_install is success
           retries: 3
           delay: 10
 
-        - name: Check current crypto policy
+        - name: redhat | Check current crypto policy
           ansible.builtin.command: update-crypto-policies --show
-          register: _crypto_policy
+          register: _repos_crypto_policy
           changed_when: false
 
-        - name: Set Crypto policies to legacy
+        - name: redhat | Set Crypto policies to legacy
           ansible.builtin.command: "update-crypto-policies --set LEGACY"
           changed_when: true
-          when: _crypto_policy.stdout != 'LEGACY'
+          when: _repos_crypto_policy.stdout != 'LEGACY'
 
-- name: Ensure Elastic repository key is available (RedHat)
+- name: redhat | Ensure Elastic repository key is available (RedHat)
   ansible.builtin.rpm_key:
     key: "{{ elasticstack_repo_key }}"
     state: present
 
-- name: Ensure Elastic Stack yum repository is configured (RedHat)
+- name: redhat | Ensure Elastic Stack yum repository is configured (RedHat)
   ansible.builtin.yum_repository:
     name: elastic-{{ elasticstack_release }}.x
     description: Elastic Release {{ elasticstack_release }}.x

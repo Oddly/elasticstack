@@ -25,7 +25,7 @@
     beats_metricbeat: true
     beats_fields:
       - "testbed: molecule"
-    kibana_extra_config: |-
+    kibana_extra_config:
       ops.interval: 5000
   tasks:
     - name: Enable Elastic installation on RHEL 9

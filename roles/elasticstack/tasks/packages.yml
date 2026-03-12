@@ -1,27 +1,27 @@
 ---
-- name: Bootstrap python3-apt for Ansible apt module
+- name: packages | Bootstrap python3-apt for Ansible apt module
   ansible.builtin.raw: apt-get install -y python3-apt
   changed_when: false
   when:
     - ansible_facts.os_family == 'Debian'
     - ansible_facts.pkg_mgr == 'apt'
 
-- name: Update apt cache.
+- name: packages | Update apt cache.
   ansible.builtin.apt:
     update_cache: true
     cache_valid_time: 600
   changed_when: false
   when: ansible_facts.os_family == 'Debian'
 
-- name: Install packages for security tasks
+- name: packages | Install packages for security tasks
   ansible.builtin.package:
     name:
       - unzip
       - python3-cryptography
       - python3-packaging
       - openssl
-  register: _security_packages_install
-  until: _security_packages_install is success
+  register: _elasticstack_security_packages_install
+  until: _elasticstack_security_packages_install is success
   retries: 3
   delay: 10
   tags:

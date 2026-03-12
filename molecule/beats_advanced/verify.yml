@@ -60,6 +60,19 @@
           - "'journald' in (filebeat_yml.content | b64decode)"
         fail_msg: "Journald input not found in filebeat.yml"
 
+    - name: Verify log level is debug
+      ansible.builtin.assert:
+        that:
+          - "'level: debug' in (filebeat_yml.content | b64decode)"
+        fail_msg: "Logging level not set to debug in filebeat.yml"
+
+    - name: Verify extra input is rendered
+      ansible.builtin.assert:
+        that:
+          - "'extra-test' in (filebeat_yml.content | b64decode)"
+          - "'extra-test.log' in (filebeat_yml.content | b64decode)"
+        fail_msg: "beats_filebeat_extra_inputs not rendered in filebeat.yml"
+
     - name: Verify file output is configured
       ansible.builtin.assert:
         that:
@@ -106,6 +119,12 @@
         that:
           - "'metricbeat.config.modules' in (metricbeat_yml.content | b64decode)"
         fail_msg: "Module config path not found in metricbeat.yml"
+
+    - name: Verify metricbeat output is logstash
+      ansible.builtin.assert:
+        that:
+          - "'output.logstash' in (metricbeat_yml.content | b64decode)"
+        fail_msg: "Metricbeat output not set to logstash"
 
     - name: Verify system module is enabled
       ansible.builtin.stat:

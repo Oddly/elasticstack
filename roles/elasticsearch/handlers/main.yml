@@ -5,13 +5,14 @@
   when:
     - not ansible_check_mode
     - elasticsearch_enable | bool
-    - not elasticsearch_freshstart.changed | bool
-    - not elasticsearch_freshstart_security.changed | bool
+    - not _elasticsearch_freshstart.changed | bool
+    - not _elasticsearch_freshstart_security.changed | bool
     - not _elasticsearch_rolling_upgrade_performed | default(false) | bool
 
 - name: Restart kibana if available for elasticsearch certificates
   ansible.builtin.include_tasks: handlers/restart_kibana.yml
   loop: "{{ groups[elasticstack_kibana_group_name] | default([]) }}"
+  run_once: true
   when:
     - elasticstack_full_stack | bool
     - "not 'renew_ca' in ansible_run_tags"

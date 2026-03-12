@@ -154,17 +154,34 @@
           - "'auto_create_index' in es_yml.content | b64decode"
         fail_msg: "action.auto_create_index from elasticsearch_extra_config not found"
 
-    - name: Assert snapshot repo path is configured
-      ansible.builtin.assert:
-        that:
-          - "'/mnt/es-snapshots' in es_yml.content | b64decode"
-        fail_msg: "Snapshot repo path /mnt/es-snapshots not found in elasticsearch.yml"
-
     - name: Assert indices.recovery.max_bytes_per_sec from extra_config
       ansible.builtin.assert:
         that:
           - "'indices.recovery.max_bytes_per_sec' in es_yml.content | b64decode"
         fail_msg: "indices.recovery.max_bytes_per_sec not found (should come from elasticsearch_extra_config)"
+
+    # ── Heap dump path ──────────────────────────────────────────────
+
+    - name: Read JVM paths options
+      ansible.builtin.slurp:
+        src: /etc/elasticsearch/jvm.options.d/50-paths.options
+      register: jvm_paths
+
+    - name: Verify heap dump path is set to custom location
+      ansible.builtin.assert:
+        that:
+          - "'-XX:HeapDumpPath=/data/elasticsearch' in jvm_paths.content | b64decode"
+        fail_msg: "HeapDumpPath not set to /data/elasticsearch"
+
+    # ── Snapshot repo directory ──────────────────────────────────
+
+    - name: Verify snapshot repo path in elasticsearch.yml
+      ansible.builtin.assert:
+        that:
+          - "'path' in es_yml.content | b64decode"
+          - "'repo' in es_yml.content | b64decode"
+          - "'/mnt/es-snapshots' in es_yml.content | b64decode"
+        fail_msg: "Snapshot repo path /mnt/es-snapshots not configured correctly"
 
     # ── Config backup ─────────────────────────────────────────────
 
@@ -174,9 +191,11 @@
         patterns: "elasticsearch.yml.*"
       register: backups
 
-    - name: Report backup status
-      ansible.builtin.debug:
-        msg: "Found {{ backups.files | length }} config backup(s)"
+    - name: Assert at least one backup exists
+      ansible.builtin.assert:
+        that:
+          - backups.files | length > 0
+        fail_msg: "No elasticsearch.yml backup found despite elasticsearch_config_backup: true"
 
     # ── ML setting ────────────────────────────────────────────────
 
@@ -349,3 +368,22 @@
           - "'xpack.security.transport.ssl.enabled: true' in es_yml.content | b64decode"
           - "'xpack.security.http.ssl.enabled: true' in es_yml.content | b64decode"
         fail_msg: "Security/TLS settings missing from elasticsearch.yml"
+
+    # ── Managed logging (log4j2.properties) ──────────────────────
+
+    - name: Check log4j2.properties exists
+      ansible.builtin.stat:
+        path: /etc/elasticsearch/log4j2.properties
+      register: es_log4j2
+
+    - name: Assert log4j2.properties is deployed
+      ansible.builtin.assert:
+        that:
+          - es_log4j2.stat.exists
+        fail_msg: "log4j2.properties not found (elasticsearch_manage_logging: true)"
+
+    - name: Verify log4j2.properties is owned by elasticsearch group
+      ansible.builtin.assert:
+        that:
+          - es_log4j2.stat.gr_name == 'elasticsearch'
+        fail_msg: "log4j2.properties not owned by elasticsearch group"

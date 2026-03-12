@@ -1,11 +1,11 @@
 ---
 
-- name: Install Auditbeat
+- name: auditbeat | Install Auditbeat
   ansible.builtin.include_tasks: beat-install.yml
   vars:
     _beat_name: auditbeat
 
-- name: Configure Auditbeat
+- name: auditbeat | Configure Auditbeat
   ansible.builtin.template:
     src: auditbeat.yml.j2
     dest: /etc/auditbeat/auditbeat.yml
@@ -19,7 +19,7 @@
     - beats_auditbeat_configuration
     - beats_configuration
 
-- name: Setup Auditbeat in Elasticsearch
+- name: auditbeat | Setup Auditbeat in Elasticsearch
   ansible.builtin.shell: >
     /usr/bin/auditbeat setup --pipelines --index-management &&
     /usr/bin/auditbeat version > /etc/auditbeat/pipeline_created
@@ -33,7 +33,7 @@
     - beats_auditbeat_setup | bool
     - beats_auditbeat_output == "elasticsearch"
 
-- name: Start Auditbeat
+- name: auditbeat | Start Auditbeat
   ansible.builtin.service:
     name: auditbeat
     state: started

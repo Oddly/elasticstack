@@ -15,7 +15,7 @@
     - name: Debug
       ansible.builtin.debug:
         msg: "{{ test }}"
-    - name: Test required parameters (missing path)
+    - name: Test required parameters (missing path)  # noqa: args[module]
       oddly.elasticstack.cert_info:
         passphrase: PleaseChangeMe
       failed_when: false
@@ -37,6 +37,6 @@
       oddly.elasticstack.cert_info:
         path: files/es-ca/elastic-stack-ca.p12
       failed_when: false
-    - name: Test no parameters
+    - name: Test no parameters  # noqa: args[module]
       oddly.elasticstack.cert_info:
       failed_when: false

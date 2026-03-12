@@ -1,13 +1,19 @@
 ---
 
-- name: Restart and verify Kibana
+- name: restart_and_verify_kibana | Restart and verify Kibana
   block:
-    - name: Restart Kibana service
+    - name: restart_and_verify_kibana | Reset Kibana failed state before restart
+      ansible.builtin.command:
+        cmd: systemctl reset-failed kibana.service
+      changed_when: false
+      failed_when: false
+
+    - name: restart_and_verify_kibana | Restart Kibana service
       ansible.builtin.service:
         name: kibana
         state: restarted
 
-    - name: Verify Kibana is running
+    - name: restart_and_verify_kibana | Verify Kibana is running
       ansible.builtin.systemd:
         name: kibana
       register: _kibana_service_state
@@ -15,7 +21,7 @@
       retries: 5
       delay: 3
 
-    - name: Wait for Kibana HTTP readiness
+    - name: restart_and_verify_kibana | Wait for Kibana HTTP readiness
       ansible.builtin.shell:
         cmd: |
           HTTP_CODE=$(curl -sk -o /dev/null -w '%{http_code}' http://localhost:5601/api/status 2>/dev/null) || true
@@ -30,13 +36,13 @@
       changed_when: false
 
   rescue:
-    - name: Get recent Kibana journal output
+    - name: restart_and_verify_kibana | Get recent Kibana journal output
       ansible.builtin.command:
         cmd: journalctl -u kibana --no-pager -n 50
       register: _kibana_journal
       changed_when: false
 
-    - name: Fail with Kibana startup diagnostics
+    - name: restart_and_verify_kibana | Fail with Kibana startup diagnostics
       ansible.builtin.fail:
         msg: |
           Kibana failed to start.
