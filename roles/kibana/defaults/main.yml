@@ -21,6 +21,14 @@ kibana_config_backup: false
 # @var kibana_manage_yaml:description: Let the role manage kibana.yml. Set to false to manage it yourself
 kibana_manage_yaml: true
 
+# @var kibana_system_password:description: >
+#   User-defined password for the kibana_system user. When set, the role
+#   changes the auto-generated password via the Elasticsearch security API
+#   and uses this value for Kibana's connection to Elasticsearch. Leave
+#   empty to keep the auto-generated password from initial_passwords.
+# @end
+kibana_system_password: ""
+
 # @var kibana_security:description: Enable security features (connect to Elasticsearch over HTTPS with authentication)
 kibana_security: true
 # @var kibana_tls:description: Enable TLS on the Kibana web interface itself (serve Kibana over HTTPS)
