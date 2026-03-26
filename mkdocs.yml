@@ -90,7 +90,10 @@ nav:
   - Guide:
       - guide/index.md
       - Architecture: guide/architecture.md
+      - Security: guide/security.md
       - TLS & Certificates: guide/tls.md
+      - Upgrading: guide/upgrades.md
+      - Performance Tuning: guide/performance.md
   - Reference:
       - reference/index.md
       - Shared Defaults: reference/elasticstack.md
@@ -99,5 +102,12 @@ nav:
       - Kibana: reference/kibana.md
       - Logstash: reference/logstash.md
       - Beats: reference/beats.md
-  - "How To": how-to/index.md
+  - "How To":
+      - how-to/index.md
+      - Deployment: how-to/deployment.md
+      - Cluster Operations: how-to/cluster-operations.md
+      - Configuration: how-to/configuration.md
+      - Pipelines & Inputs: how-to/pipelines.md
+      - Scaling & HA: how-to/scaling.md
+      - Monitoring: how-to/monitoring.md
   - FAQ: faq.md
