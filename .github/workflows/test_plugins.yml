@@ -66,8 +66,17 @@ jobs:
       - name: Check out code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
+      - name: Select Python for ansible-core version
+        id: pyver
+        run: |
+          PYTHON=/usr/bin/python3
+          if [[ "${{ matrix.ansible_core }}" == "2.20" ]] && command -v python3.12 &>/dev/null; then
+            PYTHON=$(command -v python3.12)
+          fi
+          echo "python=$PYTHON" >> "$GITHUB_OUTPUT"
+
       - name: Install ansible-core
-        run: uv pip install --system --break-system-packages --python /usr/bin/python3 ansible-core~=${{ matrix.ansible_core }}.0
+        run: uv pip install --system --break-system-packages --python ${{ steps.pyver.outputs.python }} ansible-core~=${{ matrix.ansible_core }}.0
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
@@ -197,8 +206,17 @@ jobs:
       - name: Check out code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
+      - name: Select Python for ansible-core version
+        id: pyver
+        run: |
+          PYTHON=/usr/bin/python3
+          if [[ "${{ matrix.ansible_core_version }}" == 2.20* ]] && command -v python3.12 &>/dev/null; then
+            PYTHON=$(command -v python3.12)
+          fi
+          echo "python=$PYTHON" >> "$GITHUB_OUTPUT"
+
       - name: Install dependencies
-        run: uv pip install --system --break-system-packages --python /usr/bin/python3 ansible-core==${{ matrix.ansible_core_version }}
+        run: uv pip install --system --break-system-packages --python ${{ steps.pyver.outputs.python }} ansible-core==${{ matrix.ansible_core_version }}
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
