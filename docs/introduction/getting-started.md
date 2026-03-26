@@ -252,5 +252,5 @@ ansible-playbook -i inventory.yml playbook.yml --tags renew_ca
 
 ## Next steps
 
-- Review the [Architecture](architecture.md) page for how roles interact
-- Browse the role reference pages for all available variables: [elasticsearch](roles/elasticsearch.md), [kibana](roles/kibana.md), [logstash](roles/logstash.md), [beats](roles/beats.md), [elasticstack](roles/elasticstack.md), [repos](roles/repos.md)
+- Review the [Architecture](../guide/architecture.md) page for how roles interact
+- Browse the role reference pages for all available variables: [elasticsearch](../reference/elasticsearch.md), [kibana](../reference/kibana.md), [logstash](../reference/logstash.md), [beats](../reference/beats.md), [elasticstack](../reference/elasticstack.md), [repos](../reference/repos.md)

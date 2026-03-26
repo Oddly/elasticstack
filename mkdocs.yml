@@ -12,31 +12,32 @@ theme:
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: teal
-      accent: pink
+      accent: purple
       toggle:
-        icon: material/brightness-7
+        icon: material/weather-sunny
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: teal
-      accent: pink
+      primary: black
       toggle:
-        icon: material/brightness-4
+        icon: material/weather-night
         name: Switch to light mode
   features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.indexes
+    - navigation.footer
+    - navigation.top
+    - navigation.tracking
     - content.code.copy
     - content.code.annotate
     - content.tabs.link
-    - navigation.instant
-    - navigation.tracking
-    - navigation.tabs
-    - navigation.sections
-    - navigation.expand
-    - navigation.top
     - search.highlight
     - search.suggest
     - toc.follow
+  font:
+    text: Roboto
+    code: Roboto Mono
   icon:
     repo: fontawesome/brands/github
 
@@ -44,6 +45,10 @@ extra:
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/Oddly/elasticstack
+      name: elasticstack on GitHub
+
+extra_css:
+  - stylesheets/custom.css
 
 markdown_extensions:
   - admonition
@@ -54,7 +59,11 @@ markdown_extensions:
   - tables
   - toc:
       permalink: true
+      baselevel: 1
   - pymdownx.details
+  - pymdownx.keys
+  - pymdownx.tasklist:
+      custom_checkbox: true
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
@@ -75,12 +84,20 @@ exclude_docs: |
 
 nav:
   - Home: index.md
-  - Getting Started: getting-started.md
-  - Architecture: architecture.md
-  - Roles:
-      - Shared (elasticstack): roles/elasticstack.md
-      - Repository Setup (repos): roles/repos.md
-      - Elasticsearch: roles/elasticsearch.md
-      - Kibana: roles/kibana.md
-      - Logstash: roles/logstash.md
-      - Beats: roles/beats.md
+  - Introduction:
+      - introduction/index.md
+      - Getting Started: introduction/getting-started.md
+  - Guide:
+      - guide/index.md
+      - Architecture: guide/architecture.md
+      - TLS & Certificates: guide/tls.md
+  - Reference:
+      - reference/index.md
+      - Shared Defaults: reference/elasticstack.md
+      - Repository Setup: reference/repos.md
+      - Elasticsearch: reference/elasticsearch.md
+      - Kibana: reference/kibana.md
+      - Logstash: reference/logstash.md
+      - Beats: reference/beats.md
+  - "How To": how-to/index.md
+  - FAQ: faq.md
