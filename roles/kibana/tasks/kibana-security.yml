@@ -425,7 +425,6 @@
 # (kibana.yml template, keystore) uses the new password transparently.
 - name: kibana-security | Change kibana_system password to user-defined value
   when:
-    - inventory_hostname == elasticstack_ca_host
     - kibana_system_password | default('') | length > 0
     - kibana_password.stdout | default('') != kibana_system_password
   block:
@@ -438,7 +437,7 @@
 
     - name: kibana-security | Change kibana_system password via Elasticsearch API
       ansible.builtin.uri:
-        url: "{{ _kibana_es_protocol }}://{{ elasticsearch_api_host | default('localhost') }}:{{ elasticstack_elasticsearch_http_port }}/_security/user/kibana_system/_password"
+        url: "{{ _kibana_es_protocol }}://{{ elasticsearch_api_host | default(elasticstack_ca_host) }}:{{ elasticstack_elasticsearch_http_port }}/_security/user/kibana_system/_password"
         method: POST
         body_format: json
         body:
@@ -451,6 +450,7 @@
       no_log: "{{ elasticstack_no_log }}"
       vars:
         _kibana_es_protocol: "{{ 'https' if kibana_security | bool else 'http' }}"
+      run_once: true
 
     - name: kibana-security | Update kibana_password fact to user-defined value  # noqa: var-naming[no-role-prefix]
       ansible.builtin.set_fact:
