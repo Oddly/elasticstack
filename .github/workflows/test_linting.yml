@@ -33,7 +33,11 @@ jobs:
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
       - name: Install test dependencies.
-        run: uv pip install --system --break-system-packages --python /usr/bin/python3 -r requirements-test.txt
+        run: |
+          uv venv "$RUNNER_TEMP/venv" --python /usr/bin/python3
+          source "$RUNNER_TEMP/venv/bin/activate"
+          uv pip install -r requirements-test.txt
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
