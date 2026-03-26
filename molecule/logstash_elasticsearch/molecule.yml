@@ -16,7 +16,7 @@ platforms:
     groups:
       - logstash
     distro: "${MOLECULE_DISTRO:-debian12}"
-    memory_mb: 2048
+    memory_mb: 3072
 provisioner:
   name: ansible
   env:
