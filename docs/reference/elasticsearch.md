@@ -398,6 +398,8 @@ The role manages a fixed set of keystore keys internally (SSL keystore/truststor
 
 On each run, the role reads the current value of each custom entry and only writes it if the value has changed, so the keystore is not unnecessarily modified and Elasticsearch is only restarted when an entry actually changes.
 
+The keystore is kept in sync with the declared state: entries that were previously added via `elasticsearch_keystore_entries` but are no longer present in the dictionary are automatically removed. Role-managed keys and `keystore.seed` are never touched by this cleanup.
+
 ### Extra Configuration
 
 ```yaml

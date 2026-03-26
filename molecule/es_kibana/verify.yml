@@ -70,3 +70,54 @@
           - kibana_status.json.status.overall.level == 'available'
         fail_msg: "Kibana status: {{ kibana_status.json.status.overall.level | default('unknown') }}"
       when: "'kibana' in group_names"
+
+    # -- Custom keystore entries --
+    - name: List Elasticsearch keystore entries
+      ansible.builtin.command: /usr/share/elasticsearch/bin/elasticsearch-keystore list
+      register: keystore_list
+      changed_when: false
+      when: "'elasticsearch' in group_names"
+
+    - name: Verify custom keystore entry exists
+      ansible.builtin.assert:
+        that:
+          - "'xpack.notification.slack.account.test.secure_url' in keystore_list.stdout_lines"
+        fail_msg: "Custom keystore entry not found in: {{ keystore_list.stdout_lines }}"
+      when: "'elasticsearch' in group_names"
+
+    - name: Verify custom keystore entry has correct value
+      ansible.builtin.command: >
+        /usr/share/elasticsearch/bin/elasticsearch-keystore
+        show xpack.notification.slack.account.test.secure_url
+      register: keystore_value
+      changed_when: false
+      when: "'elasticsearch' in group_names"
+
+    - name: Assert custom keystore value
+      ansible.builtin.assert:
+        that:
+          - keystore_value.stdout == "https://hooks.example.com/test"
+        fail_msg: "Expected 'https://hooks.example.com/test', got '{{ keystore_value.stdout }}'"
+      when: "'elasticsearch' in group_names"
+
+    # -- kibana_system_password --
+    - name: Verify kibana_system can authenticate with custom password
+      ansible.builtin.uri:
+        url: "https://localhost:9200/_security/_authenticate"
+        method: GET
+        force_basic_auth: true
+        user: kibana_system
+        password: "molecule-kibana-test-pw"
+        validate_certs: false
+        status_code: 200
+      register: kibana_auth
+      when: "'elasticsearch' in group_names"
+      delegate_to: "{{ elasticsearch_ca }}"
+
+    - name: Assert kibana_system authentication succeeded
+      ansible.builtin.assert:
+        that:
+          - kibana_auth.json.username == 'kibana_system'
+        fail_msg: "kibana_system auth failed: {{ kibana_auth.json | default('no response') }}"
+      when: "'elasticsearch' in group_names"
+      delegate_to: "{{ elasticsearch_ca }}"
