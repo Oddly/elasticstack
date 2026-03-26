@@ -84,16 +84,20 @@ exclude_docs: |
 
 nav:
   - Home: index.md
-  - Getting Started: getting-started.md
+  - Introduction:
+      - introduction/index.md
+      - Getting Started: introduction/getting-started.md
   - Guide:
-      - Architecture: architecture.md
-      - TLS & Certificates: tls.md
-      - Recipes: recipes.md
-  - Roles:
-      - roles/index.md
-      - Shared Defaults: roles/elasticstack.md
-      - Repository Setup: roles/repos.md
-      - Elasticsearch: roles/elasticsearch.md
-      - Kibana: roles/kibana.md
-      - Logstash: roles/logstash.md
-      - Beats: roles/beats.md
+      - guide/index.md
+      - Architecture: guide/architecture.md
+      - TLS & Certificates: guide/tls.md
+  - Reference:
+      - reference/index.md
+      - Shared Defaults: reference/elasticstack.md
+      - Repository Setup: reference/repos.md
+      - Elasticsearch: reference/elasticsearch.md
+      - Kibana: reference/kibana.md
+      - Logstash: reference/logstash.md
+      - Beats: reference/beats.md
+  - "How To": how-to/index.md
+  - FAQ: faq.md

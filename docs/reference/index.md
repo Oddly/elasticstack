@@ -1,6 +1,6 @@
-# Roles
+# Reference
 
-The collection provides six roles that work together to deploy a complete Elastic Stack. Each role can also be used independently.
+Complete variable reference for each role in the collection. Every role can be used independently or as part of a coordinated full-stack deployment.
 
 | Role | Purpose |
 |------|---------|
