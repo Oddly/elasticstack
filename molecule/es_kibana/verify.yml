@@ -111,13 +111,15 @@
         validate_certs: false
         status_code: 200
       register: kibana_auth
-      when: "'elasticsearch' in group_names"
-      delegate_to: "{{ elasticsearch_ca }}"
+      when:
+        - "'elasticsearch' in group_names"
+        - inventory_hostname == groups['elasticsearch'][0]
 
     - name: Assert kibana_system authentication succeeded
       ansible.builtin.assert:
         that:
           - kibana_auth.json.username == 'kibana_system'
         fail_msg: "kibana_system auth failed: {{ kibana_auth.json | default('no response') }}"
-      when: "'elasticsearch' in group_names"
-      delegate_to: "{{ elasticsearch_ca }}"
+      when:
+        - "'elasticsearch' in group_names"
+        - inventory_hostname == groups['elasticsearch'][0]
