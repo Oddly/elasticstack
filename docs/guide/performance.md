@@ -2,28 +2,19 @@
 
 ## JVM heap sizing
 
-The Elasticsearch role auto-calculates heap based on available memory:
-
-- **Default formula**: `min(RAM/2, 30GB)` with a 1GB minimum
-- **Container-aware**: reads cgroup memory limits and uses those instead of physical RAM
-- **Override**: set `elasticsearch_heap` (in GB) to a fixed value
+The Elasticsearch role auto-calculates heap from physical RAM using the formula `min(RAM/2, 30GB)` with a 1GB floor. For production, set it explicitly:
 
 ```yaml
-# Let the role auto-calculate (recommended)
-# elasticsearch_heap: ""
-
-# Or set explicitly
-elasticsearch_heap: "16"
+elasticsearch_heap: "16"   # in GB
 ```
+
+The 30GB cap exists because beyond that, the JVM switches from 4-byte compressed ordinary object pointers (compressed OOPs) to 8-byte pointers, which wastes heap and reduces effective capacity.
 
 Logstash heap is set separately:
 
 ```yaml
 logstash_heap: "1g"   # default: 1g
 ```
-
-!!! tip
-    Never set heap above 30GB — the JVM loses compressed OOPs beyond that threshold, which actually reduces performance.
 
 ## Memory locking
 
@@ -33,34 +24,29 @@ Prevent Elasticsearch from swapping to disk:
 elasticsearch_memory_lock: true
 ```
 
-This sets `bootstrap.memory_lock: true` in `elasticsearch.yml` and configures systemd to allow unlimited memory locking. Essential for production — swapping causes GC pauses that look like node failures.
-
-!!! note
-    In containers with cgroup memory limits, memory locking is usually unnecessary since the kernel handles memory boundaries. But it doesn't hurt to enable it.
+This sets `bootstrap.memory_lock: true` in `elasticsearch.yml` and configures systemd to allow unlimited memory locking. Essential for production — swapping causes GC pauses that look like node failures to the cluster.
 
 ## JVM garbage collection tuning
 
-The role manages the JVM options file. For custom GC parameters:
+Elasticsearch 8.x+ uses G1GC by default with well-tuned parameters. Only add custom JVM flags if you've profiled your specific workload and have evidence that defaults aren't optimal:
 
 ```yaml
 elasticsearch_jvm_custom_parameters:
-  - "-XX:+UseG1GC"
   - "-XX:MaxGCPauseMillis=200"
   - "-XX:InitiatingHeapOccupancyPercent=75"
 ```
 
-Elasticsearch 8.x+ uses G1GC by default. Only add custom parameters if you've profiled your specific workload and have evidence that defaults aren't optimal.
-
 ## Thread pool sizing
 
-For search-heavy workloads:
+Thread pool sizes are auto-tuned by Elasticsearch based on CPU count. Only adjust queue sizes if you see `rejected_execution_exception` errors in logs:
 
 ```yaml
 elasticsearch_extra_config:
-  thread_pool.search.size: 30          # default: cpu_count * 3/2 + 1
-  thread_pool.search.queue_size: 1000  # default: 1000
+  thread_pool.search.queue_size: 2000  # default: 1000
   thread_pool.write.queue_size: 500    # default: 200
 ```
+
+Increasing queue sizes trades memory for burst capacity. If queues are consistently full, the cluster needs more nodes — larger queues just delay the rejection.
 
 ## Disk watermarks
 
@@ -88,21 +74,23 @@ Increase this on fast networks to speed up recovery after a node restart.
 
 ## Logstash pipeline tuning
 
+Pipeline workers, batch size, and batch delay are tuned directly in `logstash.yml` via `logstash_extra_config` since they vary by workload:
+
 ```yaml
-logstash_pipeline_workers: 4        # default: cpu_count
-logstash_pipeline_batch_size: 250   # default: 125
-logstash_pipeline_batch_delay: 50   # default: 50 (ms)
+logstash_extra_config:
+  pipeline.workers: 4        # default: cpu_count
+  pipeline.batch.size: 250   # default: 125
+  pipeline.batch.delay: 50   # default: 50 (ms)
 ```
 
-Increase `pipeline_batch_size` for throughput-oriented workloads. Decrease it for latency-sensitive pipelines.
+Increase `pipeline.batch.size` for throughput-oriented workloads. Decrease it for latency-sensitive pipelines.
 
 ### Persistent queues
 
-For at-least-once delivery (survives Logstash restarts):
+The role defaults to persistent queues (`logstash_queue_type: persisted`) for durability — events survive Logstash restarts. Increase the queue size for high-throughput pipelines:
 
 ```yaml
-logstash_queue_type: persisted      # default: memory
-logstash_queue_max_bytes: "4gb"
+logstash_queue_max_bytes: "4gb"   # default: 1gb
 ```
 
-Persistent queues write to disk, so use fast storage (SSD/NVMe). Monitor queue depth via the Logstash monitoring API.
+Persistent queues write to disk, so use fast storage (SSD/NVMe). Monitor queue depth via the Logstash monitoring API (`GET /_node/stats/pipelines`).

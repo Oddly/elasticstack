@@ -9,10 +9,9 @@ The Elasticsearch role supports zero-downtime rolling upgrades from Elastic 8.x 
 1. The role detects the installed version vs the target version
 2. For each node (one at a time):
     - Disables shard allocation to prevent rebalancing during restart
-    - Synced-flushes (8.x) or flushes (9.x) to minimize recovery time
-    - Stops Elasticsearch
-    - Upgrades the package to the target version
-    - Starts Elasticsearch
+    - Flushes indices to reduce recovery time after restart
+    - Stops Elasticsearch and upgrades the package
+    - Starts Elasticsearch with the new version
     - Waits for the node to rejoin and the cluster to reach green
     - Re-enables shard allocation
 3. Kibana, Logstash, and Beats are upgraded after Elasticsearch
@@ -31,13 +30,16 @@ ansible-playbook -i inventory.yml playbook.yml
 
 The role handles the upgrade order automatically. Elasticsearch nodes are upgraded first, then Kibana, Logstash, and Beats.
 
+### Upgrade path requirement
+
+Elasticsearch 9.x requires version 8.19.x as a stepping stone. The role validates this automatically — if you try to jump from 8.15 to 9.x, it fails with a clear error telling you to upgrade to 8.19 first. This is an Elastic requirement, not a role limitation.
+
 ### Safety checks
 
 The role refuses to upgrade if:
 
-- The cluster is not green (all primary and replica shards assigned)
-- There are unassigned shards that could indicate data loss
-- The target version is more than one major version ahead
+- The cluster is not green before starting
+- The upgrade path requirement is not met (must be on 8.19.x for 9.x)
 
 ### Unsafe restart mode
 
