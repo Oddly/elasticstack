@@ -33,7 +33,7 @@ elasticsearch_keystore_entries:
   xpack.notification.slack.account.monitoring.secure_url: "https://hooks.slack.com/services/T00/B00/XXX"
 ```
 
-Values are passed via stdin and never appear in logs. See the [Elasticsearch reference](reference/elasticsearch.md#custom-keystore-entries).
+Values are passed via stdin and never appear in logs. See the [Elasticsearch reference](reference/elasticsearch.md).
 
 ## TLS & Certificates
 

@@ -6,6 +6,8 @@ Task-oriented recipes for common operations, grouped by topic.
 
 - [Kibana behind a reverse proxy](deployment.md#kibana-behind-a-reverse-proxy)
 - [Kibana with HTTPS enabled](deployment.md#kibana-with-https-enabled-no-proxy)
+- [Kibana with external certificates](deployment.md#kibana-with-external-certificates)
+- [Elasticsearch with external certificates](deployment.md#elasticsearch-with-external-certificates)
 - [Standalone Logstash (no ES CA)](deployment.md#standalone-logstash-no-elasticsearch-ca)
 - [Beats shipping directly to Elasticsearch](deployment.md#beats-shipping-directly-to-elasticsearch)
 - [Air-gapped / offline deployment](deployment.md#air-gapped-offline-deployment)
