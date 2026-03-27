@@ -276,6 +276,11 @@
     - _elasticsearch_needs_rolling_upgrade | bool
     - elasticstack_password.stdout is defined
 
+# NOTE: When elasticstack_version is "latest", state: latest means the package
+# manager installs the newest available version. If a newer version is installed,
+# the post-install detection below triggers a rolling restart (node-by-node with
+# shard allocation management). This is intentional — even minor upgrades should
+# not restart all nodes at once.
 - name: Install Elasticsearch - rpm - full stack
   ansible.builtin.package:
     name: "{{ elasticsearch_package }}"
