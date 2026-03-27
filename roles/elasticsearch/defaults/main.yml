@@ -171,6 +171,29 @@ elasticsearch_validate_api_certs: false
 
 elasticsearch_unsafe_upgrade_restart: false
 
+# @var elasticsearch_keystore_entries:description: >
+#   Custom entries to add to the Elasticsearch keystore. Each key-value pair
+#   is added with `elasticsearch-keystore add -f -x`. Values are passed via
+#   stdin so they never appear in process listings or Ansible logs.
+#
+#   The role manages these keystore keys internally — do NOT set them here:
+#     bootstrap.password,
+#     xpack.security.http.ssl.keystore.secure_password,
+#     xpack.security.http.ssl.truststore.secure_password,
+#     xpack.security.transport.ssl.keystore.secure_password,
+#     xpack.security.transport.ssl.truststore.secure_password,
+#     xpack.security.http.ssl.secure_key_passphrase,
+#     xpack.security.transport.ssl.secure_key_passphrase,
+#     autoconfiguration.password_hash
+#   The playbook will fail with an error if any of these keys appear in
+#   elasticsearch_keystore_entries.
+# @var elasticsearch_keystore_entries:example: >
+# elasticsearch_keystore_entries:
+#   xpack.notification.slack.account.monitoring.secure_url: "https://hooks.slack.com/services/T00/B00/XXX"
+#   xpack.notification.email.account.work.smtp.secure_password: "smtp-password"
+# @end
+elasticsearch_keystore_entries: {}
+
 # @var elasticsearch_extra_config:description: >
 #   Additional key-value pairs merged into elasticsearch.yml. Keys that
 #   conflict with dedicated role variables (e.g. cluster.name) are

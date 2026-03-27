@@ -51,6 +51,7 @@ kibana_config_backup: false
 ```yaml
 # kibana_elasticsearch_hosts: (undefined by default)
 kibana_security: true
+kibana_system_password: ""
 kibana_sniff_on_start: false
 kibana_sniff_on_connection_fault: false
 ```
@@ -65,6 +66,8 @@ kibana_sniff_on_connection_fault: false
     In most full-stack deployments the automatic group-based resolution (option 2) does the right thing. You only need to set `kibana_elasticsearch_hosts` explicitly when Kibana runs on a host outside the Elasticsearch inventory group, or when you need to point at specific ES nodes rather than all of them.
 
 `kibana_security` enables authenticated, encrypted connections to Elasticsearch. When `true`, Kibana connects over HTTPS using the `kibana_system` user and the password from the Elasticsearch security setup. The CA certificate is deployed automatically from the ES CA host.
+
+`kibana_system_password` lets you set a specific password for the `kibana_system` Elasticsearch user. When empty (the default), Kibana uses the auto-generated password from the initial security setup. When set, the role changes the password via the Elasticsearch `/_security/user/kibana_system/_password` API on every run and uses the new value for Kibana's connection to Elasticsearch. This is useful when you need a known password for external monitoring, when you rotate credentials on a schedule, or when multiple Kibana instances need a consistent password that isn't tied to the initial setup file.
 
 `kibana_sniff_on_start` and `kibana_sniff_on_connection_fault` control Elasticsearch node discovery. When enabled, Kibana queries the ES cluster for the full list of nodes at startup or when a connection drops. These settings only apply to Elastic Stack versions prior to 9.x (Kibana 9.x removed sniffing support).
 

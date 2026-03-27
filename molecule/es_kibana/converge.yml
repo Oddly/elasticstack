@@ -8,6 +8,9 @@
     elasticstack_full_stack: true
     elasticstack_no_log: false
     elasticsearch_heap: "1"
+    elasticsearch_keystore_entries:
+      xpack.notification.slack.account.test.secure_url: "https://hooks.example.com/test"
+    kibana_system_password: "molecule-kibana-test-pw"
 
   tasks:
     - name: Include Elastic repos

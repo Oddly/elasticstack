@@ -382,6 +382,24 @@ elasticsearch_logging_audit: true
 
     JSON logs use `ECSJsonLayout` with `dataset` fields (Elastic Common Schema). Deprecation logs add a `RateLimitingFilter` to prevent log flooding and a `HeaderWarningAppender` for HTTP response warnings. Indexing slow log logger name changed to `index.indexing.slowlog.index`.
 
+### Custom Keystore Entries
+
+```yaml
+elasticsearch_keystore_entries:
+  xpack.notification.slack.account.monitoring.secure_url: "https://hooks.slack.com/services/T00/B00/XXX"
+  xpack.notification.email.account.work.smtp.secure_password: "smtp-password"
+```
+
+`elasticsearch_keystore_entries` is a dictionary of custom entries to add to the Elasticsearch keystore. Each key-value pair is set using `elasticsearch-keystore add -f -x`, with the value passed via stdin so it never appears in process listings or Ansible logs.
+
+Use this for any sensitive Elasticsearch setting that belongs in the keystore rather than in `elasticsearch.yml` — Watcher notification credentials, repository passwords, LDAP bind passwords, custom plugin secrets, etc.
+
+The role manages a fixed set of keystore keys internally (SSL keystore/truststore passwords, bootstrap password). If you try to set any of these via `elasticsearch_keystore_entries`, the playbook fails immediately with an error listing exactly which keys are reserved and why. The reserved keys are: `bootstrap.password`, `autoconfiguration.password_hash`, and the six `xpack.security.*.ssl.*` password entries. Use the dedicated role variables for those instead.
+
+On each run, the role reads the current value of each custom entry and only writes it if the value has changed, so the keystore is not unnecessarily modified and Elasticsearch is only restarted when an entry actually changes.
+
+The keystore is kept in sync with the declared state: entries that were previously added via `elasticsearch_keystore_entries` but are no longer present in the dictionary are automatically removed. Role-managed keys and `keystore.seed` are never touched by this cleanup.
+
 ### Extra Configuration
 
 ```yaml

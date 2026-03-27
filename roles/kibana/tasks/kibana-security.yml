@@ -416,6 +416,48 @@
     _password_user: kibana_system
     _password_fact: kibana_password
 
+# -- Change kibana_system password if user defined one --
+#
+# When kibana_system_password is set, the role changes the auto-generated
+# password to the user-provided value via the Elasticsearch security API.
+# This runs once on the CA host, authenticating as the elastic superuser.
+# After the API call, kibana_password is updated so the rest of the role
+# (kibana.yml template, keystore) uses the new password transparently.
+- name: kibana-security | Change kibana_system password to user-defined value
+  when:
+    - kibana_system_password | default('') | length > 0
+    - kibana_password.stdout | default('') != kibana_system_password
+  block:
+    - name: kibana-security | Fetch elastic password for API authentication
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/fetch_password.yml"
+      vars:
+        _password_user: elastic
+        _password_fact: _kibana_elastic_password
+
+    - name: kibana-security | Change kibana_system password via Elasticsearch API
+      ansible.builtin.uri:
+        url: "{{ _kibana_es_protocol }}://{{ elasticsearch_api_host | default(elasticstack_ca_host) }}:{{ elasticstack_elasticsearch_http_port }}/_security/user/kibana_system/_password"
+        method: POST
+        body_format: json
+        body:
+          password: "{{ kibana_system_password }}"
+        user: elastic
+        password: "{{ elasticstack_password.stdout | default(_kibana_elastic_password.stdout) }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: 200
+      no_log: "{{ elasticstack_no_log }}"
+      vars:
+        _kibana_es_protocol: "{{ 'https' if kibana_security | bool else 'http' }}"
+      run_once: true
+
+    - name: kibana-security | Update kibana_password fact to user-defined value  # noqa: var-naming[no-role-prefix]
+      ansible.builtin.set_fact:
+        kibana_password:
+          stdout: "{{ kibana_system_password }}"
+      no_log: "{{ elasticstack_no_log }}"
+
 # -- Distribute CA certificate to Kibana nodes --
 - name: kibana-security | Distribute CA certificate to Kibana nodes
   ansible.builtin.include_tasks:
