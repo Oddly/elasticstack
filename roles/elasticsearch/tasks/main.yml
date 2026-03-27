@@ -198,9 +198,10 @@
   when:
     - elasticsearch_pamlimits | bool
 
-# OS-level tuning required for production Elasticsearch.
-# vm.max_map_count is required — ES refuses to start without it.
-# The rest are strongly recommended by Elastic's production checklist.
+# OS-level tuning for production Elasticsearch.
+# vm.max_map_count must be >= 262144 for mmapfs. ES bootstrap checks
+# enforce this — if the value is too low, ES refuses to start. Some
+# distros and container hosts already set this higher than 262144.
 - name: Apply OS-level sysctl settings for Elasticsearch
   ansible.posix.sysctl:
     name: "{{ item.name }}"
