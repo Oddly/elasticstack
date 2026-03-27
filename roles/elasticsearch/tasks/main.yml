@@ -44,7 +44,7 @@
     name: oddly.elasticstack.elasticstack
   when: not hostvars[inventory_hostname]._elasticstack_role_imported | default(false)
 
-- name: main | Propagate stack-level security setting
+- name: Main | Propagate stack-level security setting
   ansible.builtin.set_fact:
     elasticsearch_security: "{{ elasticstack_security | bool }}"
   when:
