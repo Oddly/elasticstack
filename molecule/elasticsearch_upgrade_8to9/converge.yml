@@ -118,14 +118,19 @@
       delay: 5
       until: _refresh_result.status | default(0) == 200
 
-- name: Upgrade to Elasticsearch 9.x (with config change to exercise handler suppression)
+- name: Upgrade to Elasticsearch 9.x via release change (rolling upgrade)
   hosts: all
   serial: 1
   vars:
     elasticstack_full_stack: false
+    # Only change the release — don't pin elasticstack_version.
+    # This exercises the real-world upgrade path: the role detects the
+    # major version mismatch and triggers a rolling upgrade automatically.
     elasticstack_release: 9
     elasticsearch_heap: "1"
     elasticstack_no_log: false
+    # Skip the countdown pause in CI
+    elasticsearch_upgrade_countdown: 0
     # Add a JVM custom parameter during upgrade to trigger a config change.
     # This exercises the fix: the rolling upgrade restarts ES, and the config
     # change notifies the handler, which should be suppressed to prevent an
@@ -145,43 +150,6 @@
     - name: Reset shared role guard for upgrade play
       ansible.builtin.set_fact:
         _elasticstack_role_imported: false
-
-    - name: Gather package facts for version comparison
-      ansible.builtin.package_facts:
-        manager: auto
-
-    - name: Detect latest available Elasticsearch 9.x version (Debian)
-      ansible.builtin.shell: >
-        set -o pipefail &&
-        apt-cache policy elasticsearch | grep 'Candidate:' | awk '{print $2}'
-      args:
-        executable: /bin/bash
-      register: _es_candidate_version_deb
-      changed_when: false
-      when: ansible_facts.os_family == "Debian"
-
-    - name: Detect latest available Elasticsearch 9.x version (RHEL)
-      ansible.builtin.shell: >
-        set -o pipefail &&
-        dnf info --available elasticsearch 2>/dev/null | grep '^Version' | awk '{print $3}' | head -1
-      args:
-        executable: /bin/bash
-      register: _es_candidate_version_rhel
-      changed_when: false
-      when: ansible_facts.os_family == "RedHat"
-
-    - name: Combine candidate version
-      ansible.builtin.set_fact:
-        _es_candidate_version:
-          stdout: "{{ _es_candidate_version_deb.stdout | default(_es_candidate_version_rhel.stdout | default('')) }}"
-
-    - name: Set target upgrade version
-      ansible.builtin.set_fact:
-        elasticstack_version: "{{ _es_candidate_version.stdout }}"
-
-    - name: Display upgrade target
-      ansible.builtin.debug:
-        msg: "Upgrading from {{ ansible_facts.packages['elasticsearch'][0].version }} to {{ elasticstack_version }}"
 
     - name: Include Elasticsearch role (upgrade to 9.x)
       ansible.builtin.include_role:
