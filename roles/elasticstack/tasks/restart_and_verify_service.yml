@@ -1,0 +1,45 @@
+---
+# Shared restart-and-verify pattern for systemd services.
+#
+# Required variables:
+#   _service_name       – systemd unit name (without .service suffix)
+#
+# Optional variables:
+#   _daemon_reload      – whether to daemon-reload before restarting (default: false)
+
+- name: "restart_and_verify_service | Restart and verify {{ _service_name }}"  # noqa: name[template]
+  block:
+    - name: "restart_and_verify_service | Reset {{ _service_name }} failed state before restart"  # noqa: name[template]
+      ansible.builtin.command:
+        cmd: "systemctl reset-failed {{ _service_name }}.service"
+      changed_when: false
+      failed_when: false
+
+    - name: "restart_and_verify_service | Restart {{ _service_name }} service"  # noqa: name[template]
+      ansible.builtin.service:
+        name: "{{ _service_name }}"
+        state: restarted
+        daemon_reload: "{{ _daemon_reload | default(false) | bool }}"
+
+    - name: "restart_and_verify_service | Verify {{ _service_name }} is running"  # noqa: name[template] var-naming[no-role-prefix]
+      ansible.builtin.systemd:
+        name: "{{ _service_name }}"
+      register: _service_state
+      until: _service_state.status.ActiveState == 'active'
+      retries: 5
+      delay: 3
+
+  rescue:
+    - name: "restart_and_verify_service | Get recent {{ _service_name }} journal output"  # noqa: name[template] var-naming[no-role-prefix]
+      ansible.builtin.command:
+        cmd: "journalctl -u {{ _service_name }} --no-pager -n 50"
+      register: _service_journal
+      changed_when: false
+
+    - name: "restart_and_verify_service | Fail with {{ _service_name }} startup diagnostics"  # noqa: name[template]
+      ansible.builtin.fail:
+        msg: |
+          {{ _service_name }} failed to start.
+
+          Recent log output:
+          {{ _service_journal.stdout }}

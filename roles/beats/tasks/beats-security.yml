@@ -10,42 +10,20 @@
 
     # -- Detect content mode vs file mode --
     - name: beats-security | Detect content mode for Beats
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/certs/cert_detect_content_mode.yml"
+      vars:
+        _detect_cert_content_var: "{{ beats_tls_certificate_content | default('', true) }}"
+        _detect_key_content_var: "{{ beats_tls_key_content | default('', true) }}"
+        _detect_cert_file_var: "{{ beats_tls_certificate_file }}"
+        _detect_service_name: Beats
+        _detect_key_var_name: beats_tls_key_content
+
+    - name: beats-security | Map detection results to Beats facts
       ansible.builtin.set_fact:
-        _beats_content_mode: "{{ beats_tls_certificate_content | default('', true) | length > 0 }}"
-
-    - name: beats-security | Validate certificate is provided
-      ansible.builtin.assert:
-        that:
-          - (beats_tls_certificate_file | length > 0) or
-            (beats_tls_certificate_content | default('', true) | length > 0)
-        fail_msg: >-
-          External cert mode requires at minimum:
-          beats_tls_certificate_file or beats_tls_certificate_content
-
-    # -- Content mode: set format to PEM --
-    - name: beats-security | Set format facts for content mode
-      ansible.builtin.set_fact:
-        _beats_cert_format: pem
-        _beats_ca_extracted: false
-      when: _beats_content_mode | bool
-
-    - name: beats-security | Check for CA chain in certificate content
-      ansible.builtin.set_fact:
-        _beats_ca_extracted: true
-      when:
-        - _beats_content_mode | bool
-        - >-
-          beats_tls_certificate_content | default('')
-          | regex_findall('-----BEGIN CERTIFICATE-----') | length > 1
-
-    - name: beats-security | Validate key content is provided (content mode)
-      ansible.builtin.assert:
-        that:
-          - beats_tls_key_content | default('', true) | length > 0
-        fail_msg: >-
-          Content mode requires both certificate and key content.
-          Set beats_tls_key_content.
-      when: _beats_content_mode | bool
+        _beats_content_mode: "{{ _detect_content_mode }}"
+        _beats_cert_format: "{{ _detect_cert_format | default(omit) }}"
+        _beats_ca_extracted: "{{ _detect_ca_extracted | default(false) }}"
 
     # -- File mode: validate and detect format --
     - name: beats-security | Validate Beats certificate (file mode)
