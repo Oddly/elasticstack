@@ -94,6 +94,7 @@ nav:
       - TLS & Certificates: guide/tls.md
       - Upgrading: guide/upgrades.md
       - Performance Tuning: guide/performance.md
+      - Best Practices: guide/best-practices.md
   - Reference:
       - reference/index.md
       - Shared Defaults: reference/elasticstack.md
