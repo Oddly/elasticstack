@@ -4,6 +4,28 @@
   ansible.builtin.package_facts:
     manager: auto
 
+# Detect whether a rolling upgrade is needed. Any version change — major,
+# minor, or patch — should restart nodes one at a time with shard allocation
+# management rather than restarting all nodes simultaneously.
+#
+# Pre-install detection covers cases where we know the target version:
+# 1. Pinned version higher than installed (elasticstack_version: "9.2.0")
+# 2. Major version change (elasticstack_release differs from installed)
+#
+# For "latest" mode, we can't know pre-install whether a newer version is
+# available. The normal package tasks handle installation with state: latest,
+# and if the package changed, a rolling restart is triggered post-install.
+- name: Detect if rolling upgrade is needed (pre-install)
+  ansible.builtin.set_fact:
+    _elasticsearch_needs_rolling_upgrade: >-
+      {{ ansible_facts.packages['elasticsearch'] is defined and
+         ansible_facts.packages['elasticsearch'][0].version is defined and
+         ((elasticstack_version is defined and
+           elasticstack_version != 'latest' and
+           elasticstack_version is version(ansible_facts.packages['elasticsearch'][0].version, '>'))
+          or
+          (elasticstack_release | int != (ansible_facts.packages['elasticsearch'][0].version.split('.')[0] | int))) }}
+
 - name: Check upgrade path requirement for ES 9.x
   ansible.builtin.fail:
     msg: |
@@ -187,17 +209,25 @@
       replace(' ', '')
       }}
 
+- name: "WARNING: Rolling upgrade will be performed"
+  ansible.builtin.pause:
+    seconds: "{{ elasticsearch_upgrade_countdown | default(10) }}"
+    prompt: >-
+      Elasticsearch {{ ansible_facts.packages['elasticsearch'][0].version }}
+      will be upgraded to {{ elasticstack_version | default('latest ' ~ elasticstack_release ~ '.x') }}.
+      Nodes will be restarted one at a time with shard allocation management.
+      Press Ctrl+C to abort, or wait {{ elasticsearch_upgrade_countdown | default(10) }} seconds to continue.
+  when:
+    - _elasticsearch_needs_rolling_upgrade | bool
+    - ansible_facts.packages['elasticsearch'] is defined
+  run_once: true
+
 # Write config files BEFORE the rolling upgrade so the upgrade restart picks
 # up new config in a single restart. Without this, the rolling upgrade restarts
 # with old config, then config tasks change files and notify the handler,
 # causing a second uncontrolled restart.
 - name: Write config before rolling upgrade
-  when:
-    - elasticstack_version is defined
-    - elasticstack_version != 'latest'
-    - ansible_facts.packages['elasticsearch'] is defined
-    - ansible_facts.packages['elasticsearch'][0].version is defined
-    - elasticstack_version is version(ansible_facts.packages['elasticsearch'][0].version, '>')
+  when: _elasticsearch_needs_rolling_upgrade | bool
   block:
     - name: Configure Elasticsearch (pre-upgrade)
       ansible.builtin.template:
@@ -243,13 +273,14 @@
   loop: "{{ groups[elasticstack_elasticsearch_group_name] }}"
   when:
     - "hostvars[item].inventory_hostname == inventory_hostname"
-    - elasticstack_version is defined
-    - elasticstack_version != 'latest'
-    - ansible_facts.packages['elasticsearch'] is defined
-    - ansible_facts.packages['elasticsearch'][0].version is defined
+    - _elasticsearch_needs_rolling_upgrade | bool
     - elasticstack_password.stdout is defined
-    - elasticstack_version is version( ansible_facts.packages['elasticsearch'][0].version, '>')
 
+# NOTE: When elasticstack_version is "latest", state: latest means the package
+# manager installs the newest available version. If a newer version is installed,
+# the post-install detection below triggers a rolling restart (node-by-node with
+# shard allocation management). This is intentional — even minor upgrades should
+# not restart all nodes at once.
 - name: Install Elasticsearch - rpm - full stack
   ansible.builtin.package:
     name: "{{ elasticsearch_package }}"
@@ -286,6 +317,27 @@
   delay: 10
   when:
     - ansible_facts.os_family == "Debian"
+
+# If a normal package install (not the rolling upgrade path) changed the
+# package, we need a rolling restart to avoid bringing all nodes down at
+# once. This covers the "latest" case where we didn't know pre-install
+# whether a newer version was available.
+- name: Detect if package was upgraded (post-install)
+  ansible.builtin.set_fact:
+    _elasticsearch_package_upgraded: >-
+      {{ (_elasticsearch_install_rpm_full.changed | default(false)) or
+         (_elasticsearch_install_rpm.changed | default(false)) or
+         (_elasticsearch_install_deb.changed | default(false)) }}
+  when: not (_elasticsearch_needs_rolling_upgrade | bool)
+
+- name: Rolling restart after package upgrade
+  ansible.builtin.include_tasks: elasticsearch-rolling-upgrade.yml
+  loop: "{{ groups[elasticstack_elasticsearch_group_name] }}"
+  when:
+    - "hostvars[item].inventory_hostname == inventory_hostname"
+    - not (_elasticsearch_needs_rolling_upgrade | bool)
+    - _elasticsearch_package_upgraded | default(false) | bool
+    - elasticstack_password.stdout is defined
 
 # Pre-detect external cert state so the template renders consistently
 # across first and subsequent runs (idempotency).

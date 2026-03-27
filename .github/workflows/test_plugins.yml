@@ -39,8 +39,12 @@ jobs:
       - name: Check out the codebase.
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
-      - name: Install test dependencies.
-        run: uv pip install --system --break-system-packages --python /usr/bin/python3 pycodestyle
+      - name: Create venv and install dependencies
+        run: |
+          uv venv "$RUNNER_TEMP/venv" --python /usr/bin/python3
+          source "$RUNNER_TEMP/venv/bin/activate"
+          uv pip install pycodestyle
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
@@ -66,8 +70,21 @@ jobs:
       - name: Check out code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
-      - name: Install ansible-core
-        run: uv pip install --system --break-system-packages --python /usr/bin/python3 ansible-core~=${{ matrix.ansible_core }}.0
+      - name: Select Python for ansible-core version
+        id: pyver
+        run: |
+          PYTHON=/usr/bin/python3
+          if [[ "${{ matrix.ansible_core }}" == "2.20" ]] && command -v python3.12 &>/dev/null; then
+            PYTHON=$(command -v python3.12)
+          fi
+          echo "python=$PYTHON" >> "$GITHUB_OUTPUT"
+
+      - name: Create venv and install ansible-core
+        run: |
+          uv venv "$RUNNER_TEMP/venv" --python ${{ steps.pyver.outputs.python }}
+          source "$RUNNER_TEMP/venv/bin/activate"
+          uv pip install ansible-core~=${{ matrix.ansible_core }}.0
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
@@ -109,8 +126,12 @@ jobs:
       - name: Check out code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
-      - name: Install dependencies
-        run: uv pip install --system --break-system-packages --python /usr/bin/python3 ansible
+      - name: Create venv and install dependencies
+        run: |
+          uv venv "$RUNNER_TEMP/venv" --python /usr/bin/python3
+          source "$RUNNER_TEMP/venv/bin/activate"
+          uv pip install ansible
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
@@ -154,8 +175,12 @@ jobs:
       - name: Check out code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
-      - name: Install dependencies
-        run: uv pip install --system --break-system-packages --python /usr/bin/python3 ansible
+      - name: Create venv and install dependencies
+        run: |
+          uv venv "$RUNNER_TEMP/venv" --python /usr/bin/python3
+          source "$RUNNER_TEMP/venv/bin/activate"
+          uv pip install ansible
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
@@ -197,8 +222,21 @@ jobs:
       - name: Check out code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
-      - name: Install dependencies
-        run: uv pip install --system --break-system-packages --python /usr/bin/python3 ansible-core==${{ matrix.ansible_core_version }}
+      - name: Select Python for ansible-core version
+        id: pyver
+        run: |
+          PYTHON=/usr/bin/python3
+          if [[ "${{ matrix.ansible_core_version }}" == 2.20* ]] && command -v python3.12 &>/dev/null; then
+            PYTHON=$(command -v python3.12)
+          fi
+          echo "python=$PYTHON" >> "$GITHUB_OUTPUT"
+
+      - name: Create venv and install dependencies
+        run: |
+          uv venv "$RUNNER_TEMP/venv" --python ${{ steps.pyver.outputs.python }}
+          source "$RUNNER_TEMP/venv/bin/activate"
+          uv pip install ansible-core==${{ matrix.ansible_core_version }}
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
@@ -240,10 +278,13 @@ jobs:
       - name: Check out code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
-      - name: Install dependencies
+      - name: Create venv and install dependencies
         run: |
-          uv pip install --system --break-system-packages --python /usr/bin/python3 cryptography==${{ matrix.python_cryptography_version }}
-          uv pip install --system --break-system-packages --python /usr/bin/python3 ansible
+          uv venv "$RUNNER_TEMP/venv" --python /usr/bin/python3
+          source "$RUNNER_TEMP/venv/bin/activate"
+          uv pip install cryptography==${{ matrix.python_cryptography_version }}
+          uv pip install ansible
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
