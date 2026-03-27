@@ -55,11 +55,11 @@ After deployment, verify health from the command line:
 
 ```bash
 # Elasticsearch cluster health
-curl -k -u elastic:PASSWORD https://localhost:9200/_cluster/health?pretty
+curl -sk -u elastic:PASSWORD https://localhost:9200/_cluster/health?pretty
 
-# Kibana status
-curl -u elastic:PASSWORD http://localhost:5601/api/status
+# Kibana status (use https if kibana_tls: true)
+curl -sk -u elastic:PASSWORD https://localhost:5601/api/status
 
-# Logstash pipeline stats
-curl http://localhost:9600/_node/stats/pipelines?pretty
+# Logstash pipeline stats (no auth required, localhost only)
+curl -s http://localhost:9600/_node/stats/pipelines?pretty
 ```

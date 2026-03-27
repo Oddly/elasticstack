@@ -8,18 +8,17 @@ Opinionated recommendations for running the Elastic Stack in production. These a
 
 - **Minimum 3 master-eligible nodes** for quorum. A 2-node cluster has no fault tolerance — if one node goes down, the other can't form a quorum and the cluster locks up.
 - **Odd number of master-eligible nodes** (3, 5, 7) to avoid split-brain during network partitions.
-- **Separate roles at scale**: below ~10 nodes, let every node be master + data. Above that, dedicate 3 nodes to master-only and the rest to data.
+- **Dedicate 3 nodes to master-only** for any production cluster with non-trivial indexing or search load. A data node under heavy GC pressure or large merges can delay master duties (cluster state updates, shard allocation), which destabilizes the whole cluster. Combined master+data roles are fine for development and light workloads.
 
-```yaml title="host_vars/es-master1.yml (large clusters only)"
+```yaml title="host_vars/es-master1.yml"
 elasticsearch_node_types: ["master"]
-elasticsearch_heap: "4"
+elasticsearch_heap: "4"   # masters need little heap — 4GB is plenty
 ```
 
 ### JVM heap
 
-- Set heap to **half of available RAM**, up to **30GB max**. The other half is used by the OS for filesystem caching, which Elasticsearch relies on heavily.
-- Let the role auto-calculate when possible — it reads cgroup limits in containers and gets this right.
-- Never give Elasticsearch all available memory. A 64GB host should have `elasticsearch_heap: "30"`, not `"32"`.
+- Set heap to **half of available RAM**, up to **30GB**. The other half is for the OS filesystem cache, which Elasticsearch relies on for search performance. Beyond 30GB the JVM loses compressed ordinary object pointers (compressed OOPs), which increases pointer size from 4 to 8 bytes and actually reduces the amount of heap you can use effectively. A 64GB host should have `elasticsearch_heap: "30"`.
+- The role auto-calculates heap from physical RAM when `elasticsearch_heap` is not set. For production, set it explicitly.
 
 ### Memory locking
 
@@ -57,17 +56,25 @@ This isn't managed by Ansible (it's runtime Elasticsearch config), but make sure
 
 ### Slow query logging
 
-Enable slow query logs to catch problematic queries before they cause outages:
+Enable slow query logs to catch problematic queries before they cause outages. These are index-level settings — apply them via an index template so all new indices inherit them:
 
-```yaml
-elasticsearch_cluster_settings:
-  index.search.slowlog.threshold.query.warn: "10s"
-  index.search.slowlog.threshold.query.info: "5s"
-  index.search.slowlog.threshold.fetch.warn: "1s"
-  index.indexing.slowlog.threshold.index.warn: "10s"
+```bash
+curl -k -u elastic:PASSWORD -X PUT https://localhost:9200/_index_template/slowlog-defaults \
+  -H 'Content-Type: application/json' -d '{
+  "index_patterns": ["*"],
+  "priority": 0,
+  "template": {
+    "settings": {
+      "index.search.slowlog.threshold.query.warn": "10s",
+      "index.search.slowlog.threshold.query.info": "5s",
+      "index.search.slowlog.threshold.fetch.warn": "1s",
+      "index.indexing.slowlog.threshold.index.warn": "10s"
+    }
+  }
+}'
 ```
 
-Ship these logs to a monitoring cluster (not the same cluster) via Filebeat.
+Ship slow logs to a monitoring cluster (not the same cluster) via Filebeat.
 
 ## Security
 
@@ -82,7 +89,6 @@ elasticsearch_extra_config:
     - authentication_success
     - authentication_failed
     - access_denied
-    - access_granted
     - connection_denied
     - tampered_request
     - run_as_denied
@@ -91,7 +97,7 @@ elasticsearch_extra_config:
     - anonymous_access_denied   # reduce noise from health checks
 ```
 
-This writes structured JSON logs to `<cluster>_audit.json`. At minimum, always include `authentication_failed` and `access_denied` — these surface brute-force attempts and misconfigured services.
+This writes structured JSON logs to `<cluster>_audit.json`. The `access_granted` event is omitted here because it logs every successful API call and generates very high volume. Add it only if you need full access tracing and have the storage for it. At minimum, always include `authentication_failed` and `access_denied` — these surface brute-force attempts and misconfigured services.
 
 ### Ship audit logs to a separate cluster
 
@@ -129,15 +135,14 @@ curl -k -u elastic:OLD_PASSWORD -X POST \
 
 ### Restrict network exposure
 
-Elasticsearch should never be directly accessible from the internet:
+Elasticsearch should never be directly accessible from the internet. The role defaults to binding to `_site_` (private network interface), which is correct for most deployments. Combine this with firewall rules to restrict port 9200 (HTTP) and 9300 (transport) to known hosts only — Kibana nodes, Logstash nodes, and your admin workstations.
+
+For hosts with multiple network interfaces, be explicit:
 
 ```yaml
 elasticsearch_extra_config:
-  network.host: ["_site_", "_local_"]   # bind to private + loopback only
-  http.host: "0.0.0.0"                  # if Kibana needs to reach it from another host
+  network.host: ["_site_", "_local_"]   # private interface + loopback
 ```
-
-Use firewall rules to restrict port 9200 (HTTP) and 9300 (transport) to known hosts only.
 
 ## Kibana
 
@@ -167,21 +172,17 @@ Without these, each Kibana instance generates random keys on startup and session
 
 ### Kibana logging
 
-Configure Kibana to log authentication events:
+Configure Kibana to log security events to a separate file for easier monitoring and shipping:
 
 ```yaml
 kibana_extra_config:
-  logging.appenders.security:
-    type: rolling-file
-    fileName: /var/log/kibana/security.log
-    policy:
-      type: time-interval
-      interval: 24h
-    strategy:
-      type: numeric
-      max: 30
-    layout:
-      type: json
+  logging.appenders.security.type: rolling-file
+  logging.appenders.security.fileName: /var/log/kibana/security.log
+  logging.appenders.security.policy.type: time-interval
+  logging.appenders.security.policy.interval: 24h
+  logging.appenders.security.strategy.type: numeric
+  logging.appenders.security.strategy.max: 30
+  logging.appenders.security.layout.type: json
   logging.loggers:
     - name: plugins.security
       level: info
