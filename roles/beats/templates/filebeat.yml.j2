@@ -145,59 +145,17 @@ setup.kibana:
 {% if elasticstack_full_stack | default(false) | bool and groups[elasticstack_kibana_group_name] | default([]) | length > 0 %}
   host: "http://{{ groups[elasticstack_kibana_group_name][0] }}:{{ elasticstack_kibana_port }}"
 {% endif %}
-{% if beats_filebeat_output == "elasticsearch" %}
-output.elasticsearch:
-{% if beats_security | bool %}
-{% if elasticstack_full_stack | bool %}
-  hosts: [ {% for host in groups[elasticstack_elasticsearch_group_name] %}"https://{{ host }}:{{ elasticstack_elasticsearch_http_port }}"{% if not loop.last %},{% endif %}{% endfor %}]
-{% else %}
-  hosts: [ {% for host in beats_target_hosts %}"https://{{ host }}:{{ elasticstack_elasticsearch_http_port }}"{% if not loop.last %},{% endif %}{% endfor %}]
-{% endif %}
-  username: "elastic"
-  password: "{{ beats_writer_password.stdout }}"
-  ssl.enabled: true
-  ssl.verification_mode: {{ beats_ssl_verification_mode }}
-  ssl.certificate_authorities: ["/etc/beats/certs/ca.crt"]
-{% else %}
-{% if elasticstack_full_stack | bool %}
-  hosts: [ {% for host in groups[elasticstack_elasticsearch_group_name] %}"http://{{ host }}:{{ elasticstack_elasticsearch_http_port }}"{% if not loop.last %},{% endif %}{% endfor %}]
-{% else %}
-  hosts: [ {% for host in beats_target_hosts %}"http://{{ host }}:{{ elasticstack_elasticsearch_http_port }}"{% if not loop.last %},{% endif %}{% endfor %}]
-{% endif %}
-{% endif %}
-{% endif %}
-{% if beats_filebeat_output == "logstash" %}
-output.logstash:
-{% if elasticstack_full_stack | bool %}
-  hosts: [ {% for host in groups[elasticstack_logstash_group_name] %}"{{ host }}:{{ elasticstack_beats_port }}"{% if not loop.last %},{% endif %}{% endfor %}]
-{% else %}
-  hosts: [ {% for host in beats_target_hosts %}"{{ host }}:{{ elasticstack_beats_port }}"{% if not loop.last %},{% endif %}{% endfor %}]
-{% endif %}
-  loadbalance: {{ beats_filebeat_loadbalance }}
-{% if beats_security | bool %}
-  ssl.enabled: true
-  ssl.certificate_authorities: ["{{ beats_tls_cacert }}"]
-  ssl.verification_mode: full
-  ssl.key: {{ beats_tls_key }}
-  ssl.key_passphrase: {{ beats_tls_key_passphrase }}
-  ssl.certificate: {{ beats_tls_cert }}
-{% endif %}
-{% endif %}
+{% set _beat_output = beats_filebeat_output %}
+{% set _beat_loadbalance = beats_filebeat_loadbalance %}
+{% set _beat_name = "filebeat" %}
+{% include '_beats_output.j2' %}
 {% if beats_filebeat_output == "file" %}
 output.file:
   path: {{ beats_filebeat_output_file_path | default("/tmp/filebeat-output") }}
   filename: filebeat
 {% endif %}
 
-{% if beats_logging == "file" %}
-logging.level: {{ beats_loglevel }}
-logging.to_files: true
-logging.files:
-  path: {{ beats_logpath }}
-  name: filebeat
-  keepfiles: {{ beats_logging_keepfiles }}
-  permissions: {{ beats_logging_permissions }}
-{% endif %}
+{% include '_beats_logging.j2' %}
 
 queue.{{ beats_queue_type }}:
 {% if beats_queue_type == "disk" %}

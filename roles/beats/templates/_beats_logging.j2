@@ -1,0 +1,9 @@
+{% if beats_logging == "file" %}
+logging.level: {{ beats_loglevel }}
+logging.to_files: true
+logging.files:
+  path: {{ beats_logpath }}
+  name: {{ _beat_name }}
+  keepfiles: {{ beats_logging_keepfiles }}
+  permissions: {{ beats_logging_permissions }}
+{% endif %}
