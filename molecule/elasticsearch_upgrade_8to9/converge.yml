@@ -154,3 +154,48 @@
     - name: Include Elasticsearch role (upgrade to 9.x)
       ansible.builtin.include_role:
         name: oddly.elasticstack.elasticsearch
+
+# Re-run with elasticstack_version: "latest" to exercise the post-install
+# detection path. Since we're already on the latest 9.x, the package should
+# NOT change and the rolling restart should NOT trigger. This verifies that
+# the "latest" mode doesn't cause unnecessary restarts.
+- name: Re-run with elasticstack_version latest (no-op expected)
+  hosts: all
+  vars:
+    elasticstack_full_stack: false
+    elasticstack_release: 9
+    elasticstack_version: "latest"
+    elasticsearch_heap: "1"
+    elasticstack_no_log: false
+    elasticsearch_upgrade_countdown: 0
+    elasticsearch_jvm_custom_parameters:
+      - "-Des.upgrade.test.marker=true"
+  tasks:
+    - name: Reset shared role guard
+      ansible.builtin.set_fact:
+        _elasticstack_role_imported: false
+
+    - name: Record ES PID before re-run
+      ansible.builtin.command: pgrep -f 'org.elasticsearch.bootstrap.Elasticsearch'
+      register: _es_pid_before
+      changed_when: false
+
+    - name: Include Elasticsearch role (latest, should be no-op)
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elasticsearch
+
+    - name: Record ES PID after re-run
+      ansible.builtin.command: pgrep -f 'org.elasticsearch.bootstrap.Elasticsearch'
+      register: _es_pid_after
+      changed_when: false
+
+    - name: Verify ES was NOT restarted (PID unchanged)
+      ansible.builtin.assert:
+        that:
+          - _es_pid_before.stdout == _es_pid_after.stdout
+        fail_msg: >-
+          ES was restarted unnecessarily! PID changed from
+          {{ _es_pid_before.stdout }} to {{ _es_pid_after.stdout }}.
+          The 'latest' mode should not trigger a restart when already
+          at the latest version.
+        success_msg: "ES PID unchanged ({{ _es_pid_after.stdout }}) — no unnecessary restart"
