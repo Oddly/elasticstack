@@ -198,6 +198,43 @@
   when:
     - elasticsearch_pamlimits | bool
 
+# OS-level tuning required for production Elasticsearch.
+# vm.max_map_count is required — ES refuses to start without it.
+# The rest are strongly recommended by Elastic's production checklist.
+- name: Apply OS-level sysctl settings for Elasticsearch
+  ansible.posix.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    sysctl_set: true
+    state: present
+    reload: true
+  loop:
+    - { name: vm.max_map_count, value: "262144" }
+    - { name: vm.swappiness, value: "1" }
+    - { name: net.ipv4.tcp_retries2, value: "5" }
+  loop_control:
+    label: "{{ item.name }}={{ item.value }}"
+  when: elasticsearch_os_tuning | bool
+
+- name: Disable Transparent Huge Pages (runtime)
+  ansible.builtin.shell: |
+    echo never > /sys/kernel/mm/transparent_hugepage/enabled
+    echo never > /sys/kernel/mm/transparent_hugepage/defrag
+  changed_when: false
+  when: elasticsearch_os_tuning | bool
+  failed_when: false  # may fail in containers where sysfs is read-only
+
+- name: Disable Transparent Huge Pages (persistent via tmpfiles)
+  ansible.builtin.copy:
+    dest: /etc/tmpfiles.d/elasticsearch-thp.conf
+    content: |
+      w /sys/kernel/mm/transparent_hugepage/enabled - - - - never
+      w /sys/kernel/mm/transparent_hugepage/defrag - - - - never
+    owner: root
+    group: root
+    mode: "0644"
+  when: elasticsearch_os_tuning | bool
+
 - name: Construct exact name of Elasticsearch package
   ansible.builtin.set_fact:
     elasticsearch_package: >-

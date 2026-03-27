@@ -74,3 +74,30 @@
           Got: {{ cluster_settings.json.persistent }}
       run_once: true
       when: elasticstack_release | int >= 9
+
+    # OS tuning checks
+    - name: Verify vm.max_map_count  # noqa: run-once[task]
+      ansible.builtin.command: sysctl -n vm.max_map_count
+      register: _max_map_count
+      changed_when: false
+      run_once: true
+
+    - name: Assert vm.max_map_count is 262144  # noqa: run-once[task]
+      ansible.builtin.assert:
+        that:
+          - _max_map_count.stdout | int == 262144
+        fail_msg: "vm.max_map_count is {{ _max_map_count.stdout }}, expected 262144"
+      run_once: true
+
+    - name: Verify vm.swappiness  # noqa: run-once[task]
+      ansible.builtin.command: sysctl -n vm.swappiness
+      register: _swappiness
+      changed_when: false
+      run_once: true
+
+    - name: Assert vm.swappiness is 1  # noqa: run-once[task]
+      ansible.builtin.assert:
+        that:
+          - _swappiness.stdout | int == 1
+        fail_msg: "vm.swappiness is {{ _swappiness.stdout }}, expected 1"
+      run_once: true
