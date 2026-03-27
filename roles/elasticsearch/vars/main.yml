@@ -39,6 +39,9 @@ _elasticsearch_managed_keys:
 
 # Internal sentinel values — prevent handler errors on first run.
 # These are overwritten by task register output; users must never set them.
+# Internal state — do not set manually
+elasticsearch_cert_will_expire_soon: false
+
 _elasticsearch_freshstart:
   changed: false
 _elasticsearch_freshstart_security:

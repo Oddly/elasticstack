@@ -200,9 +200,6 @@ beats_metricbeat_loadbalance: true
 beats_cert_validity_period: 1095
 # @var beats_cert_expiration_buffer:description: Days before certificate expiry to trigger renewal
 beats_cert_expiration_buffer: 30
-# @var beats_cert_will_expire_soon:description: Internal flag set when certificates are within the expiration buffer. Do not set manually
-beats_cert_will_expire_soon: false
-
 # @var beats_cert_source:description: Where to get TLS certificates. 'elasticsearch_ca' (default) auto-generates from the built-in CA; 'external' uses user-provided files
 beats_cert_source: elasticsearch_ca
 

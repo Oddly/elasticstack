@@ -207,8 +207,6 @@ logstash_certs_dir: /etc/logstash/certs
 logstash_cert_validity_period: 1095
 # @var logstash_cert_expiration_buffer:description: Days before certificate expiry to trigger renewal
 logstash_cert_expiration_buffer: 30
-# @var logstash_cert_will_expire_soon:description: Internal flag set when certificates are within the expiration buffer. Do not set manually
-logstash_cert_will_expire_soon: false
 # @var logstash_cert_force_regenerate:description: Force TLS certificate regeneration even if current certificates are valid
 logstash_cert_force_regenerate: false
 # @var logstash_tls_key_passphrase:description: Passphrase for the Logstash TLS private key

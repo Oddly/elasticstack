@@ -116,8 +116,6 @@ elasticsearch_tls_key_passphrase: PleaseChangeMeIndividually
 elasticsearch_cert_validity_period: 1095
 # @var elasticsearch_cert_expiration_buffer:description: Days before certificate expiry to trigger renewal
 elasticsearch_cert_expiration_buffer: 30
-# @var elasticsearch_cert_will_expire_soon:description: Internal flag set when certificates are within the expiration buffer. Do not set manually
-elasticsearch_cert_will_expire_soon: false
 # @var elasticsearch_ssl_verification_mode:description: TLS verification mode for inter-node communication (full, certificate, or none)
 elasticsearch_ssl_verification_mode: full
 
