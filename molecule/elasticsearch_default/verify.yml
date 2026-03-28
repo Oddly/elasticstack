@@ -75,12 +75,13 @@
       run_once: true
       when: elasticstack_release | int >= 9
 
-    # OS tuning checks
+    # OS tuning checks — skipped in containers where sysctl is restricted
     - name: Verify vm.max_map_count  # noqa: run-once[task]
       ansible.builtin.command: sysctl -n vm.max_map_count
       register: _max_map_count
       changed_when: false
       run_once: true
+      when: ansible_facts.virtualization_type | default('') not in ['docker', 'container', 'containerd', 'lxc', 'podman']
 
     - name: Assert vm.max_map_count is 262144  # noqa: run-once[task]
       ansible.builtin.assert:
@@ -88,12 +89,14 @@
           - _max_map_count.stdout | int == 262144
         fail_msg: "vm.max_map_count is {{ _max_map_count.stdout }}, expected 262144"
       run_once: true
+      when: _max_map_count is not skipped
 
     - name: Verify vm.swappiness  # noqa: run-once[task]
       ansible.builtin.command: sysctl -n vm.swappiness
       register: _swappiness
       changed_when: false
       run_once: true
+      when: ansible_facts.virtualization_type | default('') not in ['docker', 'container', 'containerd', 'lxc', 'podman']
 
     - name: Assert vm.swappiness is 1  # noqa: run-once[task]
       ansible.builtin.assert:
@@ -101,3 +104,4 @@
           - _swappiness.stdout | int == 1
         fail_msg: "vm.swappiness is {{ _swappiness.stdout }}, expected 1"
       run_once: true
+      when: _swappiness is not skipped

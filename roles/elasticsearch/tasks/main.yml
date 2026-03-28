@@ -214,15 +214,19 @@
     - { name: net.ipv4.tcp_retries2, value: "5" }
   loop_control:
     label: "{{ item.name }}={{ item.value }}"
-  when: elasticsearch_os_tuning | bool
+  when:
+    - elasticsearch_os_tuning | bool
+    - ansible_facts.virtualization_type | default('') not in ['docker', 'container', 'containerd', 'lxc', 'podman']
 
 - name: Disable Transparent Huge Pages (runtime)
   ansible.builtin.shell: |
     echo never > /sys/kernel/mm/transparent_hugepage/enabled
     echo never > /sys/kernel/mm/transparent_hugepage/defrag
   changed_when: false
-  when: elasticsearch_os_tuning | bool
-  failed_when: false  # may fail in containers where sysfs is read-only
+  when:
+    - elasticsearch_os_tuning | bool
+    - ansible_facts.virtualization_type | default('') not in ['docker', 'container', 'containerd', 'lxc', 'podman']
+  failed_when: false  # may fail where sysfs is read-only
 
 - name: Disable Transparent Huge Pages (persistent via tmpfiles)
   ansible.builtin.copy:
@@ -233,7 +237,9 @@
     owner: root
     group: root
     mode: "0644"
-  when: elasticsearch_os_tuning | bool
+  when:
+    - elasticsearch_os_tuning | bool
+    - ansible_facts.virtualization_type | default('') not in ['docker', 'container', 'containerd', 'lxc', 'podman']
 
 - name: Construct exact name of Elasticsearch package
   ansible.builtin.set_fact:
