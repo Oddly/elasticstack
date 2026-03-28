@@ -62,6 +62,12 @@ elasticsearch_create_logpath: false
 elasticsearch_heap: "{{ [[(ansible_facts.memtotal_mb // 1024) // 2, 30] | min, 1] | max }}"
 # @var elasticsearch_pamlimits:description: Configure PAM limits for the elasticsearch user (open files, max processes)
 elasticsearch_pamlimits: true
+# @var elasticsearch_os_tuning:description: >
+#   Apply OS-level sysctl settings required for production Elasticsearch.
+#   Sets vm.max_map_count (required for mmapfs), vm.swappiness, disables
+#   Transparent Huge Pages, and tunes TCP retries for faster fault detection.
+# @end
+elasticsearch_os_tuning: true
 # @var elasticsearch_check_calculation:description: Enable heap calculation verification and display debug output
 elasticsearch_check_calculation: false
 # @var elasticsearch_clustername:description: Name of the Elasticsearch cluster
