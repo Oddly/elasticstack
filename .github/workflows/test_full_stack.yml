@@ -80,7 +80,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && fromJSON('["rockylinux9","debian13"]') || fromJSON('["rockylinux9","ubuntu2204","ubuntu2404","debian12","debian13"]') }}
+        distro: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && fromJSON('["rockylinux9","debian13"]') || fromJSON('["rockylinux9","ubuntu2204","ubuntu2404","ubuntu2604","debian12","debian13"]') }}
         scenario:
           - elasticstack_default
           - es_kibana

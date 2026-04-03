@@ -42,5 +42,5 @@ jobs:
     uses: ./.github/workflows/molecule.yml
     with:
       scenarios: '["kibana_default","kibana_custom","kibana_custom_certs"]'
-      distros: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && '["rockylinux10","debian13"]' || '["rockylinux9","rockylinux10","ubuntu2204","ubuntu2404","debian12","debian13"]' }}
+      distros: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && '["rockylinux10","debian13"]' || '["rockylinux9","rockylinux10","ubuntu2204","ubuntu2404","ubuntu2604","debian12","debian13"]' }}
     secrets: inherit

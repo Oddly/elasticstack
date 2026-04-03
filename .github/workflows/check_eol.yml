@@ -62,14 +62,13 @@ jobs:
           }
 
           echo "=== Checking OS distributions ==="
-          check_eol "rocky-linux" "8" "Rocky Linux 8"
           check_eol "rocky-linux" "9" "Rocky Linux 9"
           check_eol "rocky-linux" "10" "Rocky Linux 10"
-          check_eol "debian" "11" "Debian 11 (Bullseye)"
           check_eol "debian" "12" "Debian 12 (Bookworm)"
           check_eol "debian" "13" "Debian 13 (Trixie)"
           check_eol "ubuntu" "22.04" "Ubuntu 22.04 (Jammy)"
           check_eol "ubuntu" "24.04" "Ubuntu 24.04 (Noble)"
+          check_eol "ubuntu" "26.04" "Ubuntu 26.04 (Resolute Raccoon)"
 
           echo ""
           echo "=== Checking Python versions ==="
