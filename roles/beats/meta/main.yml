@@ -10,7 +10,6 @@ galaxy_info:
   platforms:
     - name: EL
       versions:
-        - "8"
         - "9"
         - "10"
     - name: Debian
@@ -21,6 +20,7 @@ galaxy_info:
       versions:
         - jammy
         - noble
+        - resolute
   galaxy_tags:
     - elk
     - beats

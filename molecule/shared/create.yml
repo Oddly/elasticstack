@@ -52,6 +52,7 @@
       rockylinux10: "molecule-rockylinux-10"
       ubuntu2204: "molecule-ubuntu-22.04"
       ubuntu2404: "molecule-ubuntu-24.04"
+      ubuntu2604: "molecule-ubuntu-26.04"
 
   tasks:
     - name: Delete any existing containers with same names

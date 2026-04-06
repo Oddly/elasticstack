@@ -99,9 +99,9 @@ See the **[getting started guide](https://oddly.github.io/elasticstack/getting-s
 
 | | Versions |
 |-|----------|
-| Debian | 11, 12, 13 |
-| Ubuntu | 22.04, 24.04 |
-| Rocky Linux / RHEL | 8, 9, 10 |
+| Debian | 12, 13 |
+| Ubuntu | 22.04, 24.04, 26.04 |
+| Rocky Linux / RHEL | 9, 10 |
 | Elastic Stack | 8.x, 9.x |
 | Ansible | 2.18+ |
 

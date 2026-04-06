@@ -1,0 +1,56 @@
+---
+# Detect whether external certificates are provided as inline PEM content
+# or as file paths, and set format/CA-extraction facts accordingly.
+#
+# Required variables:
+#   _detect_cert_content_var  – the certificate content variable value
+#                               (e.g. beats_tls_certificate_content)
+#   _detect_key_content_var   – the key content variable value
+#                               (e.g. beats_tls_key_content)
+#   _detect_cert_file_var     – the certificate file path variable value
+#                               (e.g. beats_tls_certificate_file)
+#   _detect_service_name      – human-readable service name for error messages
+#   _detect_key_var_name      – variable name string for the fail_msg hint
+#                               (e.g. "beats_tls_key_content")
+#
+# Output facts (set on the host):
+#   _detect_content_mode      – "True"/"False" string (use with | bool)
+#   _detect_cert_format       – "pem" when content mode, undefined otherwise
+#   _detect_ca_extracted      – whether the PEM bundle contains a CA chain
+
+- name: "cert_detect_content_mode | Detect content mode for {{ _detect_service_name }}"  # noqa: name[template] var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    _detect_content_mode: "{{ _detect_cert_content_var | default('', true) | length > 0 }}"
+
+- name: "cert_detect_content_mode | Validate certificate is provided for {{ _detect_service_name }}"  # noqa: name[template]
+  ansible.builtin.assert:
+    that:
+      - (_detect_cert_file_var | length > 0) or
+        (_detect_cert_content_var | default('', true) | length > 0)
+    fail_msg: >-
+      External cert mode requires at minimum a certificate file or content
+      for {{ _detect_service_name }}.
+
+- name: cert_detect_content_mode | Set format facts for content mode  # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    _detect_cert_format: pem
+    _detect_ca_extracted: false
+  when: _detect_content_mode | bool
+
+- name: cert_detect_content_mode | Check for CA chain in certificate content  # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    _detect_ca_extracted: true
+  when:
+    - _detect_content_mode | bool
+    - >-
+      _detect_cert_content_var | default('')
+      | regex_findall('-----BEGIN CERTIFICATE-----') | length > 1
+
+- name: "cert_detect_content_mode | Validate key content is provided for {{ _detect_service_name }}"  # noqa: name[template]
+  ansible.builtin.assert:
+    that:
+      - _detect_key_content_var | default('', true) | length > 0
+    fail_msg: >-
+      Content mode requires both certificate and key content.
+      Set {{ _detect_key_var_name }}.
+  when: _detect_content_mode | bool

@@ -1,10 +1,11 @@
+---
 galaxy_info:
-  role_name: kibana
-  author: netways
-  description: Ansible role for Kibana
+  role_name: elasticstack
+  namespace: oddly
+  author: Netways GmbH
+  description: Shared defaults for the oddly.elasticstack collection
   company: Netways GmbH
   license: GPL-3.0-or-later
-
   min_ansible_version: "2.18"
   platforms:
     - name: EL
@@ -20,7 +21,9 @@ galaxy_info:
         - jammy
         - noble
         - resolute
-  galaxy_tags: []
+  galaxy_tags:
+    - elk
+    - elastic
+    - logging
+    - system
 dependencies: []
-  # List your role dependencies here, one per line. Be sure to remove the '[]' above,
-  # if you add dependencies to this list.

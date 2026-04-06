@@ -1,38 +1,8 @@
 ---
 
 - name: restart_and_verify_elasticsearch | Restart and verify Elasticsearch
-  block:
-    - name: restart_and_verify_elasticsearch | Reset Elasticsearch failed state before restart
-      ansible.builtin.command:
-        cmd: systemctl reset-failed elasticsearch.service
-      changed_when: false
-      failed_when: false
-
-    - name: restart_and_verify_elasticsearch | Restart Elasticsearch service
-      ansible.builtin.service:
-        name: elasticsearch
-        state: restarted
-        daemon_reload: true
-
-    - name: restart_and_verify_elasticsearch | Verify Elasticsearch is running
-      ansible.builtin.systemd:
-        name: elasticsearch
-      register: _elasticsearch_service_state
-      until: _elasticsearch_service_state.status.ActiveState == 'active'
-      retries: 5
-      delay: 3
-
-  rescue:
-    - name: restart_and_verify_elasticsearch | Get recent Elasticsearch journal output
-      ansible.builtin.command:
-        cmd: journalctl -u elasticsearch --no-pager -n 50
-      register: _elasticsearch_journal
-      changed_when: false
-
-    - name: restart_and_verify_elasticsearch | Fail with Elasticsearch startup diagnostics
-      ansible.builtin.fail:
-        msg: |
-          Elasticsearch failed to start.
-
-          Recent log output:
-          {{ _elasticsearch_journal.stdout }}
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/restart_and_verify_service.yml"
+  vars:
+    _service_name: elasticsearch
+    _daemon_reload: true

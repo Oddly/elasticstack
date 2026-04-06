@@ -23,7 +23,7 @@ ansible-galaxy collection install oddly.elasticstack
 - **Automatic TLS** — generates and distributes certificates for inter-node and HTTP encryption
 - **Security bootstrapping** — creates users, roles, and passwords on first run
 - **Rolling upgrades** — 8.x to 9.x with zero-downtime node-by-node upgrades
-- **Multi-platform** — Debian 11-13, Ubuntu 22.04/24.04, Rocky Linux/RHEL 8-10
+- **Multi-platform** — Debian 12-13, Ubuntu 22.04/24.04/26.04, Rocky Linux/RHEL 9-10
 
 <div class="grid cards" markdown>
 

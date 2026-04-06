@@ -42,5 +42,5 @@ jobs:
     uses: ./.github/workflows/molecule.yml
     with:
       scenarios: '["logstash_default","logstash_ssl","logstash_custom_pipeline","logstash_advanced","logstash_standalone_certs","logstash_centralized_pipelines"]'
-      distros: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && '["rockylinux10","debian13"]' || '["rockylinux9","rockylinux10","ubuntu2204","ubuntu2404","debian12","debian13"]' }}
+      distros: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && '["rockylinux10","debian13"]' || '["rockylinux9","rockylinux10","ubuntu2204","ubuntu2404","ubuntu2604","debian12","debian13"]' }}
     secrets: inherit

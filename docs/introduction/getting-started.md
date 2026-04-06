@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Ansible 2.18 or later
-- Target hosts running Debian 11/12/13, Ubuntu 22.04/24.04, or Rocky Linux/RHEL 8/9/10
+- Target hosts running Debian 12/13, Ubuntu 22.04/24.04/26.04, or Rocky Linux/RHEL 9/10
 - SSH access to target hosts with root or sudo privileges
 - Minimum 4 GB RAM per Elasticsearch node (8 GB recommended)
 - Python 3 on all target hosts (with `python3-apt` on Debian/Ubuntu)

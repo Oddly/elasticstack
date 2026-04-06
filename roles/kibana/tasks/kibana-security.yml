@@ -15,42 +15,20 @@
       block:
         # -- Detect content mode vs file mode --
         - name: kibana-security | Detect content mode for Kibana
+          ansible.builtin.include_tasks:
+            file: "{{ role_path }}/../elasticstack/tasks/certs/cert_detect_content_mode.yml"
+          vars:
+            _detect_cert_content_var: "{{ kibana_tls_certificate_content | default('', true) }}"
+            _detect_key_content_var: "{{ kibana_tls_key_content | default('', true) }}"
+            _detect_cert_file_var: "{{ kibana_tls_certificate_file }}"
+            _detect_service_name: Kibana
+            _detect_key_var_name: kibana_tls_key_content
+
+        - name: kibana-security | Map detection results to Kibana facts
           ansible.builtin.set_fact:
-            _kibana_content_mode: "{{ kibana_tls_certificate_content | default('', true) | length > 0 }}"
-
-        - name: kibana-security | Validate certificate is provided
-          ansible.builtin.assert:
-            that:
-              - (kibana_tls_certificate_file | length > 0) or
-                (kibana_tls_certificate_content | default('', true) | length > 0)
-            fail_msg: >-
-              External cert mode with kibana_tls requires at minimum:
-              kibana_tls_certificate_file or kibana_tls_certificate_content
-
-        # -- Content mode: set format to PEM --
-        - name: kibana-security | Set format facts for content mode
-          ansible.builtin.set_fact:
-            _kibana_cert_format: pem
-            _kibana_ca_extracted: false
-          when: _kibana_content_mode | bool
-
-        - name: kibana-security | Check for CA chain in certificate content
-          ansible.builtin.set_fact:
-            _kibana_ca_extracted: true
-          when:
-            - _kibana_content_mode | bool
-            - >-
-              kibana_tls_certificate_content | default('')
-              | regex_findall('-----BEGIN CERTIFICATE-----') | length > 1
-
-        - name: kibana-security | Validate key content is provided (content mode)
-          ansible.builtin.assert:
-            that:
-              - kibana_tls_key_content | default('', true) | length > 0
-            fail_msg: >-
-              Content mode requires both certificate and key content.
-              Set kibana_tls_key_content.
-          when: _kibana_content_mode | bool
+            _kibana_content_mode: "{{ _detect_content_mode }}"
+            _kibana_cert_format: "{{ _detect_cert_format | default(omit) }}"
+            _kibana_ca_extracted: "{{ _detect_ca_extracted | default(false) }}"
 
         # -- File mode: validate and detect format --
         - name: kibana-security | Validate Kibana certificate (file mode)
