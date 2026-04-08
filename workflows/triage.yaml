@@ -1,0 +1,58 @@
+identity:
+  name: triage
+  version: 1.0.0
+  description: Classify and triage an elasticstack issue by severity, category, and affected roles.
+
+inputs:
+  issue-description:
+    type: string
+    required: true
+    description: The issue body to triage.
+    source: issue.body
+    fallback: issue.title
+  repository-ref:
+    type: repository-ref
+    required: true
+    description: The repository to inspect for role structure.
+
+tools:
+  capabilities:
+    - repository:read
+    - issue:comment
+    - issue:label
+
+agent:
+  runtime: claude-code
+  model: claude-sonnet-4-20250514
+  system_prompt: prompts/triage.md
+  max_iterations: 10
+
+safety:
+  trust: elevated
+  resources:
+    timeout: 120
+
+output:
+  schema:
+    type: object
+    required: [severity, category, affected_roles, reasoning]
+    properties:
+      severity:
+        type: string
+        enum: [critical, high, medium, low]
+      category:
+        type: string
+      affected_roles:
+        type: array
+        items:
+          type: string
+      reasoning:
+        type: string
+  side_effects:
+    - type: terminal
+      description: Print triage summary to stdout
+  output_paths:
+    - triage-result.json
+
+composition:
+  steps: []
