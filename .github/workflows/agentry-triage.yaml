@@ -1,4 +1,4 @@
-name: 'Agentry: triage'
+name: 'Agentry: Planning Pipeline'
 on:
   issues:
     types: [opened, reopened]
@@ -19,8 +19,11 @@ jobs:
       run: npm install -g @anthropic-ai/claude-code
     - name: Install agentry
       run: pip install "agentry @ git+https://github.com/norrietaylor/agentry.git"
-    - name: Triage issue
-      run: agentry run workflows/triage.yaml --binder github-actions
+    - name: Run planning pipeline
+      run: >
+        agentry --output-format json run workflows/planning-pipeline.yaml
+        --input repository-ref=.
+        --binder github-actions
       env:
         CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

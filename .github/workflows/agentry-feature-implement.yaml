@@ -1,14 +1,15 @@
-name: 'Agentry: Code Review'
+name: 'Agentry: Feature Implement'
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+  issues:
+    types: [labeled]
 permissions:
-  contents: read
+  contents: write
+  issues: write
   pull-requests: write
 jobs:
   agentry:
+    if: github.event.label.name == 'feature'
     runs-on: ubuntu-latest
-    if: github.event.pull_request.draft == false
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -22,11 +23,10 @@ jobs:
       run: npm install -g @anthropic-ai/claude-code
     - name: Install agentry
       run: pip install "agentry @ git+https://github.com/norrietaylor/agentry.git"
-    - name: Run code review
+    - name: Implement feature
       run: >
-        agentry --output-format json run workflows/code-review.yaml
-        --input diff=${{ github.event.pull_request.head.sha }}~1
-        --input codebase=.
+        agentry --output-format json run workflows/feature-implement.yaml
+        --input repository-ref=.
         --binder github-actions
       env:
         CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
