@@ -1,0 +1,41 @@
+language: en
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  path_filters:
+    - "!distillery/**"
+    - "!.agentry/**"
+  path_instructions:
+    - path: "roles/*/tasks/**"
+      instructions: >
+        Review for Ansible best practices: idempotency (command/shell needs
+        creates/removes guards), correct handler notifications, proper use of
+        become/become_user, and platform conditionals (Debian vs RHEL).
+        failed_when: false does NOT survive until/retries exhaustion in
+        Ansible 2.19+ — use ignore_errors: true instead.
+    - path: "roles/*/templates/**"
+      instructions: >
+        Check Jinja2 templates for: undefined variable access without defaults,
+        correct filter usage, proper quoting of values in config files, and
+        consistency with the role's defaults/main.yml variables.
+    - path: "molecule/**"
+      instructions: >
+        Verify molecule scenarios follow project conventions: prefer extending
+        existing verify.yml over creating new scenarios (each adds ~10 min CI).
+        Check that verify assertions are meaningful and will catch regressions.
+    - path: "roles/elasticsearch/tasks/elasticsearch-rolling-upgrade.yml"
+      instructions: >
+        Rolling upgrade plays MUST use serial: 1 for multi-node clusters.
+        until: retry conditions need | default() for safe attribute access
+        during mixed-version clusters. Verify health checks wait for green
+        status before proceeding to the next node.
+    - path: ".github/workflows/**"
+      instructions: >
+        Check workflow syntax, appropriate use of self-hosted vs ubuntu-latest
+        runners, secret references, and concurrency settings. Molecule test
+        workflows should use the reusable molecule.yml workflow.
+chat:
+  auto_reply: true
