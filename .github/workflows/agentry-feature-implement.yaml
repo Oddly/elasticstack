@@ -1,18 +1,18 @@
-name: 'Agentry: Bug Fix'
+name: 'Agentry: Feature Implement'
 on:
   issues:
     types: [labeled]
 permissions:
   contents: write # needed for pr:create to push branches
-  pull-requests: write
   issues: write
+  pull-requests: write
 concurrency:
-  group: agentry-bug-fix-${{ github.event.issue.number }}
+  group: agentry-feature-implement-${{ github.event.issue.number }}
   cancel-in-progress: true
 jobs:
   agentry:
+    if: github.event.label.name == 'feature'
     runs-on: ubuntu-latest
-    if: github.event.label.name == 'bug'
     steps:
     - name: Checkout repository
       uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -26,9 +26,9 @@ jobs:
       run: npm install -g @anthropic-ai/claude-code
     - name: Install agentry
       run: pip install "agentry @ git+https://github.com/norrietaylor/agentry.git"
-    - name: Diagnose and fix bug
+    - name: Implement feature
       run: >
-        agentry --output-format json run workflows/bug-fix.yaml
+        agentry --output-format json run workflows/feature-implement.yaml
         --input repository-ref=.
         --binder github-actions
       env:
