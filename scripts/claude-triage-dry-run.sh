@@ -24,12 +24,17 @@ issue_number="${1:?usage: $0 <issue-number>}"
 repo="${REPO:-Oddly/elasticstack}"
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-prompt_file="$script_dir/../.github/prompts/triage.md"
+repo_root="$(cd -- "$script_dir/.." && pwd)"
+prompt_file="$repo_root/.github/prompts/triage.md"
 
 if [[ ! -f "$prompt_file" ]]; then
     echo "error: prompt file not found at $prompt_file" >&2
     exit 1
 fi
+
+# Claude needs to read/grep the repo from its root for the triage to be
+# code-grounded. Anchor cwd here regardless of where the user invoked us.
+cd "$repo_root"
 
 command -v claude >/dev/null || { echo "error: claude CLI not on PATH" >&2; exit 1; }
 command -v gh     >/dev/null || { echo "error: gh CLI not on PATH"     >&2; exit 1; }

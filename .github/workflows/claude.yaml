@@ -20,6 +20,14 @@ on:
   pull_request_review:
     types: [submitted]
 
+# Suppress duplicate runs when @claude is mentioned multiple times in rapid
+# succession on the same issue/PR/comment thread. Cancels in-flight runs so
+# only the most recent invocation completes — keeps token spend bounded if
+# you accidentally double-ping.
+concurrency:
+  group: claude-code-${{ github.event.issue.number || github.event.pull_request.number || github.event.comment.id || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   claude:
     # Only Oddly can invoke Claude. The @claude mention is still required —
