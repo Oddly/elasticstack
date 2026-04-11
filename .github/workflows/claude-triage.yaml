@@ -1,0 +1,46 @@
+name: 'Claude: Triage'
+
+on:
+  issues:
+    types: [opened, reopened]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to (re-)triage'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: claude-triage-${{ github.event.issue.number || inputs.issue_number }}
+  cancel-in-progress: true
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Load triage prompt
+        id: prompt
+        run: |
+          {
+            echo 'body<<CLAUDE_TRIAGE_PROMPT_EOF'
+            cat .github/prompts/triage.md
+            echo
+            echo "Issue to triage: #${{ github.event.issue.number || inputs.issue_number }}"
+            echo CLAUDE_TRIAGE_PROMPT_EOF
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: ${{ steps.prompt.outputs.body }}
+          claude_args: '--allowedTools "Read,Grep,Glob,Bash(git:*),Bash(gh issue:*),Bash(gh search:*),Bash(gh api repos/Oddly/elasticstack/contents/*)"'
