@@ -33,7 +33,7 @@ Hard rules for the query:
 
 ### Call pattern
 
-```
+```text
 mcp__distillery__distillery_search(
     query="<symbol-and-concept query per rules above>",
     project="oddly-elasticstack",
@@ -47,9 +47,9 @@ surfaces a promising thread you want to expand (e.g. pull out all PRs touching
 a specific role). Do not spam searches.
 
 If you perform two searches, the `## KB analysis` section below must include
-**all unique non-self entries from both searches combined**. Deduplicate by
-entry id (the same entry may appear in both result sets — write one line for
-it, not two).
+**all unique entries from both searches combined**. Deduplicate by entry id
+(the same entry may appear in both result sets — write one line for it, not
+two).
 
 ### Post-filter: produce a mandatory `## KB analysis` section
 
@@ -57,10 +57,10 @@ After the search returns, your **first** output must be a `## KB analysis`
 section. This is not optional and not internal reasoning — it is a visible,
 required part of your output, and it comes **before** the Severity section.
 
-For **every** non-self entry returned by `distillery_search`, write exactly
-one line in the KB analysis section:
+For **every entry** returned by `distillery_search` — including any self-match
+— write exactly one line in the KB analysis section:
 
-```
+```text
 - entry <short-id> (#<ref_type>-<ref_number>) → <tag> — <one-phrase justification>
 ```
 
@@ -68,7 +68,9 @@ Where `<short-id>` is the first 8 characters of the entry's UUID and
 `<tag>` is **exactly one** of these five:
 
 - `skip-self` — the entry's `metadata.ref_number` equals the issue you are
-  triaging. Always skip. Justification is optional for this tag.
+  triaging. Include the line in `## KB analysis` with this tag, but never
+  cite it later in `## Affected paths` or `## Next action`. Justification is
+  optional for this tag.
 - `cite-as-duplicate` — the entry is an issue or PR that is materially the
   same problem, same symptom, or same feature request as the current one.
   When you tag an entry this way, your `Next action` below **must** change
@@ -89,14 +91,14 @@ Where `<short-id>` is the first 8 characters of the entry's UUID and
   unrelated fix" is fine.
 
 You **must** write one line per returned entry. Do not silently omit entries.
-If the search returned 6 non-self entries, the KB analysis section must
-contain 6 lines. Missing entries are a contract violation.
+If the search returned 6 entries, the KB analysis section must contain 6
+lines. Missing entries are a contract violation.
 
-If the search returned **zero non-self entries** (only self-matches, or no
-matches at all), you must still emit the `## KB analysis` section with a
-single line stating the empty result, exactly:
+If the search returned **zero entries total**, you must still emit the
+`## KB analysis` section with a single line stating the empty result,
+exactly:
 
-```
+```text
 - (no prior related entries surfaced by KB search)
 ```
 
@@ -119,7 +121,7 @@ ref-numbers into your output — yours must come from the actual
 Imagine you are triaging a hypothetical issue 9999 about "Filebeat TLS
 key passphrase not supported" and the search returns 5 entries:
 
-```
+```markdown
 ## KB analysis
 
 - entry aaaaaaaa (#issue-9999) → skip-self
@@ -164,7 +166,7 @@ tree. KB entries can be stale; verify before you cite a file or line.
 
 Produce a single comment in Markdown. The output order is **exactly** this:
 
-1. `## KB analysis` — one line per non-self returned entry, as specified above. Mandatory.
+1. `## KB analysis` — one line per returned entry (including the self-match), as specified above. Mandatory.
 2. `## Severity`
 3. `## Category`
 4. `## Affected paths`
@@ -183,7 +185,9 @@ Start this section with exactly one of these four tokens, wrapped in
 backticks, with no bold, italics, quotes, period, or any other punctuation
 attached to the token itself:
 
-    `critical`  `high`  `medium`  `low`
+```text
+`critical`  `high`  `medium`  `low`
+```
 
 After the backticked token, on the same line, an em-dash and a one-sentence
 justification grounded in concrete user-visible impact to people running this
@@ -199,7 +203,9 @@ Elasticsearch nodes, causing full cluster downtime.
 Start with exactly one of these four tokens, wrapped in backticks, same
 formatting rules as severity:
 
-    `bug`  `feature`  `chore`  `docs`
+```text
+`bug`  `feature`  `chore`  `docs`
+```
 
 Then an em-dash and one short sub-flavour sentence if useful (e.g.
 "bug — molecule coverage gap", "chore — CI tuning"). No more.
@@ -214,7 +220,9 @@ variables, name them.
 KB entry that survived post-filtering, append the citation at the end of the
 bullet in this exact shape:
 
-    - `roles/elasticsearch/tasks/elasticsearch-rolling-upgrade.yml` — contains the rolling restart pattern to reuse [Entry 4f14c154 · #pr-94 — already implements this pattern this issue asks for]
+```markdown
+- `roles/elasticsearch/tasks/elasticsearch-rolling-upgrade.yml` — contains the rolling restart pattern to reuse [Entry 4f14c154 · #pr-94 — already implements this pattern this issue asks for]
+```
 
 The bracketed citation must include **all three** of:
 
@@ -268,5 +276,10 @@ a sprint review" — there is no team and there are no sprints.
 - Prefer reading code to confirm file paths, task names, and variable names
   over guessing. When in doubt, grep.
 
-If the issue is obviously a duplicate, stale, or already fixed on main, say so
-in the `Next action` section instead of producing a full triage.
+If the issue is obviously a duplicate, stale, or already fixed on main, you
+must still emit all five section headers (`## KB analysis`, `## Severity`,
+`## Category`, `## Affected paths`, `## Next action`) so downstream parsers
+keep working — but Severity, Category, and Affected paths may collapse to
+one-line stubs (e.g. Severity → `` `low` `` — already fixed; Affected paths
+→ "n/a, already addressed in #X"). Put the substance in `## Next action`,
+naming the duplicate/superseding/fix issue or PR explicitly.
