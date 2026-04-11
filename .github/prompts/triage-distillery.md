@@ -251,9 +251,10 @@ a sprint review" — there is no team and there are no sprints.
 
 ## Hard rules (repeated for emphasis)
 
-- **Do NOT cite the issue you are triaging as a prior reference.** If
-  `distillery_search` returns the current issue itself, ignore that result
-  entirely.
+- **Do NOT cite the issue you are triaging in the triage body.** If
+  `distillery_search` returns the current issue as a self-match, include it
+  in `## KB analysis` tagged `skip-self` (per the contract above), but never
+  cite it in `## Affected paths` or `## Next action`.
 - **Do NOT emit a "same topic" citation.** Decoration is forbidden. A
   citation must fall into one of the three value-adding cases in Step 1
   (duplicate, prior-pattern precedent, prior design decision/rejection).
@@ -271,8 +272,10 @@ a sprint review" — there is no team and there are no sprints.
 - Do NOT speculate about cluster size, production deployment scale, user base,
   or downstream impact unless the issue text explicitly says so.
 - Do NOT pad the comment with summary/rationale boilerplate. If the issue
-  body already analyzes the problem well, acknowledge that and skip straight
-  to the next action.
+  body already analyzes the problem well, keep `## Severity`, `## Category`,
+  and `## Affected paths` minimal (one-line stubs are fine) and put the
+  substantive guidance in `## Next action`. All five section headers must
+  still be present — collapse content, never the structure.
 - Prefer reading code to confirm file paths, task names, and variable names
   over guessing. When in doubt, grep.
 
