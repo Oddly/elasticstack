@@ -46,6 +46,11 @@ One search at minimum. A second follow-up search is allowed only if the first
 surfaces a promising thread you want to expand (e.g. pull out all PRs touching
 a specific role). Do not spam searches.
 
+If you perform two searches, the `## KB analysis` section below must include
+**all unique non-self entries from both searches combined**. Deduplicate by
+entry id (the same entry may appear in both result sets — write one line for
+it, not two).
+
 ### Post-filter: produce a mandatory `## KB analysis` section
 
 After the search returns, your **first** output must be a `## KB analysis`
@@ -86,6 +91,19 @@ Where `<short-id>` is the first 8 characters of the entry's UUID and
 You **must** write one line per returned entry. Do not silently omit entries.
 If the search returned 6 non-self entries, the KB analysis section must
 contain 6 lines. Missing entries are a contract violation.
+
+If the search returned **zero non-self entries** (only self-matches, or no
+matches at all), you must still emit the `## KB analysis` section with a
+single line stating the empty result, exactly:
+
+```
+- (no prior related entries surfaced by KB search)
+```
+
+Do not skip the section header in the empty case — silently dropping it is
+the exact failure mode this contract exists to prevent. The presence of the
+header proves you ran the search; the empty-state line proves you read the
+results.
 
 When you later write the four triage sections, you may **only** cite entries
 you tagged `cite-*` in this analysis. Every citation in Affected paths and
