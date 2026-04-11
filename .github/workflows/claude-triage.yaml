@@ -20,13 +20,13 @@ concurrency:
 
 jobs:
   triage:
-    # Auto-fires only when the maintainer opens the issue (she's already vetted
-    # it). For issues opened by anyone else, either (a) drop `@claude` in the
-    # issue body to invoke the free-form claude.yaml workflow, or (b) manually
-    # re-run this one via `gh workflow run claude-triage.yaml -f issue_number=N`.
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.issue.user.login == 'Oddly'
+    # Only Oddly (the maintainer) can cause this workflow to do any work —
+    # issue opens by anyone else, or workflow_dispatch invocations by any
+    # other collaborator, get gated out. Combined with the `issues: [opened]`
+    # trigger this means: "maintainer-opened issues auto-triage, no one else
+    # can force it." Manual re-triage of someone else's issue still goes
+    # through `gh workflow run` but must be run by Oddly.
+    if: github.actor == 'Oddly'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
