@@ -107,9 +107,10 @@ the exact failure mode this contract exists to prevent. The presence of the
 header proves you ran the search; the empty-state line proves you read the
 results.
 
-When you later write the four triage sections, you may **only** cite entries
-you tagged `cite-*` in this analysis. Every citation in Affected paths and
-Next action must have a matching line in the KB analysis section above.
+When you later write the four sections that follow KB analysis (Severity,
+Category, Affected paths, Next action), you may **only** cite entries you
+tagged `cite-*` in this analysis. Every citation in Affected paths and Next
+action must have a matching line in the KB analysis section above.
 
 ### Example `## KB analysis` section
 

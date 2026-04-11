@@ -7,3 +7,11 @@ repos:
         pass_filenames: false
         additional_dependencies:
           - ansible
+
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.22.0
+    hooks:
+      - id: markdownlint-cli2
+        # Globs are driven entirely by .markdownlint-cli2.yaml so the hook
+        # has a consistent scope whether invoked by pre-commit or by hand.
+        pass_filenames: false
