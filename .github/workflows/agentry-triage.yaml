@@ -20,6 +20,12 @@ jobs:
         python-version: '3.12'
     - name: Install Claude Code
       run: npm install -g @anthropic-ai/claude-code
+    - name: Prime Claude Code onboarding
+      # Without this, claude -p tries to render the theme picker TUI and
+      # aborts with "Raw mode is not supported" — see anthropics/claude-code#8938.
+      run: |
+        mkdir -p ~/.claude
+        echo '{"hasCompletedOnboarding": true}' > ~/.claude.json
     - name: Install agentry
       run: pip install "agentry @ git+https://github.com/norrietaylor/agentry.git"
     - name: Run planning pipeline
