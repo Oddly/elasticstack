@@ -41,7 +41,12 @@ jobs:
         (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
         (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
       )
-    runs-on: ubuntu-latest
+    # Self-hosted runners (incus-ci LXC 305) so @claude has access to the
+    # internal lab network — gitea, distillery (LXC 800), and any other
+    # 172.30.0.0/16 service. Distillery isn't auto-registered here because
+    # the interactive workflow doesn't load a triage prompt; if you want
+    # KB access in a free-form @claude session, mention it explicitly.
+    runs-on: self-hosted
     permissions:
       contents: read
       pull-requests: read
