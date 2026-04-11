@@ -20,7 +20,9 @@ Start this section with exactly one of these four tokens, wrapped in
 backticks, with no bold, italics, quotes, period, or any other punctuation
 attached to the token itself:
 
-    `critical`  `high`  `medium`  `low`
+```text
+`critical`  `high`  `medium`  `low`
+```
 
 After the backticked token, on the same line, an em-dash and a one-sentence
 justification grounded in concrete user-visible impact to people running
@@ -36,7 +38,9 @@ Elasticsearch nodes, causing full cluster downtime.
 Start with exactly one of these four tokens, wrapped in backticks, same
 formatting rules as severity:
 
-    `bug`  `feature`  `chore`  `docs`
+```text
+`bug`  `feature`  `chore`  `docs`
+```
 
 Then an em-dash and one short sub-flavour sentence if useful (e.g.
 "bug — molecule coverage gap", "chore — CI tuning"). No more.

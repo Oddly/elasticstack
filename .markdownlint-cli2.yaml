@@ -1,0 +1,28 @@
+# Markdownlint config — narrow scope by intent.
+#
+# We turn off the default rule set and re-enable only the rules that
+# CodeRabbit's CHILL profile flags on this repo. The goal is to catch
+# the same nits CodeRabbit catches, locally at commit time, without
+# generating a wall of false positives on the existing markdown that
+# was written without lint discipline.
+#
+# Add more rules here as the need is demonstrated, not preemptively.
+config:
+  default: false
+  MD040: true   # fenced-code-language: opening fences must specify a language
+  MD046:        # code-block-style: prefer fenced over indented
+    style: fenced
+
+# Narrow scope for the initial rollout: lint files this PR has touched
+# (the prompts directory). Expand to docs/, plugins/, tests/ in a follow-up
+# cleanup PR — running --all-files today reports 24 pre-existing findings
+# in unrelated files, which would block every commit if globbed in.
+globs:
+  - ".github/prompts/**/*.md"
+
+ignores:
+  - ".venv/**"
+  - "venv/**"
+  - "node_modules/**"
+  - ".ansible/**"
+  - ".claude/**"
