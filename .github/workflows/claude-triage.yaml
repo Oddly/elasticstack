@@ -2,7 +2,7 @@ name: 'Claude: Triage'
 
 on:
   issues:
-    types: [opened, reopened]
+    types: [opened]
   workflow_dispatch:
     inputs:
       issue_number:
@@ -20,6 +20,13 @@ concurrency:
 
 jobs:
   triage:
+    # Auto-fires only when the maintainer opens the issue (she's already vetted
+    # it). For issues opened by anyone else, either (a) drop `@claude` in the
+    # issue body to invoke the free-form claude.yaml workflow, or (b) manually
+    # re-run this one via `gh workflow run claude-triage.yaml -f issue_number=N`.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.issue.user.login == 'Oddly'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
