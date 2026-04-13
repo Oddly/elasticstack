@@ -61,10 +61,38 @@
     - name: logstash-security | Check external key readability (hands-off mode)
       when: not (logstash_tls_copy_certs | bool)
       block:
+        - name: logstash-security | Stat external certificate in place
+          ansible.builtin.stat:
+            path: "{{ logstash_tls_certificate_file }}"
+          register: _logstash_external_cert_stat
+
         - name: logstash-security | Stat external key in place
           ansible.builtin.stat:
             path: "{{ logstash_tls_key_file }}"
           register: _logstash_external_key_stat
+
+        - name: logstash-security | Determine external CA path used by pipeline
+          ansible.builtin.set_fact:
+            _logstash_external_ca_path: "{{ logstash_tls_ca_file | default(logstash_certs_dir ~ '/ca.crt') }}"
+
+        - name: logstash-security | Stat external CA in place
+          ansible.builtin.stat:
+            path: "{{ _logstash_external_ca_path }}"
+          register: _logstash_external_ca_stat
+
+        - name: logstash-security | Validate hands-off external TLS files are readable
+          ansible.builtin.assert:
+            that:
+              - _logstash_external_cert_stat.stat.exists | default(false) | bool
+              - _logstash_external_cert_stat.stat.readable | default(false) | bool
+              - _logstash_external_key_stat.stat.exists | default(false) | bool
+              - _logstash_external_key_stat.stat.readable | default(false) | bool
+              - _logstash_external_ca_stat.stat.exists | default(false) | bool
+              - _logstash_external_ca_stat.stat.readable | default(false) | bool
+            fail_msg: >-
+              With logstash_tls_copy_certs: false, the TLS certificate, key, and
+              CA files referenced by the Logstash pipeline must already exist and
+              be readable on the managed node.
 
         - name: logstash-security | Warn if external key is not readable by logstash group
           ansible.builtin.debug:
@@ -326,6 +354,7 @@
         size: 2048
         type: RSA
         format: pkcs8
+        format_mismatch: convert
         mode: "0640"
         owner: root
         group: logstash
