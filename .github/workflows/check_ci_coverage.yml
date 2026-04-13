@@ -2,6 +2,7 @@
 name: Check CI coverage
 on:
   pull_request:
+    types: [labeled]
     paths:
       - 'molecule/**'
       - '.github/workflows/test_*.yml'
@@ -12,11 +13,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && github.event.label.name != 'ci:run' && github.run_id || 'ci' }}
   cancel-in-progress: true
 
 jobs:
   check-ci-coverage:
+    if: ${{ github.event_name != 'pull_request' || github.event.label.name == 'ci:run' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
