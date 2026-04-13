@@ -67,4 +67,9 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: ${{ steps.prompt.outputs.body }}
+          # Temporary debug flag: exposes Claude's tool call inputs, outputs,
+          # and reasoning in the public Actions log so we can see why the
+          # permission_denials_count is non-zero and whether the triage
+          # comment is being produced. Revert after one debug triage.
+          show_full_output: true
           claude_args: --mcp-config ${{ runner.temp }}/distillery-mcp.json --allowedTools "Read,Grep,Glob,Bash(git:*),Bash(gh issue:*),Bash(gh search:*),Bash(gh api repos/Oddly/elasticstack/contents/*),mcp__distillery__distillery_search"
