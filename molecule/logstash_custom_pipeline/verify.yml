@@ -60,8 +60,13 @@
     - name: Wait for Logstash to process events
       ansible.builtin.wait_for:
         path: /var/log/logstash/custom-output.log
-        timeout: 60
-        msg: "Logstash custom output file not created"
+        # Wait for actual content, not just file creation: Logstash opens the
+        # output file when the pipeline starts but the generator events still
+        # need to flow through batch and flush, which is noticeably slower on
+        # resource-constrained runners.
+        search_regex: processed_by
+        timeout: 120
+        msg: "Logstash custom output did not contain processed events within 120s"
 
     - name: Check output file has data
       ansible.builtin.slurp:
