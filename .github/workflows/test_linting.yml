@@ -42,7 +42,22 @@ jobs:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
       - name: Install Ansible collection dependencies.
-        run: ansible-galaxy collection install http://${{ secrets.INCUS_HOST }}:8082/collections/community-general-12.3.0.tar.gz http://${{ secrets.INCUS_HOST }}:8082/collections/community-crypto-3.1.1.tar.gz http://${{ secrets.INCUS_HOST }}:8082/collections/ansible-posix-2.1.0.tar.gz
+        env:
+          CACHE_HOST: ${{ secrets.INCUS_HOST }}
+        run: |
+          # Fall back to upstream Galaxy when the cache host secret is not
+          # available (e.g. Dependabot PRs, which do not inherit repo secrets).
+          if [ -n "$CACHE_HOST" ]; then
+            ansible-galaxy collection install \
+              "http://${CACHE_HOST}:8082/collections/community-general-12.3.0.tar.gz" \
+              "http://${CACHE_HOST}:8082/collections/community-crypto-3.1.1.tar.gz" \
+              "http://${CACHE_HOST}:8082/collections/ansible-posix-2.1.0.tar.gz"
+          else
+            ansible-galaxy collection install \
+              community.general:12.3.0 \
+              community.crypto:3.1.1 \
+              ansible.posix:2.1.0
+          fi
 
       - name: Lint code (yamllint).
         run: |

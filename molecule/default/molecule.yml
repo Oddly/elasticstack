@@ -1,0 +1,12 @@
+---
+# Placeholder scenario. Molecule 26 globs molecule/default/molecule.yml on
+# every run to discover shared state, and emits a CRITICAL line when it is
+# absent. Every CI invocation passes -s <scenario>, so this scenario is
+# never executed; the file only exists to silence that log noise.
+prerun: false
+driver:
+  name: default
+platforms:
+  - name: placeholder
+provisioner:
+  name: ansible

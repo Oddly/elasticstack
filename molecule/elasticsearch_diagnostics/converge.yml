@@ -36,8 +36,9 @@
             line: "bogus.nonexistent.setting: true"
 
         - name: Attempt restart with bad config (should fail with diagnostics)
-          ansible.builtin.include_tasks:
-            file: "{{ lookup('env', 'ANSIBLE_COLLECTIONS_PATH') | default(lookup('env', 'HOME') + '/.ansible/collections', true) }}/ansible_collections/oddly/elasticstack/roles/elasticsearch/tasks/restart_and_verify_elasticsearch.yml"
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elasticsearch
+            tasks_from: restart_and_verify_elasticsearch.yml
 
         - name: This should not be reached
           ansible.builtin.fail:
@@ -72,5 +73,6 @@
         seconds: 5
 
     - name: Restart Elasticsearch with restored config
-      ansible.builtin.include_tasks:
-        file: "{{ lookup('env', 'ANSIBLE_COLLECTIONS_PATH') | default(lookup('env', 'HOME') + '/.ansible/collections', true) }}/ansible_collections/oddly/elasticstack/roles/elasticsearch/tasks/restart_and_verify_elasticsearch.yml"
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elasticsearch
+        tasks_from: restart_and_verify_elasticsearch.yml

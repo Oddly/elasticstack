@@ -1,4 +1,9 @@
-ansible-core>=2.18,<2.21
+# Pin below 2.19 until this collection catches up with the variable-scoping
+# changes in that release: role_path no longer leaks across play boundaries,
+# which breaks include_tasks callers that rely on {{ role_path }}/.. paths
+# (the elasticsearch_diagnostics molecule scenario hit this). Revisit once
+# the full matrix is known to pass on 2.19.
+ansible-core>=2.18,<2.19
 ansible-lint
 molecule
 pytest

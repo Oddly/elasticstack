@@ -81,10 +81,22 @@ jobs:
           mkdir -p "$RUNNER_TEMP/ssh-cp"
 
       - name: Install collection
+        env:
+          CACHE_HOST: ${{ secrets.INCUS_HOST }}
         run: |
           mkdir -p $ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE
           cp -a "$GITHUB_WORKSPACE" $ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
-          ansible-galaxy collection install http://${{ secrets.INCUS_HOST }}:8082/collections/community-general-12.3.0.tar.gz http://${{ secrets.INCUS_HOST }}:8082/collections/community-crypto-3.1.1.tar.gz http://${{ secrets.INCUS_HOST }}:8082/collections/ansible-posix-2.1.0.tar.gz
+          if [ -n "$CACHE_HOST" ]; then
+            ansible-galaxy collection install \
+              "http://${CACHE_HOST}:8082/collections/community-general-12.3.0.tar.gz" \
+              "http://${CACHE_HOST}:8082/collections/community-crypto-3.1.1.tar.gz" \
+              "http://${CACHE_HOST}:8082/collections/ansible-posix-2.1.0.tar.gz"
+          else
+            ansible-galaxy collection install \
+              community.general:12.3.0 \
+              community.crypto:3.1.1 \
+              ansible.posix:2.1.0
+          fi
 
       - name: Set up SSH key for molecule
         run: |
