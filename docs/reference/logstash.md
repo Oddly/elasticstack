@@ -404,6 +404,7 @@ logstash_cert_force_regenerate: false
 # logstash_tls_key_file: "/path/to/server.key"
 # logstash_tls_ca_file: "/path/to/ca.crt"
 # logstash_tls_remote_src: false
+# logstash_tls_copy_certs: true   # set to false for hands-off rotation (certmonger, cert-manager)
 ```
 
 `logstash_cert_source`
@@ -414,7 +415,7 @@ logstash_cert_force_regenerate: false
     - **`external`** — uses certificate files you provide via `logstash_tls_certificate_file`, `logstash_tls_key_file`, and optionally `logstash_tls_ca_file`. The role copies them into place but does NOT create the ES user/role (assumes you manage that separately).
 
 `logstash_certs_dir`
-:   Directory on the Logstash host where TLS certificates, keys, and the CA bundle are stored. The role creates this directory and writes the PEM certificate, PKCS8 key, P12 keystore, and CA certificate here.
+:   Directory on the Logstash host where TLS certificates, keys, and the CA bundle are stored. The role creates this directory and writes the PEM certificate, the unencrypted PKCS#8 PEM key, the P12 keystore for the Elasticsearch output, and the CA certificate here.
 
 `logstash_tls_key_passphrase`
 :   Passphrase used when generating the P12 keystore for the Elasticsearch output plugin. Also used as the `ssl_keystore_password` in the output config.
@@ -432,10 +433,13 @@ logstash_cert_force_regenerate: false
 :   Force TLS certificate regeneration on the next run, even if current certificates are still valid. Useful after a CA rotation or if you suspect a key compromise. The role resets this to `false` internally after regeneration.
 
 `logstash_tls_certificate_file` / `logstash_tls_key_file` / `logstash_tls_ca_file`
-:   Paths to externally-managed certificate files. Only used when `logstash_cert_source: external`. The role copies these into `logstash_certs_dir`.
+:   Paths to externally-managed certificate files. Only used when `logstash_cert_source: external`. The role copies these into `logstash_certs_dir` by default; set `logstash_tls_copy_certs: false` to reference them in place instead.
 
 `logstash_tls_remote_src`
 :   When `true`, the external certificate files are already on the remote host and are copied locally (no upload from the Ansible controller). Defaults to `false`.
+
+`logstash_tls_copy_certs`
+:   Whether to copy the external `logstash_tls_*_file` paths into `logstash_certs_dir`. Defaults to `true`, which preserves the existing copy-and-rename flow. Set to `false` for a hands-off setup where the pipeline config references the original paths directly — useful for certmonger, cert-manager, or any tool that rotates the key files out-of-band. The `logstash` user must be able to read the key; typical on-disk permissions are `root:logstash 0640`.
 
 ### Dead Letter Queue
 
@@ -610,12 +614,18 @@ The standard pipeline uses three config files in `/etc/logstash/conf.d/main/`:
 
 Logstash loads `.conf` files alphabetically, so the numbering ensures correct execution order. When you set `logstash_custom_pipeline`, the role writes a single `pipeline.conf` and removes the three numbered files. Switching back from custom to standard mode removes `pipeline.conf`.
 
-### PKCS8 key requirement
+### Key format
 
-Logstash input plugins (Beats, Elastic Agent) require an unencrypted PKCS8 key, while the Elasticsearch output plugin uses a P12 keystore. The role generates both formats from the same certificate:
+The Beats and Elastic Agent inputs need an unencrypted PKCS#8 PEM key (`-----BEGIN PRIVATE KEY-----`) per the upstream plugin contract. The Elasticsearch output uses a P12 keystore. The role produces both from the same certificate:
 
-- **P12 cert** — copied as `keystore.pfx` for the ES output plugin
-- **PEM cert** — extracted from a ZIP, with the encrypted key converted to unencrypted PKCS8 via `openssl pkcs8 -topk8 -nocrypt`
+- **`<hostname>.key`** — unencrypted PKCS#8 PEM, read by the Beats / Elastic Agent inputs
+- **`keystore.pfx`** — P12 keystore (cert + key), read by the Elasticsearch output plugin
+
+Where the key comes from depends on the mode:
+
+- **`elasticsearch_ca`** — `elasticsearch-certutil --pem` emits an encrypted PKCS#1 key inside a zip. The role unpacks it and decrypts to PKCS#8 PEM in one `openssl pkcs8 -topk8 -nocrypt` step, writing directly to `<hostname>.key`.
+- **`standalone`** — generated with `community.crypto.openssl_privatekey`, which emits PKCS#8 PEM natively. No post-processing.
+- **`external`** — the file you supply at `logstash_tls_key_file` is used as-is. Most modern key generators (certmonger, `openssl genpkey`, `openssl genrsa` on OpenSSL 3.0+) emit PKCS#8 by default. If you have a legacy PKCS#1 key, convert it once with `openssl pkcs8 -topk8 -nocrypt`.
 
 ### ES 9.x vs 8.x SSL syntax
 
@@ -626,8 +636,8 @@ The Logstash input and output configuration templates use different SSL paramete
     ```
     # Input (Beats / Elastic Agent)
     ssl_enabled => true
-    ssl_certificate => "/etc/logstash/certs/..."
-    ssl_key => "/etc/logstash/certs/...-pkcs8.key"
+    ssl_certificate => "/etc/logstash/certs/<hostname>-server.crt"
+    ssl_key => "/etc/logstash/certs/<hostname>.key"
     ssl_client_authentication => required
     ssl_certificate_authorities => ["/etc/logstash/certs/ca.crt"]
 
@@ -643,8 +653,8 @@ The Logstash input and output configuration templates use different SSL paramete
     ```
     # Input (Beats / Elastic Agent)
     ssl => true
-    ssl_certificate => "/etc/logstash/certs/..."
-    ssl_key => "/etc/logstash/certs/...-pkcs8.key"
+    ssl_certificate => "/etc/logstash/certs/<hostname>-server.crt"
+    ssl_key => "/etc/logstash/certs/<hostname>.key"
     ssl_verify_mode => force_peer
     ssl_certificate_authorities => ["/etc/logstash/certs/ca.crt"]
 
@@ -655,7 +665,7 @@ The Logstash input and output configuration templates use different SSL paramete
     cacert => "/etc/logstash/certs/ca.crt"
     ```
 
-The template switches automatically based on `elasticstack_release | int >= 9`.
+The template switches automatically based on `elasticstack_release | int >= 9`. With `logstash_cert_source: external` and `logstash_tls_copy_certs: false`, the `ssl_certificate`, `ssl_key`, and `ssl_certificate_authorities` values point at the paths you supplied rather than `logstash_certs_dir`.
 
 ### Event enrichment (ident stamping)
 

@@ -20,6 +20,13 @@ First release of the `oddly.elasticstack` collection, forked from
 - Certificate expiry warnings and tag-driven renewal (`--tags certificates`,
   `--tags renew_es_cert`, `--tags renew_ca`).
 - Logstash standalone certificate mode for independent deployments.
+- Logstash role writes the unencrypted PKCS#8 PEM key directly to
+  `<hostname>.key` (the `-pkcs8.key` filename is gone). Standalone mode now
+  uses `community.crypto.openssl_privatekey` (PKCS#8 native) instead of
+  `openssl genrsa` + a separate `openssl pkcs8` conversion step. The new
+  `logstash_tls_copy_certs` variable lets external mode reference cert files
+  in place instead of copying them — useful with certmonger or cert-manager
+  where the renewal tool rotates the files and restarts Logstash out of band.
 - Beats Filebeat `filestream` input type for 9.x (replacing deprecated `log`).
 - Logstash `elastic_agent` input plugin support.
 - Elasticsearch `cluster_settings` for runtime cluster configuration via API.

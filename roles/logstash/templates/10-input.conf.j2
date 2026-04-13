@@ -7,16 +7,16 @@ input {
 {% if logstash_input_beats_ssl | default(false) | bool %}
 {% if elasticstack_release | int >= 9 %}
     ssl_enabled => true
-    ssl_certificate => "{{ logstash_certs_dir }}/{{ inventory_hostname }}-server.crt"
-    ssl_key => "{{ logstash_certs_dir }}/{{ inventory_hostname }}-pkcs8.key"
+    ssl_certificate => "{{ _logstash_input_cert_path }}"
+    ssl_key => "{{ _logstash_input_key_path }}"
     ssl_client_authentication => {{ logstash_input_beats_client_auth | default('required') }}
-    ssl_certificate_authorities => ["{{ logstash_certs_dir }}/ca.crt"]
+    ssl_certificate_authorities => ["{{ _logstash_ca_cert_path }}"]
 {% else %}
     ssl => true
-    ssl_certificate => "{{ logstash_certs_dir }}/{{ inventory_hostname }}-server.crt"
-    ssl_key => "{{ logstash_certs_dir }}/{{ inventory_hostname }}-pkcs8.key"
+    ssl_certificate => "{{ _logstash_input_cert_path }}"
+    ssl_key => "{{ _logstash_input_key_path }}"
     ssl_verify_mode => force_peer
-    ssl_certificate_authorities => ["{{ logstash_certs_dir }}/ca.crt"]
+    ssl_certificate_authorities => ["{{ _logstash_ca_cert_path }}"]
 {% endif %}
 {% endif %}
 {% if logstash_input_beats_timeout is defined %}
@@ -30,16 +30,16 @@ input {
 {% if logstash_input_elastic_agent_ssl | default(true) | bool %}
 {% if elasticstack_release | int >= 9 %}
     ssl_enabled => true
-    ssl_certificate => "{{ logstash_certs_dir }}/{{ inventory_hostname }}-server.crt"
-    ssl_key => "{{ logstash_certs_dir }}/{{ inventory_hostname }}-pkcs8.key"
+    ssl_certificate => "{{ _logstash_input_cert_path }}"
+    ssl_key => "{{ _logstash_input_key_path }}"
     ssl_client_authentication => required
-    ssl_certificate_authorities => ["{{ logstash_certs_dir }}/ca.crt"]
+    ssl_certificate_authorities => ["{{ _logstash_ca_cert_path }}"]
 {% else %}
     ssl => true
-    ssl_certificate => "{{ logstash_certs_dir }}/{{ inventory_hostname }}-server.crt"
-    ssl_key => "{{ logstash_certs_dir }}/{{ inventory_hostname }}-pkcs8.key"
+    ssl_certificate => "{{ _logstash_input_cert_path }}"
+    ssl_key => "{{ _logstash_input_key_path }}"
     ssl_verify_mode => force_peer
-    ssl_certificate_authorities => ["{{ logstash_certs_dir }}/ca.crt"]
+    ssl_certificate_authorities => ["{{ _logstash_ca_cert_path }}"]
 {% endif %}
 {% endif %}
   }

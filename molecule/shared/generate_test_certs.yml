@@ -1,6 +1,6 @@
 ---
 # Generate a self-signed CA and server certificate for testing TLS.
-# Outputs to /tmp/test-certs/: ca.crt, server.crt, server-pkcs8.key
+# Outputs to /tmp/test-certs/: ca.crt, server.crt, server.key (PKCS#8 PEM)
 - name: Install openssl and cryptography for certificate generation
   ansible.builtin.package:
     name:
@@ -18,6 +18,7 @@
   community.crypto.openssl_privatekey:
     path: /tmp/test-certs/ca.key
     size: 2048
+    format: pkcs8
 
 - name: Generate CA CSR
   community.crypto.openssl_csr:
@@ -41,10 +42,12 @@
     provider: selfsigned
     selfsigned_not_after: "+365d"
 
-- name: Generate server private key
+- name: Generate server private key (PKCS#8 PEM, unencrypted)
   community.crypto.openssl_privatekey:
     path: /tmp/test-certs/server.key
     size: 2048
+    format: pkcs8
+    mode: "0640"
 
 - name: Generate server CSR
   community.crypto.openssl_csr:
@@ -64,16 +67,3 @@
     ownca_privatekey_path: /tmp/test-certs/ca.key
     provider: ownca
     ownca_not_after: "+365d"
-
-- name: Create unencrypted PKCS8 key
-  ansible.builtin.command: >-
-    openssl pkcs8 -topk8 -nocrypt
-    -in /tmp/test-certs/server.key
-    -out /tmp/test-certs/server-pkcs8.key
-  args:
-    creates: /tmp/test-certs/server-pkcs8.key
-
-- name: Set key permissions
-  ansible.builtin.file:
-    path: /tmp/test-certs/server-pkcs8.key
-    mode: "0640"
