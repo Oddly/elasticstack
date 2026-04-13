@@ -28,9 +28,16 @@ runs:
             -i "$SSH_KEY" "root@${INCUS_HOST}" "$@" 2>/dev/null || true
         }
 
-        # Discover running Incus containers managed by molecule
-        containers=$(ssh_host \
+        # Discover running Incus containers managed by molecule.
+        # Filter by MOLECULE_RUN_SUFFIX so concurrent matrix jobs on the same
+        # Incus host don't cross-contaminate this job's diagnostics.
+        all_containers=$(ssh_host \
           "incus list --format csv -c n,s | grep ',RUNNING' | cut -d, -f1" || true)
+        if [ -n "${MOLECULE_RUN_SUFFIX:-}" ]; then
+          containers=$(echo "$all_containers" | grep -- "${MOLECULE_RUN_SUFFIX}$" || true)
+        else
+          containers="$all_containers"
+        fi
 
         for name in $containers; do
           dir="$diag/service-logs/$name"
@@ -105,13 +112,16 @@ runs:
           } > "$dir/container-resources.txt" 2>&1 || true
         done
 
-        # Container memory report with cgroup OOM events (from Incus host)
-        ssh_host bash -s << 'MEMSCRIPT' \
+        # Container memory report with cgroup OOM events (from Incus host).
+        # Filter by run suffix to skip concurrent matrix jobs' containers.
+        ssh_host bash -s "${MOLECULE_RUN_SUFFIX:-}" << 'MEMSCRIPT' \
           > "$diag/container-memory-report.txt" 2>&1 || true
+        suffix="$1"
         printf "%-50s %10s %10s %10s %10s %10s  %s\n" \
           "CONTAINER" "CURRENT" "PEAK" "ANON" "FILE" "LIMIT" "OOM_EVENTS"
         echo "---"
         for c in $(incus list -f csv -c ns 2>/dev/null | grep ",RUNNING" | cut -d, -f1 | sort); do
+          [ -n "$suffix" ] && [[ "$c" != *"$suffix" ]] && continue
           cgdir="/sys/fs/cgroup/lxc.payload.${c}"
           [ -f "$cgdir/memory.current" ] || continue
           current=$(($(cat "$cgdir/memory.current") / 1048576))
@@ -147,6 +157,12 @@ runs:
         report="$diag/OOM-REPORT.txt"
         found_oom=false
 
+        # LXC containers share the host kernel ring buffer and some log
+        # paths, so dmesg/ES log OOM entries can predate this job by days.
+        # Ignore anything older than this cutoff to avoid false positives.
+        since_epoch=$(date -u -d '3 hours ago' +%s)
+        since_iso=$(date -u -d '3 hours ago' +%Y-%m-%dT%H:%M:%S)
+
         {
           echo "========================================"
           echo "  OOM / Memory Pressure Detection Report"
@@ -178,26 +194,47 @@ runs:
             done < "$diag/container-memory-report.txt"
           fi
 
-          # Check ES logs for OutOfMemoryError
+          # Check ES logs for OutOfMemoryError (recent entries only).
+          # ES log prefix is [YYYY-MM-DDTHH:MM:SS,mmm]; ISO timestamps compare
+          # lexicographically so string >= works. POSIX awk (mawk-compatible).
           for eslog in "$diag"/service-logs/*/elasticsearch.log; do
             [ -f "$eslog" ] || continue
             container=$(basename "$(dirname "$eslog")")
-            if grep -q "OutOfMemoryError" "$eslog" 2>/dev/null; then
+            recent=$(awk -v since="$since_iso" '
+              /OutOfMemoryError/ {
+                if (match($0, /\[[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]/)) {
+                  ts = substr($0, RSTART+1, 19)
+                  if (ts >= since) print
+                }
+              }' "$eslog")
+            if [ -n "$recent" ]; then
               echo
               echo "[ES OOM] $container — OutOfMemoryError in elasticsearch.log:"
-              grep -A2 "OutOfMemoryError" "$eslog" | head -10
+              echo "$recent" | head -10
               found_oom=true
             fi
           done
 
-          # Check dmesg for kernel OOM killer
+          # Check dmesg for kernel OOM killer (recent entries only).
+          # dmesg -T prefixes lines with a ctime-like bracketed timestamp;
+          # parse it and compare to the cutoff to drop host-level history.
           for dlog in "$diag"/service-logs/*/dmesg.log; do
             [ -f "$dlog" ] || continue
             container=$(basename "$(dirname "$dlog")")
-            if grep -qi "oom-killer\|out of memory\|killed process" "$dlog" 2>/dev/null; then
+            recent=$(awk -v cutoff="$since_epoch" '
+              { line = tolower($0) }
+              line ~ /oom-killer|out of memory|killed process/ {
+                if (match($0, /^\[[^]]+\]/)) {
+                  ts = substr($0, RSTART+1, RLENGTH-2)
+                  cmd = "date -d \"" ts "\" +%s 2>/dev/null"
+                  if ((cmd | getline epoch) > 0 && (epoch+0) >= (cutoff+0)) print
+                  close(cmd)
+                }
+              }' "$dlog")
+            if [ -n "$recent" ]; then
               echo
               echo "[KERNEL OOM] $container — OOM killer in dmesg:"
-              grep -i "oom-killer\|out of memory\|killed process" "$dlog" | head -10
+              echo "$recent" | head -10
               found_oom=true
             fi
           done
