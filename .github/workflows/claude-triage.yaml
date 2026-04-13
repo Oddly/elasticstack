@@ -13,6 +13,7 @@ on:
 permissions:
   contents: read
   issues: write
+  id-token: write  # Required by anthropics/claude-code-action for OIDC auth
 
 concurrency:
   group: claude-triage-${{ github.event.issue.number || inputs.issue_number }}
