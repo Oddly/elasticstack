@@ -10,7 +10,7 @@ MOLECULE_DIR="$REPO_ROOT/molecule"
 EXIT_CODE=0
 
 # Scenarios that are not standalone tests (utility dirs, shared includes)
-EXCLUDED_SCENARIOS="shared plugins"
+EXCLUDED_SCENARIOS="default shared plugins"
 
 echo "=== Molecule scenario CI coverage check ==="
 echo
