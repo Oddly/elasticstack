@@ -104,10 +104,20 @@
               Logstash will fail to start if it cannot read the key. For certmonger,
               use `getcert request -o root:logstash -m 0640`. Set
               logstash_tls_copy_certs: true to let the role copy with correct perms.
+          vars:
+            _ls_key_mode: "{{ _logstash_external_key_stat.stat.mode | default('0000') }}"
+            _ls_key_owner: "{{ _logstash_external_key_stat.stat.pw_name | default('') }}"
+            _ls_key_group: "{{ _logstash_external_key_stat.stat.gr_name | default('') }}"
+            _ls_key_owner_read: "{{ _ls_key_mode[1] in ['4', '5', '6', '7'] }}"
+            _ls_key_group_read: "{{ _ls_key_mode[2] in ['4', '5', '6', '7'] }}"
+            _ls_key_world_read: "{{ _ls_key_mode[3] in ['4', '5', '6', '7'] }}"
           when:
             - _logstash_external_key_stat.stat.exists | default(false) | bool
-            - (_logstash_external_key_stat.stat.gr_name | default('')) != 'logstash'
-              or (_logstash_external_key_stat.stat.mode | default('0000')) not in ['0640', '0644', '0660', '0664']
+            - not (
+                (_ls_key_owner == 'logstash' and (_ls_key_owner_read | bool))
+                or (_ls_key_group == 'logstash' and (_ls_key_group_read | bool))
+                or (_ls_key_world_read | bool)
+              )
 
 - name: logstash-security | Handle Elasticsearch CA certificates
   when: _logstash_cert_mode == 'elasticsearch_ca'
@@ -283,7 +293,6 @@
               - "pass:{{ logstash_tls_key_passphrase }}"
               - -out
               - "{{ logstash_certs_dir }}/{{ inventory_hostname }}.key"
-            creates: "{{ logstash_certs_dir }}/{{ inventory_hostname }}.key"
           no_log: "{{ elasticstack_no_log }}"
           tags:
             - certificates
