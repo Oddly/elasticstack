@@ -1,0 +1,20 @@
+---
+name: Consume CI run label
+on:
+  pull_request_target:
+    types: [labeled]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  consume:
+    if: ${{ github.event.label.name == 'ci:run' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove ci:run label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: gh issue edit "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --remove-label "ci:run"
