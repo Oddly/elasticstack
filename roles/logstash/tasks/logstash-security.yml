@@ -293,6 +293,7 @@
               - "pass:{{ logstash_tls_key_passphrase }}"
               - -out
               - "{{ logstash_certs_dir }}/{{ inventory_hostname }}.key"
+          changed_when: true
           no_log: "{{ elasticstack_no_log }}"
           tags:
             - certificates
