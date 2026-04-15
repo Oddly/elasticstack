@@ -173,6 +173,25 @@
     - renew_ca
     - renew_logstash_cert
 
+- name: Compute pipeline cert paths
+  vars:
+    _hands_off: >-
+      {{ (logstash_cert_source | default('elasticsearch_ca')) == 'external'
+         and not (logstash_tls_copy_certs | default(true) | bool) }}
+  ansible.builtin.set_fact:
+    _logstash_input_cert_path: >-
+      {{ logstash_tls_certificate_file if _hands_off
+         else (logstash_certs_dir ~ '/' ~ inventory_hostname ~ '-server.crt') }}
+    _logstash_input_key_path: >-
+      {{ logstash_tls_key_file if _hands_off
+         else (logstash_certs_dir ~ '/' ~ inventory_hostname ~ '.key') }}
+    _logstash_ca_cert_path: >-
+      {{ logstash_tls_ca_file if (_hands_off and logstash_tls_ca_file is defined)
+         else (logstash_certs_dir ~ '/ca.crt') }}
+  tags:
+    - configuration
+    - logstash_configuration
+
 - name: Configure Logstash
   ansible.builtin.template:
     src: logstash.yml.j2

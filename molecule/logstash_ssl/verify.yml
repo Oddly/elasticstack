@@ -24,11 +24,11 @@
       register: server_cert
       failed_when: not server_cert.stat.exists
 
-    - name: Check PKCS8 key exists
+    - name: Check server key exists
       ansible.builtin.stat:
-        path: "/etc/logstash/certs/{{ inventory_hostname }}-pkcs8.key"
-      register: pkcs8_key
-      failed_when: not pkcs8_key.stat.exists
+        path: "/etc/logstash/certs/{{ inventory_hostname }}.key"
+      register: server_key
+      failed_when: not server_key.stat.exists
 
     - name: Check CA certificate exists
       ansible.builtin.stat:
@@ -40,9 +40,23 @@
       ansible.builtin.assert:
         that:
           - server_cert.stat.mode == '0640'
-          - pkcs8_key.stat.mode == '0640'
+          - server_key.stat.mode == '0640'
           - ca_cert.stat.mode == '0640'
         fail_msg: "Certificate file permissions are not correct (expected 0640)"
+
+    - name: Verify server key is unencrypted PKCS#8 PEM (not PKCS#1, not encrypted)
+      ansible.builtin.command: head -1 /etc/logstash/certs/{{ inventory_hostname }}.key
+      register: _server_key_header
+      changed_when: false
+
+    - name: Assert PKCS#8 header
+      ansible.builtin.assert:
+        that:
+          - _server_key_header.stdout == '-----BEGIN PRIVATE KEY-----'
+        fail_msg: >-
+          Expected unencrypted PKCS#8 PEM (-----BEGIN PRIVATE KEY-----),
+          got {{ _server_key_header.stdout }}. The beats/elastic_agent input
+          requires PKCS#8 per upstream Logstash docs.
 
     # --- Input verification (elastic_agent with SSL) ---
 

@@ -200,6 +200,17 @@ logstash_cert_source: elasticsearch_ca
 # logstash_tls_ca_file: "/path/to/ca.crt"
 # logstash_tls_remote_src: false  # Set true if cert files are on remote host
 
+# @var logstash_tls_copy_certs:description: >
+#   Copy externally-managed certificate files into `logstash_certs_dir` (default).
+#   Set to `false` to reference the `logstash_tls_*_file` paths directly from the
+#   pipeline config — Logstash reads them in place. Use this for certmonger,
+#   cert-manager, or any renewal system where the cert files update out-of-band
+#   and you don't want to re-run Ansible to pick up rotations. Logstash must have
+#   read access to the files (typically `root:logstash 0640` and a
+#   world-traversable parent directory).
+# @end
+logstash_tls_copy_certs: true
+
 # @var logstash_certs_dir:description: Directory on the Logstash host where TLS certificates are stored
 logstash_certs_dir: /etc/logstash/certs
 

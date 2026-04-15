@@ -13,7 +13,7 @@ graph TD
     CA -->|"P12 keystore<br/>per node"| ES_T["ES Transport :9300<br/>Node-to-node encryption"]
     CA -->|"P12 keystore<br/>per node"| ES_H["ES HTTP :9200<br/>Client-to-node encryption"]
     CA -->|"P12 keystore"| KB["Kibana<br/>ES connection + optional HTTPS"]
-    CA -->|"PEM cert + PKCS8 key<br/>+ P12 keystore"| LS["Logstash<br/>Beats input + ES output"]
+    CA -->|"PEM cert + key<br/>+ P12 keystore"| LS["Logstash<br/>Beats input + ES output"]
     CA -->|"PEM cert + key<br/>per host"| BT["Beats<br/>Logstash/ES output"]
 
     ES_T -.->|"mutual TLS"| ES_T
@@ -41,7 +41,7 @@ The collection uses different formats depending on what each service expects nat
 | Elasticsearch (HTTP) | PKCS12 | `<hostname>-http.p12` |
 | Kibana | PKCS12 | `<hostname>-kibana.p12` |
 | Logstash (ES output) | PKCS12 | `keystore.pfx` |
-| Logstash (Beats input) | PEM | `<hostname>.crt` + `<hostname>-pkcs8.key` |
+| Logstash (Beats input) | PEM | `<hostname>-server.crt` + `<hostname>.key` |
 | Beats | PEM | `<hostname>-beats.crt` + `<hostname>-beats.key` |
 
 When using external certificates, both PEM (`.crt`, `.pem`) and PKCS12 (`.p12`, `.pfx`) are accepted. Format is auto-detected by probing the file content with `openssl`, not from the file extension.
@@ -176,6 +176,36 @@ You don't always need to set every variable. The roles apply sensible defaults:
 ### Controller-side vs remote-side files
 
 By default (`*_tls_remote_src: false`), certificate files are on the Ansible controller and get copied to each managed node. Set `*_tls_remote_src: true` when files are already on the managed nodes — provisioned by certbot, cloud-init, Vault agent, or a configuration management tool.
+
+### Logstash with certmonger / cert-manager (hands-off rotation)
+
+For Logstash specifically, certificate copies can get out of sync with automatic renewals. When certmonger or cert-manager rotates the cert, the copy under `/etc/logstash/certs/` becomes stale until the next Ansible run.
+
+Set `logstash_tls_copy_certs: false` to skip the copy. The pipeline config then references the original paths directly, and Logstash picks up the new cert on the next restart — which the renewal tool can trigger itself.
+
+```yaml title="group_vars/all.yml"
+logstash_cert_source: external
+logstash_tls_copy_certs: false
+logstash_tls_certificate_file: /etc/pki/logstash/server.crt
+logstash_tls_key_file: /etc/pki/logstash/server.key
+logstash_tls_ca_file: /etc/pki/logstash/ca.crt
+```
+
+Logstash runs as the `logstash` user and must be able to read the key. For certmonger, request the cert with the right ownership and restart hook:
+
+```bash
+getcert request \
+  -f /etc/pki/logstash/server.crt -k /etc/pki/logstash/server.key \
+  -o root:logstash -m 0640 \
+  -O root:logstash -M 0644 \
+  -C 'systemctl try-reload-or-restart logstash' \
+  -c local -I logstash
+```
+
+The `-o root:logstash -m 0640` ensures Logstash can read the key; certmonger preserves this ownership across every renewal. The `-C` post-save hook replaces the Ansible re-run. Verified on Debian with certmonger 0.79 and tested on both certmonger and openssl-generated keys, which both produce PKCS#8 PEM directly.
+
+!!! note
+    This path does not generate `keystore.pfx`. If you need the Elasticsearch output's P12 keystore (`logstash_output_elasticsearch: true` with security), either leave `logstash_tls_copy_certs: true` or set `logstash_output_elasticsearch: false` and manage the ES output yourself.
 
 ## Mode 3: Inline PEM content from a secrets manager
 
@@ -335,6 +365,7 @@ beats_cert_source: elasticsearch_ca   # or external
 | | `logstash_input_beats_ssl` | inherited | TLS on Beats input |
 | | `logstash_tls_certificate_file` | `""` | Certificate path (external) |
 | | `logstash_tls_remote_src` | `false` | Certs on managed node |
+| | `logstash_tls_copy_certs` | `true` | Copy external certs into `logstash_certs_dir`; set `false` for hands-off rotation |
 | | `logstash_cert_force_regenerate` | `false` | Force cert regen |
 | **Beats** | `beats_cert_source` | `elasticsearch_ca` | `elasticsearch_ca` or `external` |
 | | `beats_security` | `false` | Enable TLS (opt-in) |

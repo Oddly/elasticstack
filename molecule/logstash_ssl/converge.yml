@@ -18,7 +18,7 @@
     # External certificate configuration
     logstash_cert_source: external
     logstash_tls_certificate_file: /tmp/test-certs/server.crt
-    logstash_tls_key_file: /tmp/test-certs/server-pkcs8.key
+    logstash_tls_key_file: /tmp/test-certs/server.key
     logstash_tls_ca_file: /tmp/test-certs/ca.crt
     logstash_tls_remote_src: true
     logstash_extra_outputs: |
