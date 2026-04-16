@@ -1,0 +1,92 @@
+---
+- name: Elasticsearch template contract - single node
+  hosts: single_es
+  gather_facts: false
+  vars:
+    ansible_managed: "Ansible managed"
+    elasticstack_elasticsearch_group_name: single_es
+    elasticsearch_datapath: /var/lib/elasticsearch
+    elasticsearch_logpath: /var/log/elasticsearch
+    elasticsearch_clustername: template-single
+    elasticsearch_cluster_set_up: false
+    elasticsearch_ml_enabled: false
+    elasticsearch_security: false
+    elasticsearch_memory_lock: false
+    elasticsearch_extra_config:
+      cluster.name: should-be-filtered
+      thread_pool.write.queue_size: 500
+  tasks:
+    - name: Include Elasticsearch role vars
+      ansible.builtin.include_vars: ../../roles/elasticsearch/vars/main.yml
+
+    - name: Render single-node elasticsearch.yml
+      ansible.builtin.template:
+        src: ../../roles/elasticsearch/templates/elasticsearch.yml.j2
+        dest: /tmp/elasticsearch-template-single.yml
+        mode: "0644"
+
+    - name: Read single-node elasticsearch.yml
+      ansible.builtin.slurp:
+        src: /tmp/elasticsearch-template-single.yml
+      register: _single_template
+
+    - name: Assert single-node template contract
+      ansible.builtin.assert:
+        that:
+          - "'cluster.name: \"template-single\"' in (_single_template.content | b64decode)"
+          - "'discovery.type: single-node' in (_single_template.content | b64decode)"
+          - "'xpack.security.enabled: false' in (_single_template.content | b64decode)"
+          - "'cluster.name: should-be-filtered' not in (_single_template.content | b64decode)"
+          - "'thread_pool.write.queue_size: 500' in (_single_template.content | b64decode)"
+
+- name: Elasticsearch template contract - multi node external certs
+  hosts: elasticsearch
+  gather_facts: false
+  vars:
+    ansible_managed: "Ansible managed"
+    elasticstack_elasticsearch_group_name: elasticsearch
+    elasticsearch_datapath: /var/lib/elasticsearch
+    elasticsearch_logpath: /var/log/elasticsearch
+    elasticsearch_clustername: template-multi
+    elasticsearch_cluster_set_up: false
+    elasticsearch_ml_enabled: true
+    elasticsearch_security: true
+    elasticsearch_http_security: true
+    elasticsearch_security_enrollment: false
+    elasticsearch_ssl_verification_mode: certificate
+    elasticsearch_cert_source: external
+    _elasticsearch_transport_cert_format: pem
+    _elasticsearch_http_cert_format: pem
+    _elasticsearch_external_has_ca: true
+    elasticsearch_memory_lock: true
+    elasticsearch_fs_repo:
+      - /mnt/snapshots
+  tasks:
+    - name: Include Elasticsearch role vars
+      ansible.builtin.include_vars: ../../roles/elasticsearch/vars/main.yml
+
+    - name: Render multi-node elasticsearch.yml
+      ansible.builtin.template:
+        src: ../../roles/elasticsearch/templates/elasticsearch.yml.j2
+        dest: "/tmp/elasticsearch-template-{{ inventory_hostname }}.yml"
+        mode: "0644"
+
+    - name: Read multi-node elasticsearch.yml
+      ansible.builtin.slurp:
+        src: "/tmp/elasticsearch-template-{{ inventory_hostname }}.yml"
+      register: _multi_template
+
+    - name: Assert multi-node template contract
+      ansible.builtin.assert:
+        that:
+          - "'cluster.name: \"template-multi\"' in (_multi_template.content | b64decode)"
+          - "'discovery.type: single-node' not in (_multi_template.content | b64decode)"
+          - "'10.10.10.1' in (_multi_template.content | b64decode)"
+          - "'10.10.10.2' in (_multi_template.content | b64decode)"
+          - "'es-node-1' in (_multi_template.content | b64decode)"
+          - "'es-node-2' in (_multi_template.content | b64decode)"
+          - "'xpack.security.transport.ssl.certificate: certs/' ~ inventory_hostname ~ '-transport.crt' in (_multi_template.content | b64decode)"
+          - "'xpack.security.http.ssl.certificate: certs/' ~ inventory_hostname ~ '-http.crt' in (_multi_template.content | b64decode)"
+          - "'xpack.security.transport.ssl.certificate_authorities: [\"certs/ca.crt\"]' in (_multi_template.content | b64decode)"
+          - "'bootstrap.memory_lock: true' in (_multi_template.content | b64decode)"
+          - "'/mnt/snapshots' in (_multi_template.content | b64decode)"

@@ -1,0 +1,58 @@
+---
+
+- name: elasticsearch-cluster-settings | Build effective cluster settings
+  ansible.builtin.set_fact:
+    _elasticsearch_effective_cluster_settings: >-
+      {{ (elasticsearch_logsdb | bool)
+         | ternary({'cluster.logsdb.enabled': 'true'}, {})
+         | combine(elasticsearch_cluster_settings | default({})) }}
+
+- name: elasticsearch-cluster-settings | Apply persistent cluster settings  # noqa: run-once[task]
+  when:
+    - _elasticsearch_effective_cluster_settings | length > 0
+    - elasticsearch_security | bool | ternary(elasticstack_password is defined and (elasticstack_password.stdout | default('') | length > 0), true)
+    - not ansible_check_mode
+  run_once: true
+  delegate_to: "{{ elasticstack_ca_host | default(inventory_hostname) }}"
+  block:
+    - name: elasticsearch-cluster-settings | Read current persistent cluster settings
+      ansible.builtin.uri:
+        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/settings?flat_settings=true"
+        method: GET
+        user: "{{ 'elastic' if elasticsearch_security | bool else omit }}"
+        password: "{{ elasticstack_password.stdout if elasticsearch_security | bool else omit }}"
+        force_basic_auth: "{{ elasticsearch_security | bool }}"
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
+        return_content: true
+      register: _elasticsearch_current_cluster_settings
+      no_log: "{{ elasticstack_no_log }}"
+
+    - name: elasticsearch-cluster-settings | Check if settings already match
+      ansible.builtin.set_fact:
+        _elasticsearch_cluster_settings_changed: "{{ _needs_update | trim }}"
+      vars:
+        _current: "{{ _elasticsearch_current_cluster_settings.json.persistent }}"
+        _needs_update: >-
+          {% set ns = namespace(changed=false) %}
+          {% for key, value in _elasticsearch_effective_cluster_settings.items() %}
+          {%   if _current.get(key) is none or _current[key] | string != value | string %}
+          {%     set ns.changed = true %}
+          {%   endif %}
+          {% endfor %}
+          {{ ns.changed }}
+
+    - name: elasticsearch-cluster-settings | Apply cluster settings
+      ansible.builtin.uri:
+        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/settings"
+        method: PUT
+        body_format: json
+        body:
+          persistent: "{{ _elasticsearch_effective_cluster_settings }}"
+        user: "{{ 'elastic' if elasticsearch_security | bool else omit }}"
+        password: "{{ elasticstack_password.stdout if elasticsearch_security | bool else omit }}"
+        force_basic_auth: "{{ elasticsearch_security | bool }}"
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
+        status_code: 200
+      no_log: "{{ elasticstack_no_log }}"
+      when: _elasticsearch_cluster_settings_changed | bool
+      changed_when: true

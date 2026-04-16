@@ -1,0 +1,286 @@
+---
+
+- name: restart_and_verify_elasticsearch_rolling_node | Prepare host-specific values
+  ansible.builtin.set_fact:
+    _elasticsearch_allocation_disabled: false
+    _elasticsearch_restart_api_host: "{{ hostvars[_elasticsearch_restart_host].elasticsearch_api_host | default(elasticsearch_api_host) }}"
+    _elasticsearch_restart_nodename: >-
+      {{ hostvars[_elasticsearch_restart_host].elasticsearch_nodename
+         | default(hostvars[_elasticsearch_restart_host].ansible_facts.hostname | default(_elasticsearch_restart_host)) }}
+    _elasticsearch_restart_protocol: >-
+      {{ 'https'
+         if (elasticsearch_security | bool)
+         else hostvars[_elasticsearch_restart_host].elasticsearch_http_protocol
+              | default(elasticsearch_http_protocol | default('http')) }}
+    _elasticsearch_restart_port: "{{ hostvars[_elasticsearch_restart_host].elasticstack_elasticsearch_http_port | default(elasticstack_elasticsearch_http_port) }}"
+    _elasticsearch_health_statuses: "{{ ['green'] if elasticsearch_config_restart_wait_status == 'green' else ['green', 'yellow'] }}"
+
+- name: "restart_and_verify_elasticsearch_rolling_node | Restart {{ _elasticsearch_restart_host }}"
+  block:
+    - name: restart_and_verify_elasticsearch_rolling_node | Wait for cluster health before restart
+      ansible.builtin.uri:
+        url: "{{ _elasticsearch_restart_protocol }}://{{ _elasticsearch_restart_api_host }}:{{ _elasticsearch_restart_port }}/_cluster/health"
+        method: GET
+        user: "{{ 'elastic' if elasticsearch_security | bool else omit }}"
+        password: "{{ elasticstack_password.stdout if elasticsearch_security | bool else omit }}"
+        force_basic_auth: "{{ elasticsearch_security | bool }}"
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
+      register: _elasticsearch_pre_restart_health
+      until:
+        - (_elasticsearch_pre_restart_health.json.status | default('')) in _elasticsearch_health_statuses
+        - (_elasticsearch_pre_restart_health.json.relocating_shards | default(0) | int) == 0
+        - (_elasticsearch_pre_restart_health.json.initializing_shards | default(0) | int) == 0
+      retries: "{{ elasticsearch_config_restart_health_retries }}"
+      delay: "{{ elasticsearch_config_restart_health_delay }}"
+      changed_when: false
+      no_log: "{{ elasticstack_no_log }}"
+      delegate_to: "{{ _elasticsearch_restart_host }}"
+
+    - name: restart_and_verify_elasticsearch_rolling_node | Disable replica allocation
+      ansible.builtin.uri:
+        url: "{{ _elasticsearch_restart_protocol }}://{{ _elasticsearch_restart_api_host }}:{{ _elasticsearch_restart_port }}/_cluster/settings"
+        method: PUT
+        body: '{ "persistent": { "cluster.routing.allocation.enable": "primaries" }}'
+        body_format: json
+        user: "{{ 'elastic' if elasticsearch_security | bool else omit }}"
+        password: "{{ elasticstack_password.stdout if elasticsearch_security | bool else omit }}"
+        force_basic_auth: "{{ elasticsearch_security | bool }}"
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
+      register: _elasticsearch_disable_allocation
+      until: (_elasticsearch_disable_allocation.json | default({})).acknowledged | default(false)
+      retries: 5
+      delay: 10
+      no_log: "{{ elasticstack_no_log }}"
+      delegate_to: "{{ _elasticsearch_restart_host }}"
+
+    - name: restart_and_verify_elasticsearch_rolling_node | Record disabled allocation
+      ansible.builtin.set_fact:
+        _elasticsearch_allocation_disabled: true
+
+    - name: restart_and_verify_elasticsearch_rolling_node | Flush indices before restart
+      ansible.builtin.uri:
+        url: "{{ _elasticsearch_restart_protocol }}://{{ _elasticsearch_restart_api_host }}:{{ _elasticsearch_restart_port }}/_flush"
+        method: POST
+        user: "{{ 'elastic' if elasticsearch_security | bool else omit }}"
+        password: "{{ elasticstack_password.stdout if elasticsearch_security | bool else omit }}"
+        force_basic_auth: "{{ elasticsearch_security | bool }}"
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
+        status_code: [200, 409, 503]
+      register: _elasticsearch_restart_flush
+      failed_when: false
+      changed_when: false
+      no_log: "{{ elasticstack_no_log }}"
+      delegate_to: "{{ _elasticsearch_restart_host }}"
+      when: elasticsearch_config_restart_flush | bool
+
+    - name: restart_and_verify_elasticsearch_rolling_node | Warn if flush failed
+      ansible.builtin.debug:
+        msg: >-
+          Flush returned status {{ _elasticsearch_restart_flush.status | default('unknown') }}:
+          {{ _elasticsearch_restart_flush.msg | default('') }}
+      when:
+        - elasticsearch_config_restart_flush | bool
+        - (_elasticsearch_restart_flush.status | default(0)) != 200
+
+    - name: restart_and_verify_elasticsearch_rolling_node | Record restart start marker
+      ansible.builtin.command:
+        cmd: date +%s%6N
+      register: _elasticsearch_restart_started_at
+      changed_when: false
+      delegate_to: "{{ _elasticsearch_restart_host }}"
+
+    - name: restart_and_verify_elasticsearch_rolling_node | Store restart start marker
+      ansible.builtin.set_fact:
+        _elasticsearch_config_restart_started_usec: "{{ _elasticsearch_restart_started_at.stdout | int }}"
+      delegate_to: "{{ _elasticsearch_restart_host }}"
+      delegate_facts: true
+
+    - name: restart_and_verify_elasticsearch_rolling_node | Reset Elasticsearch failed state before restart
+      ansible.builtin.command:
+        cmd: systemctl reset-failed elasticsearch.service
+      changed_when: false
+      failed_when: false
+      delegate_to: "{{ _elasticsearch_restart_host }}"
+      when: not _elasticsearch_restart_test_mode | default(false) | bool
+
+    - name: restart_and_verify_elasticsearch_rolling_node | Restart Elasticsearch service
+      ansible.builtin.service:
+        name: elasticsearch
+        state: restarted
+        daemon_reload: true
+      delegate_to: "{{ _elasticsearch_restart_host }}"
+      when: not _elasticsearch_restart_test_mode | default(false) | bool
+
+    - name: restart_and_verify_elasticsearch_rolling_node | Verify Elasticsearch service is running
+      ansible.builtin.systemd:
+        name: elasticsearch
+      register: _elasticsearch_service_state
+      until: _elasticsearch_service_state.status.ActiveState == 'active'
+      retries: 5
+      delay: 3
+      delegate_to: "{{ _elasticsearch_restart_host }}"
+      when: not _elasticsearch_restart_test_mode | default(false) | bool
+
+    - name: restart_and_verify_elasticsearch_rolling_node | Wait for Elasticsearch HTTP port
+      ansible.builtin.wait_for:
+        host: "{{ _elasticsearch_restart_api_host }}"
+        port: "{{ _elasticsearch_restart_port }}"
+        delay: "{{ 0 if _elasticsearch_restart_test_mode | default(false) | bool else 10 }}"
+        timeout: 600
+      delegate_to: "{{ _elasticsearch_restart_host }}"
+
+    - name: restart_and_verify_elasticsearch_rolling_node | Confirm node has rejoined the cluster
+      ansible.builtin.uri:
+        url: "{{ _elasticsearch_restart_protocol }}://{{ _elasticsearch_restart_api_host }}:{{ _elasticsearch_restart_port }}/_cat/nodes?h=name"
+        method: GET
+        user: "{{ 'elastic' if elasticsearch_security | bool else omit }}"
+        password: "{{ elasticstack_password.stdout if elasticsearch_security | bool else omit }}"
+        force_basic_auth: "{{ elasticsearch_security | bool }}"
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
+        return_content: true
+      register: _elasticsearch_nodes
+      until: _elasticsearch_restart_nodename in (_elasticsearch_nodes.content | default('')).split()
+      retries: "{{ elasticsearch_config_restart_node_retries }}"
+      delay: "{{ elasticsearch_config_restart_node_delay }}"
+      changed_when: false
+      no_log: "{{ elasticstack_no_log }}"
+      delegate_to: "{{ _elasticsearch_restart_host }}"
+
+    - name: restart_and_verify_elasticsearch_rolling_node | Re-enable shard allocation
+      ansible.builtin.uri:
+        url: "{{ _elasticsearch_restart_protocol }}://{{ _elasticsearch_restart_api_host }}:{{ _elasticsearch_restart_port }}/_cluster/settings"
+        method: PUT
+        body: '{ "persistent": { "cluster.routing.allocation.enable": null }}'
+        body_format: json
+        user: "{{ 'elastic' if elasticsearch_security | bool else omit }}"
+        password: "{{ elasticstack_password.stdout if elasticsearch_security | bool else omit }}"
+        force_basic_auth: "{{ elasticsearch_security | bool }}"
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
+      register: _elasticsearch_enable_allocation
+      until: (_elasticsearch_enable_allocation.json | default({})).acknowledged | default(false)
+      retries: 5
+      delay: 30
+      no_log: "{{ elasticstack_no_log }}"
+      delegate_to: "{{ _elasticsearch_restart_host }}"
+
+    - name: restart_and_verify_elasticsearch_rolling_node | Wait for cluster health after restart
+      ansible.builtin.uri:
+        url: "{{ _elasticsearch_restart_protocol }}://{{ _elasticsearch_restart_api_host }}:{{ _elasticsearch_restart_port }}/_cluster/health"
+        method: GET
+        user: "{{ 'elastic' if elasticsearch_security | bool else omit }}"
+        password: "{{ elasticstack_password.stdout if elasticsearch_security | bool else omit }}"
+        force_basic_auth: "{{ elasticsearch_security | bool }}"
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
+      register: _elasticsearch_post_restart_health
+      until:
+        - (_elasticsearch_post_restart_health.json.status | default('')) in _elasticsearch_health_statuses
+        - (_elasticsearch_post_restart_health.json.relocating_shards | default(0) | int) == 0
+        - (_elasticsearch_post_restart_health.json.initializing_shards | default(0) | int) == 0
+      retries: "{{ elasticsearch_config_restart_health_retries }}"
+      delay: "{{ elasticsearch_config_restart_health_delay }}"
+      changed_when: false
+      no_log: "{{ elasticstack_no_log }}"
+      delegate_to: "{{ _elasticsearch_restart_host }}"
+
+    - name: restart_and_verify_elasticsearch_rolling_node | Record post-health completion marker
+      ansible.builtin.command:
+        cmd: date +%s%6N
+      register: _elasticsearch_restart_health_completed_at
+      changed_when: false
+      delegate_to: "{{ _elasticsearch_restart_host }}"
+
+    - name: restart_and_verify_elasticsearch_rolling_node | Store post-health completion marker
+      ansible.builtin.set_fact:
+        _elasticsearch_config_restart_health_complete_usec: "{{ _elasticsearch_restart_health_completed_at.stdout | int }}"
+      delegate_to: "{{ _elasticsearch_restart_host }}"
+      delegate_facts: true
+
+    - name: restart_and_verify_elasticsearch_rolling_node | Clear allocation state
+      ansible.builtin.set_fact:
+        _elasticsearch_allocation_disabled: false
+
+    - name: restart_and_verify_elasticsearch_rolling_node | Clear restart request
+      ansible.builtin.set_fact:
+        _elasticsearch_restart_requested: false
+      delegate_to: "{{ _elasticsearch_restart_host }}"
+      delegate_facts: true
+
+  rescue:
+    - name: restart_and_verify_elasticsearch_rolling_node | Get recent Elasticsearch journal output
+      ansible.builtin.command:
+        cmd: journalctl -u elasticsearch --no-pager -n 50
+      register: _elasticsearch_restart_journal
+      changed_when: false
+      delegate_to: "{{ _elasticsearch_restart_host }}"
+
+    - name: restart_and_verify_elasticsearch_rolling_node | Fail with startup diagnostics
+      ansible.builtin.fail:
+        msg: |
+          Elasticsearch failed to restart on {{ _elasticsearch_restart_host }}.
+
+          Recent log output:
+          {{ _elasticsearch_restart_journal.stdout }}
+
+  always:
+    - name: restart_and_verify_elasticsearch_rolling_node | Re-enable shard allocation
+      ansible.builtin.uri:
+        url: "{{ _elasticsearch_restart_protocol }}://{{ _elasticsearch_restart_api_host }}:{{ _elasticsearch_restart_port }}/_cluster/settings"
+        method: PUT
+        body: '{ "persistent": { "cluster.routing.allocation.enable": null }}'
+        body_format: json
+        user: "{{ 'elastic' if elasticsearch_security | bool else omit }}"
+        password: "{{ elasticstack_password.stdout if elasticsearch_security | bool else omit }}"
+        force_basic_auth: "{{ elasticsearch_security | bool }}"
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
+      register: _elasticsearch_enable_allocation
+      until: (_elasticsearch_enable_allocation.json | default({})).acknowledged | default(false)
+      retries: 5
+      delay: 30
+      no_log: "{{ elasticstack_no_log }}"
+      delegate_to: "{{ _elasticsearch_restart_host }}"
+      when: _elasticsearch_allocation_disabled | bool
+
+    - name: restart_and_verify_elasticsearch_rolling_node | Wait for cluster health after restart
+      ansible.builtin.uri:
+        url: "{{ _elasticsearch_restart_protocol }}://{{ _elasticsearch_restart_api_host }}:{{ _elasticsearch_restart_port }}/_cluster/health"
+        method: GET
+        user: "{{ 'elastic' if elasticsearch_security | bool else omit }}"
+        password: "{{ elasticstack_password.stdout if elasticsearch_security | bool else omit }}"
+        force_basic_auth: "{{ elasticsearch_security | bool }}"
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
+      register: _elasticsearch_post_restart_health
+      until:
+        - (_elasticsearch_post_restart_health.json.status | default('')) in _elasticsearch_health_statuses
+        - (_elasticsearch_post_restart_health.json.relocating_shards | default(0) | int) == 0
+        - (_elasticsearch_post_restart_health.json.initializing_shards | default(0) | int) == 0
+      retries: "{{ elasticsearch_config_restart_health_retries }}"
+      delay: "{{ elasticsearch_config_restart_health_delay }}"
+      changed_when: false
+      no_log: "{{ elasticstack_no_log }}"
+      delegate_to: "{{ _elasticsearch_restart_host }}"
+      when: _elasticsearch_allocation_disabled | bool
+
+    - name: restart_and_verify_elasticsearch_rolling_node | Record post-health completion marker
+      ansible.builtin.command:
+        cmd: date +%s%6N
+      register: _elasticsearch_restart_health_completed_at
+      changed_when: false
+      delegate_to: "{{ _elasticsearch_restart_host }}"
+      when: _elasticsearch_allocation_disabled | bool
+
+    - name: restart_and_verify_elasticsearch_rolling_node | Store post-health completion marker
+      ansible.builtin.set_fact:
+        _elasticsearch_config_restart_health_complete_usec: "{{ _elasticsearch_restart_health_completed_at.stdout | int }}"
+      delegate_to: "{{ _elasticsearch_restart_host }}"
+      delegate_facts: true
+      when: _elasticsearch_allocation_disabled | bool
+
+    - name: restart_and_verify_elasticsearch_rolling_node | Clear allocation state
+      ansible.builtin.set_fact:
+        _elasticsearch_allocation_disabled: false
+
+    - name: restart_and_verify_elasticsearch_rolling_node | Clear restart request
+      ansible.builtin.set_fact:
+        _elasticsearch_restart_requested: false
+      delegate_to: "{{ _elasticsearch_restart_host }}"
+      delegate_facts: true

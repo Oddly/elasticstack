@@ -1,10 +1,52 @@
 ---
 # handlers file for elasticsearch
-- name: Restart Elasticsearch
-  ansible.builtin.include_tasks: restart_and_verify_elasticsearch.yml
+- name: Mark Elasticsearch restart requested
+  ansible.builtin.set_fact:
+    _elasticsearch_restart_requested: true
+  listen: Restart Elasticsearch
   when:
     - not ansible_check_mode
     - elasticsearch_enable | bool
+    - not _elasticsearch_freshstart.changed | bool
+    - not _elasticsearch_freshstart_security.changed | bool
+    - not _elasticsearch_rolling_upgrade_performed | default(false) | bool
+
+- name: Restart Elasticsearch directly
+  ansible.builtin.include_tasks: restart_and_verify_elasticsearch.yml
+  listen: Restart Elasticsearch
+  when:
+    - not ansible_check_mode
+    - elasticsearch_enable | bool
+    - >
+      elasticsearch_config_restart_strategy == 'direct'
+      or groups[elasticstack_elasticsearch_group_name] | default([]) | length <= 1
+    - not _elasticsearch_freshstart.changed | bool
+    - not _elasticsearch_freshstart_security.changed | bool
+    - not _elasticsearch_rolling_upgrade_performed | default(false) | bool
+
+- name: Clear direct Elasticsearch restart request
+  ansible.builtin.set_fact:
+    _elasticsearch_restart_requested: false
+  listen: Restart Elasticsearch
+  when:
+    - not ansible_check_mode
+    - elasticsearch_enable | bool
+    - >
+      elasticsearch_config_restart_strategy == 'direct'
+      or groups[elasticstack_elasticsearch_group_name] | default([]) | length <= 1
+    - not _elasticsearch_freshstart.changed | bool
+    - not _elasticsearch_freshstart_security.changed | bool
+    - not _elasticsearch_rolling_upgrade_performed | default(false) | bool
+
+- name: Restart Elasticsearch rolling
+  ansible.builtin.include_tasks: restart_and_verify_elasticsearch_rolling.yml
+  listen: Restart Elasticsearch
+  run_once: true
+  when:
+    - not ansible_check_mode
+    - elasticsearch_enable | bool
+    - elasticsearch_config_restart_strategy == 'rolling'
+    - groups[elasticstack_elasticsearch_group_name] | default([]) | length > 1
     - not _elasticsearch_freshstart.changed | bool
     - not _elasticsearch_freshstart_security.changed | bool
     - not _elasticsearch_rolling_upgrade_performed | default(false) | bool

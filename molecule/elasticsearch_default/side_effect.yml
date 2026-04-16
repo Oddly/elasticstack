@@ -1,0 +1,79 @@
+---
+- name: Trigger config-change rolling restart
+  hosts: all
+  vars:
+    elasticstack_full_stack: false
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    elasticsearch_security: true
+    elasticsearch_http_protocol: https
+    elasticsearch_heap: "1"
+    elasticstack_no_log: false
+    elasticsearch_elastic_password: "TestPassword123!"
+    elasticsearch_jvm_custom_parameters:
+      - "-Des.config.restart.marker=true"
+    elasticsearch_config_restart_health_retries: 20
+    elasticsearch_config_restart_health_delay: 3
+    elasticsearch_cluster_settings:
+      action.destructive_requires_name: "true"
+  tasks:
+    - name: Reset shared role guard for config restart test
+      ansible.builtin.set_fact:
+        _elasticstack_role_imported: false
+
+    - name: Record ES PID before config change
+      ansible.builtin.command: pgrep -f 'org.elasticsearch.bootstrap.Elasticsearch'
+      register: _es_pid_before_config_restart
+      changed_when: false
+
+    - name: Include Elasticsearch with changed JVM config
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elasticsearch
+
+    - name: Record ES PID after config change
+      ansible.builtin.command: pgrep -f 'org.elasticsearch.bootstrap.Elasticsearch'
+      register: _es_pid_after_config_restart
+      changed_when: false
+
+    - name: Verify config change restarted Elasticsearch
+      ansible.builtin.assert:
+        that:
+          - _es_pid_before_config_restart.stdout != _es_pid_after_config_restart.stdout
+        fail_msg: >-
+          Elasticsearch was not restarted after config change on {{ inventory_hostname }}.
+          PID remained {{ _es_pid_after_config_restart.stdout }}.
+        success_msg: >-
+          Elasticsearch restarted after config change on {{ inventory_hostname }}.
+
+    - name: Build config restart rolling timeline  # noqa: run-once[task]
+      ansible.builtin.set_fact:
+        _es_first_restart_host: "{{ groups['elasticsearch'][0] }}"
+        _es_second_restart_host: "{{ groups['elasticsearch'][1] }}"
+        _es_first_restart_started_usec: "{{ hostvars[groups['elasticsearch'][0]]._elasticsearch_config_restart_started_usec | int }}"
+        _es_first_restart_health_complete_usec: "{{ hostvars[groups['elasticsearch'][0]]._elasticsearch_config_restart_health_complete_usec | int }}"
+        _es_second_restart_started_usec: "{{ hostvars[groups['elasticsearch'][1]]._elasticsearch_config_restart_started_usec | int }}"
+        _es_second_restart_health_complete_usec: "{{ hostvars[groups['elasticsearch'][1]]._elasticsearch_config_restart_health_complete_usec | int }}"
+      run_once: true
+
+    - name: Verify config restart was rolling  # noqa: run-once[task]
+      ansible.builtin.assert:
+        that:
+          - groups['elasticsearch'] | length == 2
+          - _es_first_restart_started_usec | int > 0
+          - _es_first_restart_health_complete_usec | int > 0
+          - _es_second_restart_started_usec | int > 0
+          - _es_second_restart_health_complete_usec | int > 0
+          - _es_first_restart_started_usec | int <= _es_first_restart_health_complete_usec | int
+          - _es_second_restart_started_usec | int <= _es_second_restart_health_complete_usec | int
+          - _es_first_restart_health_complete_usec | int <= _es_second_restart_started_usec | int
+        fail_msg: >-
+          Elasticsearch config restart did not wait for the first node's
+          post-restart health gate before starting the next node.
+          {{ _es_first_restart_host }} started={{ _es_first_restart_started_usec }}
+          health_complete={{ _es_first_restart_health_complete_usec }};
+          {{ _es_second_restart_host }} started={{ _es_second_restart_started_usec }}
+          health_complete={{ _es_second_restart_health_complete_usec }}.
+        success_msg: >-
+          Elasticsearch config restart was rolling and health-gated.
+          {{ _es_first_restart_host }} completed health before
+          {{ _es_second_restart_host }} started.
+      run_once: true

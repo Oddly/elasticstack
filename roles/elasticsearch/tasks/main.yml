@@ -4,40 +4,8 @@
   ansible.builtin.package_facts:
     manager: auto
 
-# Detect whether a rolling upgrade is needed. Any version change — major,
-# minor, or patch — should restart nodes one at a time with shard allocation
-# management rather than restarting all nodes simultaneously.
-#
-# Pre-install detection covers cases where we know the target version:
-# 1. Pinned version higher than installed (elasticstack_version: "9.2.0")
-# 2. Major version change (elasticstack_release differs from installed)
-#
-# For "latest" mode, we can't know pre-install whether a newer version is
-# available. The normal package tasks handle installation with state: latest,
-# and if the package changed, a rolling restart is triggered post-install.
 - name: Detect if rolling upgrade is needed (pre-install)
-  ansible.builtin.set_fact:
-    _elasticsearch_needs_rolling_upgrade: >-
-      {{ ansible_facts.packages['elasticsearch'] is defined and
-         ansible_facts.packages['elasticsearch'][0].version is defined and
-         ((elasticstack_version is defined and
-           elasticstack_version != 'latest' and
-           elasticstack_version is version(ansible_facts.packages['elasticsearch'][0].version, '>'))
-          or
-          (elasticstack_release | int != (ansible_facts.packages['elasticsearch'][0].version.split('.')[0] | int))) }}
-
-- name: Check upgrade path requirement for ES 9.x
-  ansible.builtin.fail:
-    msg: |
-      UPGRADE PATH VIOLATION: Elasticsearch 9.x requires 8.19.x first.
-      Current version: {{ ansible_facts.packages['elasticsearch'][0].version }}
-      You must upgrade to 8.19.x before upgrading to 9.x.
-      See: https://www.elastic.co/docs/deploy-manage/upgrade/deployment-or-cluster
-  when:
-    - elasticstack_release | int >= 9
-    - ansible_facts.packages['elasticsearch'] is defined
-    - ansible_facts.packages['elasticsearch'][0].version is version('8.0.0', '>=')
-    - ansible_facts.packages['elasticsearch'][0].version is version('8.19.0', '<')
+  ansible.builtin.include_tasks: elasticsearch-upgrade-detection.yml
 
 - name: Include global role
   ansible.builtin.import_role:
@@ -655,59 +623,5 @@
 
 # -- Persistent cluster settings via _cluster/settings API --
 
-- name: Build effective cluster settings
-  ansible.builtin.set_fact:
-    _elasticsearch_effective_cluster_settings: >-
-      {{ (elasticsearch_logsdb | bool)
-         | ternary({'cluster.logsdb.enabled': 'true'}, {})
-         | combine(elasticsearch_cluster_settings | default({})) }}
-
-- name: Apply persistent cluster settings  # noqa: run-once[task]
-  when:
-    - _elasticsearch_effective_cluster_settings | length > 0
-    - elasticsearch_security | bool | ternary(elasticstack_password is defined and (elasticstack_password.stdout | default('') | length > 0), true)
-    - not ansible_check_mode
-  run_once: true
-  delegate_to: "{{ elasticstack_ca_host | default(inventory_hostname) }}"
-  block:
-    - name: Read current persistent cluster settings
-      ansible.builtin.uri:
-        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/settings?flat_settings=true"
-        method: GET
-        user: "{{ 'elastic' if elasticsearch_security | bool else omit }}"
-        password: "{{ elasticstack_password.stdout if elasticsearch_security | bool else omit }}"
-        force_basic_auth: "{{ elasticsearch_security | bool }}"
-        validate_certs: "{{ elasticsearch_validate_api_certs }}"
-        return_content: true
-      register: _elasticsearch_current_cluster_settings
-      no_log: "{{ elasticstack_no_log }}"
-
-    - name: Check if settings already match
-      ansible.builtin.set_fact:
-        _elasticsearch_cluster_settings_changed: "{{ _needs_update | trim }}"
-      vars:
-        _current: "{{ _elasticsearch_current_cluster_settings.json.persistent }}"
-        _needs_update: >-
-          {% set ns = namespace(changed=false) %}
-          {% for key, value in _elasticsearch_effective_cluster_settings.items() %}
-          {%   if _current.get(key) is none or _current[key] | string != value | string %}
-          {%     set ns.changed = true %}
-          {%   endif %}
-          {% endfor %}
-          {{ ns.changed }}
-
-    - name: Apply cluster settings
-      ansible.builtin.uri:
-        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/settings"
-        method: PUT
-        body_format: json
-        body:
-          persistent: "{{ _elasticsearch_effective_cluster_settings }}"
-        user: "{{ 'elastic' if elasticsearch_security | bool else omit }}"
-        password: "{{ elasticstack_password.stdout if elasticsearch_security | bool else omit }}"
-        force_basic_auth: "{{ elasticsearch_security | bool }}"
-        validate_certs: "{{ elasticsearch_validate_api_certs }}"
-        status_code: 200
-      no_log: "{{ elasticstack_no_log }}"
-      when: _elasticsearch_cluster_settings_changed | bool
-      changed_when: true
+- name: Apply persistent cluster settings
+  ansible.builtin.include_tasks: elasticsearch-cluster-settings.yml
