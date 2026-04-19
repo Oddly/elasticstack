@@ -7,8 +7,8 @@
   when:
     - not ansible_check_mode
     - elasticsearch_enable | bool
-    - not _elasticsearch_freshstart.changed | bool
-    - not _elasticsearch_freshstart_security.changed | bool
+    - not (_elasticsearch_freshstart | default({'changed': false})).changed | bool
+    - not (_elasticsearch_freshstart_security | default({'changed': false})).changed | bool
     - not _elasticsearch_rolling_upgrade_performed | default(false) | bool
 
 - name: Restart Elasticsearch directly
@@ -20,8 +20,8 @@
     - >
       elasticsearch_config_restart_strategy == 'direct'
       or groups[elasticstack_elasticsearch_group_name] | default([]) | length <= 1
-    - not _elasticsearch_freshstart.changed | bool
-    - not _elasticsearch_freshstart_security.changed | bool
+    - not (_elasticsearch_freshstart | default({'changed': false})).changed | bool
+    - not (_elasticsearch_freshstart_security | default({'changed': false})).changed | bool
     - not _elasticsearch_rolling_upgrade_performed | default(false) | bool
 
 - name: Clear direct Elasticsearch restart request
@@ -34,8 +34,8 @@
     - >
       elasticsearch_config_restart_strategy == 'direct'
       or groups[elasticstack_elasticsearch_group_name] | default([]) | length <= 1
-    - not _elasticsearch_freshstart.changed | bool
-    - not _elasticsearch_freshstart_security.changed | bool
+    - not (_elasticsearch_freshstart | default({'changed': false})).changed | bool
+    - not (_elasticsearch_freshstart_security | default({'changed': false})).changed | bool
     - not _elasticsearch_rolling_upgrade_performed | default(false) | bool
 
 - name: Restart Elasticsearch rolling
@@ -47,8 +47,8 @@
     - elasticsearch_enable | bool
     - elasticsearch_config_restart_strategy == 'rolling'
     - groups[elasticstack_elasticsearch_group_name] | default([]) | length > 1
-    - not _elasticsearch_freshstart.changed | bool
-    - not _elasticsearch_freshstart_security.changed | bool
+    - not (_elasticsearch_freshstart | default({'changed': false})).changed | bool
+    - not (_elasticsearch_freshstart_security | default({'changed': false})).changed | bool
     - not _elasticsearch_rolling_upgrade_performed | default(false) | bool
 
 - name: Restart kibana if available for elasticsearch certificates

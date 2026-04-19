@@ -83,7 +83,7 @@ elasticsearch_config_restart_strategy: rolling
 # @var elasticsearch_config_restart_flush:description: Flush indices before each node restart during config-triggered rolling restarts
 elasticsearch_config_restart_flush: true
 # @var elasticsearch_config_restart_wait_status:description: Minimum cluster health status before and after each config-triggered rolling restart. Use yellow or green
-elasticsearch_config_restart_wait_status: yellow
+elasticsearch_config_restart_wait_status: green
 # @var elasticsearch_config_restart_health_retries:description: Number of cluster health polling attempts during config-triggered rolling restarts
 elasticsearch_config_restart_health_retries: 50
 # @var elasticsearch_config_restart_health_delay:description: Delay in seconds between cluster health polling attempts during config-triggered rolling restarts

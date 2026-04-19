@@ -8,10 +8,11 @@ import threading
 
 
 class State:
-    def __init__(self, nodes, log_path, persistent_settings):
+    def __init__(self, nodes, log_path, persistent_settings, fail_nodes_on):
         self.nodes = nodes
         self.log_path = log_path
         self.persistent_settings = persistent_settings
+        self.fail_nodes_on = fail_nodes_on
         self.lock = threading.Lock()
 
     def log(self, port, method, path, body):
@@ -64,6 +65,9 @@ def handler(state):
                 )
                 return
             if self.path.startswith("/_cat/nodes"):
+                if self.server.server_port in state.fail_nodes_on:
+                    self._send_json({"error": "simulated rejoin failure"}, status=503)
+                    return
                 body = ("\n".join(state.nodes) + "\n").encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/plain")
@@ -116,10 +120,23 @@ def main():
     parser.add_argument("--nodes", required=True)
     parser.add_argument("--log", required=True)
     parser.add_argument("--persistent-settings", default="{}")
+    parser.add_argument(
+        "--fail-nodes-on",
+        default="",
+        help="Comma-separated ports whose /_cat/nodes endpoint returns 503",
+    )
     args = parser.parse_args()
 
     ports = [int(port) for port in args.ports.split(",")]
-    state = State(args.nodes.split(","), args.log, json.loads(args.persistent_settings))
+    fail_nodes_on = {
+        int(port) for port in args.fail_nodes_on.split(",") if port.strip()
+    }
+    state = State(
+        args.nodes.split(","),
+        args.log,
+        json.loads(args.persistent_settings),
+        fail_nodes_on,
+    )
 
     for port in ports:
         thread = threading.Thread(target=serve, args=(port, state), daemon=True)

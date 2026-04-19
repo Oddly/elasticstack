@@ -20,7 +20,7 @@
            elasticstack_version != 'latest' and
            elasticstack_version is version(ansible_facts.packages['elasticsearch'][0].version, '>'))
           or
-          (elasticstack_release | int != (ansible_facts.packages['elasticsearch'][0].version.split('.')[0] | int))) }}
+          (elasticstack_release | default(8) | int != (ansible_facts.packages['elasticsearch'][0].version.split('.')[0] | int))) }}
 
 - name: elasticsearch-upgrade-detection | Check upgrade path requirement for ES 9.x
   ansible.builtin.fail:
@@ -30,7 +30,7 @@
       You must upgrade to 8.19.x before upgrading to 9.x.
       See: https://www.elastic.co/docs/deploy-manage/upgrade/deployment-or-cluster
   when:
-    - elasticstack_release | int >= 9
+    - elasticstack_release | default(8) | int >= 9
     - ansible_facts.packages['elasticsearch'] is defined
     - ansible_facts.packages['elasticsearch'][0].version is version('8.0.0', '>=')
     - ansible_facts.packages['elasticsearch'][0].version is version('8.19.0', '<')

@@ -14,6 +14,21 @@
               | default(elasticsearch_http_protocol | default('http')) }}
     _elasticsearch_restart_port: "{{ hostvars[_elasticsearch_restart_host].elasticstack_elasticsearch_http_port | default(elasticstack_elasticsearch_http_port) }}"
     _elasticsearch_health_statuses: "{{ ['green'] if elasticsearch_config_restart_wait_status == 'green' else ['green', 'yellow'] }}"
+    _elasticsearch_cleanup_host: >-
+      {{ ((groups[elasticstack_elasticsearch_group_name] | default([]))
+          | difference([_elasticsearch_restart_host])
+          | first)
+         | default(_elasticsearch_restart_host, true) }}
+
+- name: restart_and_verify_elasticsearch_rolling_node | Prepare cleanup delegate values
+  ansible.builtin.set_fact:
+    _elasticsearch_cleanup_api_host: "{{ hostvars[_elasticsearch_cleanup_host].elasticsearch_api_host | default(elasticsearch_api_host) }}"
+    _elasticsearch_cleanup_protocol: >-
+      {{ 'https'
+         if (elasticsearch_security | bool)
+         else hostvars[_elasticsearch_cleanup_host].elasticsearch_http_protocol
+              | default(elasticsearch_http_protocol | default('http')) }}
+    _elasticsearch_cleanup_port: "{{ hostvars[_elasticsearch_cleanup_host].elasticstack_elasticsearch_http_port | default(elasticstack_elasticsearch_http_port) }}"
 
 - name: "restart_and_verify_elasticsearch_rolling_node | Restart {{ _elasticsearch_restart_host }}"
   block:
@@ -222,9 +237,9 @@
           {{ _elasticsearch_restart_journal.stdout }}
 
   always:
-    - name: restart_and_verify_elasticsearch_rolling_node | Re-enable shard allocation
+    - name: restart_and_verify_elasticsearch_rolling_node | Re-enable shard allocation via surviving peer
       ansible.builtin.uri:
-        url: "{{ _elasticsearch_restart_protocol }}://{{ _elasticsearch_restart_api_host }}:{{ _elasticsearch_restart_port }}/_cluster/settings"
+        url: "{{ _elasticsearch_cleanup_protocol }}://{{ _elasticsearch_cleanup_api_host }}:{{ _elasticsearch_cleanup_port }}/_cluster/settings"
         method: PUT
         body: '{ "persistent": { "cluster.routing.allocation.enable": null }}'
         body_format: json
@@ -237,12 +252,12 @@
       retries: 5
       delay: 30
       no_log: "{{ elasticstack_no_log }}"
-      delegate_to: "{{ _elasticsearch_restart_host }}"
+      delegate_to: "{{ _elasticsearch_cleanup_host }}"
       when: _elasticsearch_allocation_disabled | bool
 
-    - name: restart_and_verify_elasticsearch_rolling_node | Wait for cluster health after restart
+    - name: restart_and_verify_elasticsearch_rolling_node | Wait for cluster health after restart via surviving peer
       ansible.builtin.uri:
-        url: "{{ _elasticsearch_restart_protocol }}://{{ _elasticsearch_restart_api_host }}:{{ _elasticsearch_restart_port }}/_cluster/health"
+        url: "{{ _elasticsearch_cleanup_protocol }}://{{ _elasticsearch_cleanup_api_host }}:{{ _elasticsearch_cleanup_port }}/_cluster/health"
         method: GET
         user: "{{ 'elastic' if elasticsearch_security | bool else omit }}"
         password: "{{ elasticstack_password.stdout if elasticsearch_security | bool else omit }}"
@@ -257,7 +272,7 @@
       delay: "{{ elasticsearch_config_restart_health_delay }}"
       changed_when: false
       no_log: "{{ elasticstack_no_log }}"
-      delegate_to: "{{ _elasticsearch_restart_host }}"
+      delegate_to: "{{ _elasticsearch_cleanup_host }}"
       when: _elasticsearch_allocation_disabled | bool
 
     - name: restart_and_verify_elasticsearch_rolling_node | Record post-health completion marker
@@ -265,7 +280,7 @@
         cmd: date +%s%6N
       register: _elasticsearch_restart_health_completed_at
       changed_when: false
-      delegate_to: "{{ _elasticsearch_restart_host }}"
+      delegate_to: "{{ _elasticsearch_cleanup_host }}"
       when: _elasticsearch_allocation_disabled | bool
 
     - name: restart_and_verify_elasticsearch_rolling_node | Store post-health completion marker

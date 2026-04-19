@@ -3,7 +3,7 @@
 - name: elasticsearch-cluster-settings | Build effective cluster settings
   ansible.builtin.set_fact:
     _elasticsearch_effective_cluster_settings: >-
-      {{ (elasticsearch_logsdb | bool)
+      {{ (elasticsearch_logsdb | default(false) | bool)
          | ternary({'cluster.logsdb.enabled': 'true'}, {})
          | combine(elasticsearch_cluster_settings | default({})) }}
 
