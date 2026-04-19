@@ -21,7 +21,6 @@ provisioner:
   name: ansible
   env:
     ANSIBLE_LOG_PATH: /var/log/ansible.log
-    ANSIBLE_COLLECTIONS_PATH: "${MOLECULE_PROJECT_DIRECTORY}/.ansible/collections:/usr/share/ansible/collections"
   connection_options:
     ansible_connection: ssh
     ansible_user: root
