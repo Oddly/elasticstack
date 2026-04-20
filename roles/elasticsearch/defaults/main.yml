@@ -78,6 +78,20 @@ elasticsearch_conf_dir: "/etc/elasticsearch/"
 elasticsearch_group: elasticsearch
 # @var elasticsearch_api_host:description: Hostname or IP used for Elasticsearch API health checks
 elasticsearch_api_host: localhost
+# @var elasticsearch_config_restart_strategy:description: Strategy for config-triggered Elasticsearch restarts. Use rolling for multi-node clusters, direct for legacy all-host handler behavior
+elasticsearch_config_restart_strategy: rolling
+# @var elasticsearch_config_restart_flush:description: Flush indices before each node restart during config-triggered rolling restarts
+elasticsearch_config_restart_flush: true
+# @var elasticsearch_config_restart_wait_status:description: Minimum cluster health status before and after each config-triggered rolling restart. Use yellow or green
+elasticsearch_config_restart_wait_status: green
+# @var elasticsearch_config_restart_health_retries:description: Number of cluster health polling attempts during config-triggered rolling restarts
+elasticsearch_config_restart_health_retries: 50
+# @var elasticsearch_config_restart_health_delay:description: Delay in seconds between cluster health polling attempts during config-triggered rolling restarts
+elasticsearch_config_restart_health_delay: 30
+# @var elasticsearch_config_restart_node_retries:description: Number of attempts to confirm the restarted node has rejoined the cluster
+elasticsearch_config_restart_node_retries: 200
+# @var elasticsearch_config_restart_node_delay:description: Delay in seconds between restarted node join checks
+elasticsearch_config_restart_node_delay: 3
 
 # @var elasticsearch_jvm_custom_parameters:description: Additional JVM parameters appended to jvm.options.d. Use for GC tuning, debug flags, etc
 # @var elasticsearch_jvm_custom_parameters:example: >

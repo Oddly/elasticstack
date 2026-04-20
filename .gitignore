@@ -8,4 +8,12 @@ __pycache__/
 *.tar.gz
 venv/
 tests/integration/
+!tests/integration/
+tests/integration/*
+!tests/integration/elasticsearch_cluster_settings_contract.yml
+!tests/integration/elasticsearch_template_contract.yml
+!tests/integration/elasticsearch_template_inventory.ini
+!tests/integration/elasticsearch_upgrade_detection_contract.yml
+!tests/integration/rolling_restart_contract.yml
+!tests/integration/rolling_restart_inventory.ini
 site/

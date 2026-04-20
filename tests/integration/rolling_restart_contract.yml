@@ -1,0 +1,308 @@
+---
+- name: Start fake Elasticsearch APIs
+  hosts: localhost
+  gather_facts: false
+  vars:
+    _fake_es_log: /tmp/elasticstack-rolling-restart-api.jsonl
+  tasks:
+    - name: Stop previous fake API if present
+      ansible.builtin.shell: |
+        set -o pipefail
+        if [ -f /tmp/elasticstack-rolling-restart-api.pid ]; then
+          kill "$(cat /tmp/elasticstack-rolling-restart-api.pid)" 2>/dev/null || true
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Reset fake API log
+      ansible.builtin.copy:
+        dest: "{{ _fake_es_log }}"
+        content: ""
+        mode: "0644"
+
+    - name: Start fake API server
+      ansible.builtin.shell: |
+        set -o pipefail
+        nohup python3 {{ playbook_dir }}/../fakes/fake_es_rolling_api.py \
+          --ports 19200,19201 \
+          --nodes es1,es2 \
+          --log {{ _fake_es_log }} >/tmp/elasticstack-rolling-restart-api.out 2>&1 &
+        echo $!
+      args:
+        executable: /bin/bash
+      register: _fake_es_api
+      changed_when: true
+
+    - name: Store fake API PID
+      ansible.builtin.copy:
+        dest: /tmp/elasticstack-rolling-restart-api.pid
+        content: "{{ _fake_es_api.stdout }}"
+        mode: "0644"
+
+    - name: Wait for fake API
+      ansible.builtin.uri:
+        url: http://127.0.0.1:19200/_cluster/health
+        method: GET
+      register: _fake_api_health
+      until: _fake_api_health.status | default(0) == 200
+      retries: 10
+      delay: 1
+
+- name: Rolling restart contract - flush enabled
+  hosts: elasticsearch
+  gather_facts: false
+  vars:
+    _elasticsearch_restart_test_mode: true
+    elasticsearch_security: false
+    elasticstack_no_log: false
+    elasticstack_elasticsearch_group_name: elasticsearch
+    elasticsearch_http_protocol: http
+    elasticsearch_validate_api_certs: false
+    elasticsearch_config_restart_strategy: rolling
+    elasticsearch_config_restart_flush: true
+    elasticsearch_config_restart_wait_status: yellow
+    elasticsearch_config_restart_health_retries: 1
+    elasticsearch_config_restart_health_delay: 0
+    elasticsearch_config_restart_node_retries: 1
+    elasticsearch_config_restart_node_delay: 0
+  tasks:
+    - name: Mark all hosts for restart
+      ansible.builtin.set_fact:
+        _elasticsearch_restart_requested: true
+
+    - name: Include rolling restart task  # noqa: run-once[task]
+      ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/restart_and_verify_elasticsearch_rolling.yml
+      run_once: true
+
+- name: Verify flush-enabled contract
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Read fake API log
+      ansible.builtin.command:
+        cmd: cat /tmp/elasticstack-rolling-restart-api.jsonl
+      register: _fake_api_log
+      changed_when: false
+
+    - name: Assert both fake nodes were processed with flush
+      ansible.builtin.assert:
+        that:
+          - '_fake_api_log.stdout is search(''"path": "/_flush", "port": 19200'')'
+          - '_fake_api_log.stdout is search(''"path": "/_flush", "port": 19201'')'
+          - "_fake_api_log.stdout is search('primaries')"
+          - "_fake_api_log.stdout is search('null')"
+
+    - name: Reset fake API log
+      ansible.builtin.copy:
+        dest: /tmp/elasticstack-rolling-restart-api.jsonl
+        content: ""
+        mode: "0644"
+
+- name: Rolling restart contract - flush disabled and subset restart
+  hosts: elasticsearch
+  gather_facts: false
+  vars:
+    _elasticsearch_restart_test_mode: true
+    elasticsearch_security: false
+    elasticstack_no_log: false
+    elasticstack_elasticsearch_group_name: elasticsearch
+    elasticsearch_http_protocol: http
+    elasticsearch_validate_api_certs: false
+    elasticsearch_config_restart_strategy: rolling
+    elasticsearch_config_restart_flush: false
+    elasticsearch_config_restart_wait_status: green
+    elasticsearch_config_restart_health_retries: 1
+    elasticsearch_config_restart_health_delay: 0
+    elasticsearch_config_restart_node_retries: 1
+    elasticsearch_config_restart_node_delay: 0
+  tasks:
+    - name: Mark only es1 for restart
+      ansible.builtin.set_fact:
+        _elasticsearch_restart_requested: "{{ inventory_hostname == 'es1' }}"
+
+    - name: Include rolling restart task  # noqa: run-once[task]
+      ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/restart_and_verify_elasticsearch_rolling.yml
+      run_once: true
+
+- name: Verify flush-disabled subset contract
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Read fake API log
+      ansible.builtin.command:
+        cmd: cat /tmp/elasticstack-rolling-restart-api.jsonl
+      register: _fake_api_log
+      changed_when: false
+
+    - name: Assert only es1 was processed and flush was skipped
+      ansible.builtin.assert:
+        that:
+          - '_fake_api_log.stdout is search(''"port": 19200'')'
+          - '_fake_api_log.stdout is not search(''"port": 19201'')'
+          - '_fake_api_log.stdout is not search(''"path": "/_flush"'')'
+
+    - name: Reset fake API log
+      ansible.builtin.copy:
+        dest: /tmp/elasticstack-rolling-restart-api.jsonl
+        content: ""
+        mode: "0644"
+
+- name: Rolling restart contract - missing secured credentials fails
+  hosts: elasticsearch[0]
+  gather_facts: false
+  vars:
+    _elasticsearch_restart_test_mode: true
+    elasticsearch_security: true
+    elasticstack_no_log: false
+    elasticstack_elasticsearch_group_name: elasticsearch
+    elasticsearch_config_restart_strategy: rolling
+    elasticsearch_config_restart_flush: false
+    elasticsearch_config_restart_wait_status: yellow
+  tasks:
+    - name: Mark one host for restart
+      ansible.builtin.set_fact:
+        _elasticsearch_restart_requested: "{{ inventory_hostname == 'es1' }}"
+
+    - name: Verify missing credentials fail before restart
+      block:
+        - name: Include rolling restart task without credentials  # noqa: run-once[task]
+          ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/restart_and_verify_elasticsearch_rolling.yml
+          run_once: true
+
+        - name: Missing credentials should fail  # noqa: run-once[task]
+          ansible.builtin.fail:
+            msg: Missing credentials did not fail.
+          run_once: true
+
+      rescue:
+        - name: Assert missing credentials error is clear  # noqa: run-once[task]
+          ansible.builtin.assert:
+            that:
+              - "ansible_failed_result.msg is search('elastic user password is unavailable')"
+          run_once: true
+
+- name: Restart fake API with simulated rejoin failure on es1
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Stop previous fake API
+      ansible.builtin.shell: |
+        set -o pipefail
+        if [ -f /tmp/elasticstack-rolling-restart-api.pid ]; then
+          kill "$(cat /tmp/elasticstack-rolling-restart-api.pid)" 2>/dev/null || true
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Reset fake API log
+      ansible.builtin.copy:
+        dest: /tmp/elasticstack-rolling-restart-api.jsonl
+        content: ""
+        mode: "0644"
+
+    - name: Start fake API with es1 rejoin failure
+      ansible.builtin.shell: |
+        set -o pipefail
+        nohup python3 {{ playbook_dir }}/../fakes/fake_es_rolling_api.py \
+          --ports 19200,19201 \
+          --nodes es1,es2 \
+          --fail-nodes-on 19200 \
+          --log /tmp/elasticstack-rolling-restart-api.jsonl \
+          >/tmp/elasticstack-rolling-restart-api.out 2>&1 &
+        echo $!
+      args:
+        executable: /bin/bash
+      register: _fake_es_api
+      changed_when: true
+
+    - name: Store fake API PID
+      ansible.builtin.copy:
+        dest: /tmp/elasticstack-rolling-restart-api.pid
+        content: "{{ _fake_es_api.stdout }}"
+        mode: "0644"
+
+    - name: Wait for fake API
+      ansible.builtin.uri:
+        url: http://127.0.0.1:19201/_cluster/health
+        method: GET
+      register: _fake_api_health
+      until: _fake_api_health.status | default(0) == 200
+      retries: 10
+      delay: 1
+
+- name: Rolling restart contract - cleanup via surviving peer on failure
+  hosts: elasticsearch
+  gather_facts: false
+  vars:
+    _elasticsearch_restart_test_mode: true
+    elasticsearch_security: false
+    elasticstack_no_log: false
+    elasticstack_elasticsearch_group_name: elasticsearch
+    elasticsearch_http_protocol: http
+    elasticsearch_validate_api_certs: false
+    elasticsearch_config_restart_strategy: rolling
+    elasticsearch_config_restart_flush: false
+    elasticsearch_config_restart_wait_status: green
+    elasticsearch_config_restart_health_retries: 1
+    elasticsearch_config_restart_health_delay: 0
+    elasticsearch_config_restart_node_retries: 1
+    elasticsearch_config_restart_node_delay: 0
+  tasks:
+    - name: Mark only es1 for restart
+      ansible.builtin.set_fact:
+        _elasticsearch_restart_requested: "{{ inventory_hostname == 'es1' }}"
+
+    - name: Expect rolling restart to fail but cleanup via peer
+      block:
+        - name: Include rolling restart task  # noqa: run-once[task]
+          ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/restart_and_verify_elasticsearch_rolling.yml
+          run_once: true
+
+        - name: Rejoin failure should have raised  # noqa: run-once[task]
+          ansible.builtin.fail:
+            msg: Simulated rejoin failure did not raise.
+          run_once: true
+
+      rescue:
+        - name: Absorb expected failure  # noqa: run-once[task]
+          ansible.builtin.debug:
+            msg: Rolling restart failed as expected; cleanup should have run via es2.
+          run_once: true
+
+- name: Verify cleanup used surviving peer
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Read fake API log
+      ansible.builtin.command:
+        cmd: cat /tmp/elasticstack-rolling-restart-api.jsonl
+      register: _fake_api_log
+      changed_when: false
+
+    - name: Assert cleanup PUT with null landed on port 19201 (surviving peer)
+      ansible.builtin.assert:
+        that:
+          - '_fake_api_log.stdout is search(''"method": "PUT", "path": "/_cluster/settings", "port": 19201'')'
+          - "_fake_api_log.stdout is search('null')"
+
+    - name: Reset fake API log
+      ansible.builtin.copy:
+        dest: /tmp/elasticstack-rolling-restart-api.jsonl
+        content: ""
+        mode: "0644"
+
+- name: Stop fake Elasticsearch APIs
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Stop fake API server
+      ansible.builtin.shell: |
+        set -o pipefail
+        if [ -f /tmp/elasticstack-rolling-restart-api.pid ]; then
+          kill "$(cat /tmp/elasticstack-rolling-restart-api.pid)" 2>/dev/null || true
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false

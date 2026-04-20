@@ -1,0 +1,39 @@
+---
+
+- name: restart_and_verify_elasticsearch_rolling | Build restart host list
+  ansible.builtin.set_fact:
+    _elasticsearch_restart_hosts: []
+
+- name: restart_and_verify_elasticsearch_rolling | Add requested hosts to restart list
+  ansible.builtin.set_fact:
+    _elasticsearch_restart_hosts: "{{ _elasticsearch_restart_hosts + [item] }}"
+  loop: "{{ groups[elasticstack_elasticsearch_group_name] | default([]) }}"
+  when: hostvars[item]._elasticsearch_restart_requested | default(false) | bool
+
+- name: restart_and_verify_elasticsearch_rolling | Validate restart strategy inputs
+  ansible.builtin.assert:
+    that:
+      - elasticsearch_config_restart_strategy in ['rolling', 'direct']
+      - elasticsearch_config_restart_wait_status in ['yellow', 'green']
+    fail_msg: >-
+      elasticsearch_config_restart_strategy must be rolling or direct, and
+      elasticsearch_config_restart_wait_status must be yellow or green.
+
+- name: restart_and_verify_elasticsearch_rolling | Validate credentials for secured rolling restart
+  ansible.builtin.assert:
+    that:
+      - elasticstack_password is defined
+      - elasticstack_password.stdout | default('') | length > 0
+    fail_msg: >-
+      Cannot perform a safe rolling Elasticsearch restart because security is
+      enabled but the elastic user password is unavailable.
+  when:
+    - elasticsearch_security | bool
+    - _elasticsearch_restart_hosts | length > 0
+
+- name: restart_and_verify_elasticsearch_rolling | Restart requested nodes one at a time
+  ansible.builtin.include_tasks: restart_and_verify_elasticsearch_rolling_node.yml
+  loop: "{{ _elasticsearch_restart_hosts }}"
+  loop_control:
+    loop_var: _elasticsearch_restart_host
+  when: _elasticsearch_restart_hosts | length > 0

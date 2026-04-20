@@ -1,0 +1,36 @@
+---
+
+# Detect whether a rolling upgrade is needed. Any version change — major,
+# minor, or patch — should restart nodes one at a time with shard allocation
+# management rather than restarting all nodes simultaneously.
+#
+# Pre-install detection covers cases where we know the target version:
+# 1. Pinned version higher than installed (elasticstack_version: "9.2.0")
+# 2. Major version change (elasticstack_release differs from installed)
+#
+# For "latest" mode, we can't know pre-install whether a newer version is
+# available. The normal package tasks handle installation with state: latest,
+# and if the package changed, a rolling restart is triggered post-install.
+- name: elasticsearch-upgrade-detection | Detect if rolling upgrade is needed
+  ansible.builtin.set_fact:
+    _elasticsearch_needs_rolling_upgrade: >-
+      {{ ansible_facts.packages['elasticsearch'] is defined and
+         ansible_facts.packages['elasticsearch'][0].version is defined and
+         ((elasticstack_version is defined and
+           elasticstack_version != 'latest' and
+           elasticstack_version is version(ansible_facts.packages['elasticsearch'][0].version, '>'))
+          or
+          (elasticstack_release | default(8) | int != (ansible_facts.packages['elasticsearch'][0].version.split('.')[0] | int))) }}
+
+- name: elasticsearch-upgrade-detection | Check upgrade path requirement for ES 9.x
+  ansible.builtin.fail:
+    msg: |
+      UPGRADE PATH VIOLATION: Elasticsearch 9.x requires 8.19.x first.
+      Current version: {{ ansible_facts.packages['elasticsearch'][0].version }}
+      You must upgrade to 8.19.x before upgrading to 9.x.
+      See: https://www.elastic.co/docs/deploy-manage/upgrade/deployment-or-cluster
+  when:
+    - elasticstack_release | default(8) | int >= 9
+    - ansible_facts.packages['elasticsearch'] is defined
+    - ansible_facts.packages['elasticsearch'][0].version is version('8.0.0', '>=')
+    - ansible_facts.packages['elasticsearch'][0].version is version('8.19.0', '<')

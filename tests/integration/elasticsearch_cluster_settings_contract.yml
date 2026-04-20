@@ -1,0 +1,140 @@
+---
+- name: Start fake Elasticsearch API for cluster settings
+  hosts: localhost
+  gather_facts: false
+  vars:
+    _fake_es_log: /tmp/elasticstack-cluster-settings-api.jsonl
+  tasks:
+    - name: Stop previous fake API if present
+      ansible.builtin.shell: |
+        set -o pipefail
+        if [ -f /tmp/elasticstack-cluster-settings-api.pid ]; then
+          kill "$(cat /tmp/elasticstack-cluster-settings-api.pid)" 2>/dev/null || true
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Reset fake API log
+      ansible.builtin.copy:
+        dest: "{{ _fake_es_log }}"
+        content: ""
+        mode: "0644"
+
+    - name: Start fake API server
+      ansible.builtin.shell: |
+        set -o pipefail
+        nohup python3 {{ playbook_dir }}/../fakes/fake_es_rolling_api.py \
+          --ports 19210 \
+          --nodes es1 \
+          --log {{ _fake_es_log }} >/tmp/elasticstack-cluster-settings-api.out 2>&1 &
+        echo $!
+      args:
+        executable: /bin/bash
+      register: _fake_es_api
+      changed_when: true
+
+    - name: Store fake API PID
+      ansible.builtin.copy:
+        dest: /tmp/elasticstack-cluster-settings-api.pid
+        content: "{{ _fake_es_api.stdout }}"
+        mode: "0644"
+
+    - name: Wait for fake API
+      ansible.builtin.uri:
+        url: http://127.0.0.1:19210/_cluster/settings?flat_settings=true
+        method: GET
+      register: _fake_api_settings
+      until: _fake_api_settings.status | default(0) == 200
+      retries: 10
+      delay: 1
+
+- name: Cluster settings contract
+  hosts: localhost
+  gather_facts: false
+  vars:
+    elasticsearch_logsdb: true
+    elasticsearch_cluster_settings:
+      action.destructive_requires_name: "true"
+    elasticsearch_security: false
+    elasticstack_no_log: false
+    elasticsearch_http_protocol: http
+    elasticsearch_api_host: 127.0.0.1
+    elasticstack_elasticsearch_http_port: 19210
+    elasticsearch_validate_api_certs: false
+    elasticstack_ca_host: localhost
+  tasks:
+    - name: Apply cluster settings first time
+      ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/elasticsearch-cluster-settings.yml
+
+    - name: Read fake API log after first apply
+      ansible.builtin.command:
+        cmd: cat /tmp/elasticstack-cluster-settings-api.jsonl
+      register: _fake_api_log
+      changed_when: false
+
+    - name: Assert first apply sent expected settings
+      ansible.builtin.assert:
+        that:
+          - '_fake_api_log.stdout is search(''"method": "PUT"'')'
+          - "_fake_api_log.stdout is search('cluster.logsdb.enabled')"
+          - "_fake_api_log.stdout is search('action.destructive_requires_name')"
+
+    - name: Reset fake API log
+      ansible.builtin.copy:
+        dest: /tmp/elasticstack-cluster-settings-api.jsonl
+        content: ""
+        mode: "0644"
+
+    - name: Apply matching cluster settings again
+      ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/elasticsearch-cluster-settings.yml
+
+    - name: Read fake API log after idempotent apply
+      ansible.builtin.command:
+        cmd: cat /tmp/elasticstack-cluster-settings-api.jsonl
+      register: _fake_api_log
+      changed_when: false
+
+    - name: Assert matching settings did not call PUT
+      ansible.builtin.assert:
+        that:
+          - '_fake_api_log.stdout is search(''"method": "GET"'')'
+          - '_fake_api_log.stdout is not search(''"method": "PUT"'')'
+
+    - name: Reset fake API log before missing credentials case
+      ansible.builtin.copy:
+        dest: /tmp/elasticstack-cluster-settings-api.jsonl
+        content: ""
+        mode: "0644"
+
+    - name: Skip secured settings without password
+      ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/elasticsearch-cluster-settings.yml
+      vars:
+        elasticsearch_security: true
+        elasticsearch_cluster_settings:
+          indices.recovery.max_bytes_per_sec: "80mb"
+
+    - name: Read fake API log after skipped secured apply
+      ansible.builtin.command:
+        cmd: cat /tmp/elasticstack-cluster-settings-api.jsonl
+      register: _fake_api_log
+      changed_when: false
+
+    - name: Assert missing credentials skipped all API calls
+      ansible.builtin.assert:
+        that:
+          - _fake_api_log.stdout | length == 0
+
+- name: Stop fake Elasticsearch API for cluster settings
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Stop fake API server
+      ansible.builtin.shell: |
+        set -o pipefail
+        if [ -f /tmp/elasticstack-cluster-settings-api.pid ]; then
+          kill "$(cat /tmp/elasticstack-cluster-settings-api.pid)" 2>/dev/null || true
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
