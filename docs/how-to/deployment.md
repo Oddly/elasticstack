@@ -74,18 +74,18 @@ When you have certificates from an external CA (Let's Encrypt, corporate PKI, et
 kibana_tls: true
 kibana_cert_source: external
 
-kibana_tls_cert: /etc/pki/kibana/kibana.crt
-kibana_tls_key: /etc/pki/kibana/kibana.key
-kibana_tls_ca: /etc/pki/kibana/ca-chain.crt
+kibana_tls_certificate_file: /etc/pki/kibana/kibana.crt
+kibana_tls_key_file: /etc/pki/kibana/kibana.key
+kibana_tls_ca_file: /etc/pki/kibana/ca-chain.crt
 
-# Optional: key passphrase if the private key is encrypted
-# kibana_tls_key_passphrase: "{{ vault_kibana_key_pass }}"
+# Optional: passphrase for an encrypted private key or P12 file
+# kibana_tls_certificate_passphrase: "{{ vault_kibana_key_pass }}"
 ```
 
 The files must already exist on the Kibana host before running the playbook. The role configures Kibana to use them but does not manage the certificate lifecycle — renewal is your responsibility.
 
 !!! tip
-    If your external CA is not the same as the Elasticsearch CA, you also need to configure Elasticsearch to trust it. Add the CA certificate to `elasticsearch_tls_cacerts` on all ES nodes.
+    If your external CA is not the same as the Elasticsearch CA, you also need to configure Elasticsearch to trust it. Set `elasticsearch_tls_ca_certificate` on all ES nodes.
 
 ## Elasticsearch with external certificates
 
@@ -95,14 +95,15 @@ For environments where certificates come from an external PKI:
 elasticsearch_cert_source: external
 
 # HTTP (client-facing) certificates
-elasticsearch_http_tls_cert: /etc/pki/elasticsearch/http.crt
+elasticsearch_http_tls_certificate: /etc/pki/elasticsearch/http.crt
 elasticsearch_http_tls_key: /etc/pki/elasticsearch/http.key
-elasticsearch_http_tls_ca: /etc/pki/elasticsearch/ca-chain.crt
 
 # Transport (inter-node) certificates
-elasticsearch_transport_tls_cert: /etc/pki/elasticsearch/transport.crt
+elasticsearch_transport_tls_certificate: /etc/pki/elasticsearch/transport.crt
 elasticsearch_transport_tls_key: /etc/pki/elasticsearch/transport.key
-elasticsearch_transport_tls_ca: /etc/pki/elasticsearch/ca-chain.crt
+
+# Shared CA for HTTP and transport
+elasticsearch_tls_ca_certificate: /etc/pki/elasticsearch/ca-chain.crt
 ```
 
 Each node needs its own certificate with the node's hostname or IP in the Subject Alternative Names (SAN). The transport certificate must include all node hostnames since nodes verify each other's identity during cluster formation.
