@@ -415,6 +415,30 @@ elasticsearch_extra_config:
 
 Keys that conflict with settings managed by dedicated role variables (like `cluster.name`, `network.host`, security/TLS settings, `bootstrap.memory_lock`) are silently filtered out, and the role emits a warning telling you to use the dedicated variable instead.
 
+### Config-triggered restarts
+
+When a run changes `elasticsearch.yml` or JVM options, the Restart Elasticsearch handler fires. On multi-node clusters the role restarts nodes one at a time and waits for cluster health to recover between nodes; on single-node clusters it restarts in place.
+
+```yaml
+elasticsearch_config_restart_strategy: rolling
+elasticsearch_config_restart_flush: true
+elasticsearch_config_restart_wait_status: green
+elasticsearch_config_restart_health_retries: 50
+elasticsearch_config_restart_health_delay: 30
+elasticsearch_config_restart_node_retries: 200
+elasticsearch_config_restart_node_delay: 3
+```
+
+`elasticsearch_config_restart_strategy` picks between `rolling` (default — restart one node at a time, gate on cluster health) and `direct` (legacy all-at-once restart from a normal handler). Single-node clusters always take the direct path regardless of this setting.
+
+`elasticsearch_config_restart_flush` runs a synced flush before each node restart during a rolling restart. Set to `false` only if you have a specific reason to skip it.
+
+`elasticsearch_config_restart_wait_status` is the minimum cluster health colour the role waits for before and after each node restart. `green` is strictly safer; set to `yellow` if you have unassigned replicas that are expected and you don't want the restart to block on them.
+
+`elasticsearch_config_restart_health_retries` and `elasticsearch_config_restart_health_delay` control how long the role waits for the cluster to regain the chosen health status between nodes. Defaults give ~25 minutes per node (50 × 30s), which is generous for large clusters with lots of shard recovery.
+
+`elasticsearch_config_restart_node_retries` and `elasticsearch_config_restart_node_delay` control how long the role waits for the node it just restarted to rejoin the cluster. Defaults give ~10 minutes per node (200 × 3s).
+
 ### Rolling Upgrades
 
 The role validates the upgrade path before any work begins. When `elasticstack_release` is 9 or higher and Elasticsearch is currently installed, the role checks that the installed version is at least 8.19.0. If it finds an older 8.x version, the play fails immediately -- you must step through 8.19.x first. This matches [Elastic's official upgrade requirements](https://www.elastic.co/docs/deploy-manage/upgrade/deployment-or-cluster).
@@ -455,6 +479,10 @@ The default heap formula is `min(max(memtotal_mb / 1024 / 2, 1), 30)` -- half of
 
 The role sets `nofile=65535` for the `elasticsearch` user via PAM (`/etc/security/limits.d/`). This is required for production but was historically unreliable in the RPM post-install scripts. Controlled by `elasticsearch_pamlimits` (default `true`).
 
+### OS-level tuning
+
+`elasticsearch_os_tuning` (default `true`) applies the sysctl and kernel settings Elasticsearch expects in production: raises `vm.max_map_count` for the mmapfs directory (required for large shard counts), drops `vm.swappiness` to 1, tightens TCP retry counts for faster fault detection, and disables Transparent Huge Pages at runtime. The tuning is skipped automatically in container environments (`virtualization_type` in `docker`, `container`, `containerd`, `lxc`, `podman`), where these sysctls typically can't be set and should be inherited from the host. Set to `false` if your host is managed by a separate tuning policy and you don't want the role writing `/etc/sysctl.d/`.
+
 ### JNA tmpdir workaround
 
 On systems where `/tmp` is mounted with `noexec`, Java Native Access fails to load native libraries. Set `elasticsearch_jna_workaround: true` to redirect JNA's temp directory to `{{ elasticsearch_datapath }}/tmp` via the sysconfig file (`/etc/default/elasticsearch` on Debian, `/etc/sysconfig/elasticsearch` on RedHat).
@@ -494,14 +522,15 @@ In container environments (`virtualization_type` in `container`, `docker`, `lxc`
 
 ### Handler guards
 
-The "Restart Elasticsearch" handler has four guards that prevent it from firing when a restart would be redundant or harmful:
+Notifications of `Restart Elasticsearch` are dispatched to one of two paths depending on `elasticsearch_config_restart_strategy` and cluster size: a direct restart-in-place (single-node or explicitly direct), or a rolling restart that run_once-orchestrates node-by-node restarts across the cluster (multi-node + rolling, the default). Every handler in that dispatch chain applies the same five guard conditions to prevent a restart that would be redundant or harmful:
 
-1. `elasticsearch_enable` must be true
-2. NOT during a fresh install (service already started naturally)
-3. NOT during security initialization (service already started)
-4. NOT after a rolling upgrade (upgrade did its own restart)
+1. NOT in check mode (`ansible_check_mode` is false)
+2. `elasticsearch_enable` must be true
+3. NOT during a fresh install (service already started naturally)
+4. NOT during security initialization (service already started)
+5. NOT after a rolling upgrade (upgrade did its own restart)
 
-The handler also triggers a Kibana restart on all Kibana hosts (if `elasticstack_full_stack` is enabled) since Kibana may need to reconnect after an ES restart. This Kibana restart is skipped during CA renewal.
+A separate handler on the same notification triggers a Kibana restart on all Kibana hosts (if `elasticstack_full_stack` is enabled) since Kibana may need to reconnect after an ES restart. The Kibana restart is skipped during CA renewal.
 
 ### Double config write
 

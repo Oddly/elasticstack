@@ -19,9 +19,9 @@ The collection provides six roles that cover each layer of the stack. They work 
 
 | Category | Versions |
 |----------|----------|
-| Debian | 11 (Bullseye), 12 (Bookworm), 13 (Trixie) |
-| Ubuntu | 22.04 (Jammy), 24.04 (Noble) |
-| Rocky Linux / RHEL | 8, 9, 10 |
+| Debian | 12 (Bookworm), 13 (Trixie) |
+| Ubuntu | 22.04 (Jammy), 24.04 (Noble), 26.04 (Resolute) |
+| Rocky Linux / RHEL | 9, 10 |
 | Elastic Stack | 8.x, 9.x |
 | Ansible | 2.18+ |
 
