@@ -165,12 +165,17 @@
     elasticsearch_http_tls_key: /tmp/test-certs/http.key
     elasticsearch_tls_remote_src: true
     elasticsearch_ssl_verification_mode: certificate
-    # Kibana: external cert source, no web TLS, no CA provided.
-    # Skip cert verification since update-ca-certificates doesn't reliably
-    # update the CA bundle in containers (test is about config generation,
-    # not TLS verification).
+    # Kibana: external cert source with web TLS enabled, reusing the HTTP
+    # cert material generated above. Exercises the HTTPS readiness path
+    # (#141) and confirms certificateAuthorities is still omitted from
+    # kibana.yml when no CA is passed (the scenario's original intent).
+    # Skip ES-side cert verification: update-ca-certificates doesn't
+    # reliably update the CA bundle in containers.
     kibana_cert_source: external
-    kibana_tls: false
+    kibana_tls: true
+    kibana_tls_certificate_file: /tmp/test-certs/http.crt
+    kibana_tls_key_file: /tmp/test-certs/http.key
+    kibana_tls_remote_src: true
     kibana_extra_config: "elasticsearch.ssl.verificationMode: none"
   tasks:
     - name: Include Elastic repos

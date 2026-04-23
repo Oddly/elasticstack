@@ -87,15 +87,16 @@
     - name: Run Kibana checks
       when: "'kibana' in group_names"
       block:
-        - name: Connect to Kibana
+        - name: Connect to Kibana (HTTPS — kibana_tls enabled)
           ansible.builtin.uri:
-            url: "http://localhost:5601/api/status"
+            url: "https://localhost:5601/api/status"
             method: GET
             force_basic_auth: true
             user: elastic
             password: "{{ elastic_pass.stdout }}"
             return_content: true
             status_code: [200, 503]
+            validate_certs: false
           register: kibana_status
           retries: 30
           delay: 10
