@@ -143,13 +143,13 @@
 - name: Wait for Kibana to be ready
   when: not ansible_check_mode
   block:
-    - name: Wait for Kibana HTTP with service health check
+    - name: Wait for Kibana readiness ({{ 'HTTPS' if kibana_tls | default(false) | bool else 'HTTP' }})
       ansible.builtin.shell:
         cmd: |
           if ! systemctl is-active --quiet kibana; then
             exit 2
           fi
-          HTTP_CODE=$(curl -sk -o /dev/null -w '%{http_code}' http://localhost:5601/api/status 2>/dev/null) || true
+          HTTP_CODE=$(curl -sk -o /dev/null -w '%{http_code}' {{ 'https' if kibana_tls | default(false) | bool else 'http' }}://localhost:5601/api/status 2>/dev/null) || true
           if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
             exit 0
           fi
