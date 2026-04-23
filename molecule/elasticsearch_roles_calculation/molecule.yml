@@ -22,6 +22,14 @@ platforms:
       - elasticsearch
     distro: "${MOLECULE_DISTRO:-debian12}"
     memory_mb: 4096
+  # Separate single-node "monitoring" cluster, run in a second play against
+  # this group to catch the regression from #143 where group_by accumulated
+  # elasticsearch_role_master across plays.
+  - name: "es-calc-mon-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
+    groups:
+      - elasticsearch_mon
+    distro: "${MOLECULE_DISTRO:-debian12}"
+    memory_mb: 4096
 provisioner:
   name: ansible
   env:
