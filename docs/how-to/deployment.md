@@ -78,8 +78,8 @@ kibana_tls_certificate_file: /etc/pki/kibana/kibana.crt
 kibana_tls_key_file: /etc/pki/kibana/kibana.key
 kibana_tls_ca_file: /etc/pki/kibana/ca-chain.crt
 
-# Optional: key passphrase if the private key is encrypted
-# kibana_tls_key_passphrase: "{{ vault_kibana_key_pass }}"
+# Optional: passphrase for an encrypted private key or P12 file
+# kibana_tls_certificate_passphrase: "{{ vault_kibana_key_pass }}"
 ```
 
 The files must already exist on the Kibana host before running the playbook. The role configures Kibana to use them but does not manage the certificate lifecycle — renewal is your responsibility.

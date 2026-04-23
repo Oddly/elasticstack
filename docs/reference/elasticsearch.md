@@ -530,7 +530,7 @@ Notifications of `Restart Elasticsearch` are dispatched to one of two paths depe
 4. NOT during security initialization (service already started)
 5. NOT after a rolling upgrade (upgrade did its own restart)
 
-A separate handler on the same notification triggers a Kibana restart on all Kibana hosts (if `elasticstack_full_stack` is enabled) since Kibana may need to reconnect after an ES restart. The Kibana restart is skipped during CA renewal.
+A separate handler on the same notification triggers a Kibana restart on all Kibana hosts (if `elasticstack_full_stack` is enabled) since Kibana may need to reconnect after an ES restart. The Kibana restart is skipped when the `renew_ca` tag is active or when `elasticstack_ca_will_expire_soon` is true, since those paths have their own coordinated Kibana restart.
 
 ### Double config write
 
