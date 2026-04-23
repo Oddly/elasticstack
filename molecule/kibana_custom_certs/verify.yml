@@ -1,5 +1,5 @@
 ---
-- name: Verify Kibana with external cert source, no TLS, system trust store CA
+- name: Verify Kibana with external cert source, web TLS on, system trust store CA
   hosts: all
   vars:
     elasticstack_elasticsearch_http_port: 9200
@@ -40,15 +40,16 @@
     - name: Run Kibana checks
       when: "'kibana' in group_names"
       block:
-        - name: Connect to Kibana (HTTP — TLS is disabled)
+        - name: Connect to Kibana (HTTPS — kibana_tls enabled)
           ansible.builtin.uri:
-            url: "http://localhost:5601/api/status"
+            url: "https://localhost:5601/api/status"
             method: GET
             force_basic_auth: true
             user: elastic
             password: "{{ elastic_pass.stdout }}"
             return_content: true
             status_code: [200, 503]
+            validate_certs: false
           register: kibana_status
           retries: 18
           delay: 10
@@ -71,8 +72,8 @@
               - "'certificateAuthorities' not in (kibana_yml.content | b64decode)"
             fail_msg: "certificateAuthorities should not be present — CA is in system trust store"
 
-        - name: Verify server.ssl.enabled is NOT present (TLS disabled)
+        - name: Verify server.ssl.enabled IS present (TLS enabled)
           ansible.builtin.assert:
             that:
-              - "'server.ssl.enabled' not in (kibana_yml.content | b64decode)"
-            fail_msg: "server.ssl.enabled should not be present when kibana_tls is false"
+              - "'server.ssl.enabled: true' in (kibana_yml.content | b64decode)"
+            fail_msg: "server.ssl.enabled: true should be present when kibana_tls is true"

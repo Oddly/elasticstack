@@ -21,10 +21,10 @@
       retries: 5
       delay: 3
 
-    - name: restart_and_verify_kibana | Wait for Kibana HTTP readiness
+    - name: restart_and_verify_kibana | Wait for Kibana readiness ({{ 'HTTPS' if kibana_tls | default(false) | bool else 'HTTP' }})
       ansible.builtin.shell:
         cmd: |
-          HTTP_CODE=$(curl -sk -o /dev/null -w '%{http_code}' http://localhost:5601/api/status 2>/dev/null) || true
+          HTTP_CODE=$(curl -sk -o /dev/null -w '%{http_code}' {{ 'https' if kibana_tls | default(false) | bool else 'http' }}://localhost:5601/api/status 2>/dev/null) || true
           if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
             exit 0
           fi
