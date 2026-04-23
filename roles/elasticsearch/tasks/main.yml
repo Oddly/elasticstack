@@ -126,7 +126,8 @@
 
     - name: Count master nodes
       ansible.builtin.set_fact:
-        elasticsearch_count_of_master_nodes: "{{ groups['elasticsearch_role_master'] | length }}"
+        elasticsearch_count_of_master_nodes: >-
+          {{ ansible_play_hosts_all | intersect(groups['elasticsearch_role_master'] | default([])) | length }}
 
     - name: Check count of master nodes
       ansible.builtin.fail:

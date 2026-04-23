@@ -1,8 +1,33 @@
 ---
 # The workaround for arbitrarily named role directory is important because the git repo has one name and the role within it another
 # Found at: https://github.com/ansible-community/molecule/issues/1567#issuecomment-436876722
-- name: Converge
-  hosts: all
+- name: Converge primary cluster (3 master-eligible nodes)
+  hosts: elasticsearch
+  vars:
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    elasticsearch_node_types:
+      - master
+      - data
+    elasticsearch_heap: 1
+    elasticsearch_check_calculation: true
+    elasticstack_no_log: false
+  tasks:
+    - name: Include Elastics repos role
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.repos
+    - name: Include Elasticsearch
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elasticsearch
+    - name: CI — set lenient disk watermarks
+      ansible.builtin.include_tasks: ../shared/set_ci_watermarks.yml
+
+# Second cluster, same run. Without the fix for #143, group_by from the
+# first play would have left 3 masters in elasticsearch_role_master; this
+# play would then see 3 + 1 = 4 masters and fail the odd-count assertion.
+# With the fix, the count is scoped to ansible_play_hosts_all, so this
+# cluster sees 1 master.
+- name: Converge monitoring cluster (1 master-eligible node, same run)
+  hosts: elasticsearch_mon
   vars:
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticsearch_node_types:
