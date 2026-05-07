@@ -125,11 +125,17 @@
         elasticsearch_count_of_master_nodes: >-
           {{ ansible_play_hosts_all | intersect(groups['elasticsearch_role_master'] | default([])) | length }}
 
+    # The odd-master-count rule is required for a fresh-bootstrapped cluster
+    # to have a stable initial quorum. When joining an existing cluster
+    # (elasticsearch_cluster_set_up: true) the cluster already has its own
+    # master-eligible quorum independent of how many new nodes are added in
+    # this play, so the check is irrelevant and would block legitimate joins.
     - name: Check count of master nodes
       ansible.builtin.fail:
         msg: "There must be an odd count of master nodes. You have {{ elasticsearch_count_of_master_nodes }}"
       when:
         - elasticsearch_count_of_master_nodes | int % 2  == 0
+        - not elasticsearch_cluster_set_up | bool
 
     - name: End play in checks
       ansible.builtin.meta: end_host
