@@ -76,19 +76,15 @@
   register: elasticsearch_cluster_setup_check
   failed_when: false
 
-- name: Set var that cluster is set up
+# Respect a user-supplied elasticsearch_cluster_set_up value (e.g. when joining
+# an existing multi-node cluster from a fresh node, the local marker file does
+# not exist but the user knows the cluster is already bootstrapped). Only
+# auto-detect via the marker file when the user has not set the variable.
+# See https://github.com/Oddly/elasticstack/issues/146 for context.
+- name: Set var that cluster is set up (auto-detect via marker file)
   ansible.builtin.set_fact:
-    elasticsearch_cluster_set_up: true
-  when:
-    - elasticsearch_cluster_setup_check is defined
-    - elasticsearch_cluster_setup_check.stat.exists | bool
-
-- name: Set var that cluster is not set up
-  ansible.builtin.set_fact:
-    elasticsearch_cluster_set_up: false
-  when:
-    - elasticsearch_cluster_setup_check is undefined or
-      not elasticsearch_cluster_setup_check.stat.exists | bool
+    elasticsearch_cluster_set_up: "{{ elasticsearch_cluster_setup_check.stat.exists | default(false) | bool }}"
+  when: elasticsearch_cluster_set_up is not defined
 
 - name: Check if master node count is correct
   when:
