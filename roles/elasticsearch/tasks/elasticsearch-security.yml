@@ -650,6 +650,18 @@
 - name: elasticsearch-security | Runtime cluster setup (requires running Elasticsearch)
   when: not ansible_check_mode
   block:
+    # Bootstrap-password tasks below are gated on
+    # `elasticsearch_cluster_set_up` so that a node joining an existing
+    # cluster (where the user signals `elasticsearch_cluster_set_up: true`)
+    # skips bootstrap-only checks. The bootstrap password is no longer
+    # accepted on an established cluster — replicated cluster state has
+    # replaced it — so running these checks on a joining node fails with
+    # "Bootstrap password authentication failed and this is not the CA
+    # host". See issue #148. Gated per task rather than at the block
+    # level because a later task in this block flips
+    # `elasticsearch_cluster_set_up` to true and Ansible re-evaluates
+    # block-level whens against the live variable, which would silently
+    # skip everything after that flip.
     - name: elasticsearch-security | Check for API with bootstrap password
       ansible.builtin.uri:
         url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}"
@@ -662,6 +674,7 @@
       no_log: "{{ elasticstack_no_log }}"
       when:
         - not elasticsearch_passwords_file.stat.exists | bool
+        - not elasticsearch_cluster_set_up | bool
       until: (elasticsearch_api_status_bootstrap.json | default({})).cluster_name is defined
       retries: 30
       delay: 10
@@ -675,6 +688,7 @@
         - not elasticsearch_passwords_file.stat.exists | bool
         - elasticsearch_api_status_bootstrap is failed
         - inventory_hostname == elasticstack_ca_host
+        - not elasticsearch_cluster_set_up | bool
       block:
         - name: elasticsearch-security | Reset elastic user password via elasticsearch-reset-password
           ansible.builtin.command: >
@@ -727,6 +741,7 @@
         - not elasticsearch_passwords_file.stat.exists | bool
         - elasticsearch_api_status_bootstrap is failed
         - inventory_hostname != elasticstack_ca_host
+        - not elasticsearch_cluster_set_up | bool
 
     # We need this check twice. One to wait for the API to be actually available. And a second time to
     # check the actual return code. Should not cause a huge delay.
@@ -743,6 +758,7 @@
       no_log: "{{ elasticstack_no_log }}"
       when:
         - not elasticsearch_passwords_file.stat.exists | bool
+        - not elasticsearch_cluster_set_up | bool
       until: (elasticsearch_cluster_status_bootstrap.json | default({})).status | default('') in ["green", "yellow"]
       retries: 30
       delay: 10
