@@ -648,15 +648,7 @@
   when: elasticsearch_http_security
 
 - name: elasticsearch-security | Runtime cluster setup (requires running Elasticsearch)
-  # Runtime cluster setup uses the bootstrap password to seed the elastic user,
-  # built-in user passwords, etc. on a fresh cluster. When joining an existing
-  # cluster (elasticsearch_cluster_set_up: true) those are already part of the
-  # replicated cluster state, the bootstrap password is no longer accepted,
-  # and this whole block fails with "Bootstrap password authentication failed
-  # and this is not the CA host". See issue #148.
-  when:
-    - not ansible_check_mode
-    - not elasticsearch_cluster_set_up | bool
+  when: not ansible_check_mode
   block:
     - name: elasticsearch-security | Check for API with bootstrap password
       ansible.builtin.uri:
