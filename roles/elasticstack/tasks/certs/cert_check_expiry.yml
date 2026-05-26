@@ -30,6 +30,7 @@
         passphrase: "{{ _cert_pass | default(omit, true) }}"
         format: "{{ _cert_format | default('p12') }}"
       register: elasticstack_cert_info
+      ignore_errors: true  # noqa: ignore-errors
 
     - name: certs | cert_check_expiry | Calculate days until expiration
       ansible.builtin.set_fact:
@@ -37,15 +38,22 @@
           {{ (((elasticstack_cert_info.not_valid_after | regex_replace('[+-]\d{2}:\d{2}$', ''))
           | to_datetime('%Y-%m-%d %H:%M:%S')) - (ansible_facts.date_time.date
           | to_datetime('%Y-%m-%d'))).days }}
+      when:
+        - elasticstack_cert_info is succeeded
+        - (elasticstack_cert_info.not_valid_after | default('') | length) > 0
 
     - name: certs | cert_check_expiry | Set certificate expiry fact - {{ _cert_expiry_fact }}
       ansible.builtin.set_fact:
         "{{ _cert_expiry_fact }}": true
-      when: (hostvars[inventory_hostname][_cert_days_fact | default('elasticstack_cert_expiration_days')]) | int <= _cert_buffer_days | int
+      when:
+        - elasticstack_cert_info is succeeded
+        - (hostvars[inventory_hostname][_cert_days_fact | default('elasticstack_cert_expiration_days')]) | int <= _cert_buffer_days | int
 
     - name: certs | cert_check_expiry | Show certificate renewal message
       ansible.builtin.debug:
         msg: >-
           Certificate {{ _cert_path }} will expire in {{ hostvars[inventory_hostname][_cert_days_fact | default('elasticstack_cert_expiration_days')] }} days.
           Ansible will renew it.
-      when: (hostvars[inventory_hostname][_cert_days_fact | default('elasticstack_cert_expiration_days')]) | int <= _cert_buffer_days | int
+      when:
+        - elasticstack_cert_info is succeeded
+        - (hostvars[inventory_hostname][_cert_days_fact | default('elasticstack_cert_expiration_days')]) | int <= _cert_buffer_days | int
