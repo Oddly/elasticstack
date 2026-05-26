@@ -42,10 +42,6 @@ def run_module():
         supports_check_mode=True
     )
 
-    # check mode
-    if module.check_mode:
-        module.exit_json(**result)
-
     try:
         cert_info = AnalyzeCertificate(module, result)
         result = cert_info.return_result()
