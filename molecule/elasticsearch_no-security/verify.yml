@@ -23,7 +23,7 @@
         _verify_es_scheme: http
         _verify_es_status: green
 
-    - name: Fetch _cat/nodes for membership check
+    - name: Fetch _cat/nodes for membership check  # noqa: run-once[task]
       ansible.builtin.uri:
 # kics-scan ignore-line
         url: http://localhost:{{ elasticstack_elasticsearch_http_port }}/_cat/nodes
@@ -34,7 +34,7 @@
       register: nodes
       run_once: true
 
-    - name: Assert every cluster member appears in _cat/nodes
+    - name: Assert every cluster member appears in _cat/nodes  # noqa: run-once[task]
       ansible.builtin.assert:
         that:
           - "hostvars[item].ansible_facts.hostname in nodes.content"

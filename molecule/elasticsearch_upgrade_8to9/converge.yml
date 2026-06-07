@@ -178,11 +178,12 @@
 
     - name: Count ES start events during the upgrade window
       ansible.builtin.shell:
-        cmd: >-
-          journalctl -u elasticsearch
-          --since='{{ _ts_before_upgrade.stdout }}'
-          --no-pager --output=cat 2>/dev/null
-          | grep -c 'Started elasticsearch' || true
+        cmd: |
+          set -o pipefail
+          journalctl -u elasticsearch \
+            --since='{{ _ts_before_upgrade.stdout }}' \
+            --no-pager --output=cat 2>/dev/null \
+            | grep -c 'Started elasticsearch' || true
         executable: /bin/bash
       register: _es_start_count
       changed_when: false

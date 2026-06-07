@@ -8,7 +8,7 @@
 
     # --- Happy path ---
 
-    - name: cert_info on a valid PKCS#12 with the right passphrase
+    - name: Run cert_info on a valid PKCS#12 with the right passphrase
       oddly.elasticstack.cert_info:
         path: files/es-ca/elastic-stack-ca.p12
         passphrase: PleaseChangeMe
@@ -45,7 +45,7 @@
     # cert_info started swallowing bad inputs (e.g. missing passphrase
     # falling back to "" and succeeding) would have passed silently.
 
-    - name: cert_info with missing path argument  # noqa: args[module]
+    - name: Run cert_info with missing path argument  # noqa: args[module]
       oddly.elasticstack.cert_info:
         passphrase: PleaseChangeMe
       register: _ci_missing_path
@@ -57,7 +57,7 @@
           - _ci_missing_path is failed
         fail_msg: "cert_info should have failed on missing path, but returned: {{ _ci_missing_path }}"
 
-    - name: cert_info with a non-existent path
+    - name: Run cert_info with a non-existent path
       oddly.elasticstack.cert_info:
         path: does-not-exist.p12
         passphrase: PleaseChangeMe
@@ -70,7 +70,7 @@
           - _ci_bad_path is failed
         fail_msg: "cert_info should have failed on non-existent path, but returned: {{ _ci_bad_path }}"
 
-    - name: cert_info with the wrong passphrase
+    - name: Run cert_info with the wrong passphrase
       oddly.elasticstack.cert_info:
         path: files/es-ca/elastic-stack-ca.p12
         passphrase: PleaseChangeMe-wrong
@@ -83,7 +83,7 @@
           - _ci_bad_pass is failed
         fail_msg: "cert_info should have failed on wrong passphrase, but returned: {{ _ci_bad_pass }}"
 
-    - name: cert_info with no passphrase against an encrypted PKCS#12
+    - name: Run cert_info with no passphrase against an encrypted PKCS#12
       oddly.elasticstack.cert_info:
         path: files/es-ca/elastic-stack-ca.p12
       register: _ci_no_pass
@@ -95,7 +95,7 @@
           - _ci_no_pass is failed
         fail_msg: "cert_info should have failed when no passphrase given for an encrypted p12, but returned: {{ _ci_no_pass }}"
 
-    - name: cert_info with no parameters at all  # noqa: args[module]
+    - name: Run cert_info with no parameters at all  # noqa: args[module]
       oddly.elasticstack.cert_info:
       register: _ci_no_params
       failed_when: false
