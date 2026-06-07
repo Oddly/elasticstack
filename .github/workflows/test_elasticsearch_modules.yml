@@ -17,7 +17,7 @@ on:
     paths:
       - 'roles/elasticsearch/**'
       - 'roles/elasticstack/**'
-      - 'molecule/elasticsearch_test_modules/**'
+      - 'molecule/elasticsearch_security_api/**'
       - 'molecule/shared/**'
       - '.github/workflows/test_elasticsearch_modules.yml'
       - '.github/workflows/molecule.yml'
@@ -43,7 +43,7 @@ jobs:
     needs: lint_elasticsearch
     uses: ./.github/workflows/molecule.yml
     with:
-      scenarios: '["elasticsearch_test_modules"]'
+      scenarios: '["elasticsearch_security_api"]'
       distros: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && '["rockylinux10","debian13"]' || '["rockylinux9","rockylinux10","ubuntu2204","ubuntu2404","ubuntu2604","debian12","debian13"]' }}
       timeout: 20
     secrets: inherit
