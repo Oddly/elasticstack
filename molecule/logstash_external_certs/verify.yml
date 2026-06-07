@@ -95,6 +95,25 @@
       register: port_check
       ignore_errors: true
 
+    # An open socket doesn't prove TLS — Logstash could be serving plain text
+    # on 5044 if the SSL block silently failed to load. Run an actual TLS
+    # handshake against the port and verify the served cert chains to the
+    # external CA we deployed.
+    - name: TLS handshake against Logstash 5044 (signed by Test CA)
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          out=$(echo | openssl s_client \
+            -connect localhost:5044 \
+            -CAfile /tmp/test-certs/ca.crt \
+            -servername {{ ansible_facts.hostname }} 2>&1) || true
+          echo "$out" | grep -E 'Verify return code|verify error|issuer=' || true
+          echo "$out" | grep -q 'Verify return code: 0 (ok)'
+        executable: /bin/bash
+      register: _ls_tls_probe
+      changed_when: false
+      when: port_check is not failed
+
     - name: Show diagnostics on port check failure
       when: port_check is failed
       block:
