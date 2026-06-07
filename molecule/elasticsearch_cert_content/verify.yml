@@ -33,33 +33,46 @@
         fail_msg: "Cluster status is {{ health.json.status }}"
       run_once: true  # noqa: run-once[task]
 
-    - name: Get HTTP certificate subject from Elasticsearch
-      ansible.builtin.shell: |
-        set -o pipefail
-        echo | openssl s_client -connect localhost:9200 -servername localhost 2>/dev/null |
-        openssl x509 -noout -subject
-      args:
+    # The whole point of the *_content variables is "bytes in == bytes on disk".
+    # Compare each deployed cert against the source PEM the converge fed in via
+    # /tmp/test-certs/ (which is what got slurped into _test_*_content facts).
+    # sha256sum comparison catches empty/wrong/truncated files that the
+    # earlier "is the subject string 'http'" heuristic let through.
+    - name: Hash deployed certs vs source PEM files
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          for pair in \
+            "/tmp/test-certs/transport.crt /etc/elasticsearch/certs/{{ inventory_hostname }}-transport.crt" \
+            "/tmp/test-certs/http.crt /etc/elasticsearch/certs/{{ inventory_hostname }}-http.crt" \
+            "/tmp/test-certs/ca.crt /etc/elasticsearch/certs/ca.crt"; do
+            src=$(echo "$pair" | awk '{print $1}')
+            dst=$(echo "$pair" | awk '{print $2}')
+            src_sum=$(sha256sum "$src" | awk '{print $1}')
+            dst_sum=$(sha256sum "$dst" 2>/dev/null | awk '{print $1}' || echo "MISSING")
+            echo "$src $src_sum $dst $dst_sum"
+          done
         executable: /bin/bash
-      register: es_http_cert_subject
+      register: _cert_hashes
       changed_when: false
 
-    - name: Verify HTTP cert is the external cert (not auto-generated)
+    - name: Assert each deployed cert matches the source PEM byte-for-byte
       ansible.builtin.assert:
         that:
-          - "'http' in es_http_cert_subject.stdout"
-        fail_msg: >-
-          Expected HTTP certificate subject to contain 'http' from our test cert.
-          Got: {{ es_http_cert_subject.stdout }}
-
-    - name: Verify transport cert file was deployed
-      ansible.builtin.stat:
-        path: "/etc/elasticsearch/certs/{{ inventory_hostname }}-transport.crt"
-      register: transport_cert_stat
-
-    - name: Assert transport cert exists
-      ansible.builtin.assert:
-        that:
-          - transport_cert_stat.stat.exists
+          # All three lines present (transport.crt, http.crt, ca.crt).
+          - "(_cert_hashes.stdout_lines | length) == 3"
+          # No deployed file was missing.
+          - "(_cert_hashes.stdout_lines | select('search', ' MISSING$') | list | length) == 0"
+          # Each line has the form "<src_path> <src_hash> <dst_path> <dst_hash>";
+          # we require src_hash == dst_hash. The regex backreference \\2 enforces it.
+          - >-
+            (_cert_hashes.stdout_lines
+             | map('regex_search', '^\\S+ (\\S+) \\S+ \\1$')
+             | select | list | length) == 3
+        fail_msg: |
+          One or more deployed certs do not match the source PEM content the role
+          was fed via *_content variables. Detail (src dst src_hash dst_hash):
+          {{ _cert_hashes.stdout }}
 
     - name: Verify no P12 files exist (content mode is always PEM)
       ansible.builtin.find:
@@ -73,16 +86,23 @@
           - p12_files.files | length == 0
         fail_msg: "Found unexpected P12 files in content mode: {{ p12_files.files | map(attribute='path') | list }}"
 
-    - name: Verify elasticsearch.yml has PEM config
-      ansible.builtin.command:
-        cmd: grep 'xpack.security.transport.ssl.certificate' /etc/elasticsearch/elasticsearch.yml
-      register: es_yml_check
-      changed_when: false
+    - name: Slurp elasticsearch.yml for config assertions
+      ansible.builtin.slurp:
+        src: /etc/elasticsearch/elasticsearch.yml
+      register: _es_yml
 
-    - name: Assert PEM-style config (not keystore)
+    - name: Assert verification_mode is certificate, not none, and PEM keys reference the deployed files
       ansible.builtin.assert:
         that:
-          - "'transport.crt' in es_yml_check.stdout"
-        fail_msg: >-
-          Expected PEM-style transport config in elasticsearch.yml.
-          Got: {{ es_yml_check.stdout }}
+          - "'xpack.security.transport.ssl.verification_mode: certificate' in (_es_yml.content | b64decode)"
+          - "'verification_mode: none' not in (_es_yml.content | b64decode)"
+          - >-
+            ('xpack.security.transport.ssl.certificate: certs/' ~ inventory_hostname ~ '-transport.crt')
+            in (_es_yml.content | b64decode)
+          - >-
+            ('xpack.security.http.ssl.certificate: certs/' ~ inventory_hostname ~ '-http.crt')
+            in (_es_yml.content | b64decode)
+        fail_msg: |
+          elasticsearch.yml is missing one of the expected verification_mode / cert
+          path lines. Content:
+          {{ _es_yml.content | b64decode }}

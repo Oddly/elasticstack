@@ -33,23 +33,30 @@
         fail_msg: "Cluster status is {{ health.json.status }}"
       run_once: true  # noqa: run-once[task]
 
-    - name: Get HTTP certificate subject from Elasticsearch
-      ansible.builtin.shell: |
-        set -o pipefail
-        echo | openssl s_client -connect localhost:9200 -servername localhost 2>/dev/null |
-        openssl x509 -noout -subject
-      args:
+    # The previous "is the substring 'http' in the subject" heuristic only
+    # discriminated because the converge contrived a CN of "<hostname>-http".
+    # Compare issuers instead: the test CA's CN is "Test CA" (set in
+    # converge.yml). The Elasticsearch auto-generated cert is issued by ES
+    # itself, so an issuer of "Test CA" proves the served cert is ours and
+    # the role didn't fall back to auto-generation.
+    - name: Get HTTP certificate issuer from Elasticsearch
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          echo | openssl s_client -connect localhost:9200 -servername localhost 2>/dev/null |
+          openssl x509 -noout -issuer
         executable: /bin/bash
-      register: es_http_cert_subject
+      register: es_http_cert_issuer
       changed_when: false
 
-    - name: Verify HTTP cert is the external cert (not auto-generated)
+    - name: Verify HTTP cert was signed by the test CA (not auto-generated)
       ansible.builtin.assert:
         that:
-          - "'http' in es_http_cert_subject.stdout"
+          - "'CN = Test CA' in es_http_cert_issuer.stdout or 'CN=Test CA' in es_http_cert_issuer.stdout"
         fail_msg: >-
-          Expected HTTP certificate subject to contain 'http' from our test cert.
-          Got: {{ es_http_cert_subject.stdout }}
+          Expected HTTP cert to be issued by the test CA "Test CA". Got:
+          {{ es_http_cert_issuer.stdout }}. The role may have fallen back to
+          its auto-generated cert path.
 
     - name: Verify transport cert file was deployed
       ansible.builtin.stat:
