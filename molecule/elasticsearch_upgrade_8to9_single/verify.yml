@@ -31,6 +31,7 @@
       ansible.builtin.assert:
         that:
           - es_info.json.version.number is version('9.0.0', '>=')
+          - es_info.json.version.number is version('10.0.0', '<')
         fail_msg: "Expected ES 9.x but got {{ es_info.json.version.number }}"
         success_msg: "ES 9.x ({{ es_info.json.version.number }}) - upgrade successful!"
 
