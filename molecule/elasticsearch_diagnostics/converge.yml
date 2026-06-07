@@ -30,10 +30,15 @@
 
     - name: Test bad config produces fast failure with diagnostics
       block:
-        - name: Inject bad setting into elasticsearch.yml
+        # Use a setting ES guarantees to reject (malformed YAML at the
+        # top level). The previous "bogus.nonexistent.setting: true"
+        # bait relied on ES rejecting unknown root settings, which some
+        # versions silently archive as "archived.bogus..." — the rescue
+        # below would then not fire and the test would mis-report.
+        - name: Inject malformed setting that ES is guaranteed to reject
           ansible.builtin.lineinfile:
             path: /etc/elasticsearch/elasticsearch.yml
-            line: "bogus.nonexistent.setting: true"
+            line: "discovery.type: bogus-invalid-discovery-type"
 
         - name: Attempt restart with bad config (should fail with diagnostics)
           ansible.builtin.include_role:
@@ -45,13 +50,27 @@
             msg: "restart_and_verify_elasticsearch.yml did not fail on bad config"
 
       rescue:
-        - name: Assert failure includes diagnostic log output
+        - name: Assert failure includes non-empty diagnostic log output
           ansible.builtin.assert:
             that:
               - ansible_failed_result.msg is defined
               - "'Recent log output' in ansible_failed_result.msg"
+              # The previous check only required the literal header string
+              # 'Recent log output' to appear — the role hardcodes that
+              # string, so the assertion would pass even if journalctl
+              # returned an empty stdout (broken diagnostics). Require
+              # enough trailing content that real journal output must be
+              # present (200+ chars beyond the header).
+              - ansible_failed_result.msg | length > (('Recent log output:' | length) + 200)
+              # And require at least one of the systemd/ES tokens that any
+              # real ES startup-failure log would contain.
+              - >-
+                ('elasticsearch.service' in ansible_failed_result.msg)
+                or ('Elasticsearch' in ansible_failed_result.msg)
+                or ('exit code' in ansible_failed_result.msg)
             fail_msg: >-
-              Expected failure message with 'Recent log output', got:
+              Expected a substantial diagnostic message containing real
+              journal output, got:
               {{ ansible_failed_result.msg | default('no message') }}
 
     - name: Restore good config
