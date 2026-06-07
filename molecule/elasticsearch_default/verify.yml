@@ -34,6 +34,26 @@
           changed_when: false
           run_once: true
 
+        # The role MUST preserve the auto-generated password in initial_passwords
+        # when the user supplies a custom one — overwriting it (to the user's
+        # password) is the exact regression this block exists to catch. The
+        # previous version skipped the API call when _old_pass.stdout matched
+        # the user password, which silently turned the regression-guard into a
+        # no-op the moment the regression actually happened.
+        - name: Assert initial_passwords still holds the auto-generated password (not overwritten)  # noqa: run-once[task]
+          ansible.builtin.assert:
+            that:
+              - _old_pass.stdout | length > 0
+              - _old_pass.stdout != "TestPassword123!"
+            fail_msg: >-
+              initial_passwords was overwritten with the user-defined password.
+              The role is supposed to preserve the auto-generated value here
+              and only switch to the user password for API calls. If
+              initial_passwords now contains the user value, the role has
+              regressed and downstream services (Kibana, Logstash) that read
+              from this file will end up with the wrong credentials.
+          run_once: true
+
         - name: Try API with old password (should fail)  # noqa: run-once[task]
           ansible.builtin.uri:
             url: "https://localhost:9200/"
@@ -43,7 +63,6 @@
             validate_certs: false
             status_code: 401
           run_once: true
-          when: _old_pass.stdout != "TestPassword123!"
 
     - name: Read cluster settings  # noqa: run-once[task]
       ansible.builtin.uri:
