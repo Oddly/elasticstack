@@ -139,3 +139,91 @@
       ansible.builtin.include_role:
         name: oddly.elasticstack.kibana
       when: "'kibana' in group_names"
+
+# --- Phase 4: Confirm certificates actually changed ---
+#
+# Captures the post-renewal fingerprint and compares to the pre-renewal value
+# from phase 2. Facts persist across plays within a single ansible-playbook
+# run, so _*_cert_fp_before from phase 2 is still in scope here. (Verify is
+# a separate playbook invocation by molecule, which is why this comparison
+# must live in converge, not verify.)
+
+- name: Verify certificate fingerprints changed after renewal
+  hosts: all
+  vars:
+    elasticsearch_tls_key_passphrase: PleaseChangeMeIndividually
+    logstash_tls_key_passphrase: LogstashChangeMe
+    kibana_tls_key_passphrase: PleaseChangeMe
+  tasks:
+    - name: Get ES transport cert fingerprint (after renewal)
+      ansible.builtin.shell: >-
+        set -o pipefail &&
+        openssl pkcs12 -in /etc/elasticsearch/certs/{{ ansible_facts.hostname }}.p12
+        -nokeys -passin pass:{{ elasticsearch_tls_key_passphrase }} 2>/dev/null |
+        openssl x509 -fingerprint -sha256 -noout 2>/dev/null
+      args:
+        executable: /bin/bash
+      register: _es_cert_fp_after
+      changed_when: false
+      no_log: true
+      when: "'elasticsearch' in group_names"
+
+    - name: Get Logstash cert fingerprint (after renewal)
+      ansible.builtin.shell: >-
+        set -o pipefail &&
+        openssl pkcs12 -in /etc/logstash/certs/{{ ansible_facts.hostname }}-ls.p12
+        -nokeys -passin pass:{{ logstash_tls_key_passphrase }} 2>/dev/null |
+        openssl x509 -fingerprint -sha256 -noout 2>/dev/null
+      args:
+        executable: /bin/bash
+      register: _ls_cert_fp_after
+      changed_when: false
+      no_log: true
+      when: "'logstash' in group_names"
+
+    - name: Get Kibana cert fingerprint (after renewal)
+      ansible.builtin.shell: >-
+        set -o pipefail &&
+        openssl pkcs12 -in /etc/kibana/certs/{{ ansible_facts.hostname }}-kibana.p12
+        -nokeys -passin pass:{{ kibana_tls_key_passphrase }} 2>/dev/null |
+        openssl x509 -fingerprint -sha256 -noout 2>/dev/null
+      args:
+        executable: /bin/bash
+      register: _kb_cert_fp_after
+      changed_when: false
+      no_log: true
+      when: "'kibana' in group_names"
+
+    - name: Assert ES transport cert was actually replaced
+      ansible.builtin.assert:
+        that:
+          - _es_cert_fp_before.stdout != "NONE"
+          - _es_cert_fp_after.stdout | length > 0
+          - _es_cert_fp_before.stdout != _es_cert_fp_after.stdout
+        fail_msg: >-
+          ES transport cert was not renewed (before={{ _es_cert_fp_before.stdout }},
+          after={{ _es_cert_fp_after.stdout }}). The renewal play ran but the on-disk
+          p12 was not replaced — check elasticsearch_cert_will_expire_soon handling.
+      when: "'elasticsearch' in group_names"
+
+    - name: Assert Logstash cert was actually replaced
+      ansible.builtin.assert:
+        that:
+          - _ls_cert_fp_before.stdout != "NONE"
+          - _ls_cert_fp_after.stdout | length > 0
+          - _ls_cert_fp_before.stdout != _ls_cert_fp_after.stdout
+        fail_msg: >-
+          Logstash cert was not renewed (before={{ _ls_cert_fp_before.stdout }},
+          after={{ _ls_cert_fp_after.stdout }}).
+      when: "'logstash' in group_names"
+
+    - name: Assert Kibana cert was actually replaced
+      ansible.builtin.assert:
+        that:
+          - _kb_cert_fp_before.stdout != "NONE"
+          - _kb_cert_fp_after.stdout | length > 0
+          - _kb_cert_fp_before.stdout != _kb_cert_fp_after.stdout
+        fail_msg: >-
+          Kibana cert was not renewed (before={{ _kb_cert_fp_before.stdout }},
+          after={{ _kb_cert_fp_after.stdout }}).
+      when: "'kibana' in group_names"
