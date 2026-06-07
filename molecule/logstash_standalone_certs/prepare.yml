@@ -1,0 +1,68 @@
+---
+- name: Prepare
+  hosts: all
+  tasks:
+    - name: Populate /etc/hosts with molecule instances
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        regexp: ".*{{ item }}$"
+        line: "{{ hostvars[item]['ansible_host'] }} {{ item }}"
+      loop: "{{ groups['all'] }}"
+      when: groups['all'] | length > 1
+
+    - name: Common prepare tasks
+      ansible.builtin.include_tasks: ../shared/prepare_common.yml
+
+    # The standalone cert_source path in roles/logstash still distributes
+    # a CA file from elasticstack_ca_host/elasticstack_ca_dir to the
+    # Logstash node (line 434 of logstash-security.yml). This scenario
+    # has no ES, so we fake the CA host: elasticstack_ca_host defaults
+    # to inventory_hostname when no elasticsearch group exists, so
+    # pre-seed /opt/es-ca/ca.crt on the Logstash node with a placeholder
+    # cert that cert_distribute can fetch from itself.
+    - name: Create faux ES CA directory
+      ansible.builtin.file:
+        path: /opt/es-ca
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Generate placeholder ES CA key
+      ansible.builtin.command:
+        cmd: openssl genrsa -out /opt/es-ca/ca.key 2048
+        creates: /opt/es-ca/ca.key
+
+    - name: Generate placeholder ES CA cert
+      ansible.builtin.command:
+        cmd: >-
+          openssl req -x509 -new -nodes
+          -key /opt/es-ca/ca.key
+          -sha256 -days 365
+          -subj "/CN=Faux ES CA for standalone test"
+          -out /opt/es-ca/ca.crt
+        creates: /opt/es-ca/ca.crt
+
+    # logstash-security.yml's "Manage Elasticsearch user and role" block runs
+    # unconditionally for cert_mode == 'standalone' and calls fetch_password
+    # against elasticstack_initial_passwords (default /usr/share/elasticsearch/
+    # initial_passwords). With no ES installed, the file doesn't exist and
+    # the role fails before reaching the actual user/role creation tasks
+    # (which we suppress via logstash_create_user/role: false in converge).
+    # Seed the file with a dummy elastic password so the fetch succeeds.
+    - name: Create faux ES install directory
+      ansible.builtin.file:
+        path: /usr/share/elasticsearch
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Seed faux initial_passwords for fetch_password.yml
+      ansible.builtin.copy:
+        dest: /usr/share/elasticsearch/initial_passwords
+        content: |
+          PASSWORD elastic = dummy-password-for-standalone-test
+        owner: root
+        group: root
+        mode: "0600"
