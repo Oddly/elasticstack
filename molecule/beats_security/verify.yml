@@ -86,3 +86,47 @@
               - "'certificate_authorities' in (filebeat_yml.content | b64decode)"
               - "'output.elasticsearch' in (filebeat_yml.content | b64decode)"
             fail_msg: "SSL configuration not found in filebeat.yml"
+
+        # End-to-end ingest test: emit a uniquely-tagged line via syslog on
+        # the beats node, then query ES for that exact string. Proves
+        # Filebeat actually authenticates to ES with the configured TLS
+        # client and that documents arrive — the substring checks above
+        # would all pass against a config that silently drops events
+        # (wrong CA path, wrong password, broken handshake).
+        - name: Emit a unique marker line via syslog
+          ansible.builtin.command:
+            cmd: logger -t molecule-beats-security 'MARKER {{ ansible_facts.hostname }} molecule-beats-security-test'
+          changed_when: false
+
+    # The ingest assertion runs on the ES host because filebeat-* lives in
+    # ES, not on the beats node.
+    - name: Confirm Filebeat shipped the marker to Elasticsearch
+      when: "'elasticsearch' in group_names"
+      block:
+        - name: Wait for filebeat-* index to receive the marker
+          ansible.builtin.uri:
+            url: "https://localhost:{{ elasticstack_elasticsearch_http_port }}/filebeat-*/_search?q=message:molecule-beats-security-test"
+            method: GET
+            force_basic_auth: true
+            user: elastic
+            password: "{{ elastic_pass.stdout }}"
+            return_content: true
+            status_code: [200, 404]
+            validate_certs: false
+          register: _filebeat_search
+          until: (_filebeat_search.json.hits.total.value | default(0)) > 0
+          retries: 30
+          delay: 10
+          run_once: true  # noqa: run-once[task]
+
+        - name: Assert at least one document landed in filebeat-*
+          ansible.builtin.assert:
+            that:
+              - _filebeat_search.json.hits.total.value > 0
+            fail_msg: >-
+              No matching document found in filebeat-*. Filebeat is running
+              and the config looks right (SSL block, output.elasticsearch
+              present), but no events made it from the beats node to ES.
+              Likely causes: wrong elastic password, wrong CA path on the
+              beats node, or TLS handshake failing silently.
+          run_once: true  # noqa: run-once[task]

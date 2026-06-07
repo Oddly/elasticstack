@@ -77,6 +77,52 @@
         msg: "Logstash events — in: {{ logstash_stats.json.pipelines.main.events.in }}, out: {{ logstash_stats.json.pipelines.main.events.out }}"
       when: "'logstash' in group_names"
 
+    # End-to-end: Beats → Logstash is proven by events.out > 0 above. To
+    # prove Logstash → ES (the gap a config-only verify silently misses),
+    # query ES for any non-system index with documents. The flagship scenario
+    # has Filebeat+Auditbeat+Metricbeat shipping to Logstash, which outputs
+    # to ES with the default `logstash-*` / data-stream `logs-*` naming —
+    # either appears here.
+    - name: Confirm Logstash output index landed in Elasticsearch
+      ansible.builtin.uri:
+        url: "https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cat/indices/logstash-*,logs-*,ecs-*?h=index,docs.count&format=json&expand_wildcards=open"
+        method: GET
+        force_basic_auth: true
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        return_content: true
+        status_code: [200, 404]
+        validate_certs: false
+      register: _ls_es_indices
+      until: >-
+        (_ls_es_indices.json | default([])
+         | selectattr('docs.count', 'defined')
+         | selectattr('docs.count', 'ne', '0')
+         | list | length) > 0
+      retries: 18
+      delay: 10
+      delegate_to: "{{ elasticsearch_ca }}"
+      run_once: true
+      when: "'logstash' in group_names"  # noqa: run-once[task]
+
+    - name: Assert at least one Logstash output index has documents in ES
+      ansible.builtin.assert:
+        that:
+          - >-
+            (_ls_es_indices.json | default([])
+             | selectattr('docs.count', 'defined')
+             | selectattr('docs.count', 'ne', '0')
+             | list | length) > 0
+        fail_msg: >-
+          Logstash reported events.out > 0 to its internal counter, but no
+          documents landed in ES under logstash-*, logs-*, or ecs-* indices.
+          The Beats → Logstash leg works but Logstash → ES does not — likely
+          a wrong elastic password in the ES output, a TLS chain failure to
+          ES, or the output plugin silently dropping events.
+      run_once: true
+      delegate_to: "{{ elasticsearch_ca }}"
+      when: "'logstash' in group_names"  # noqa: run-once[task]
+
     - name: Run Kibana checks
       when: "'kibana' in group_names"
       block:
