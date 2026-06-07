@@ -1,42 +1,107 @@
 ---
-# The workaround for arbitrarily named role directory is important because the git repo has one name and the role within it another
-# Found at: https://github.com/ansible-community/molecule/issues/1567#issuecomment-436876722
+# Tests the oddly.elasticstack.cert_info module across happy and failure paths.
+# Invoked directly via `ansible-playbook` from .github/workflows/test_plugins.yml
+# (this is not a molecule scenario — there is no molecule.yml).
 - name: Converge
   hosts: localhost
   tasks:
-    #
-    # Test modules
-    #
-    - name: Test
+
+    # --- Happy path ---
+
+    - name: cert_info on a valid PKCS#12 with the right passphrase
       oddly.elasticstack.cert_info:
         path: files/es-ca/elastic-stack-ca.p12
         passphrase: PleaseChangeMe
-      register: test
-    - name: Debug
+      register: _ci_ok
+
+    - name: Show happy-path result
       ansible.builtin.debug:
-        msg: "{{ test }}"
-    - name: Test required parameters (missing path)  # noqa: args[module]
-      oddly.elasticstack.cert_info:
-        passphrase: PleaseChangeMe
-      failed_when: false
-    - name: Test wrong path
-      oddly.elasticstack.cert_info:
-        path: es-ca-wrong
-        passphrase: PleaseChangeMe
-      failed_when: false
-    - name: Debug with to_datetime() - strip timezone for naive datetime arithmetic
+        var: _ci_ok
+
+    - name: Assert happy-path returned the expected fields
+      ansible.builtin.assert:
+        that:
+          - _ci_ok is not failed
+          - _ci_ok.not_valid_after is defined
+          - _ci_ok.not_valid_before is defined
+          - _ci_ok.subject is defined
+          # An empty/None response would fail the date arithmetic below in
+          # surprising ways; check the date parses to a real timestamp.
+          - (_ci_ok.not_valid_after | regex_replace('[+-]\d{2}:\d{2}$', '') | to_datetime('%Y-%m-%d %H:%M:%S')).year >= 2020
+        fail_msg: "cert_info happy-path did not return the expected dict shape: {{ _ci_ok }}"
+
+    - name: Compute days until expiry (smoke-test the typical caller pattern)
       ansible.builtin.debug:
         msg: >-
-          "{{ ((test.not_valid_after | regex_replace('[+-]\d{2}:\d{2}$', '') | to_datetime('%Y-%m-%d %H:%M:%S')) - (ansible_facts.date_time.date | to_datetime('%Y-%m-%d'))).days }}"
-    - name: Test wrong passphrase
+          Cert expires in
+          {{ ((_ci_ok.not_valid_after | regex_replace('[+-]\d{2}:\d{2}$', '') | to_datetime('%Y-%m-%d %H:%M:%S')) -
+              (ansible_facts.date_time.date | to_datetime('%Y-%m-%d'))).days }}
+          days
+
+    # --- Negative paths ---
+    #
+    # Each negative case must explicitly fail. The previous version used
+    # `failed_when: false` with no register/assertion, so a regression where
+    # cert_info started swallowing bad inputs (e.g. missing passphrase
+    # falling back to "" and succeeding) would have passed silently.
+
+    - name: cert_info with missing path argument  # noqa: args[module]
+      oddly.elasticstack.cert_info:
+        passphrase: PleaseChangeMe
+      register: _ci_missing_path
+      failed_when: false
+
+    - name: Assert missing-path call failed
+      ansible.builtin.assert:
+        that:
+          - _ci_missing_path is failed
+        fail_msg: "cert_info should have failed on missing path, but returned: {{ _ci_missing_path }}"
+
+    - name: cert_info with a non-existent path
+      oddly.elasticstack.cert_info:
+        path: does-not-exist.p12
+        passphrase: PleaseChangeMe
+      register: _ci_bad_path
+      failed_when: false
+
+    - name: Assert bad-path call failed
+      ansible.builtin.assert:
+        that:
+          - _ci_bad_path is failed
+        fail_msg: "cert_info should have failed on non-existent path, but returned: {{ _ci_bad_path }}"
+
+    - name: cert_info with the wrong passphrase
       oddly.elasticstack.cert_info:
         path: files/es-ca/elastic-stack-ca.p12
         passphrase: PleaseChangeMe-wrong
+      register: _ci_bad_pass
       failed_when: false
-    - name: Test no passphrase
+
+    - name: Assert wrong-passphrase call failed
+      ansible.builtin.assert:
+        that:
+          - _ci_bad_pass is failed
+        fail_msg: "cert_info should have failed on wrong passphrase, but returned: {{ _ci_bad_pass }}"
+
+    - name: cert_info with no passphrase against an encrypted PKCS#12
       oddly.elasticstack.cert_info:
         path: files/es-ca/elastic-stack-ca.p12
+      register: _ci_no_pass
       failed_when: false
-    - name: Test no parameters  # noqa: args[module]
+
+    - name: Assert no-passphrase call failed
+      ansible.builtin.assert:
+        that:
+          - _ci_no_pass is failed
+        fail_msg: "cert_info should have failed when no passphrase given for an encrypted p12, but returned: {{ _ci_no_pass }}"
+
+    - name: cert_info with no parameters at all  # noqa: args[module]
       oddly.elasticstack.cert_info:
+      register: _ci_no_params
       failed_when: false
+
+    - name: Assert no-parameters call failed
+      ansible.builtin.assert:
+        that:
+          - _ci_no_params is failed
+        fail_msg: "cert_info should have failed with no parameters, but returned: {{ _ci_no_params }}"
