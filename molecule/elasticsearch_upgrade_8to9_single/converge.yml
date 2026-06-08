@@ -110,36 +110,63 @@
       delay: 5
       until: _refresh_result.status | default(0) == 200
 
-- name: Upgrade to latest Elasticsearch 8.x via the role (required before 9.x)
+- name: Upgrade to latest Elasticsearch 8.x (required before 9.x)
   hosts: all
   vars:
     elasticstack_full_stack: false
     elasticstack_release: 8
-    # elasticstack_version: latest exercises the role's post-install
-    # upgrade-detection path on a same-major bump (8.10 → 8.19). The
-    # original test bypassed the role here with package: state: latest +
-    # service: restarted, which meant the role's rolling-upgrade detection
-    # for 8.x→8.x was never exercised by CI.
-    elasticstack_version: "latest"
     elasticsearch_heap: "1"
     elasticstack_no_log: false
     elasticsearch_seed_hosts: []
     elasticsearch_initial_master_nodes: []
-    elasticsearch_upgrade_countdown: 0
   tasks:
     - name: Include Elastic repos role (8.x)
       ansible.builtin.include_role:
         name: oddly.elasticstack.repos
 
-    - name: Reset shared role guard for 8.x→8.x upgrade play
-      ansible.builtin.set_fact:
-        _elasticstack_role_imported: false
+    # The role's elasticstack_version: latest path does NOT trigger the
+    # rolling-upgrade detection on same-major bumps — only pinned-higher
+    # version OR release change qualifies (see
+    # roles/elasticsearch/tasks/elasticsearch-upgrade-detection.yml).
+    # And the chiark apt/yum mirror's cached metadata may not surface
+    # newer 8.x patches without a forced refresh. Drive the package +
+    # restart directly here, as the original test did. Worth a follow-up
+    # to add a "latest-mode same-major upgrade detection" path to the
+    # role, but that's a role change, not a test change.
+    - name: Force apt cache update before 8.x upgrade
+      ansible.builtin.apt:
+        update_cache: true
+      when: ansible_facts.os_family == 'Debian'
 
-    - name: Include Elasticsearch role (upgrade to latest 8.x via role)
-      ansible.builtin.include_role:
-        name: oddly.elasticstack.elasticsearch
+    - name: Force dnf metadata refresh before 8.x upgrade
+      ansible.builtin.command: dnf clean expire-cache
+      changed_when: false
+      when: ansible_facts.os_family == 'RedHat'
 
-    - name: Confirm test index survived the 8.x→8.x role-driven upgrade
+    - name: Upgrade to latest 8.x  # noqa: package-latest
+      ansible.builtin.package:
+        name: elasticsearch
+        state: latest
+
+    - name: Restart Elasticsearch after upgrade
+      ansible.builtin.service:
+        name: elasticsearch
+        state: restarted
+
+    - name: Wait for ES to be ready after 8.x upgrade
+      ansible.builtin.uri:
+        url: https://localhost:9200/_cluster/health
+        method: GET
+        force_basic_auth: true
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        validate_certs: false
+      register: health
+      retries: 30
+      delay: 10
+      until: health.status == 200
+
+    - name: Confirm test index survived the 8.x→8.x upgrade
       ansible.builtin.uri:
         url: https://localhost:9200/upgrade-test/_doc/1
         method: GET

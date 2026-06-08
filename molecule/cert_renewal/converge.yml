@@ -114,11 +114,19 @@
     logstash_heap: "512m"
     logstash_pipeline_unsafe_shutdown: true
     kibana_tls: true
-    # Force certificate renewal
-    elasticstack_ca_will_expire_soon: true
-    elasticsearch_cert_will_expire_soon: true
-    kibana_cert_will_expire_soon: true
-    logstash_cert_will_expire_soon: true
+    # Force certificate renewal.
+    #
+    # The *_cert_will_expire_soon flags live in each role's vars/main.yml
+    # (precedence higher than play vars), so setting them here would be
+    # overridden when the role loads. Instead set the expiration buffer to
+    # a value larger than the cert's validity period — the role's
+    # cert_check_expiry task then computes "expires within buffer days" as
+    # true and flips the will_expire_soon fact via set_fact, which DOES
+    # propagate correctly to the renewal gates.
+    elasticstack_ca_expiration_buffer: 99999
+    elasticsearch_cert_expiration_buffer: 99999
+    kibana_cert_expiration_buffer: 99999
+    logstash_cert_expiration_buffer: 99999
     logstash_cert_force_regenerate: true
   tasks:
     - name: Reset shared role import guard for re-run

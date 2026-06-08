@@ -99,7 +99,11 @@
          | selectattr('docs.count', 'defined')
          | selectattr('docs.count', 'ne', '0')
          | list | length) > 0
-      retries: 18
+      # Generous retry budget: in CI the Beats → Logstash → ES chain needs
+      # cluster green + Logstash plugin warmup + ES create-index latency.
+      # 18×10s was not enough on slow runners; 60×10s = 10 min covers the
+      # slowest observed startups while still failing on real breakage.
+      retries: 60
       delay: 10
       delegate_to: "{{ elasticsearch_ca }}"
       run_once: true

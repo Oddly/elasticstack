@@ -180,10 +180,13 @@
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
+          # systemd emits "Started Elasticsearch." with a capital E (the
+          # unit's Description=Elasticsearch). Use case-insensitive grep so
+          # we don't depend on the exact casing across distros.
           journalctl -u elasticsearch \
             --since='{{ _ts_before_upgrade.stdout }}' \
             --no-pager --output=cat 2>/dev/null \
-            | grep -c 'Started elasticsearch' || true
+            | grep -ic 'started elasticsearch' || true
         executable: /bin/bash
       register: _es_start_count
       changed_when: false
