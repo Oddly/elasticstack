@@ -158,7 +158,10 @@
     # restart unless suppressed. Capture the start-event window so we can
     # assert exactly-one after include_role completes.
     - name: Capture pre-upgrade timestamp
-      ansible.builtin.command: date -u --iso-8601=seconds
+      # journalctl --since wants 'YYYY-MM-DD HH:MM:SS' (UTC implied via -u).
+      # Don't use --iso-8601=seconds: that emits '+00:00' which journalctl
+      # parses inconsistently and silently filters out every match.
+      ansible.builtin.command: date -u "+%Y-%m-%d %H:%M:%S"
       register: _ts_before_upgrade
       changed_when: false
 

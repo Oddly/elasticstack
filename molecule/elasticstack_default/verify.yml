@@ -83,40 +83,34 @@
     # has Filebeat+Auditbeat+Metricbeat shipping to Logstash, which outputs
     # to ES with the default `logstash-*` / data-stream `logs-*` naming —
     # either appears here.
+    # Use _count instead of _cat/indices because selectattr with a literal
+    # dot in the attribute name ('docs.count') is parsed by Jinja as a
+    # nested attribute access (item.docs.count) and silently never matches.
+    # _count returns {"count": N} which is simple to assert on.
     - name: Confirm Logstash output index landed in Elasticsearch
       ansible.builtin.uri:
-        url: "https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cat/indices/logstash-*,logs-*,ecs-*?h=index,docs.count&format=json&expand_wildcards=open"
+        url: "https://localhost:{{ elasticstack_elasticsearch_http_port }}/logstash-*,logs-*,ecs-*/_count?expand_wildcards=open,hidden&ignore_unavailable=true&allow_no_indices=true"
         method: GET
         force_basic_auth: true
         user: elastic
         password: "{{ elastic_pass.stdout }}"
         return_content: true
-        status_code: [200, 404]
+        status_code: 200
         validate_certs: false
-      register: _ls_es_indices
-      until: >-
-        (_ls_es_indices.json | default([])
-         | selectattr('docs.count', 'defined')
-         | selectattr('docs.count', 'ne', '0')
-         | list | length) > 0
+      register: _ls_es_count
+      until: (_ls_es_count.json.count | default(0) | int) > 0
       # Generous retry budget: in CI the Beats → Logstash → ES chain needs
       # cluster green + Logstash plugin warmup + ES create-index latency.
-      # 18×10s was not enough on slow runners; 60×10s = 10 min covers the
-      # slowest observed startups while still failing on real breakage.
       retries: 60
       delay: 10
       delegate_to: "{{ elasticsearch_ca }}"
       run_once: true
       when: "'logstash' in group_names"  # noqa: run-once[task]
 
-    - name: Assert at least one Logstash output index has documents in ES
+    - name: Assert at least one Logstash output document exists in ES
       ansible.builtin.assert:
         that:
-          - >-
-            (_ls_es_indices.json | default([])
-             | selectattr('docs.count', 'defined')
-             | selectattr('docs.count', 'ne', '0')
-             | list | length) > 0
+          - (_ls_es_count.json.count | default(0) | int) > 0
         fail_msg: >-
           Logstash reported events.out > 0 to its internal counter, but no
           documents landed in ES under logstash-*, logs-*, or ecs-* indices.

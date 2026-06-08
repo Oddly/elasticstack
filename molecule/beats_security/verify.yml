@@ -103,26 +103,35 @@
     - name: Confirm Filebeat shipped the marker to Elasticsearch
       when: "'elasticsearch' in group_names"
       block:
+        # Filebeat 8+ writes to data streams (filebeat-<version>) whose
+        # backing indices (.ds-filebeat-...) are hidden. The default
+        # expand_wildcards=open excludes them, so the search needs
+        # expand_wildcards=open,hidden, ignore_unavailable and
+        # allow_no_indices so we don't 400 if the data stream hasn't
+        # rolled over yet.
         - name: Wait for filebeat-* index to receive the marker
           ansible.builtin.uri:
-            url: "https://localhost:{{ elasticstack_elasticsearch_http_port }}/filebeat-*/_search?q=message:molecule-beats-security-test"
+            url: "https://localhost:{{ elasticstack_elasticsearch_http_port }}/filebeat-*/_search?q=message:molecule-beats-security-test&expand_wildcards=open,hidden&ignore_unavailable=true&allow_no_indices=true"
             method: GET
             force_basic_auth: true
             user: elastic
             password: "{{ elastic_pass.stdout }}"
             return_content: true
-            status_code: [200, 404]
+            status_code: 200
             validate_certs: false
           register: _filebeat_search
-          until: (_filebeat_search.json.hits.total.value | default(0)) > 0
-          retries: 30
+          until: (_filebeat_search.json.hits.total.value | default(0) | int) > 0
+          # Filebeat's default flush interval + ES create-index latency can
+          # exceed 5 min on slow CI runners; 60×10s = 10 min covers the slow
+          # tail while still failing fast on real breakage.
+          retries: 60
           delay: 10
           run_once: true  # noqa: run-once[task]
 
         - name: Assert at least one document landed in filebeat-*
           ansible.builtin.assert:
             that:
-              - _filebeat_search.json.hits.total.value > 0
+              - (_filebeat_search.json.hits.total.value | default(0) | int) > 0
             fail_msg: >-
               No matching document found in filebeat-*. Filebeat is running
               and the config looks right (SSL block, output.elasticsearch
