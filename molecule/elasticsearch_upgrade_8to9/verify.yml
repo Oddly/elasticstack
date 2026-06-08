@@ -74,8 +74,11 @@
         success_msg: "Cluster is {{ cluster_health.json.status }} with {{ cluster_health.json.number_of_nodes }} nodes"
 
     - name: Check all nodes are visible
+      # Default _cat/nodes columns don't include version — must specify h=
+      # explicitly. Without it the per-node version assert below fails
+      # with 'dict object has no attribute "version"'.
       ansible.builtin.uri:
-        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cat/nodes?format=json
+        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cat/nodes?h=name,version&format=json
         method: GET
         force_basic_auth: true
         user: elastic

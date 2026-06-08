@@ -93,9 +93,24 @@
         # client and that documents arrive — the substring checks above
         # would all pass against a config that silently drops events
         # (wrong CA path, wrong password, broken handshake).
-        - name: Emit a unique marker line via syslog
-          ansible.builtin.command:
-            cmd: logger -t molecule-beats-security 'MARKER {{ ansible_facts.hostname }} molecule-beats-security-test'
+        # Write directly to the configured Filebeat input paths.
+        # `logger` goes through the syslog socket (/dev/log), which depends
+        # on rsyslog/journald-to-syslog forwarding being active; in LXC
+        # containers neither is reliably running, so the marker never
+        # lands in /var/log/syslog or /var/log/messages and Filebeat
+        # has nothing to ship. Bypass syslog by appending directly.
+        - name: Emit a unique marker line into the configured log paths
+          ansible.builtin.shell:
+            cmd: |
+              line="$(date '+%b %d %H:%M:%S') {{ ansible_facts.hostname }} molecule-beats-security[$$]: MARKER molecule-beats-security-test"
+              for f in /var/log/syslog /var/log/messages; do
+                [ -e "$f" ] && echo "$line" >> "$f"
+              done
+              # If neither file existed, create syslog so Filebeat sees it.
+              if [ ! -e /var/log/syslog ] && [ ! -e /var/log/messages ]; then
+                echo "$line" >> /var/log/syslog
+              fi
+            executable: /bin/bash
           changed_when: false
 
     # The ingest assertion runs on the ES host because filebeat-* lives in
