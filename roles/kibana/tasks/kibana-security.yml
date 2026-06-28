@@ -292,6 +292,16 @@
       loop_control:
         label: "{{ item.item }}"
 
+    - name: kibana-security | Use provided encryption key
+      ansible.builtin.copy:
+        dest: "{{ elasticstack_ca_dir }}/encryption_key"
+        content: "{{ kibana_security_encryptionkey }}"
+        owner: root
+        group: elasticsearch
+        mode: "0600"
+      when: kibana_security_encryptionkey | default('') | length > 0
+      no_log: true
+
     - name: kibana-security | Generate encryption key
       ansible.builtin.shell: >
         set -o pipefail;
@@ -308,6 +318,16 @@
         src: "{{ elasticstack_ca_dir }}/encryption_key"
       register: kibana_encryption_key
       check_mode: false
+
+    - name: kibana-security | Use provided saved objects encryption key
+      ansible.builtin.copy:
+        dest: "{{ elasticstack_ca_dir }}/savedobjects_encryption_key"
+        content: "{{ kibana_encryptedsavedobjects_encryptionkey }}"
+        owner: root
+        group: elasticsearch
+        mode: "0600"
+      when: kibana_encryptedsavedobjects_encryptionkey | default('') | length > 0
+      no_log: true
 
     - name: kibana-security | Generate saved objects encryption key
       ansible.builtin.shell: >

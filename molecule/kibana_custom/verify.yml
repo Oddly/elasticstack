@@ -93,6 +93,24 @@
               - "(kibana_yml.content | b64decode | from_yaml) is mapping"
             fail_msg: "kibana.yml is not parseable as YAML"
 
+        - name: Read provided encryption keys from the keystore
+          ansible.builtin.command: >
+            /usr/share/kibana/bin/kibana-keystore show {{ item }}
+          environment:
+            KBN_PATH_CONF: /etc/kibana
+          loop:
+            - xpack.security.encryptionKey
+            - xpack.encryptedSavedObjects.encryptionKey
+          register: provided_keys
+          changed_when: false
+
+        - name: Verify provided encryption keys are honoured in the keystore
+          ansible.builtin.assert:
+            that:
+              - "provided_keys.results[0].stdout_lines[-1] == 'moleculeProvidedSecurityKey0123456789abcd'"
+              - "provided_keys.results[1].stdout_lines[-1] == 'moleculeProvidedSavedObjectsKey0123456789'"
+            fail_msg: "Provided encryption keys not stored in the Kibana keystore"
+
         - name: Verify sniff on start is enabled (pre-9.x only)
           ansible.builtin.assert:
             that:
