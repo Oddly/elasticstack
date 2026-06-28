@@ -74,6 +74,14 @@ kibana_tls_remote_src: false
 # @end
 # kibana_server_protocol: ""
 
+# @var kibana_public_base_url:description: >
+#   Explicit value for server.publicBaseUrl, used verbatim. Set this when Kibana
+#   runs behind a reverse proxy on a different host/port than the node itself
+#   (the generated default is "<scheme>://<host>:<port>"). Empty = use the
+#   generated default.
+# @end
+kibana_public_base_url: ""
+
 # @var kibana_sniff_on_start:description: >
 #   Discover all Elasticsearch nodes in the cluster on Kibana startup.
 #   Deprecated: removed in Elasticsearch/Kibana 9.x. Will be dropped in a future release.

@@ -1,7 +1,11 @@
 {{ ansible_managed | comment }}
 
 server.host: "0.0.0.0"
+{% if kibana_public_base_url is defined and kibana_public_base_url | length > 0 %}
+server.publicBaseUrl: "{{ kibana_public_base_url }}"
+{% else %}
 server.publicBaseUrl: "http{% if kibana_tls | bool %}s{% endif %}://{{ elasticstack_kibana_host | default( ansible_facts.fqdn ) }}:{{ elasticstack_kibana_port }}"
+{% endif %}
 {% if kibana_server_protocol is defined and kibana_server_protocol | length > 0 %}
 server.protocol: "{{ kibana_server_protocol }}"
 {% endif %}
