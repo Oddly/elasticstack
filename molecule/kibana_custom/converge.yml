@@ -12,6 +12,9 @@
     # Kibana custom settings
     kibana_config_backup: true
     kibana_sniff_on_start: true
+    # Override server.publicBaseUrl (e.g. a reverse proxy URL) via the dedicated var
+    # instead of a duplicate key in kibana_extra_config, which Kibana rejects.
+    kibana_public_base_url: "https://kibana.example.com"
     kibana_extra_config: |-
       ops.interval: 10000
       logging.root.level: warn

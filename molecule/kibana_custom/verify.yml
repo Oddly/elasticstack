@@ -72,6 +72,13 @@
               - "'logging.root.level: warn' in (kibana_yml.content | b64decode)"
             fail_msg: "Extra config not found in kibana.yml"
 
+        - name: Verify server.publicBaseUrl uses the override and appears exactly once
+          ansible.builtin.assert:
+            that:
+              - "'server.publicBaseUrl: \"https://kibana.example.com\"' in (kibana_yml.content | b64decode)"
+              - "(kibana_yml.content | b64decode).split('\n') | select('match', '^server.publicBaseUrl:') | list | length == 1"
+            fail_msg: "server.publicBaseUrl override missing or duplicated in kibana.yml"
+
         - name: Verify sniff on start is enabled (pre-9.x only)
           ansible.builtin.assert:
             that:
