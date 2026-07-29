@@ -75,9 +75,13 @@
         - name: Verify server.publicBaseUrl uses the override and appears exactly once
           ansible.builtin.assert:
             that:
+              # The dedicated variable wins ...
               - "'server.publicBaseUrl: \"https://kibana.example.com\"' in (kibana_yml.content | b64decode)"
-              - "(kibana_yml.content | b64decode).split('\n') | select('match', '^server.publicBaseUrl:') | list | length == 1"
-            fail_msg: "server.publicBaseUrl override missing or duplicated in kibana.yml"
+              # ... the conflicting key from kibana_extra_config is filtered out ...
+              - "'duplicate.example.com' not in (kibana_yml.content | b64decode)"
+              # ... and the key is emitted exactly once (a duplicate stops Kibana from starting).
+              - "(kibana_yml.content | b64decode).split('\n') | select('match', '\\s*server\\.publicBaseUrl\\s*:') | list | length == 1"
+            fail_msg: "server.publicBaseUrl override missing, duplicated, or not filtered from kibana_extra_config"
 
         - name: Verify sniff on start is enabled (pre-9.x only)
           ansible.builtin.assert:

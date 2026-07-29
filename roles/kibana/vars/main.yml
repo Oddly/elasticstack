@@ -1,4 +1,22 @@
 ---
+# Keys managed by dedicated role variables in kibana.yml.j2. Used to filter
+# kibana_extra_config, since Kibana refuses to start on a duplicate key.
+_kibana_managed_keys:
+  - server.host
+  - server.publicBaseUrl
+  - server.protocol
+  - server.ssl.enabled
+  - server.ssl.certificate
+  - server.ssl.key
+  - server.ssl.keystore.path
+  - elasticsearch.hosts
+  - elasticsearch.username
+  - elasticsearch.password
+  - elasticsearch.ssl.certificateAuthorities
+  - elasticsearch.sniffOnStart
+  - elasticsearch.sniffOnConnectionFault
+  - elasticsearch.sniffInterval
+
 # Internal state — do not set manually
 kibana_cert_will_expire_soon: false
 

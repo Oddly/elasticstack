@@ -42,10 +42,17 @@ server.ssl.keystore.path: "/etc/kibana/certs/{{ inventory_hostname }}-kibana.p12
 {% endif %}
 {% endif %}
 
+{# Filter kibana_extra_config to remove keys already managed by dedicated role variables. #}
+{# Kibana refuses to start on a duplicate key, so these must not be emitted twice.        #}
+{# _kibana_managed_keys is defined in vars/main.yml                                       #}
 {% if kibana_extra_config is defined and kibana_extra_config %}
 {% if kibana_extra_config is mapping %}
-{{ kibana_extra_config | to_nice_yaml(indent=2, sort_keys=False) }}
+{%   set _filtered = kibana_extra_config | dict2items | rejectattr('key', 'in', _kibana_managed_keys) | list | items2dict %}
+{%   if _filtered %}
+{{ _filtered | to_nice_yaml(indent=2, sort_keys=False) }}
+{%   endif %}
 {% else %}
-{{ kibana_extra_config }}
+{%   set _managed_pattern = '\s*(' ~ (_kibana_managed_keys | map('regex_escape') | join('|')) ~ ')\s*:' %}
+{{ kibana_extra_config.split('\n') | reject('match', _managed_pattern) | join('\n') }}
 {% endif %}
 {% endif %}

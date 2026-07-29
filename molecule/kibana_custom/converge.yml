@@ -12,12 +12,14 @@
     # Kibana custom settings
     kibana_config_backup: true
     kibana_sniff_on_start: true
-    # Override server.publicBaseUrl (e.g. a reverse proxy URL) via the dedicated var
-    # instead of a duplicate key in kibana_extra_config, which Kibana rejects.
+    # Override server.publicBaseUrl (e.g. a reverse proxy URL) via the dedicated var.
+    # kibana_extra_config also sets it, to prove the managed key is filtered out there:
+    # a duplicate server.publicBaseUrl makes Kibana refuse to start.
     kibana_public_base_url: "https://kibana.example.com"
     kibana_extra_config: |-
       ops.interval: 10000
       logging.root.level: warn
+      server.publicBaseUrl: "https://duplicate.example.com"
   tasks:
     - name: Include Elastic repos
       ansible.builtin.include_role:
