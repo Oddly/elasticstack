@@ -46,6 +46,22 @@ kibana_tls: false
 kibana_tls_key_passphrase: PleaseChangeMe
 # @var kibana_keystore_password:description: Password to encrypt the Kibana keystore file. Empty means no encryption (same as ES default)
 kibana_keystore_password: ""
+
+# @var kibana_security_encryptionkey:description: >
+#   Value for xpack.security.encryptionKey (stored in the Kibana keystore).
+#   Set this to reuse an existing key when migrating Kibana to a new host or
+#   running multiple instances, so encrypted session state stays valid. Empty
+#   generates a random key on first run.
+# @end
+kibana_security_encryptionkey: ""
+
+# @var kibana_encryptedsavedobjects_encryptionkey:description: >
+#   Value for xpack.encryptedSavedObjects.encryptionKey (stored in the keystore).
+#   Set this to reuse an existing key when migrating or scaling out, otherwise
+#   encrypted saved objects (alerting rules, connectors, Fleet tokens) cannot be
+#   decrypted by the new instance. Empty generates a random key on first run.
+# @end
+kibana_encryptedsavedobjects_encryptionkey: ""
 # @var kibana_cert_expiration_buffer:description: Days before certificate expiry to trigger renewal
 kibana_cert_expiration_buffer: 30
 # @var kibana_cert_validity_period:description: Validity period in days for generated TLS certificates

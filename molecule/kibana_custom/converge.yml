@@ -16,6 +16,8 @@
     # kibana_extra_config also sets it, to prove the managed key is filtered out there:
     # a duplicate server.publicBaseUrl makes Kibana refuse to start.
     kibana_public_base_url: "https://kibana.example.com"
+    kibana_security_encryptionkey: "moleculeProvidedSecurityKey0123456789abcd"
+    kibana_encryptedsavedobjects_encryptionkey: "moleculeProvidedSavedObjectsKey0123456789"
     kibana_extra_config: |-
       ops.interval: 10000
       logging.root.level: warn
