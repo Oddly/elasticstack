@@ -51,6 +51,16 @@ jobs:
             --output-path /results \
             --report-formats json,sarif \
             --ignore-on-exit results
+
+      # Workaround for Checkmarx/kics#7588: repeated CWE findings cause KICS
+      # to emit duplicate entries in runs[].taxonomies[].taxa, which the SARIF
+      # schema (uniqueItems: true) rejects, blocking the upload step.
+      - name: Deduplicate SARIF taxa
+        run: |
+          jq '.runs |= map(.taxonomies |= (. // [] | map(.taxa |= (. // [] | unique_by(.id)))))' \
+            results-dir/results.sarif > results-dir/results.dedup.sarif
+          mv results-dir/results.dedup.sarif results-dir/results.sarif
+
       - name: Upload SARIF file
         uses: github/codeql-action/upload-sarif@af56b044b5d41c317aef5d19920b3183cb4fbbec # v3
         with:
