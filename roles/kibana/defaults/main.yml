@@ -5,6 +5,15 @@
 # Elasticsearch connection setup, and certificate management.
 # @end
 
+# === Server ===
+
+# @var kibana_public_base_url:description: >
+#   Value for server.publicBaseUrl. Defaults to this node's own URL. Set it to the
+#   externally reachable URL (e.g. the reverse proxy / VIP) when Kibana runs behind
+#   a proxy, so generated absolute URLs (reporting, share links) are correct.
+# @end
+kibana_public_base_url: "http{% if kibana_tls | bool %}s{% endif %}://{{ elasticstack_kibana_host | default(ansible_facts.fqdn) }}:{{ elasticstack_kibana_port }}"
+
 # === Node.js Memory ===
 
 # @var kibana_node_max_old_space_size:description: >

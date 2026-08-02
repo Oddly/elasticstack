@@ -72,6 +72,27 @@
               - "'logging.root.level: warn' in (kibana_yml.content | b64decode)"
             fail_msg: "Extra config not found in kibana.yml"
 
+        - name: Verify server.publicBaseUrl uses the override and appears exactly once
+          ansible.builtin.assert:
+            that:
+              # The dedicated variable wins ...
+              - "'server.publicBaseUrl: \"https://kibana.example.com\"' in (kibana_yml.content | b64decode)"
+              # ... the conflicting key from kibana_extra_config is filtered out ...
+              - "'duplicate.example.com' not in (kibana_yml.content | b64decode)"
+              # ... and the key is emitted exactly once (a duplicate stops Kibana from starting).
+              - "(kibana_yml.content | b64decode).split('\n') | select('match', '\\s*server\\.publicBaseUrl\\s*:') | list | length == 1"
+              # A quoted managed key must be filtered too (line-based filtering missed it).
+              - "(kibana_yml.content | b64decode).split('\n') | select('match', '\\s*.?server\\.host.?\\s*:') | list | length == 1"
+              # A multiline managed value must be removed whole, leaving no orphaned list items.
+              - "'should-be-filtered' not in (kibana_yml.content | b64decode)"
+            fail_msg: "server.publicBaseUrl override missing, duplicated, or not filtered from kibana_extra_config"
+
+        - name: Verify kibana.yml is still valid YAML after filtering
+          ansible.builtin.assert:
+            that:
+              - "(kibana_yml.content | b64decode | from_yaml) is mapping"
+            fail_msg: "kibana.yml is not parseable as YAML"
+
         - name: Verify sniff on start is enabled (pre-9.x only)
           ansible.builtin.assert:
             that:
