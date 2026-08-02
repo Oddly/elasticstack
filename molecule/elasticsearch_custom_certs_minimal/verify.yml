@@ -69,30 +69,52 @@
           - ca_cert_stat.stat.exists
         fail_msg: "CA cert not found — auto-extraction from PEM bundle failed"
 
-    - name: Read CA cert content
-      ansible.builtin.slurp:
-        src: /etc/elasticsearch/certs/ca.crt
-      register: ca_cert_content
-
-    - name: Verify CA cert is not empty
-      ansible.builtin.assert:
-        that:
-          - (ca_cert_content.content | b64decode) is search('BEGIN CERTIFICATE')
-        fail_msg: "CA cert is empty or invalid"
-
-    - name: Verify elasticsearch.yml uses PEM config with CA authorities
-      ansible.builtin.shell: |
-        set -o pipefail
-        grep 'certificate_authorities' /etc/elasticsearch/elasticsearch.yml
-      args:
+    # The point of the minimal scenario is that the role slices the CA
+    # out of a chained server+CA PEM bundle. A buggy role that wrote the
+    # full bundle to ca.crt (or even just the server cert) would still
+    # match 'BEGIN CERTIFICATE' — so count occurrences AND verify the
+    # subject matches the test CA, not the server cert.
+    - name: Hash extracted ca.crt and inspect its subject
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          path=/etc/elasticsearch/certs/ca.crt
+          count=$(grep -c '^-----BEGIN CERTIFICATE-----' "$path" || echo 0)
+          src_sum=$(sha256sum /tmp/test-certs/ca.crt | awk '{print $1}')
+          dst_sum=$(sha256sum "$path" | awk '{print $1}')
+          subject=$(openssl x509 -in "$path" -noout -subject)
+          echo "count=$count src_sum=$src_sum dst_sum=$dst_sum subject=$subject"
         executable: /bin/bash
-      register: es_yml_ca_check
+      register: _ca_extract
       changed_when: false
 
-    - name: Assert certificate_authorities is configured
+    - name: Assert ca.crt contains exactly one cert and matches the source CA
       ansible.builtin.assert:
         that:
-          - "'ca.crt' in es_yml_ca_check.stdout"
-        fail_msg: >-
-          Expected certificate_authorities in elasticsearch.yml.
-          Got: {{ es_yml_ca_check.stdout }}
+          - "'count=1 ' in _ca_extract.stdout"
+          - "_ca_extract.stdout is search('CN ?= ?Test CA')"
+          # Source CA on /tmp/test-certs/ca.crt is the standalone CA PEM
+          # (single cert), so the extracted ca.crt should match it byte-for-byte.
+          - >-
+            _ca_extract.stdout is regex('src_sum=(\\S+) dst_sum=\\1')
+        fail_msg: |
+          CA cert was not extracted correctly from the chained PEM bundle.
+          Either the file holds the wrong number of certs, the subject is not
+          the test CA, or its bytes don't match the source CA. Got:
+          {{ _ca_extract.stdout }}
+
+    - name: Slurp elasticsearch.yml for cert-config assertions
+      ansible.builtin.slurp:
+        src: /etc/elasticsearch/elasticsearch.yml
+      register: _es_yml
+
+    - name: Assert certificate_authorities is configured in BOTH transport and http sections
+      ansible.builtin.assert:
+        that:
+          - "'transport.ssl.certificate_authorities' in (_es_yml.content | b64decode)"
+          - "'http.ssl.certificate_authorities' in (_es_yml.content | b64decode)"
+        fail_msg: |
+          certificate_authorities missing from one of the SSL sections. The
+          earlier `grep ca.crt` check would have passed even if only HTTP
+          referenced the CA (transport gone silent). Content:
+          {{ _es_yml.content | b64decode }}

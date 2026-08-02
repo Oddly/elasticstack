@@ -108,8 +108,33 @@
         path: /etc/logstash/conf.d/main
       register: pipeline_dir
 
-    - name: Warn if local pipeline configs exist
-      ansible.builtin.debug:
-        msg: "Local pipeline configs should not exist with centralized management"
-      when: pipeline_dir.stat.exists and (not pipeline_dir.stat.isdir or pipeline_dir.stat.size > 0)
-      changed_when: true
+    - name: Assert no local pipeline configs exist with centralized management
+      ansible.builtin.assert:
+        that:
+          - >-
+            (not pipeline_dir.stat.exists) or
+            (pipeline_dir.stat.isdir and pipeline_dir.stat.size == 0)
+        fail_msg: >-
+          /etc/logstash/conf.d/main exists with content despite
+          logstash_no_pipelines: true. The role should not have written
+          local pipeline files when xpack.management is configured.
+
+    # --- Confirm Logstash actually starts ---
+    #
+    # The previous version of this verify only inspected /etc/logstash/logstash.yml
+    # — never confirmed Logstash came up. If xpack.management.* was misconfigured
+    # (malformed YAML, missing required field) Logstash crashes on startup and
+    # every assertion above still passes because they only test rendered config.
+    #
+    # We can ONLY check the service is active here. The scenario's ES hosts
+    # (es-001.example.com, es-002.example.com) are intentionally fake to test
+    # config rendering without a real cluster, so the Logstash monitoring API
+    # may never bind and the log will contain xpack.management connection
+    # errors — those are EXPECTED here and not a regression signal.
+    - name: Check Logstash service is running
+      ansible.builtin.service:
+        name: logstash
+        state: started
+      check_mode: true
+      register: _ls_svc
+      failed_when: _ls_svc.changed

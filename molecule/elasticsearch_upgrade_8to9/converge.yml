@@ -151,9 +151,63 @@
       ansible.builtin.set_fact:
         _elasticstack_role_imported: false
 
+    # The handler-suppression fix should produce exactly one ES restart per
+    # node during the upgrade play: the rolling-upgrade restart itself. The
+    # config change introduced by elasticsearch_jvm_custom_parameters
+    # notifies the Restart Elasticsearch handler, which would fire a SECOND
+    # restart unless suppressed. Capture the start-event window so we can
+    # assert exactly-one after include_role completes.
+    - name: Capture pre-upgrade timestamp
+      # journalctl --since wants 'YYYY-MM-DD HH:MM:SS' (UTC implied via -u).
+      # Don't use --iso-8601=seconds: that emits '+00:00' which journalctl
+      # parses inconsistently and silently filters out every match.
+      ansible.builtin.command: date -u "+%Y-%m-%d %H:%M:%S"
+      register: _ts_before_upgrade
+      changed_when: false
+
+    - name: Capture pre-upgrade ES PID
+      ansible.builtin.command: pgrep -f 'org.elasticsearch.bootstrap.Elasticsearch'
+      register: _es_pid_before_upgrade
+      changed_when: false
+
     - name: Include Elasticsearch role (upgrade to 9.x)
       ansible.builtin.include_role:
         name: oddly.elasticstack.elasticsearch
+
+    - name: Capture post-upgrade ES PID
+      ansible.builtin.command: pgrep -f 'org.elasticsearch.bootstrap.Elasticsearch'
+      register: _es_pid_after_upgrade
+      changed_when: false
+
+    - name: Count ES start events during the upgrade window
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          # systemd emits "Started Elasticsearch." with a capital E (the
+          # unit's Description=Elasticsearch). Use case-insensitive grep so
+          # we don't depend on the exact casing across distros.
+          journalctl -u elasticsearch \
+            --since='{{ _ts_before_upgrade.stdout }}' \
+            --no-pager --output=cat 2>/dev/null \
+            | grep -ic 'started elasticsearch' || true
+        executable: /bin/bash
+      register: _es_start_count
+      changed_when: false
+
+    - name: Assert handler-suppression worked (exactly one restart during upgrade)
+      ansible.builtin.assert:
+        that:
+          - _es_pid_before_upgrade.stdout != _es_pid_after_upgrade.stdout
+          - _es_start_count.stdout | int == 1
+        fail_msg: >-
+          Expected exactly 1 'Started elasticsearch' event during the upgrade
+          play (the rolling-upgrade restart itself). Counted
+          {{ _es_start_count.stdout }}. If >1 the config-change handler fired
+          in addition to the upgrade restart — the handler-suppression fix
+          has regressed and ES restarted twice on this node.
+        success_msg: >-
+          Handler suppression OK: ES restarted exactly once during upgrade
+          (PID {{ _es_pid_before_upgrade.stdout }} → {{ _es_pid_after_upgrade.stdout }}).
 
 # Re-run with elasticstack_version: "latest" to exercise the post-install
 # detection path. Since we're already on the latest 9.x, the package should

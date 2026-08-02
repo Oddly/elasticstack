@@ -21,7 +21,7 @@ on:
     paths:
       - 'plugins/**'
       - '.github/workflows/test_plugins.yml'
-      - 'molecule/plugins/**'
+      - 'molecule/cert_info_module/**'
       - '.config/pycodestyle.cfg'
       - 'tests/**'
 
@@ -201,7 +201,7 @@ jobs:
 
       - name: Test with ansible-playbook
         run: |
-          ansible-playbook molecule/plugins/converge.yml
+          ansible-playbook molecule/cert_info_module/converge.yml
         env:
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
@@ -257,7 +257,7 @@ jobs:
 
       - name: Test with ansible-playbook
         run: |
-          ansible-playbook molecule/plugins/converge.yml
+          ansible-playbook molecule/cert_info_module/converge.yml
         env:
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
@@ -305,7 +305,7 @@ jobs:
 
       - name: Test with ansible-playbook
         run: |
-          ansible-playbook molecule/plugins/converge.yml
+          ansible-playbook molecule/cert_info_module/converge.yml
         env:
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'

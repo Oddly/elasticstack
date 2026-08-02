@@ -77,3 +77,39 @@
             that:
               - "'server.ssl.enabled: true' in (kibana_yml.content | b64decode)"
             fail_msg: "server.ssl.enabled: true should be present when kibana_tls is true"
+
+        # An open https://localhost:5601 with validate_certs:false doesn't
+        # prove the role rendered the right cert paths — Kibana could be
+        # serving its bundled default cert if the role's PEM branch picked
+        # up the wrong filename (e.g. wrong _kibana_cert_format default
+        # silently re-routed to the .p12 keystore.path branch).
+        - name: Verify server.ssl.certificate and server.ssl.key paths are rendered
+          ansible.builtin.assert:
+            that:
+              - "'server.ssl.certificate:' in (kibana_yml.content | b64decode)"
+              - "'server.ssl.key:' in (kibana_yml.content | b64decode)"
+              - "'keystore.path' not in (kibana_yml.content | b64decode)"
+              - "'elasticsearch.ssl.verificationMode: none' in (kibana_yml.content | b64decode)"
+            fail_msg: |
+              kibana.yml is missing PEM cert/key paths, or accidentally rendered
+              a keystore.path entry (wrong cert format detection), or dropped
+              the elasticsearch.ssl.verificationMode: none line from extra_config.
+              Got:
+              {{ kibana_yml.content | b64decode }}
+
+        # An open socket on 5601 doesn't prove the cert chains to our test CA.
+        # Confirm the served cert is signed by "Test CA" — the role's
+        # auto-generated fallback would have a different issuer.
+        - name: TLS handshake against Kibana 5601 (signed by Test CA)
+          ansible.builtin.shell:
+            cmd: |
+              set -o pipefail
+              out=$(echo | openssl s_client \
+                -connect localhost:5601 \
+                -CAfile /tmp/test-certs/ca.crt \
+                -servername {{ ansible_facts.hostname }} 2>&1) || true
+              echo "$out" | grep -E 'Verify return code|verify error|issuer=' || true
+              echo "$out" | grep -q 'Verify return code: 0 (ok)'
+            executable: /bin/bash
+          register: _kb_tls_probe
+          changed_when: false

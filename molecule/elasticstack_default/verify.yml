@@ -77,6 +77,50 @@
         msg: "Logstash events — in: {{ logstash_stats.json.pipelines.main.events.in }}, out: {{ logstash_stats.json.pipelines.main.events.out }}"
       when: "'logstash' in group_names"
 
+    # End-to-end: Beats → Logstash is proven by events.out > 0 above. To
+    # prove Logstash → ES (the gap a config-only verify silently misses),
+    # query ES for any non-system index with documents. The flagship scenario
+    # has Filebeat+Auditbeat+Metricbeat shipping to Logstash, which outputs
+    # to ES with the default `logstash-*` / data-stream `logs-*` naming —
+    # either appears here.
+    # Use _count instead of _cat/indices because selectattr with a literal
+    # dot in the attribute name ('docs.count') is parsed by Jinja as a
+    # nested attribute access (item.docs.count) and silently never matches.
+    # _count returns {"count": N} which is simple to assert on.
+    - name: Confirm Logstash output index landed in Elasticsearch
+      ansible.builtin.uri:
+        url: "https://localhost:{{ elasticstack_elasticsearch_http_port }}/logstash-*,logs-*,ecs-*/_count?expand_wildcards=open,hidden&ignore_unavailable=true&allow_no_indices=true"
+        method: GET
+        force_basic_auth: true
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        return_content: true
+        status_code: 200
+        validate_certs: false
+      register: _ls_es_count
+      until: (_ls_es_count.json.count | default(0) | int) > 0
+      # Generous retry budget: in CI the Beats → Logstash → ES chain needs
+      # cluster green + Logstash plugin warmup + ES create-index latency.
+      retries: 60
+      delay: 10
+      delegate_to: "{{ elasticsearch_ca }}"
+      run_once: true
+      when: "'logstash' in group_names"  # noqa: run-once[task]
+
+    - name: Assert at least one Logstash output document exists in ES
+      ansible.builtin.assert:
+        that:
+          - (_ls_es_count.json.count | default(0) | int) > 0
+        fail_msg: >-
+          Logstash reported events.out > 0 to its internal counter, but no
+          documents landed in ES under logstash-*, logs-*, or ecs-* indices.
+          The Beats → Logstash leg works but Logstash → ES does not — likely
+          a wrong elastic password in the ES output, a TLS chain failure to
+          ES, or the output plugin silently dropping events.
+      run_once: true
+      delegate_to: "{{ elasticsearch_ca }}"
+      when: "'logstash' in group_names"  # noqa: run-once[task]
+
     - name: Run Kibana checks
       when: "'kibana' in group_names"
       block:

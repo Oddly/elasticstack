@@ -105,6 +105,14 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -t ed25519 ${{ secrets.INCUS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
+      - name: Acquire memory slot
+        # Coordinated admission gate. Takes an flock'd reservation on the
+        # runner host's RAM budget so the pool can scale past the point where
+        # every concurrent slot fits at peak memory_mb. Times out and proceeds
+        # without a reservation rather than failing — better one OOM than a
+        # stuck queue.
+        run: bash scripts/wait-for-memory.sh acquire "${{ matrix.scenario }}" 1800
+
       - name: Converge
         run: molecule converge -s ${{ matrix.scenario }}
         env:
@@ -142,6 +150,13 @@ jobs:
           INCUS_HOST: ${{ secrets.INCUS_HOST }}
           MOLECULE_SSH_KEY: ${{ runner.temp }}/molecule_id_ed25519
           DISTRO_CACHE_URL: http://${{ secrets.REGISTRY_HOST }}:8081
+
+      - name: Release memory slot
+        # Runs whether converge/verify/idempotence passed or failed, so the
+        # reservation is freed promptly. Stale reservations (>1h) are also
+        # GC'd by the next acquire under the same lock as a safety net.
+        if: always()
+        run: bash scripts/wait-for-memory.sh release
 
       - name: Collect and upload diagnostics
         if: failure()

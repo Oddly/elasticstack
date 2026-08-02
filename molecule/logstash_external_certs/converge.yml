@@ -1,9 +1,8 @@
 ---
-# Exercises logstash_cert_source: standalone — the path where Logstash
-# generates its own self-signed CA + server cert and PKCS12 keystore.
-# Previously uncovered by any molecule scenario (the directory named
-# logstash_standalone_certs actually tested cert_source: external).
-- name: Converge
+# Tests Logstash with beats input SSL using external certificates.
+# This validates the logstash_cert_source: external path with beats input
+# (as opposed to logstash_ssl which tests elastic_agent input).
+- name: Deploy Logstash with beats SSL using external certs
   hosts: all
   vars:
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
@@ -14,14 +13,22 @@
     logstash_create_role: false
     logstash_pipeline_unsafe_shutdown: true
     logstash_heap: "512m"
+    # Beats input with SSL enabled
     logstash_input_beats: true
     logstash_input_beats_ssl: true
     logstash_input_beats_port: 5044
-    logstash_cert_source: standalone
-    logstash_tls_key_passphrase: StandaloneTestPass
+    # External certificate configuration
+    logstash_cert_source: external
+    logstash_tls_certificate_file: /tmp/test-certs/server.crt
+    logstash_tls_key_file: /tmp/test-certs/server.key
+    logstash_tls_ca_file: /tmp/test-certs/ca.crt
+    logstash_tls_remote_src: true
     logstash_extra_outputs: |
       stdout { codec => rubydebug }
   tasks:
+    - name: Generate test certificates
+      ansible.builtin.include_tasks: ../shared/generate_test_certs.yml
+
     - name: Include Elastic repos role
       ansible.builtin.include_role:
         name: oddly.elasticstack.repos

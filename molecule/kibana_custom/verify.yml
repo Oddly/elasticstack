@@ -118,6 +118,21 @@
             fail_msg: "Sniff on start not found in kibana.yml"
           when: (lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int) < 9
 
+        # Negative test on 9.x: even with kibana_sniff_on_start: true the
+        # template should NOT emit sniffOnStart (Kibana 9.x removed the
+        # sniffing setting). Without this assert, a regression that restored
+        # the line on 9.x would only show up under default-release CI as a
+        # confusing Kibana startup warning, not a test failure.
+        - name: Verify sniff on start is NOT emitted on 9.x
+          ansible.builtin.assert:
+            that:
+              - "'sniffOnStart' not in (kibana_yml.content | b64decode)"
+            fail_msg: >-
+              kibana_sniff_on_start: true should be silently dropped on
+              Kibana 9.x, but sniffOnStart appears in kibana.yml. Kibana
+              9.x will log a warning at startup and ignore the value.
+          when: (lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int) >= 9
+
         - name: Check for kibana.yml backup files
           ansible.builtin.find:
             paths: /etc/kibana

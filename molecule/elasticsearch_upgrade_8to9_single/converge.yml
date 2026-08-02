@@ -124,6 +124,25 @@
       ansible.builtin.include_role:
         name: oddly.elasticstack.repos
 
+    # The role's elasticstack_version: latest path does NOT trigger the
+    # rolling-upgrade detection on same-major bumps — only pinned-higher
+    # version OR release change qualifies (see
+    # roles/elasticsearch/tasks/elasticsearch-upgrade-detection.yml).
+    # And the chiark apt/yum mirror's cached metadata may not surface
+    # newer 8.x patches without a forced refresh. Drive the package +
+    # restart directly here, as the original test did. Worth a follow-up
+    # to add a "latest-mode same-major upgrade detection" path to the
+    # role, but that's a role change, not a test change.
+    - name: Force apt cache update before 8.x upgrade
+      ansible.builtin.apt:
+        update_cache: true
+      when: ansible_facts.os_family == 'Debian'
+
+    - name: Force dnf metadata refresh before 8.x upgrade
+      ansible.builtin.command: dnf clean expire-cache
+      changed_when: false
+      when: ansible_facts.os_family == 'RedHat'
+
     - name: Upgrade to latest 8.x  # noqa: package-latest
       ansible.builtin.package:
         name: elasticsearch
@@ -146,6 +165,27 @@
       retries: 30
       delay: 10
       until: health.status == 200
+
+    - name: Confirm test index survived the 8.x→8.x upgrade
+      ansible.builtin.uri:
+        url: https://localhost:9200/upgrade-test/_doc/1
+        method: GET
+        force_basic_auth: true
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        return_content: true
+        validate_certs: false
+        status_code: 200
+      register: _post_8x_doc
+
+    - name: Assert test data survived 8.x→8.x upgrade (catches data loss before 9.x step)
+      ansible.builtin.assert:
+        that:
+          - _post_8x_doc.json._source.message == "pre-upgrade-test-data"
+        fail_msg: >-
+          Test data was lost during the 8.x→8.x upgrade. A subsequent
+          failure in the 9.x verify would otherwise be blamed on the
+          9.x step.
 
 - name: Verify latest 8.x before 9.x upgrade
   hosts: all

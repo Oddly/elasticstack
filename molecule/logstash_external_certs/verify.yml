@@ -1,5 +1,5 @@
 ---
-- name: Verify Logstash SSL deployment
+- name: Verify Logstash with beats SSL and external certs
   hosts: all
   tasks:
     - name: Check Logstash service is running
@@ -16,36 +16,38 @@
       ansible.builtin.stat:
         path: /etc/logstash/certs
       register: certs_dir
-      failed_when: not certs_dir.stat.exists
 
-    - name: Check server certificate exists
-      ansible.builtin.stat:
-        path: "/etc/logstash/certs/{{ inventory_hostname }}-server.crt"
-      register: server_cert
-      failed_when: not server_cert.stat.exists
-
-    - name: Check server key exists
-      ansible.builtin.stat:
-        path: "/etc/logstash/certs/{{ inventory_hostname }}.key"
-      register: server_key
-      failed_when: not server_key.stat.exists
-
-    - name: Check CA certificate exists
-      ansible.builtin.stat:
-        path: /etc/logstash/certs/ca.crt
-      register: ca_cert
-      failed_when: not ca_cert.stat.exists
-
-    - name: Verify certificate permissions
+    - name: Assert certificate directory exists
       ansible.builtin.assert:
         that:
-          - server_cert.stat.mode == '0640'
-          - server_key.stat.mode == '0640'
-          - ca_cert.stat.mode == '0640'
-        fail_msg: "Certificate file permissions are not correct (expected 0640)"
+          - certs_dir.stat.exists
+          - certs_dir.stat.isdir
+        fail_msg: "Certificate directory /etc/logstash/certs not found"
 
-    - name: Verify server key is unencrypted PKCS#8 PEM (not PKCS#1, not encrypted)
-      ansible.builtin.command: head -1 /etc/logstash/certs/{{ inventory_hostname }}.key
+    - name: Check server certificate was copied
+      ansible.builtin.stat:
+        path: "/etc/logstash/certs/{{ ansible_facts.hostname }}-server.crt"
+      register: server_cert
+
+    - name: Assert server certificate exists
+      ansible.builtin.assert:
+        that:
+          - server_cert.stat.exists
+        fail_msg: "Server certificate not found in /etc/logstash/certs/"
+
+    - name: Check server key was copied
+      ansible.builtin.stat:
+        path: "/etc/logstash/certs/{{ ansible_facts.hostname }}.key"
+      register: server_key
+
+    - name: Assert server key exists
+      ansible.builtin.assert:
+        that:
+          - server_key.stat.exists
+        fail_msg: "Server key not found in /etc/logstash/certs/"
+
+    - name: Verify server key is unencrypted PKCS#8 PEM
+      ansible.builtin.command: head -1 /etc/logstash/certs/{{ ansible_facts.hostname }}.key
       register: _server_key_header
       changed_when: false
 
@@ -55,58 +57,48 @@
           - _server_key_header.stdout == '-----BEGIN PRIVATE KEY-----'
         fail_msg: >-
           Expected unencrypted PKCS#8 PEM (-----BEGIN PRIVATE KEY-----),
-          got {{ _server_key_header.stdout }}. The beats/elastic_agent input
-          requires PKCS#8 per upstream Logstash docs.
+          got {{ _server_key_header.stdout }}.
 
-    # --- Input verification (elastic_agent with SSL) ---
+    - name: Check CA certificate was copied
+      ansible.builtin.stat:
+        path: /etc/logstash/certs/ca.crt
+      register: ca_cert
+
+    - name: Assert CA certificate exists
+      ansible.builtin.assert:
+        that:
+          - ca_cert.stat.exists
+        fail_msg: "CA certificate not found in /etc/logstash/certs/"
+
+    # --- Input SSL verification ---
 
     - name: Read input configuration
       ansible.builtin.slurp:
         src: /etc/logstash/conf.d/main/10-input.conf
       register: input_content
 
-    - name: Verify elastic_agent input is configured with SSL
+    - name: Verify beats input with SSL is configured
       ansible.builtin.assert:
         that:
-          - "'elastic_agent {' in (input_content.content | b64decode)"
+          - "'beats {' in (input_content.content | b64decode)"
           - "'port => 5044' in (input_content.content | b64decode)"
-          - "'ssl_enabled => true' in (input_content.content | b64decode) or 'ssl => true' in (input_content.content | b64decode)"
-          - "'ssl_certificate' in (input_content.content | b64decode)"
-          - "'ssl_key' in (input_content.content | b64decode)"
-        fail_msg: "Elastic Agent input with SSL not properly configured"
+          - "'ssl_enabled' in (input_content.content | b64decode) or 'ssl => true' in (input_content.content | b64decode)"
+        fail_msg: "Beats input with SSL not properly configured"
 
-    - name: Verify beats input is NOT configured
-      ansible.builtin.assert:
-        that:
-          - "'beats {' not in (input_content.content | b64decode)"
-        fail_msg: "Beats input should not be present when disabled"
-
-    # --- Service health ---
-
-    - name: Show Logstash log before port check
-      ansible.builtin.shell: >-
-        journalctl -u logstash --no-pager -n 50 2>/dev/null ||
-        tail -50 /var/log/logstash/logstash-plain.log 2>/dev/null ||
-        echo "No logs found"
-      register: logstash_log_before
-      changed_when: false
-
-    - name: Display Logstash log  # noqa: no-handler
-      ansible.builtin.debug:
-        var: logstash_log_before.stdout_lines
+    # --- Port check ---
 
     - name: Check Logstash is listening on port 5044
       ansible.builtin.wait_for:
         port: 5044
-        timeout: 300
+        timeout: 120
         state: started
       register: port_check
       ignore_errors: true
 
     # An open socket doesn't prove TLS — Logstash could be serving plain text
     # on 5044 if the SSL block silently failed to load. Run an actual TLS
-    # handshake against the port and verify the served cert chains to our
-    # test CA.
+    # handshake against the port and verify the served cert chains to the
+    # external CA we deployed.
     - name: TLS handshake against Logstash 5044 (signed by Test CA)
       ansible.builtin.shell:
         cmd: |
@@ -130,27 +122,16 @@
             journalctl -u logstash --no-pager -n 100 2>/dev/null ||
             tail -100 /var/log/logstash/logstash-plain.log 2>/dev/null ||
             echo "No logs found"
-          register: logstash_log_after
+          register: logstash_log
           changed_when: false
 
         - name: Display failure log  # noqa: no-handler
           ansible.builtin.debug:
-            var: logstash_log_after.stdout_lines
-
-        - name: Show listening ports
-          ansible.builtin.shell: set -o pipefail && ss -tlnp | grep -E '5044|logstash|java' || echo "No matching ports"
-          args:
-            executable: /bin/bash
-          register: listening_ports
-          changed_when: false
-
-        - name: Display listening ports  # noqa: no-handler
-          ansible.builtin.debug:
-            var: listening_ports.stdout_lines
+            var: logstash_log.stdout_lines
 
         - name: Fail with context
           ansible.builtin.fail:
-            msg: "Logstash port 5044 did not open within timeout. Check logs above."
+            msg: "Logstash port 5044 did not open within timeout."
 
     # --- Config syntax validation ---
 

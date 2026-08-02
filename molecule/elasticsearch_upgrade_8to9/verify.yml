@@ -74,23 +74,37 @@
         success_msg: "Cluster is {{ cluster_health.json.status }} with {{ cluster_health.json.number_of_nodes }} nodes"
 
     - name: Check all nodes are visible
+      # Default _cat/nodes columns don't include version — must specify h=
+      # explicitly. Without it the per-node version assert below fails
+      # with 'dict object has no attribute "version"'.
       ansible.builtin.uri:
-        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cat/nodes?format=json
+        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cat/nodes?h=name,version&format=json
         method: GET
         force_basic_auth: true
         user: elastic
         password: "{{ elastic_pass.stdout }}"
         return_content: true
+        status_code: 200
         validate_certs: false
       register: nodes_info
-      until: nodes_info.status | default(0) == 200
-      retries: 3
-      delay: 5
       when: groups[elasticstack_elasticsearch_group_name] | length > 1
 
     - name: Display nodes
       ansible.builtin.debug:
         var: nodes_info.json
+      when: groups[elasticstack_elasticsearch_group_name] | length > 1
+
+    - name: Assert every cluster node is on 9.x (not just the queried one)
+      ansible.builtin.assert:
+        that:
+          - item.version is version('9.0.0', '>=')
+          - item.version is version('10.0.0', '<')
+        fail_msg: >-
+          Node {{ item.name }} reports version {{ item.version }} — expected 9.x.
+          The rolling upgrade left at least one node on a stale version.
+      loop: "{{ nodes_info.json }}"
+      loop_control:
+        label: "{{ item.name }} ({{ item.version }})"
       when: groups[elasticstack_elasticsearch_group_name] | length > 1
 
     - name: Verify test data survived the upgrade  # noqa: run-once[task]
@@ -120,18 +134,35 @@
         success_msg: "Test data survived upgrade: {{ test_doc.json._source.test_field }}"
       run_once: true
 
-    - name: Verify JVM custom config was written during upgrade
-      ansible.builtin.slurp:
-        src: /etc/elasticsearch/jvm.options.d/90-custom.options
-      register: custom_jvm_config
+    - name: Query running JVM input arguments
+      ansible.builtin.uri:
+        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/_nodes/jvm?filter_path=nodes.*.jvm.input_arguments
+        method: GET
+        force_basic_auth: true
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        return_content: true
+        status_code: 200
+        validate_certs: false
+      register: _nodes_jvm
 
-    - name: Check custom JVM parameter is on disk (written pre-upgrade, applied on upgrade restart)
+    - name: Assert custom JVM parameter is loaded by the running ES process (not just on disk)
       ansible.builtin.assert:
         that:
-          - "'-Des.upgrade.test.marker=true' in (custom_jvm_config.content | b64decode)"
+          - >-
+            '-Des.upgrade.test.marker=true' in (
+              _nodes_jvm.json.nodes.values()
+              | map(attribute='jvm')
+              | map(attribute='input_arguments')
+              | flatten
+            )
         fail_msg: >-
-          JVM custom config not applied. Got: {{ custom_jvm_config.content | b64decode }}
-        success_msg: "JVM custom parameter correctly applied during upgrade"
+          The role wrote /etc/elasticsearch/jvm.options.d/90-custom.options with
+          -Des.upgrade.test.marker=true, but it is NOT in the running JVM's
+          input_arguments. The upgrade restart did not pick up the new options
+          file — either the file was written after the restart, or the upgrade
+          path skipped the restart entirely.
+        success_msg: "Custom JVM parameter is in the running JVM — upgrade restart picked up the new options"
 
     - name: Final upgrade verification summary  # noqa: run-once[task]
       ansible.builtin.debug:

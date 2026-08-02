@@ -9,8 +9,9 @@ WORKFLOWS_DIR="$REPO_ROOT/.github/workflows"
 MOLECULE_DIR="$REPO_ROOT/molecule"
 EXIT_CODE=0
 
-# Scenarios that are not standalone tests (utility dirs, shared includes)
-EXCLUDED_SCENARIOS="default shared plugins"
+# Scenarios that are not standalone tests (utility dirs, shared includes,
+# or playbooks invoked directly by ansible-playbook rather than `molecule`)
+EXCLUDED_SCENARIOS="default shared cert_info_module"
 
 echo "=== Molecule scenario CI coverage check ==="
 echo
