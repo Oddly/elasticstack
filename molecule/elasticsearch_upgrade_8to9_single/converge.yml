@@ -19,7 +19,21 @@
     elasticstack_no_log: false
     elasticsearch_seed_hosts: []
     elasticsearch_initial_master_nodes: []
+    # External certificates, so the upgrade exercises the code path where
+    # elasticsearch.yml.j2 has to emit certificate_authorities. The multi-node
+    # elasticsearch_upgrade_8to9 scenario still covers the self-signed path.
+    elasticsearch_cert_source: external
+    elasticsearch_transport_tls_certificate: /tmp/test-certs/server.crt
+    elasticsearch_transport_tls_key: /tmp/test-certs/server.key
+    elasticsearch_http_tls_certificate: /tmp/test-certs/server.crt
+    elasticsearch_http_tls_key: /tmp/test-certs/server.key
+    elasticsearch_tls_ca_certificate: /tmp/test-certs/ca.crt
+    elasticsearch_tls_remote_src: true
+    elasticsearch_ssl_verification_mode: certificate
   tasks:
+    - name: Generate test certificates
+      ansible.builtin.include_tasks: ../shared/generate_test_certs.yml
+
     - name: Include Elastic repos role (8.x)
       ansible.builtin.include_role:
         name: oddly.elasticstack.repos
@@ -227,6 +241,17 @@
     elasticsearch_initial_master_nodes: []
     # Skip the countdown pause in CI
     elasticsearch_upgrade_countdown: 0
+    # Same external certificates as the install play; the rolling upgrade
+    # writes config before restarting, so this is where a missing
+    # certificate_authorities would be baked in.
+    elasticsearch_cert_source: external
+    elasticsearch_transport_tls_certificate: /tmp/test-certs/server.crt
+    elasticsearch_transport_tls_key: /tmp/test-certs/server.key
+    elasticsearch_http_tls_certificate: /tmp/test-certs/server.crt
+    elasticsearch_http_tls_key: /tmp/test-certs/server.key
+    elasticsearch_tls_ca_certificate: /tmp/test-certs/ca.crt
+    elasticsearch_tls_remote_src: true
+    elasticsearch_ssl_verification_mode: certificate
   tasks:
     - name: Include Elastic repos role (9.x)
       ansible.builtin.include_role:
