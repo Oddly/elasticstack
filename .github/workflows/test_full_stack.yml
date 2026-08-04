@@ -91,6 +91,13 @@ jobs:
 
     strategy:
       fail-fast: false
+      # Each scenario/distro/release combo needs 15-25 GB of container RAM on
+      # the shared incus-ci host. The memory-capacity gate in shared/create.yml
+      # eventually admits every job, but without a matrix-level cap the full
+      # 16-combo PR matrix would swamp the 131 GB host and starve the biggest
+      # scenarios (elasticstack_default, cert_renewal). 6 concurrent slots keep
+      # committed memory around 90-100 GB with head-room to spare.
+      max-parallel: 6
       matrix:
         distro: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && fromJSON('["rockylinux9","debian13"]') || (inputs.distros != '' && fromJSON(inputs.distros)) || fromJSON('["rockylinux9","ubuntu2204","ubuntu2404","ubuntu2604","debian12","debian13"]') }}
         scenario:
