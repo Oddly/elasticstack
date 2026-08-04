@@ -408,6 +408,21 @@
   notify: Restart Elasticsearch
   when: elasticsearch_manage_logging | bool
 
+- name: Install logrotate configuration for Elasticsearch
+  ansible.builtin.template:
+    src: logrotate-elasticsearch.j2
+    dest: /etc/logrotate.d/elasticsearch
+    owner: root
+    group: root
+    mode: "0644"
+  when: elasticsearch_logrotate_enabled | bool
+
+- name: Remove logrotate configuration for Elasticsearch
+  ansible.builtin.file:
+    path: /etc/logrotate.d/elasticsearch
+    state: absent
+  when: not (elasticsearch_logrotate_enabled | bool)
+
 - name: Create Elasticsearch directory
   ansible.builtin.file:
     path: "{{ item.path }}"
