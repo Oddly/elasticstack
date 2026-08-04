@@ -4,13 +4,25 @@
 # minor, or patch — should restart nodes one at a time with shard allocation
 # management rather than restarting all nodes simultaneously.
 #
-# Pre-install detection covers cases where we know the target version:
-# 1. Pinned version higher than installed (elasticstack_version: "9.2.0")
-# 2. Major version change (elasticstack_release differs from installed)
+# There are TWO detection points and this file only handles the first.
 #
-# For "latest" mode, we can't know pre-install whether a newer version is
-# available. The normal package tasks handle installation with state: latest,
-# and if the package changed, a rolling restart is triggered post-install.
+# 1. PRE-install (this file): we know the target version before touching
+#    packages, so we can set _elasticsearch_needs_rolling_upgrade and let
+#    "Update Elasticsearch if needed" run the full rolling path (which
+#    does the package upgrade per-node under shard-allocation management).
+#    Fires when:
+#      a. Pinned version higher than installed (elasticstack_version: "9.2.0")
+#      b. Major version change (elasticstack_release differs from installed)
+#
+# 2. POST-install (see "Detect if package was upgraded (post-install)" and
+#    "Rolling restart after package upgrade" in main.yml): for
+#    elasticstack_version: latest, we can't know pre-install whether a
+#    newer version is available, so the normal package task runs with
+#    state: latest and we look at its .changed field. If it upgraded, a
+#    rolling restart fires post-install.
+#
+# Both paths converge on elasticsearch-rolling-upgrade.yml; only the
+# "when did we know we had to?" differs.
 - name: elasticsearch-upgrade-detection | Detect if rolling upgrade is needed
   ansible.builtin.set_fact:
     _elasticsearch_needs_rolling_upgrade: >-

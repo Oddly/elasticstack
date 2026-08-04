@@ -124,15 +124,15 @@
       ansible.builtin.include_role:
         name: oddly.elasticstack.repos
 
-    # The role's elasticstack_version: latest path does NOT trigger the
-    # rolling-upgrade detection on same-major bumps — only pinned-higher
-    # version OR release change qualifies (see
-    # roles/elasticsearch/tasks/elasticsearch-upgrade-detection.yml).
-    # And the chiark apt/yum mirror's cached metadata may not surface
-    # newer 8.x patches without a forced refresh. Drive the package +
-    # restart directly here, as the original test did. Worth a follow-up
-    # to add a "latest-mode same-major upgrade detection" path to the
-    # role, but that's a role change, not a test change.
+    # The role DOES detect same-major latest-mode upgrades post-install
+    # (see roles/elasticsearch/tasks/main.yml "Rolling restart after
+    # package upgrade") — the earlier "not wired up" note here was wrong.
+    # We still drive the package + restart directly in this scenario
+    # because the chiark apt/yum mirror's cached metadata may not surface
+    # newer 8.x patches without a forced refresh, and the test needs a
+    # deterministic bump from 8.10 to the latest 8.x. Refreshing the
+    # cache explicitly gets us that without depending on when the mirror
+    # last pulled.
     - name: Force apt cache update before 8.x upgrade
       ansible.builtin.apt:
         update_cache: true
