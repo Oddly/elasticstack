@@ -243,3 +243,11 @@ elasticsearch_logrotate_rotate: 32
 elasticsearch_logrotate_size: 50M
 # @var elasticsearch_logrotate_maxage:description: Delete rotated files older than this many days
 elasticsearch_logrotate_maxage: 370
+
+# @var elasticsearch_cert_will_expire_soon:description: >
+#   Force renewal of the Elasticsearch node certificate on the next run.
+#   Normally flipped to true automatically by the cert_check_expiry task
+#   when the certificate is within `elasticsearch_cert_expiration_buffer` days of expiry;
+#   set to true from a playbook to force renewal regardless of buffer.
+# @end
+elasticsearch_cert_will_expire_soon: false
