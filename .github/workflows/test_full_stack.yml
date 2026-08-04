@@ -63,7 +63,13 @@ jobs:
     runs-on: self-hosted
     needs: [changes, lint_full]
     if: needs.changes.outputs.should_test == 'true' || github.event_name != 'pull_request'
-    timeout-minutes: 120
+    # 180 min: elasticstack_default is the heaviest scenario and observed
+    # runs range 70-105 min in isolation, but the extra queue wait added
+    # by the memory-capacity gate on a busy runner can push a single job
+    # past the previous 120-min cap.  The memory-gate retry cap in
+    # shared/create.yml is now 15 min so this ceiling is only reached
+    # when the scenario genuinely runs long, not when the queue starves it.
+    timeout-minutes: 180
 
     env:
       COLLECTION_NAMESPACE: oddly
