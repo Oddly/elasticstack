@@ -228,3 +228,18 @@ elasticsearch_extra_config: {}
 #   elasticsearch.yml (path.repo). Leave empty to disable.
 # @end
 elasticsearch_fs_repo: []
+
+# @var elasticsearch_logrotate_enabled:description: >
+#   Install /etc/logrotate.d/elasticsearch as a safety net for the
+#   /var/log/elasticsearch directory. Uses copytruncate so it does not
+#   conflict with the log4j2 rolling appender's own rotation.
+# @end
+elasticsearch_logrotate_enabled: true
+# @var elasticsearch_logrotate_frequency:description: Rotation cadence (daily, weekly, monthly)
+elasticsearch_logrotate_frequency: daily
+# @var elasticsearch_logrotate_rotate:description: Number of rotated files to keep before deletion
+elasticsearch_logrotate_rotate: 32
+# @var elasticsearch_logrotate_size:description: Rotate when a log file exceeds this size (e.g. 50M, 1G)
+elasticsearch_logrotate_size: 50M
+# @var elasticsearch_logrotate_maxage:description: Delete rotated files older than this many days
+elasticsearch_logrotate_maxage: 370

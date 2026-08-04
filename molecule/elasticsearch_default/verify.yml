@@ -124,3 +124,29 @@
         fail_msg: "vm.swappiness is {{ _swappiness.stdout }}, expected 1"
       run_once: true
       when: _swappiness is not skipped
+
+    - name: Verify Elasticsearch logrotate config exists
+      ansible.builtin.stat:
+        path: /etc/logrotate.d/elasticsearch
+      register: _es_logrotate
+
+    - name: Assert Elasticsearch logrotate config is installed
+      ansible.builtin.assert:
+        that:
+          - _es_logrotate.stat.exists
+          - _es_logrotate.stat.mode == '0644'
+        fail_msg: "/etc/logrotate.d/elasticsearch missing or wrong permissions"
+
+    - name: Read logrotate config
+      ansible.builtin.slurp:
+        src: /etc/logrotate.d/elasticsearch
+      register: _es_logrotate_content
+
+    - name: Assert logrotate config sets expected directives
+      ansible.builtin.assert:
+        that:
+          - "'copytruncate' in (_es_logrotate_content.content | b64decode)"
+          - "'daily' in (_es_logrotate_content.content | b64decode)"
+          - "'rotate 32' in (_es_logrotate_content.content | b64decode)"
+          - "'/var/log/elasticsearch/*.log' in (_es_logrotate_content.content | b64decode)"
+        fail_msg: "logrotate config missing expected directives"

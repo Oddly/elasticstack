@@ -1,0 +1,20 @@
+# {{ ansible_managed }}
+# Elasticsearch OS-level logrotate. This is a safety net; log4j2 already
+# rotates the primary appenders when elasticsearch_manage_logging is true,
+# but the /var/log/elasticsearch directory can still accumulate audit,
+# slowlog, and other files over time. copytruncate is used so
+# Elasticsearch does not need to reopen its file descriptors.
+/var/log/elasticsearch/*.log
+/var/log/elasticsearch/*.json
+{
+    {{ elasticsearch_logrotate_frequency }}
+    rotate {{ elasticsearch_logrotate_rotate }}
+    size {{ elasticsearch_logrotate_size }}
+    maxage {{ elasticsearch_logrotate_maxage }}
+    copytruncate
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0644 elasticsearch {{ elasticsearch_group }}
+}
