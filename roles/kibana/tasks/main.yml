@@ -150,6 +150,7 @@
         #   1  transient — still starting up, keep retrying
         #   2  permanent — service dead or a fatal log line already surfaced
         cmd: |
+          set -o pipefail
           if ! systemctl is-active --quiet kibana; then
             exit 2
           fi
