@@ -145,8 +145,16 @@
   block:
     - name: Wait for Kibana readiness ({{ 'HTTPS' if kibana_tls | default(false) | bool else 'HTTP' }})
       ansible.builtin.shell:
+        # Exit codes:
+        #   0  ready (200 or 401)
+        #   1  transient — still starting up, keep retrying
+        #   2  permanent — service dead or a fatal log line already surfaced
         cmd: |
           if ! systemctl is-active --quiet kibana; then
+            exit 2
+          fi
+          if journalctl -u kibana --no-pager -n 100 --since '2 minutes ago' 2>/dev/null | \
+              grep -Eq 'FATAL|Unable to connect to Elasticsearch|Authentication.*failed|Kibana server is not ready.*fatal'; then
             exit 2
           fi
           HTTP_CODE=$(curl -sk -o /dev/null -w '%{http_code}' {{ 'https' if kibana_tls | default(false) | bool else 'http' }}://localhost:5601/api/status 2>/dev/null) || true
