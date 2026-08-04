@@ -236,6 +236,28 @@
     - ansible_facts.packages['elasticsearch'] is defined
   run_once: true
 
+# Pre-detect external cert state so the template renders consistently
+# across first and subsequent runs (idempotency). This must happen before the
+# pre-upgrade config write below: elasticsearch.yml.j2 only emits
+# xpack.security.{transport,http}.ssl.certificate_authorities when
+# _elasticsearch_external_has_ca is true, and that fact defaults to false.
+# If it is still unset when the pre-upgrade config is written, the node
+# restarts into a config that trusts no CA and can no longer join the cluster.
+- name: Detect existing external CA for template rendering
+  ansible.builtin.stat:
+    path: /etc/elasticsearch/certs/ca.crt
+  register: _elasticsearch_existing_ca_cert
+  when: elasticsearch_cert_source == 'external'
+
+- name: Set external CA availability for initial template render
+  ansible.builtin.set_fact:
+    _elasticsearch_external_has_ca: true
+  when:
+    - elasticsearch_cert_source == 'external'
+    - (_elasticsearch_existing_ca_cert.stat.exists | default(false)) or
+      (elasticsearch_tls_ca_certificate | default('') | length > 0) or
+      (elasticsearch_tls_ca_certificate_content | default('') | length > 0)
+
 # Write config files BEFORE the rolling upgrade so the upgrade restart picks
 # up new config in a single restart. Without this, the rolling upgrade restarts
 # with old config, then config tasks change files and notify the handler,
@@ -352,23 +374,6 @@
     - not (_elasticsearch_needs_rolling_upgrade | bool)
     - _elasticsearch_package_upgraded | default(false) | bool
     - elasticstack_password.stdout is defined
-
-# Pre-detect external cert state so the template renders consistently
-# across first and subsequent runs (idempotency).
-- name: Detect existing external CA for template rendering
-  ansible.builtin.stat:
-    path: /etc/elasticsearch/certs/ca.crt
-  register: _elasticsearch_existing_ca_cert
-  when: elasticsearch_cert_source == 'external'
-
-- name: Set external CA availability for initial template render
-  ansible.builtin.set_fact:
-    _elasticsearch_external_has_ca: true
-  when:
-    - elasticsearch_cert_source == 'external'
-    - (_elasticsearch_existing_ca_cert.stat.exists | default(false)) or
-      (elasticsearch_tls_ca_certificate | default('') | length > 0) or
-      (elasticsearch_tls_ca_certificate_content | default('') | length > 0)
 
 - name: Warn about conflicting keys in elasticsearch_extra_config
   ansible.builtin.debug:

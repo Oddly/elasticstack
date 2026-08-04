@@ -72,6 +72,26 @@
         fail_msg: "Test data corrupted or lost during upgrade!"
         success_msg: "Data preserved: {{ test_doc.json._source }}"
 
+    # Regression: the rolling upgrade writes elasticsearch.yml before restarting.
+    # The CA detection used to run after that write, so the fact gating the
+    # certificate_authorities lines was still unset and the template silently
+    # dropped them. The node then came up trusting no CA and could not rejoin.
+    - name: Read elasticsearch.yml after the upgrade
+      ansible.builtin.slurp:
+        src: /etc/elasticsearch/elasticsearch.yml
+      register: _es_yml
+
+    - name: Verify the external CA survived the rolling upgrade
+      ansible.builtin.assert:
+        that:
+          - "'xpack.security.transport.ssl.certificate_authorities' in (_es_yml.content | b64decode)"
+          - "'xpack.security.http.ssl.certificate_authorities' in (_es_yml.content | b64decode)"
+        fail_msg: >-
+          certificate_authorities missing from elasticsearch.yml after the
+          upgrade. The node cannot verify its peers and will not rejoin a
+          multi-node cluster.
+        success_msg: "External CA still configured after the upgrade"
+
     - name: Summary
       ansible.builtin.debug:
         msg: |
