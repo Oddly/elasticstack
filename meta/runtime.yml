@@ -1,2 +1,5 @@
 ---
-requires_ansible: ">=2.18.0"
+# ansible-core floor: 2.18 went EOL on 2026-05-31, 2.19 goes EOL 2026-11-30.
+# Declare 2.19 as the floor now so 2.18 users see a resolvable error message
+# instead of a stray syntax failure; bump to 2.20 once 2.19 goes EOL.
+requires_ansible: ">=2.19.0"

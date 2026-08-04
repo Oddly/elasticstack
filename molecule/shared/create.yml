@@ -46,6 +46,10 @@
     incus_storage_pool: "{{ lookup('env', 'INCUS_STORAGE_POOL') | default('lvm-pool', true) }}"
     # Pre-baked local images with SSH + python3 + authorized_keys ready.
     incus_images:
+      # Debian 12 (Bookworm) went EOL on 2026-07-11. Kept in the full CI
+      # matrix as best-effort while community users still run it; drop
+      # once Trixie hits its 1-year mark (2026-08) and Bookworm images
+      # stop building cleanly.
       debian12: "molecule-debian-12"
       debian13: "molecule-debian-13"
       rockylinux9: "molecule-rockylinux-9"
