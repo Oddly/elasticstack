@@ -36,6 +36,12 @@ jobs:
     env:
       COLLECTION_NAMESPACE: oddly
       COLLECTION_NAME: elasticstack
+      # Ansible/molecule are Python; without PYTHONUNBUFFERED the
+      # "FAILED - RETRYING (N retries left)" messages that Ansible emits
+      # from the wait-for-capacity retry loop sit in Python's stdout
+      # buffer and only flush when the buffer fills, making the log look
+      # like a silent hang for tens of minutes.
+      PYTHONUNBUFFERED: '1'
       ANSIBLE_PIPELINING: 'true'
       ANSIBLE_GATHERING: smart
       ANSIBLE_ANY_ERRORS_FATAL: 'true'

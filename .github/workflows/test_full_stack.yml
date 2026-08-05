@@ -63,7 +63,13 @@ jobs:
     runs-on: self-hosted
     needs: [changes, lint_full]
     if: needs.changes.outputs.should_test == 'true' || github.event_name != 'pull_request'
-    timeout-minutes: 120
+    # 180 min: elasticstack_default is the heaviest scenario and observed
+    # runs range 70-105 min in isolation, but the extra queue wait added
+    # by the memory-capacity gate on a busy runner can push a single job
+    # past the previous 120-min cap.  The memory-gate retry cap in
+    # shared/create.yml is now 15 min so this ceiling is only reached
+    # when the scenario genuinely runs long, not when the queue starves it.
+    timeout-minutes: 180
 
     env:
       COLLECTION_NAMESPACE: oddly
@@ -85,6 +91,13 @@ jobs:
 
     strategy:
       fail-fast: false
+      # Each scenario/distro/release combo needs 15-25 GB of container RAM on
+      # the shared incus-ci host. The memory-capacity gate in shared/create.yml
+      # eventually admits every job, but without a matrix-level cap the full
+      # 16-combo PR matrix would swamp the 131 GB host and starve the biggest
+      # scenarios (elasticstack_default, cert_renewal). 6 concurrent slots keep
+      # committed memory around 90-100 GB with head-room to spare.
+      max-parallel: 6
       matrix:
         distro: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && fromJSON('["rockylinux9","debian13"]') || (inputs.distros != '' && fromJSON(inputs.distros)) || fromJSON('["rockylinux9","ubuntu2204","ubuntu2404","ubuntu2604","debian12","debian13"]') }}
         scenario:
@@ -140,6 +153,14 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -t ed25519 ${{ secrets.INCUS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
+      - name: Acquire memory slot
+        # Coordinated admission gate — reserves the scenario's memory_mb on
+        # the shared incus-ci host so the biggest scenarios don't trample
+        # each other or the parallel test_role_* / test_elasticsearch_*
+        # workflows. This step was missing from the standalone workflow;
+        # the reusable molecule.yml wrapper has always had it.
+        run: bash scripts/wait-for-memory.sh acquire "${{ matrix.scenario }}" 1800
+
       - name: Converge
         run: molecule converge -s ${{ matrix.scenario }}
         env:
@@ -177,6 +198,13 @@ jobs:
           INCUS_HOST: ${{ secrets.INCUS_HOST }}
           MOLECULE_SSH_KEY: ${{ runner.temp }}/molecule_id_ed25519
           DISTRO_CACHE_URL: http://${{ secrets.REGISTRY_HOST }}:8081
+
+      - name: Release memory slot
+        # Runs whether converge/verify/idempotence passed or failed, so the
+        # reservation is freed promptly. Stale reservations (>1h) are also
+        # GC'd by the next acquire under the same lock as a safety net.
+        if: always()
+        run: bash scripts/wait-for-memory.sh release
 
       - name: Collect and upload diagnostics
         if: failure()

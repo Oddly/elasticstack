@@ -130,7 +130,14 @@
         REMOTE_SCRIPT
       changed_when: true
       register: _launch_result
-      retries: 360
+      # 30 retries × 30s = 15 min. Deliberately shorter than the workflow
+      # timeout (45 min for the standard molecule.yml call, 120 min for
+      # full_stack) so the task fails loudly with the last "No capacity:
+      # …" stdout instead of being silently cancelled by the workflow
+      # timeout — that made the queue-starvation cases very hard to
+      # diagnose (see PR investigating the elasticsearch_roles_calculation
+      # / elasticstack_default post-outage hangs).
+      retries: 30
       delay: 30
       until: _launch_result.rc == 0
 
