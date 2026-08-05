@@ -46,3 +46,17 @@ jobs:
       scenarios: '["kibana_default","kibana_custom","kibana_custom_certs"]'
       distros: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && '["rockylinux10","debian13"]' || '["rockylinux9","rockylinux10","ubuntu2204","ubuntu2404","ubuntu2604","debian12","debian13"]' }}
     secrets: inherit
+
+  # kibana_extras exists to cover the four toggles gated on ES 8.x
+  # (sniffOnConnectionFault, sniffInterval, server.protocol, node_max_old_space_size).
+  # It hard-codes elasticstack_release: 8 in converge.yml, so running it
+  # on the ES-9 matrix would duplicate the ES-8 run. One distro on PR is
+  # enough to catch template regressions.
+  molecule_kibana_extras:
+    needs: lint_kibana
+    uses: ./.github/workflows/molecule.yml
+    with:
+      scenarios: '["kibana_extras"]'
+      distros: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && '["debian13"]' || '["debian13","rockylinux10"]' }}
+      releases: '["8"]'
+    secrets: inherit

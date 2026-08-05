@@ -64,6 +64,7 @@ declare -A REQ=(
   [kibana_custom]=8192
   [kibana_custom_certs]=8192
   [kibana_default]=4096
+  [kibana_extras]=6144
   [logstash_advanced]=2048
   [logstash_centralized_pipelines]=2048
   [logstash_custom_pipeline]=2048

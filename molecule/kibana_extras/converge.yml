@@ -1,0 +1,35 @@
+---
+# Deploy ES 8.x + Kibana with the four toggles nothing else exercises,
+# so the assertions in verify.yml prove the corresponding
+# roles/kibana/templates/kibana.yml.j2 and roles/kibana/tasks/main.yml
+# code paths actually render.
+- name: Converge Kibana extras
+  hosts: all
+  vars:
+    # Pinned to ES 8.x because kibana_sniff_on_connection_fault and
+    # kibana_sniff_interval are gated on `elasticstack_release | int < 9`.
+    elasticstack_release: 8
+    elasticstack_full_stack: true
+    elasticstack_no_log: false
+    elasticsearch_heap: "1"
+
+    # The four toggles under test:
+    kibana_node_max_old_space_size: 2048
+    kibana_server_protocol: "http"
+    kibana_sniff_on_connection_fault: true
+    kibana_sniff_interval: 30000
+
+  tasks:
+    - name: Include Elastic Repos
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.repos
+
+    - name: Deploy Elasticsearch
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elasticsearch
+      when: "'elasticsearch' in group_names"
+
+    - name: Deploy Kibana
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.kibana
+      when: "'kibana' in group_names"
