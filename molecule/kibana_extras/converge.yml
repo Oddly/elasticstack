@@ -15,7 +15,10 @@
 
     # The four toggles under test:
     kibana_node_max_old_space_size: 2048
-    kibana_server_protocol: "http"
+    # Kibana only accepts "http1" or "http2" for server.protocol; anything
+    # else is rejected at config validation. We use http1 because http2
+    # requires TLS on the server side and this scenario runs plain HTTP.
+    kibana_server_protocol: "http1"
     kibana_sniff_on_connection_fault: true
     kibana_sniff_interval: 30000
 

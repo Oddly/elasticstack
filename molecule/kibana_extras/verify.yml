@@ -13,7 +13,7 @@
         - name: Assert server.protocol is emitted
           ansible.builtin.assert:
             that:
-              - "'server.protocol: \"http\"' in (kibana_yml.content | b64decode)"
+              - "'server.protocol: \"http1\"' in (kibana_yml.content | b64decode)"
             fail_msg: >-
               server.protocol not emitted; kibana_server_protocol branch in
               kibana.yml.j2 did not render.
