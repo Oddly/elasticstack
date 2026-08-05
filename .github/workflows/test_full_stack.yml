@@ -99,7 +99,11 @@ jobs:
       # committed memory around 90-100 GB with head-room to spare.
       max-parallel: 6
       matrix:
-        distro: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && fromJSON('["rockylinux9","debian13"]') || (inputs.distros != '' && fromJSON(inputs.distros)) || fromJSON('["rockylinux9","ubuntu2204","ubuntu2404","ubuntu2604","debian12","debian13"]') }}
+        # Standardise on rockylinux10 (not 9) for PR runs to match the rest
+        # of the workflows. Rocky 10 exercises the EL≥9 branch in
+        # roles/repos/tasks/redhat.yml that Rocky 9 already covers, so no
+        # coverage is lost.
+        distro: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && fromJSON('["rockylinux10","debian13"]') || (inputs.distros != '' && fromJSON(inputs.distros)) || fromJSON('["rockylinux9","ubuntu2204","ubuntu2404","ubuntu2604","debian12","debian13"]') }}
         scenario:
           - elasticstack_default
           - es_kibana

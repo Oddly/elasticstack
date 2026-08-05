@@ -44,7 +44,7 @@ my_resv="$GATE_DIR/r.${runner}"
 # Update this table when a scenario's memory_mb changes.
 declare -A REQ=(
   [beats_advanced]=2048
-  [beats_default]=4096
+  [beats_default]=2048
   [beats_peculiar]=2048
   [beats_security]=8192
   [cert_renewal]=10752
