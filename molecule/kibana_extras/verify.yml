@@ -1,0 +1,56 @@
+---
+- name: Verify Kibana extras
+  hosts: all
+  tasks:
+    - name: Run Kibana-side assertions
+      when: "'kibana' in group_names"
+      block:
+        - name: Read kibana.yml
+          ansible.builtin.slurp:
+            src: /etc/kibana/kibana.yml
+          register: kibana_yml
+
+        - name: Assert server.protocol is emitted
+          ansible.builtin.assert:
+            that:
+              - "'server.protocol: \"http\"' in (kibana_yml.content | b64decode)"
+            fail_msg: >-
+              server.protocol not emitted; kibana_server_protocol branch in
+              kibana.yml.j2 did not render.
+
+        - name: Assert elasticsearch.sniffOnConnectionFault fired
+          ansible.builtin.assert:
+            that:
+              - "'elasticsearch.sniffOnConnectionFault: true' in (kibana_yml.content | b64decode)"
+            fail_msg: >-
+              sniffOnConnectionFault not rendered; the < 9 gate on
+              kibana_sniff_on_connection_fault may have flipped without
+              this scenario noticing.
+
+        - name: Assert elasticsearch.sniffInterval fired
+          ansible.builtin.assert:
+            that:
+              - "'elasticsearch.sniffInterval: 30000' in (kibana_yml.content | b64decode)"
+            fail_msg: >-
+              sniffInterval not rendered; the < 9 gate on
+              kibana_sniff_interval may have flipped.
+
+        - name: Read node.options for max-old-space-size
+          ansible.builtin.slurp:
+            src: /etc/kibana/node.options
+          register: kibana_node_opts
+
+        - name: Assert --max-old-space-size was set from the variable
+          ansible.builtin.assert:
+            that:
+              - "'--max-old-space-size=2048' in (kibana_node_opts.content | b64decode)"
+            fail_msg: >-
+              --max-old-space-size line missing from /etc/kibana/node.options;
+              the kibana_node_max_old_space_size lineinfile task in
+              roles/kibana/tasks/main.yml did not fire.
+
+        - name: Verify kibana.yml is still valid YAML
+          ansible.builtin.assert:
+            that:
+              - "(kibana_yml.content | b64decode | from_yaml) is mapping"
+            fail_msg: "kibana.yml is not parseable as YAML after the extras were applied"
