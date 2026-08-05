@@ -45,4 +45,8 @@ jobs:
     with:
       scenarios: '["logstash_default","logstash_ssl","logstash_custom_pipeline","logstash_advanced","logstash_external_certs","logstash_standalone_certs","logstash_centralized_pipelines"]'
       distros: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && '["rockylinux10","debian13"]' || '["rockylinux9","rockylinux10","ubuntu2204","ubuntu2404","ubuntu2604","debian12","debian13"]' }}
+      # PR: 9 only. Cron/schedule keeps ["8","9"] — Logstash config differs
+      # meaningfully between majors (api.http.* vs http.* etc.), so we still
+      # want ES 8.19 covered before its 2027-07-15 EOL.
+      releases: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && '["9"]' || '["8","9"]' }}
     secrets: inherit
