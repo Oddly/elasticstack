@@ -11,7 +11,10 @@ platforms:
     groups:
       - elasticsearch
     distro: "${MOLECULE_DISTRO:-debian12}"
-    memory_mb: 4096
+    # Beats-only scenario; no ES deployed even though the platform is in
+    # the `elasticsearch` group (leftover from the shared inventory). 2 GB
+    # is enough for filebeat + metricbeat + auditbeat side-by-side.
+    memory_mb: 2048
 provisioner:
   name: ansible
   env:
