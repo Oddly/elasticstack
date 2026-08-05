@@ -45,6 +45,11 @@ jobs:
     with:
       scenarios: '["kibana_default","kibana_custom","kibana_custom_certs"]'
       distros: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && '["rockylinux10","debian13"]' || '["rockylinux9","rockylinux10","ubuntu2204","ubuntu2404","ubuntu2604","debian12","debian13"]' }}
+      # ES 8.19 gets support until 2027-07-15. PR runs test 9 only to halve
+      # the matrix; nightly/schedule keeps the full ["8","9"] fan-out — and
+      # the dedicated kibana_extras job below always runs on 8. That leaves
+      # no ES-8 Kibana path untested in the aggregate weekly picture.
+      releases: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && '["9"]' || '["8","9"]' }}
     secrets: inherit
 
   # kibana_extras exists to cover the four toggles gated on ES 8.x

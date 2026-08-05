@@ -44,5 +44,7 @@ jobs:
     uses: ./.github/workflows/molecule.yml
     with:
       scenarios: '["beats_default","beats_peculiar","beats_advanced","beats_security"]'
+      # PR: 9 only. Cron keeps ["8","9"] until ES 8.19 EOL 2027-07-15.
+      releases: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && '["9"]' || '["8","9"]' }}
       distros: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && '["rockylinux10","debian13"]' || '["rockylinux9","rockylinux10","ubuntu2204","ubuntu2404","ubuntu2604","debian12","debian13"]' }}
     secrets: inherit
