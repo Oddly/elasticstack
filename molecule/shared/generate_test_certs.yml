@@ -54,10 +54,17 @@
     path: /tmp/test-certs/server.csr
     privatekey_path: /tmp/test-certs/server.key
     common_name: "{{ ansible_facts.hostname }}"
-    subject_alt_name:
-      - "DNS:{{ ansible_facts.hostname }}"
-      - "DNS:localhost"
-      - "IP:127.0.0.1"
+    # Include every IPv4 the host owns as a SAN. Elasticsearch binds
+    # `network.host: ["_local_", "_site_"]` and its bundled tools
+    # (elasticsearch-setup-passwords, elasticsearch-reset-password) call
+    # https://<publish_host>:9200 — the site-local address, not localhost —
+    # so the cert must accept the container's incusbr0 IP or the TLS
+    # verify fails with "No subject alternative names matching IP
+    # address ..." mid-converge.
+    subject_alt_name: >-
+      {{ ['DNS:' ~ ansible_facts.hostname, 'DNS:localhost', 'IP:127.0.0.1']
+         + (ansible_facts.all_ipv4_addresses | default([])
+            | map('regex_replace', '^', 'IP:') | list) }}
 
 - name: Sign server certificate with CA
   community.crypto.x509_certificate:
