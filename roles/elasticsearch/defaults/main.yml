@@ -187,6 +187,12 @@ elasticsearch_http_ssl_keystore_path: ""
 # @var elasticsearch_validate_api_certs:description: Validate TLS certificates on API health checks. Set to true if using a trusted CA
 elasticsearch_validate_api_certs: false
 
+# @var elasticsearch_unsafe_upgrade_restart:description: >
+#   Restart all Elasticsearch nodes simultaneously during an upgrade
+#   instead of doing a rolling restart. Only enable for single-node dev
+#   clusters where downtime is acceptable; a multi-node cluster running
+#   with this on will lose quorum on upgrade.
+# @end
 elasticsearch_unsafe_upgrade_restart: false
 
 # @var elasticsearch_keystore_entries:description: >

@@ -1,0 +1,256 @@
+---
+argument_specs:
+  main:
+    short_description: Install, configure, and manage Elastic Beats (filebeat, metricbeat, auditbeat)
+    description: Handles package install, ECS-schema output configuration to Elasticsearch or Logstash, TLS certificate distribution,
+      and systemd service management per beat.
+    options:
+      beats_security:
+        description: Enable TLS security for Beats communication with Elasticsearch or Logstash
+        type: bool
+        default: false
+      beats_filebeat:
+        description: Install and configure Filebeat
+        type: bool
+        default: true
+      beats_auditbeat:
+        description: Install and configure Auditbeat
+        type: bool
+        default: false
+      beats_metricbeat:
+        description: Install and configure Metricbeat
+        type: bool
+        default: false
+      beats_target_hosts:
+        description: List of Elasticsearch or Logstash hosts to send data to (used when not in full_stack mode)
+        type: list
+        default:
+        - localhost
+      beats_logging:
+        description: Logging destination. Set to 'file' for file-based logging
+        type: str
+        default: file
+      beats_logpath:
+        description: Directory for Beat log files
+        type: str
+        default: /var/log/beats
+      beats_loglevel:
+        description: Log level for all Beats (debug, info, warning, error, critical)
+        type: str
+        default: info
+      beats_logging_keepfiles:
+        description: Number of rotated log files to retain
+        type: int
+        default: 7
+      beats_logging_permissions:
+        description: File permissions for Beat log files
+        type: str
+        default: '0644'
+      beats_ca_dir:
+        description: Directory where Beat TLS certificates are stored. Auto-set to /etc/beats/certs in full_stack mode or
+          /opt/ca otherwise.
+        type: str
+        default: /etc/beats/certs
+      beats_tls_key:
+        description: Path to the Beat TLS private key file
+        type: str
+        default: '{{ beats_ca_dir }}/{{ inventory_hostname }}-beats.key'
+      beats_tls_cert:
+        description: Path to the Beat TLS certificate file
+        type: str
+        default: '{{ beats_ca_dir }}/{{ inventory_hostname }}-beats.crt'
+      beats_tls_cacert:
+        description: Path to the CA certificate for TLS verification
+        type: str
+        default: '{{ beats_ca_dir }}/ca.crt'
+      beats_ssl_verification_mode:
+        description: SSL verification mode for Beats output to Elasticsearch (full, certificate, none)
+        type: str
+        default: certificate
+      beats_tls_key_passphrase:
+        description: Passphrase for the Beat TLS private key
+        type: str
+        default: BeatsChangeMe
+      beats_filebeat_elastic_monitoring:
+        description: Enable Elastic monitoring (X-Pack) for Filebeat
+        type: bool
+        default: false
+      beats_filebeat_output:
+        description: Output destination for Filebeat ('logstash', 'elasticsearch', or 'file')
+        type: str
+        default: logstash
+      beats_filebeat_syslog_udp:
+        description: Enable a UDP syslog input in Filebeat
+        type: bool
+        default: false
+      beats_filebeat_syslog_udp_port:
+        description: Port for the UDP syslog input
+        type: int
+        default: 514
+      beats_filebeat_syslog_tcp:
+        description: Enable a TCP syslog input in Filebeat
+        type: bool
+        default: false
+      beats_filebeat_syslog_tcp_port:
+        description: Port for the TCP syslog input
+        type: int
+        default: 514
+      beats_filebeat_syslog_tcp_ssl:
+        description: Enable TLS on the TCP syslog input
+        type: bool
+        default: false
+      beats_filebeat_syslog_tcp_fields:
+        description: Custom fields added to events from the TCP syslog input
+        type: dict
+        default: {}
+      beats_filebeat_syslog_udp_fields:
+        description: Custom fields added to events from the UDP syslog input
+        type: dict
+        default: {}
+      beats_filebeat_log_input:
+        description: Enable file-based log inputs in Filebeat
+        type: bool
+        default: true
+      beats_filebeat_log_inputs:
+        description: Dictionary of log inputs. Each key defines an input with paths, optional fields, and multiline settings
+        type: dict
+        default:
+          messages:
+            name: messages
+            paths:
+            - /var/log/messages
+            - /var/log/syslog
+      beats_filebeat_enable:
+        description: Enable the Filebeat service after installation
+        type: bool
+        default: true
+      beats_filebeat_journald:
+        description: Enable journald input in Filebeat for reading systemd journal
+        type: bool
+        default: false
+      beats_filebeat_journald_inputs:
+        description: Dictionary of journald inputs. Each key defines an input with an id and optional include_matches filter
+        type: dict
+        default:
+          everything:
+            id: everything
+      beats_filebeat_docker:
+        description: Enable Docker container log input in Filebeat
+        type: bool
+        default: false
+      beats_filebeat_docker_ids:
+        description: Docker container IDs to collect logs from. Use '*' for all containers
+        type: str
+        default: '*'
+      beats_filebeat_loadbalance:
+        description: Load balance events across multiple Logstash hosts
+        type: bool
+        default: true
+      beats_queue_type:
+        description: Filebeat internal queue type ('mem' for in-memory, 'disk' for disk-backed)
+        type: str
+        default: mem
+      beats_queue_disk_path:
+        description: Custom path for the disk queue. Leave empty to use the default data directory
+        type: str
+        default: ''
+      beats_queue_disk_max_size:
+        description: Maximum size of the disk queue before Filebeat applies backpressure
+        type: str
+        default: 1GB
+      beats_filebeat_extra_inputs:
+        description: 'List of additional Filebeat input configurations appended after the built-in inputs. Each item is a
+          dict rendered as a complete YAML input block under filebeat.inputs @var beats_filebeat_extra_inputs:example: > beats_filebeat_extra_inputs:
+          - type: aws-s3 enabled: true queue_url: https://sqs.us-east-1.amazonaws.com/1234/queue - type: httpjson enabled:
+          true config_version: 2 request.url: https://api.example.com/logs'
+        type: list
+        default: []
+      beats_filebeat_mysql_slowlog_input:
+        description: Enable MySQL slow query log input with multiline parsing
+        type: bool
+        default: false
+      beats_filebeat_modules:
+        description: List of Filebeat modules to enable. Leave empty to disable module management
+        type: list
+        default: []
+      beats_auditbeat_setup:
+        description: Run Auditbeat setup (load dashboards, index templates) on first install
+        type: bool
+        default: true
+      beats_auditbeat_enable:
+        description: Enable the Auditbeat service. Disable in containers where auditd has no permissions
+        type: bool
+        default: true
+      beats_auditbeat_output:
+        description: Output destination for Auditbeat ('elasticsearch' or 'logstash')
+        type: str
+        default: elasticsearch
+      beats_auditbeat_loadbalance:
+        description: Load balance events across multiple output hosts
+        type: bool
+        default: true
+      beats_metricbeat_enable:
+        description: Enable the Metricbeat service after installation
+        type: bool
+        default: true
+      beats_metricbeat_output:
+        description: Output destination for Metricbeat ('elasticsearch' or 'logstash')
+        type: str
+        default: elasticsearch
+      beats_metricbeat_modules:
+        description: List of Metricbeat modules to enable
+        type: list
+        default:
+        - system
+      beats_metricbeat_loadbalance:
+        description: Load balance events across multiple output hosts
+        type: bool
+        default: true
+      beats_cert_validity_period:
+        description: Validity period in days for generated Beat TLS certificates
+        type: int
+        default: 1095
+      beats_cert_expiration_buffer:
+        description: Days before certificate expiry to trigger renewal
+        type: int
+        default: 30
+      beats_cert_source:
+        description: Where to get TLS certificates. 'elasticsearch_ca' (default) auto-generates from the built-in CA; 'external'
+          uses user-provided files
+        type: str
+        default: elasticsearch_ca
+      beats_tls_certificate_file:
+        description: "Path to Beat TLS certificate. Accepts PEM (.crt/.pem) \u2014 Beats uses PEM natively"
+        type: str
+        default: ''
+      beats_tls_key_file:
+        description: "Path to Beat TLS private key. Optional \u2014 auto-derived from cert path for PEM"
+        type: str
+        default: ''
+      beats_tls_ca_file:
+        description: "CA certificate. Optional \u2014 auto-extracted from PEM chain if cert contains multiple blocks"
+        type: str
+        default: ''
+      beats_tls_certificate_content:
+        description: Beat certificate as inline PEM string. Takes precedence over file path
+        type: str
+        default: ''
+      beats_tls_key_content:
+        description: Beat private key as inline PEM string. Takes precedence over file path
+        type: str
+        default: ''
+      beats_tls_ca_content:
+        description: CA certificate as inline PEM string. Takes precedence over file path
+        type: str
+        default: ''
+      beats_tls_remote_src:
+        description: Source location for external cert files. false = files on Ansible controller, true = files already on
+          managed node
+        type: bool
+        default: false
+      beats_cert_will_expire_soon:
+        description: Force renewal of the Beats client certificate on the next run. Normally flipped to true automatically
+          by the cert_check_expiry task when the certificate is within `beats_cert_expiration_buffer` days of expiry; set
+          to true from a playbook to force renewal regardless of buffer.
+        type: bool
+        default: false
