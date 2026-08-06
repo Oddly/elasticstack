@@ -25,13 +25,19 @@
         validate_certs: "{{ elasticsearch_validate_api_certs }}"
         return_content: true
       register: _elasticsearch_current_cluster_settings
+      # The uri module honours check_mode inherited from a block/task-level
+      # override even when the play itself is not in --check, and returns
+      # without hitting the endpoint. `.json` is then missing on the
+      # registered result; guard the downstream compare so a per-block
+      # check_mode caller doesn't crash us.
+      check_mode: false
       no_log: "{{ elasticstack_no_log }}"
 
     - name: elasticsearch-cluster-settings | Check if settings already match
       ansible.builtin.set_fact:
         _elasticsearch_cluster_settings_changed: "{{ _needs_update | trim }}"
       vars:
-        _current: "{{ _elasticsearch_current_cluster_settings.json.persistent }}"
+        _current: "{{ (_elasticsearch_current_cluster_settings.json | default({})).persistent | default({}) }}"
         _needs_update: >-
           {% set ns = namespace(changed=false) %}
           {% for key, value in _elasticsearch_effective_cluster_settings.items() %}

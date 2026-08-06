@@ -17,3 +17,31 @@
     - name: Include Elasticsearch
       ansible.builtin.include_role:
         name: oddly.elasticstack.elasticsearch
+
+# Coverage for the `not ansible_check_mode` guards #154 added to the
+# `Start Elasticsearch` and `Handle cluster setup without security`
+# tasks/blocks, plus the `check_mode: false` shield this PR adds to
+# the cluster-settings URI. Re-running the role with check_mode: true
+# on the outer block previously exploded on the `.json` reference in
+# elasticsearch-cluster-settings.yml because the URI honoured the
+# check-mode override and returned without a body.
+- name: "Re-include ES role in check mode (regression cover for #154)"
+  hosts: all
+  vars:
+    elasticsearch_security: false
+    elasticstack_security: false
+    elasticsearch_heap: "1"
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    elasticstack_no_log: false
+    elasticstack_elasticsearch_group_name: elasticsearchXYZ
+  tasks:
+    - name: Reset shared role import guard for re-run
+      ansible.builtin.set_fact:
+        _elasticstack_role_imported: false
+
+    - name: Wrap the re-include so check_mode propagates
+      check_mode: true
+      block:
+        - name: Re-include Elasticsearch in check mode
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elasticsearch
