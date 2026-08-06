@@ -229,10 +229,8 @@ argument_specs:
         type: bool
         default: false
       logstash_extra_config:
-        description: 'Dictionary of additional logstash.yml settings not covered by dedicated variables. Keys are written
-          as-is into logstash.yml. Nested values are rendered as YAML. @var logstash_extra_config:example: > logstash_extra_config:
-          queue.checkpoint.writes: 1024 xpack.management.elasticsearch.sniffing: true xpack.management.logstash.poll_interval:
-          5s'
+        description: Dictionary of additional logstash.yml settings not covered by dedicated variables. Keys are written as-is
+          into logstash.yml. Nested values are rendered as YAML.
         type: dict
         default: {}
       logstash_logging_console:

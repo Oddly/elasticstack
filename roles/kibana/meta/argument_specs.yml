@@ -120,10 +120,10 @@ argument_specs:
         type: bool
         default: false
       kibana_extra_config:
-        description: 'Dictionary of additional kibana.yml settings not covered by dedicated variables. Keys are written as-is
-          into kibana.yml. @var kibana_extra_config:example: > kibana_extra_config: server.maxPayload: 1048576 xpack.reporting.enabled:
-          false'
-        type: dict
+        description: Additional kibana.yml settings not covered by dedicated variables. Accepts a dict (keys written as-is)
+          or a YAML string block (parsed via from_yaml at render time). Managed keys defined by dedicated role variables
+          are filtered out to prevent duplicate-key crashes.
+        type: raw
         default: {}
       kibana_cert_will_expire_soon:
         description: Force renewal of the Kibana server certificate on the next run. Normally flipped to true automatically
