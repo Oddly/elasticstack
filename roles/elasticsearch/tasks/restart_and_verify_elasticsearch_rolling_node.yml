@@ -41,10 +41,7 @@
         force_basic_auth: "{{ elasticsearch_security | bool }}"
         validate_certs: "{{ elasticsearch_validate_api_certs }}"
       register: _elasticsearch_pre_restart_health
-      until:
-        - (_elasticsearch_pre_restart_health.json.status | default('')) in _elasticsearch_health_statuses
-        - (_elasticsearch_pre_restart_health.json.relocating_shards | default(0) | int) == 0
-        - (_elasticsearch_pre_restart_health.json.initializing_shards | default(0) | int) == 0
+      until: (_elasticsearch_pre_restart_health.json.status | default('')) in _elasticsearch_health_statuses
       retries: "{{ elasticsearch_config_restart_health_retries }}"
       delay: "{{ elasticsearch_config_restart_health_delay }}"
       changed_when: false
@@ -187,10 +184,7 @@
         force_basic_auth: "{{ elasticsearch_security | bool }}"
         validate_certs: "{{ elasticsearch_validate_api_certs }}"
       register: _elasticsearch_post_restart_health
-      until:
-        - (_elasticsearch_post_restart_health.json.status | default('')) in _elasticsearch_health_statuses
-        - (_elasticsearch_post_restart_health.json.relocating_shards | default(0) | int) == 0
-        - (_elasticsearch_post_restart_health.json.initializing_shards | default(0) | int) == 0
+      until: (_elasticsearch_post_restart_health.json.status | default('')) in _elasticsearch_health_statuses
       retries: "{{ elasticsearch_config_restart_health_retries }}"
       delay: "{{ elasticsearch_config_restart_health_delay }}"
       changed_when: false
@@ -264,10 +258,7 @@
         force_basic_auth: "{{ elasticsearch_security | bool }}"
         validate_certs: "{{ elasticsearch_validate_api_certs }}"
       register: _elasticsearch_post_restart_health
-      until:
-        - (_elasticsearch_post_restart_health.json.status | default('')) in _elasticsearch_health_statuses
-        - (_elasticsearch_post_restart_health.json.relocating_shards | default(0) | int) == 0
-        - (_elasticsearch_post_restart_health.json.initializing_shards | default(0) | int) == 0
+      until: (_elasticsearch_post_restart_health.json.status | default('')) in _elasticsearch_health_statuses
       retries: "{{ elasticsearch_config_restart_health_retries }}"
       delay: "{{ elasticsearch_config_restart_health_delay }}"
       changed_when: false

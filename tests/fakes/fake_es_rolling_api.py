@@ -8,11 +8,12 @@ import threading
 
 
 class State:
-    def __init__(self, nodes, log_path, persistent_settings, fail_nodes_on):
+    def __init__(self, nodes, log_path, persistent_settings, fail_nodes_on, in_flight):
         self.nodes = nodes
         self.log_path = log_path
         self.persistent_settings = persistent_settings
         self.fail_nodes_on = fail_nodes_on
+        self.in_flight = in_flight
         self.lock = threading.Lock()
 
     def log(self, port, method, path, body):
@@ -59,8 +60,8 @@ def handler(state):
                 self._send_json(
                     {
                         "status": "green",
-                        "relocating_shards": 0,
-                        "initializing_shards": 0,
+                        "relocating_shards": state.in_flight,
+                        "initializing_shards": state.in_flight,
                     }
                 )
                 return
@@ -125,6 +126,12 @@ def main():
         default="",
         help="Comma-separated ports whose /_cat/nodes endpoint returns 503",
     )
+    parser.add_argument(
+        "--in-flight",
+        type=int,
+        default=0,
+        help="Shard count reported on both relocating_shards and initializing_shards while green",
+    )
     args = parser.parse_args()
 
     ports = [int(port) for port in args.ports.split(",")]
@@ -136,6 +143,7 @@ def main():
         args.log,
         json.loads(args.persistent_settings),
         fail_nodes_on,
+        args.in_flight,
     )
 
     for port in ports:
