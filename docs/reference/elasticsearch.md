@@ -449,6 +449,16 @@ elasticsearch_unsafe_upgrade_restart: false
 
 `elasticsearch_unsafe_upgrade_restart` skips rolling upgrade safety checks (shard allocation disable, synced flush, green health wait) and restarts all nodes simultaneously. This loses data availability during the upgrade window. Only use in non-production environments where you trade safety for speed.
 
+```yaml
+elasticsearch_upgrade_wait_status: green
+elasticsearch_upgrade_health_retries: 100
+elasticsearch_upgrade_health_delay: 30
+```
+
+`elasticsearch_upgrade_wait_status` is the minimum cluster health colour the role waits for before it takes the next node down. `green` means the replicas of the previously upgraded node are back before another node is stopped. Set to `yellow` only if you accept that shards may briefly hold a single copy during the upgrade.
+
+`elasticsearch_upgrade_health_retries` and `elasticsearch_upgrade_health_delay` control how long that barrier waits. Defaults give ~50 minutes per node, which covers replica recovery on large data nodes.
+
 ### Internal Variables
 
 These are used internally by the role. Do not set them in your inventory.

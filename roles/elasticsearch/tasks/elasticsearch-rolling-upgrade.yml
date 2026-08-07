@@ -12,6 +12,17 @@
 # For now we support upgrade only for clusters with security enabled
 # If you positively need support for safely upgrading clusters without security,
 # feel free to open an issue at https://github.com/Oddly/ansible-collection-elasticstack/issues
+# A typo here silently degraded the gate to ['green', 'yellow'] before the
+# ternary got tightened — reject early with a clear message so the operator
+# can spot 'Green'/'red' before any node comes down.
+- name: elasticsearch-rolling-upgrade | Validate elasticsearch_upgrade_wait_status
+  ansible.builtin.assert:
+    that:
+      - elasticsearch_upgrade_wait_status in ['green', 'yellow']
+    fail_msg: >-
+      elasticsearch_upgrade_wait_status must be 'green' or 'yellow',
+      got '{{ elasticsearch_upgrade_wait_status }}'.
+
 - name: elasticsearch-rolling-upgrade | Set connection protocol to https
   ansible.builtin.set_fact:
     elasticsearch_http_protocol: "https"
@@ -132,7 +143,9 @@
 
       # this step is key!!!  Don't restart more nodes
       # until all shards have completed recovery
-    - name: elasticsearch-rolling-upgrade | Wait for cluster health to return to green
+    # Barrier before this node goes down: the previous node's replicas must be
+    # back, otherwise shards are left with a single copy while we stop another node.
+    - name: elasticsearch-rolling-upgrade | Wait for cluster health before taking this node down
       ansible.builtin.uri:
         url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/health"
         method: GET
@@ -141,9 +154,11 @@
         validate_certs: "{{ elasticsearch_validate_api_certs }}"
         force_basic_auth: true
       register: elasticsearch_response
-      until: ((elasticsearch_response.json | default({})).status | default('')) in ['green', 'yellow']
-      retries: 50
-      delay: 30
+      until: ((elasticsearch_response.json | default({})).status | default('')) in _elasticsearch_upgrade_health_statuses
+      retries: "{{ elasticsearch_upgrade_health_retries | int }}"
+      delay: "{{ elasticsearch_upgrade_health_delay | int }}"
+      vars:
+        _elasticsearch_upgrade_health_statuses: "{{ ['green'] if elasticsearch_upgrade_wait_status == 'green' else ['green', 'yellow'] }}"
       no_log: "{{ elasticstack_no_log }}"
       changed_when: false
       when: _elasticsearch_cluster_reachable | bool
@@ -300,9 +315,13 @@
         validate_certs: "{{ elasticsearch_validate_api_certs }}"
         force_basic_auth: true
       register: elasticsearch_response
-      until: ((elasticsearch_response.json | default({})).status | default('')) in ['green', 'yellow']
+      until: ((elasticsearch_response.json | default({})).status | default('')) in _elasticsearch_upgrade_health_statuses
       retries: 30
       delay: 30
+      vars:
+        # Same gate as the pre-node-down health wait so both sides of the
+        # rolling loop honour the same operator preference.
+        _elasticsearch_upgrade_health_statuses: "{{ ['green'] if elasticsearch_upgrade_wait_status == 'green' else ['green', 'yellow'] }}"
       no_log: "{{ elasticstack_no_log }}"
       changed_when: false
 
