@@ -42,7 +42,7 @@ elasticstack_ca_pass: PleaseChangeMe
 #   logstash_tls_key_passphrase, and beats_tls_key_passphrase.
 #   Leave empty to use the per-role passphrases.
 # @end
-# elasticstack_cert_pass:
+elasticstack_cert_pass: ""
 # @var elasticstack_ca_validity_period:description: Validity period in days for the CA certificate
 elasticstack_ca_validity_period: 1095
 # === General Settings ===

@@ -84,3 +84,11 @@ jobs:
         env:
           ROLENAME: ${{ inputs.rolename }}
         if: ${{ inputs.rolename != '' }}
+
+      # Fails if a role's meta/argument_specs.yml is out of sync with its
+      # defaults/main.yml — catches "I added a var but forgot to update the
+      # spec" and its inverse. See scripts/gen_argspecs.py for regeneration.
+      - name: Check argument_specs drift.
+        run: |
+          python3 scripts/check_argspecs.py
+        if: ${{ inputs.rolename == '' }}
