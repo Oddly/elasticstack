@@ -1,0 +1,133 @@
+---
+argument_specs:
+  main:
+    short_description: Install, configure, and manage Kibana
+    description: Handles package install, TLS setup for the Kibana web UI, keystore-managed secrets, integration with an Elasticsearch
+      backend, and systemd service management.
+    options:
+      kibana_public_base_url:
+        description: Value for server.publicBaseUrl. Defaults to this node's own URL. Set it to the externally reachable URL
+          (e.g. the reverse proxy / VIP) when Kibana runs behind a proxy, so generated absolute URLs (reporting, share links)
+          are correct.
+        type: str
+        default: http{% if kibana_tls | bool %}s{% endif %}://{{ elasticstack_kibana_host | default(ansible_facts.fqdn) }}:{{
+          elasticstack_kibana_port }}
+      kibana_node_max_old_space_size:
+        description: Max V8 old-space heap in MB (maps to --max-old-space-size in node.options). When set, the existing node.options
+          line is uncommented/updated. When empty, the package default is left in place.
+        type: str
+        default: ''
+      kibana_enable:
+        description: Whether to enable and start the Kibana service
+        type: bool
+        default: true
+      kibana_config_backup:
+        description: Create a backup of kibana.yml before overwriting
+        type: bool
+        default: false
+      kibana_manage_yaml:
+        description: Let the role manage kibana.yml. Set to false to manage it yourself
+        type: bool
+        default: true
+      kibana_system_password:
+        description: User-defined password for the kibana_system user. When set, the role changes the auto-generated password
+          via the Elasticsearch security API and uses this value for Kibana's connection to Elasticsearch. Leave empty to
+          keep the auto-generated password from initial_passwords.
+        type: str
+        default: ''
+      kibana_security:
+        description: Enable security features (connect to Elasticsearch over HTTPS with authentication)
+        type: bool
+        default: true
+      kibana_tls:
+        description: Enable TLS on the Kibana web interface itself (serve Kibana over HTTPS)
+        type: bool
+        default: false
+      kibana_tls_key_passphrase:
+        description: Passphrase for the Kibana TLS private key
+        type: str
+        default: PleaseChangeMe
+      kibana_keystore_password:
+        description: Password to encrypt the Kibana keystore file. Empty means no encryption (same as ES default)
+        type: str
+        default: ''
+      kibana_security_encryptionkey:
+        description: Value for xpack.security.encryptionKey (stored in the Kibana keystore). Set this to reuse an existing
+          key when migrating Kibana to a new host or running multiple instances, so encrypted session state stays valid. Empty
+          generates a random key on first run.
+        type: str
+        default: ''
+      kibana_encryptedsavedobjects_encryptionkey:
+        description: Value for xpack.encryptedSavedObjects.encryptionKey (stored in the keystore). Set this to reuse an existing
+          key when migrating or scaling out, otherwise encrypted saved objects (alerting rules, connectors, Fleet tokens)
+          cannot be decrypted by the new instance. Empty generates a random key on first run.
+        type: str
+        default: ''
+      kibana_cert_expiration_buffer:
+        description: Days before certificate expiry to trigger renewal
+        type: int
+        default: 30
+      kibana_cert_validity_period:
+        description: Validity period in days for generated TLS certificates
+        type: int
+        default: 1095
+      kibana_cert_source:
+        description: Where to get TLS certificates. 'elasticsearch_ca' (default) auto-generates from the built-in CA; 'external'
+          uses user-provided files
+        type: str
+        default: elasticsearch_ca
+      kibana_tls_certificate_file:
+        description: "Path to Kibana TLS certificate. Accepts PEM (.crt/.pem) or PKCS12 (.p12/.pfx) \u2014 format auto-detected"
+        type: str
+        default: ''
+      kibana_tls_key_file:
+        description: "Path to Kibana TLS private key. Optional \u2014 auto-derived from cert path for PEM; ignored for P12"
+        type: str
+        default: ''
+      kibana_tls_certificate_passphrase:
+        description: Passphrase for encrypted PEM key or P12 file (empty = unencrypted)
+        type: str
+        default: ''
+      kibana_tls_ca_file:
+        description: "CA certificate. Optional \u2014 auto-extracted from PEM chain if cert contains multiple blocks"
+        type: str
+        default: ''
+      kibana_tls_certificate_content:
+        description: Kibana certificate as inline PEM string. Takes precedence over file path
+        type: str
+        default: ''
+      kibana_tls_key_content:
+        description: Kibana private key as inline PEM string. Takes precedence over file path
+        type: str
+        default: ''
+      kibana_tls_ca_content:
+        description: CA certificate as inline PEM string. Takes precedence over file path
+        type: str
+        default: ''
+      kibana_tls_remote_src:
+        description: Source location for external cert files. false = files on Ansible controller, true = files already on
+          managed node
+        type: bool
+        default: false
+      kibana_sniff_on_start:
+        description: 'Discover all Elasticsearch nodes in the cluster on Kibana startup. Deprecated: removed in Elasticsearch/Kibana
+          9.x. Will be dropped in a future release.'
+        type: bool
+        default: false
+      kibana_sniff_on_connection_fault:
+        description: 'Re-discover Elasticsearch nodes when a connection fault is detected. Deprecated: removed in Elasticsearch/Kibana
+          9.x. Will be dropped in a future release.'
+        type: bool
+        default: false
+      kibana_extra_config:
+        description: Additional kibana.yml settings not covered by dedicated variables. Accepts a dict (keys written as-is)
+          or a YAML string block (parsed via from_yaml at render time). Managed keys defined by dedicated role variables
+          are filtered out to prevent duplicate-key crashes.
+        type: raw
+        default: {}
+      kibana_cert_will_expire_soon:
+        description: Force renewal of the Kibana server certificate on the next run. Normally flipped to true automatically
+          by the cert_check_expiry task when the certificate is within `kibana_cert_expiration_buffer` days of expiry; set
+          to true from a playbook to force renewal regardless of buffer.
+        type: bool
+        default: false

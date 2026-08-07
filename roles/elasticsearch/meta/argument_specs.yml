@@ -1,0 +1,327 @@
+---
+argument_specs:
+  main:
+    short_description: Install, configure, and manage Elasticsearch
+    description: Handles cluster formation, TLS certificate management, security setup (users, passwords, HTTPS), rolling
+      upgrades (8.x to 9.x), JVM tuning, and systemd service management.
+    options:
+      elasticsearch_enable:
+        description: Whether to enable and start the Elasticsearch service
+        type: bool
+        default: true
+      elasticsearch_ml_enabled:
+        description: Enable machine learning features in the Elasticsearch node
+        type: bool
+        default: true
+      elasticsearch_config_backup:
+        description: Create a backup of elasticsearch.yml before overwriting
+        type: bool
+        default: false
+      elasticsearch_manage_yaml:
+        description: Let the role manage elasticsearch.yml. Set to false to manage it yourself
+        type: bool
+        default: true
+      elasticsearch_manage_logging:
+        description: Let the role manage log4j2.properties for Elasticsearch logging. Default is false because the Elasticsearch
+          package ships a well-tuned log4j2.properties that works out of the box. Only set to true when you need granular
+          control over individual appenders (console, file, JSON, slow log, deprecation, audit) via the elasticsearch_logging_*
+          variables.
+        type: bool
+        default: false
+      elasticsearch_logging_console:
+        description: Enable console (stdout) log appender. Usually off for daemon mode
+        type: bool
+        default: false
+      elasticsearch_logging_file:
+        description: Enable plain-text rolling file appender (es.log)
+        type: bool
+        default: true
+      elasticsearch_logging_json_file:
+        description: Enable JSON rolling file appender (es_server.json). ES 8+ default format
+        type: bool
+        default: true
+      elasticsearch_logging_slowlog:
+        description: Enable search and indexing slow log appenders
+        type: bool
+        default: true
+      elasticsearch_logging_deprecation:
+        description: Enable deprecation log appender
+        type: bool
+        default: true
+      elasticsearch_logging_audit:
+        description: Enable security audit log appender. Only meaningful when elasticsearch_security is true
+        type: bool
+        default: true
+      elasticsearch_security:
+        description: Enable Elasticsearch security features (TLS, authentication, RBAC)
+        type: bool
+        default: true
+      elasticsearch_bootstrap_pw:
+        description: Bootstrap password for the elastic superuser during initial cluster setup
+        type: str
+        default: PleaseChangeMe
+      elasticsearch_elastic_password:
+        description: User-defined password for the elastic superuser. When set, the role changes the auto-generated password
+          after initial security setup and uses this value for all subsequent API calls. Leave empty to keep the auto-generated
+          password from the initial_passwords file.
+        type: str
+        default: ''
+      elasticsearch_http_security:
+        description: Enable TLS on the Elasticsearch HTTP interface (port 9200)
+        type: bool
+        default: true
+      elasticsearch_http_protocol:
+        description: Protocol for Elasticsearch HTTP API. Automatically set to https when security is enabled
+        type: str
+        default: http
+      elasticsearch_datapath:
+        description: Filesystem path for Elasticsearch data storage
+        type: str
+        default: /var/lib/elasticsearch
+      elasticsearch_create_datapath:
+        description: Create the data directory if it does not exist
+        type: bool
+        default: false
+      elasticsearch_logpath:
+        description: Filesystem path for Elasticsearch log files
+        type: str
+        default: /var/log/elasticsearch
+      elasticsearch_create_logpath:
+        description: Create the log directory if it does not exist
+        type: bool
+        default: false
+      elasticsearch_heap:
+        description: JVM heap size in GB. Auto-calculated as half of system RAM, capped at 30GB, minimum 1GB
+        type: str
+        default: '{{ [[(ansible_facts.memtotal_mb // 1024) // 2, 30] | min, 1] | max }}'
+      elasticsearch_pamlimits:
+        description: Configure PAM limits for the elasticsearch user (open files, max processes)
+        type: bool
+        default: true
+      elasticsearch_os_tuning:
+        description: Apply OS-level sysctl settings required for production Elasticsearch. Sets vm.max_map_count (required
+          for mmapfs), vm.swappiness, disables Transparent Huge Pages, and tunes TCP retries for faster fault detection.
+        type: bool
+        default: true
+      elasticsearch_check_calculation:
+        description: Enable heap calculation verification and display debug output
+        type: bool
+        default: false
+      elasticsearch_clustername:
+        description: Name of the Elasticsearch cluster
+        type: str
+        default: elasticsearch
+      elasticsearch_conf_dir:
+        description: Path to the Elasticsearch configuration directory
+        type: str
+        default: /etc/elasticsearch/
+      elasticsearch_group:
+        description: Linux group that owns Elasticsearch files
+        type: str
+        default: elasticsearch
+      elasticsearch_api_host:
+        description: Hostname or IP used for Elasticsearch API health checks
+        type: str
+        default: localhost
+      elasticsearch_config_restart_strategy:
+        description: Strategy for config-triggered Elasticsearch restarts. Use rolling for multi-node clusters, direct for
+          legacy all-host handler behavior
+        type: str
+        default: rolling
+      elasticsearch_config_restart_flush:
+        description: Flush indices before each node restart during config-triggered rolling restarts
+        type: bool
+        default: true
+      elasticsearch_config_restart_wait_status:
+        description: Minimum cluster health status before and after each config-triggered rolling restart. Use yellow or green
+        type: str
+        default: green
+      elasticsearch_config_restart_health_retries:
+        description: Number of cluster health polling attempts during config-triggered rolling restarts
+        type: int
+        default: 50
+      elasticsearch_config_restart_health_delay:
+        description: Delay in seconds between cluster health polling attempts during config-triggered rolling restarts
+        type: int
+        default: 30
+      elasticsearch_config_restart_node_retries:
+        description: Number of attempts to confirm the restarted node has rejoined the cluster
+        type: int
+        default: 200
+      elasticsearch_config_restart_node_delay:
+        description: Delay in seconds between restarted node join checks
+        type: int
+        default: 3
+      elasticsearch_jvm_custom_parameters:
+        description: Additional JVM parameters appended to jvm.options.d. Use for GC tuning, debug flags, etc
+        type: str
+        default: ''
+      elasticsearch_heap_dump_path:
+        description: Directory for JVM heap dump files on OutOfMemoryError. Upstream default changed to /var/log/elasticsearch
+          in 9.x
+        type: str
+        default: '{{ ''/var/log/elasticsearch'' if (elasticstack_release | int >= 9) else ''/var/lib/elasticsearch'' }}'
+      elasticsearch_jna_workaround:
+        description: Apply JNA temporary directory workaround for systems with noexec /tmp
+        type: bool
+        default: false
+      elasticsearch_memory_lock:
+        description: Lock JVM memory to prevent swapping. Requires systemd LimitMEMLOCK=infinity (set automatically)
+        type: bool
+        default: false
+      elasticsearch_systemd_override_type_exec:
+        description: Override systemd service Type to exec. Enable for Docker-in-Docker environments where sd_notify is non-functional
+        type: bool
+        default: false
+      elasticsearch_logsdb:
+        description: "Enable LogsDB index mode for logs-*-* data streams. Uses synthetic _source and optimized compression\
+          \ for ~4x storage savings. Fresh 9.x installs enable this by default; 8.x\u21929.x upgrades do not. Set to true\
+          \ to match 9.x default behavior. Requires ES 8.17+ (LogsDB GA). Applied as a persistent cluster setting."
+        type: str
+        default: '{{ elasticstack_release | int >= 9 }}'
+      elasticsearch_cluster_settings:
+        description: 'Persistent cluster settings applied via PUT _cluster/settings after the cluster is healthy. Accepts
+          any setting the cluster settings API supports. Only applied when non-empty. Runs once per play on the CA host. Example:
+          elasticsearch_cluster_settings: indices.recovery.max_bytes_per_sec: "100mb"'
+        type: dict
+        default: {}
+      elasticsearch_initialized_file:
+        description: Marker file path that indicates the cluster has been initialized
+        type: str
+        default: '{{ elasticstack_initial_passwords | dirname }}/cluster_initialized'
+      elasticsearch_tls_key_passphrase:
+        description: Passphrase for the Elasticsearch node TLS private key
+        type: str
+        default: PleaseChangeMeIndividually
+      elasticsearch_cert_validity_period:
+        description: Validity period in days for generated TLS certificates
+        type: int
+        default: 1095
+      elasticsearch_cert_expiration_buffer:
+        description: Days before certificate expiry to trigger renewal
+        type: int
+        default: 30
+      elasticsearch_ssl_verification_mode:
+        description: TLS verification mode for inter-node communication (full, certificate, or none)
+        type: str
+        default: full
+      elasticsearch_cert_source:
+        description: Where to get TLS certificates. 'elasticsearch_ca' (default) auto-generates from the built-in CA; 'external'
+          uses user-provided files
+        type: str
+        default: elasticsearch_ca
+      elasticsearch_transport_tls_certificate:
+        description: "Transport layer (port 9300) certificate. Accepts PEM (.crt/.pem) or PKCS12 (.p12/.pfx) \u2014 format\
+          \ auto-detected"
+        type: str
+        default: ''
+      elasticsearch_transport_tls_key:
+        description: "Transport layer private key. Optional \u2014 auto-derived from cert path for PEM; ignored for P12"
+        type: str
+        default: ''
+      elasticsearch_transport_tls_key_passphrase:
+        description: Passphrase for encrypted PEM key or P12 file (empty = unencrypted)
+        type: str
+        default: ''
+      elasticsearch_http_tls_certificate:
+        description: HTTP layer (port 9200) certificate. Falls back to transport cert if empty
+        type: str
+        default: ''
+      elasticsearch_http_tls_key:
+        description: HTTP layer private key. Falls back to transport key if empty
+        type: str
+        default: ''
+      elasticsearch_http_tls_key_passphrase:
+        description: HTTP layer key passphrase. Falls back to transport passphrase if empty
+        type: str
+        default: ''
+      elasticsearch_tls_ca_certificate:
+        description: "CA certificate for external certs. Optional \u2014 auto-extracted from PEM chain if cert contains multiple\
+          \ blocks"
+        type: str
+        default: ''
+      elasticsearch_transport_tls_certificate_content:
+        description: Transport certificate as inline PEM string. Takes precedence over file path
+        type: str
+        default: ''
+      elasticsearch_transport_tls_key_content:
+        description: Transport private key as inline PEM string. Takes precedence over file path
+        type: str
+        default: ''
+      elasticsearch_http_tls_certificate_content:
+        description: HTTP certificate as inline PEM string. Falls back to transport content if empty
+        type: str
+        default: ''
+      elasticsearch_http_tls_key_content:
+        description: HTTP private key as inline PEM string. Falls back to transport content if empty
+        type: str
+        default: ''
+      elasticsearch_tls_ca_certificate_content:
+        description: CA certificate as inline PEM string. Takes precedence over file path
+        type: str
+        default: ''
+      elasticsearch_tls_remote_src:
+        description: Source location for external cert files. false = files on Ansible controller, true = files already on
+          managed node
+        type: bool
+        default: false
+      elasticsearch_http_ssl_keystore_path:
+        description: Override the HTTP SSL keystore path in elasticsearch.yml. Empty = use the role default path
+        type: str
+        default: ''
+      elasticsearch_validate_api_certs:
+        description: Validate TLS certificates on API health checks. Set to true if using a trusted CA
+        type: bool
+        default: false
+      elasticsearch_unsafe_upgrade_restart:
+        description: Restart all Elasticsearch nodes simultaneously during an upgrade instead of doing a rolling restart.
+          Only enable for single-node dev clusters where downtime is acceptable; a multi-node cluster running with this on
+          will lose quorum on upgrade.
+        type: bool
+        default: false
+      elasticsearch_keystore_entries:
+        description: "Custom entries to add to the Elasticsearch keystore. Each key-value pair is added with `elasticsearch-keystore\
+          \ add -f -x`. Values are passed via stdin so they never appear in process listings or Ansible logs. The role manages\
+          \ these keystore keys internally \u2014 do NOT set them here: bootstrap.password, xpack.security.http.ssl.keystore.secure_password,\
+          \ xpack.security.http.ssl.truststore.secure_password, xpack.security.transport.ssl.keystore.secure_password, xpack.security.transport.ssl.truststore.secure_password,\
+          \ xpack.security.http.ssl.secure_key_passphrase, xpack.security.transport.ssl.secure_key_passphrase, autoconfiguration.password_hash\
+          \ The playbook will fail with an error if any of these keys appear in elasticsearch_keystore_entries."
+        type: dict
+        default: {}
+      elasticsearch_extra_config:
+        description: "Additional key-value pairs merged into elasticsearch.yml. Keys that conflict with dedicated role variables\
+          \ (e.g. cluster.name) are silently dropped \u2014 use the dedicated variables instead."
+        type: dict
+        default: {}
+      elasticsearch_fs_repo:
+        description: List of filesystem paths registered as snapshot repositories in elasticsearch.yml (path.repo). Leave
+          empty to disable.
+        type: list
+        default: []
+      elasticsearch_logrotate_enabled:
+        description: Install /etc/logrotate.d/elasticsearch as a safety net for the /var/log/elasticsearch directory. Uses
+          copytruncate so it does not conflict with the log4j2 rolling appender's own rotation.
+        type: bool
+        default: true
+      elasticsearch_logrotate_frequency:
+        description: Rotation cadence (daily, weekly, monthly)
+        type: str
+        default: daily
+      elasticsearch_logrotate_rotate:
+        description: Number of rotated files to keep before deletion
+        type: int
+        default: 32
+      elasticsearch_logrotate_size:
+        description: Rotate when a log file exceeds this size (e.g. 50M, 1G)
+        type: str
+        default: 50M
+      elasticsearch_logrotate_maxage:
+        description: Delete rotated files older than this many days
+        type: int
+        default: 370
+      elasticsearch_cert_will_expire_soon:
+        description: Force renewal of the Elasticsearch node certificate on the next run. Normally flipped to true automatically
+          by the cert_check_expiry task when the certificate is within `elasticsearch_cert_expiration_buffer` days of expiry;
+          set to true from a playbook to force renewal regardless of buffer.
+        type: bool
+        default: false
