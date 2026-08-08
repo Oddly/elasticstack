@@ -37,7 +37,7 @@
   delay: 10
   changed_when: false
   failed_when: false
-  no_log: "{{ elasticstack_no_log }}"
+  no_log: "{{ elasticstack_no_log | default(true) }}"
 
 - name: node_maintenance_end | Re-enable shard allocation
   ansible.builtin.uri:
@@ -54,7 +54,7 @@
   retries: 10
   delay: 30
   failed_when: false
-  no_log: "{{ elasticstack_no_log }}"
+  no_log: "{{ elasticstack_no_log | default(true) }}"
 
 - name: node_maintenance_end | Disable ML upgrade mode
   ansible.builtin.uri:
@@ -66,7 +66,7 @@
     force_basic_auth: true
     validate_certs: "{{ elasticsearch_validate_api_certs }}"
   failed_when: false
-  no_log: "{{ elasticstack_no_log }}"
+  no_log: "{{ elasticstack_no_log | default(true) }}"
 
 - name: node_maintenance_end | Clear voting config exclusions
   ansible.builtin.uri:
@@ -78,7 +78,7 @@
     force_basic_auth: true
     validate_certs: "{{ elasticsearch_validate_api_certs }}"
   failed_when: false
-  no_log: "{{ elasticstack_no_log }}"
+  no_log: "{{ elasticstack_no_log | default(true) }}"
 
 # Every key the drain boosted goes back to its declared baseline from
 # elasticsearch_cluster_settings, or to null when it has no baseline there.
@@ -104,7 +104,7 @@
   retries: 5
   delay: 10
   failed_when: false
-  no_log: "{{ elasticstack_no_log }}"
+  no_log: "{{ elasticstack_no_log | default(true) }}"
   when: elasticsearch_drain_cluster_settings | length > 0
 
 - name: node_maintenance_end | Confirm the node rejoined the cluster
@@ -121,7 +121,7 @@
   retries: 60
   delay: 10
   changed_when: false
-  no_log: "{{ elasticstack_no_log }}"
+  no_log: "{{ elasticstack_no_log | default(true) }}"
   when: elasticsearch_maintenance_wait_for_node | default('') | length > 0
 
 - name: node_maintenance_end | Wait for cluster health
@@ -140,7 +140,7 @@
   delay: "{{ elasticsearch_maintenance_health_delay }}"
   changed_when: false
   failed_when: false
-  no_log: "{{ elasticstack_no_log }}"
+  no_log: "{{ elasticstack_no_log | default(true) }}"
   when: elasticsearch_maintenance_wait_health | bool
 
 # Hard stop for serialised maintenance loops: with any_errors_fatal in the

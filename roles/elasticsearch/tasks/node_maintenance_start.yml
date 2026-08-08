@@ -45,7 +45,7 @@
   retries: 12
   delay: 10
   changed_when: false
-  no_log: "{{ elasticstack_no_log }}"
+  no_log: "{{ elasticstack_no_log | default(true) }}"
 
 - name: node_maintenance_start | Wait for cluster health before draining this node
   ansible.builtin.uri:
@@ -62,7 +62,7 @@
   retries: "{{ elasticsearch_maintenance_health_retries }}"
   delay: "{{ elasticsearch_maintenance_health_delay }}"
   changed_when: false
-  no_log: "{{ elasticstack_no_log }}"
+  no_log: "{{ elasticstack_no_log | default(true) }}"
 
 - name: node_maintenance_start | Exclude this node from voting
   ansible.builtin.uri:
@@ -73,7 +73,7 @@
     password: "{{ elasticsearch_maintenance_password }}"
     force_basic_auth: true
     validate_certs: "{{ elasticsearch_validate_api_certs }}"
-  no_log: "{{ elasticstack_no_log }}"
+  no_log: "{{ elasticstack_no_log | default(true) }}"
 
 - name: node_maintenance_start | Disable replica allocation
   ansible.builtin.uri:
@@ -89,7 +89,7 @@
   until: (_elasticsearch_maintenance_alloc.json | default({})).acknowledged | default(false)
   retries: 5
   delay: 10
-  no_log: "{{ elasticstack_no_log }}"
+  no_log: "{{ elasticstack_no_log | default(true) }}"
 
 - name: node_maintenance_start | Enable ML upgrade mode
   ansible.builtin.uri:
@@ -101,7 +101,7 @@
     force_basic_auth: true
     validate_certs: "{{ elasticsearch_validate_api_certs }}"
   failed_when: false
-  no_log: "{{ elasticstack_no_log }}"
+  no_log: "{{ elasticstack_no_log | default(true) }}"
 
 - name: node_maintenance_start | Boost recovery settings for the drain window
   ansible.builtin.uri:
@@ -117,7 +117,7 @@
   until: (_elasticsearch_maintenance_boost.json | default({})).acknowledged | default(false)
   retries: 5
   delay: 10
-  no_log: "{{ elasticstack_no_log }}"
+  no_log: "{{ elasticstack_no_log | default(true) }}"
   when: elasticsearch_drain_cluster_settings | length > 0
 
 - name: node_maintenance_start | Flush indices
@@ -131,4 +131,4 @@
     validate_certs: "{{ elasticsearch_validate_api_certs }}"
   failed_when: false
   changed_when: false
-  no_log: "{{ elasticstack_no_log }}"
+  no_log: "{{ elasticstack_no_log | default(true) }}"
