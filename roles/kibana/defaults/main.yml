@@ -12,7 +12,7 @@
 #   externally reachable URL (e.g. the reverse proxy / VIP) when Kibana runs behind
 #   a proxy, so generated absolute URLs (reporting, share links) are correct.
 # @end
-kibana_public_base_url: "http{% if kibana_tls | bool %}s{% endif %}://{{ elasticstack_kibana_host | default(ansible_facts.fqdn) }}:{{ elasticstack_kibana_port }}"
+kibana_public_base_url: "http{% if kibana_tls | bool %}s{% endif %}://{{ elasticstack_kibana_host | default(ansible_facts.fqdn | default(inventory_hostname)) }}:{{ elasticstack_kibana_port }}"
 
 # === Node.js Memory ===
 
