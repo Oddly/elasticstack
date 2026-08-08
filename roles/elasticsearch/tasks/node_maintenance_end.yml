@@ -1,0 +1,162 @@
+---
+# Entry point: restore cluster state after node maintenance. Counterpart of
+# node_maintenance_start; safe to run defensively (all restore steps are
+# best-effort) and from an always block after a failed maintenance.
+#
+# Optional: set elasticsearch_maintenance_wait_for_node to a node name to wait
+# for that node to rejoin the cluster before the health gate.
+
+- name: node_maintenance_end | Validate credentials
+  ansible.builtin.assert:
+    that:
+      - elasticsearch_maintenance_password is defined
+      - elasticsearch_maintenance_password | length > 0
+    fail_msg: elasticsearch_maintenance_password must be set to the elastic user password.
+    quiet: true
+
+- name: node_maintenance_end | Resolve API URL
+  ansible.builtin.set_fact:
+    _elasticsearch_maintenance_url: >-
+      {{ elasticsearch_maintenance_api_url
+         if elasticsearch_maintenance_api_url is defined
+         else elasticsearch_http_protocol ~ '://' ~ elasticsearch_api_host
+              ~ ':' ~ elasticstack_elasticsearch_http_port }}
+
+- name: node_maintenance_end | Wait for cluster API
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_maintenance_url }}/_cluster/health"
+    method: GET
+    status_code: [200, 503]
+    user: elastic
+    password: "{{ elasticsearch_maintenance_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+  register: _elasticsearch_maintenance_api
+  until: (_elasticsearch_maintenance_api.status | default(0)) == 200
+  retries: 12
+  delay: 10
+  changed_when: false
+  failed_when: false
+  no_log: "{{ elasticstack_no_log }}"
+
+- name: node_maintenance_end | Re-enable shard allocation
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_maintenance_url }}/_cluster/settings"
+    method: PUT
+    body: '{ "persistent": { "cluster.routing.allocation.enable": null } }'
+    body_format: json
+    user: elastic
+    password: "{{ elasticsearch_maintenance_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+  register: _elasticsearch_maintenance_alloc
+  until: (_elasticsearch_maintenance_alloc.json | default({})).acknowledged | default(false)
+  retries: 10
+  delay: 30
+  failed_when: false
+  no_log: "{{ elasticstack_no_log }}"
+
+- name: node_maintenance_end | Disable ML upgrade mode
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_maintenance_url }}/_ml/set_upgrade_mode?enabled=false"
+    method: POST
+    status_code: [200]
+    user: elastic
+    password: "{{ elasticsearch_maintenance_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+  failed_when: false
+  no_log: "{{ elasticstack_no_log }}"
+
+- name: node_maintenance_end | Clear voting config exclusions
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_maintenance_url }}/_cluster/voting_config_exclusions?wait_for_removal=false"
+    method: DELETE
+    status_code: [200]
+    user: elastic
+    password: "{{ elasticsearch_maintenance_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+  failed_when: false
+  no_log: "{{ elasticstack_no_log }}"
+
+# Every key the drain boosted goes back to its declared baseline from
+# elasticsearch_cluster_settings, or to null when it has no baseline there.
+- name: node_maintenance_end | Restore recovery settings to the baseline
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_maintenance_url }}/_cluster/settings"
+    method: PUT
+    body: "{{ {'persistent': _elasticsearch_maintenance_baseline} | to_json }}"
+    body_format: json
+    user: elastic
+    password: "{{ elasticsearch_maintenance_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+  vars:
+    _elasticsearch_maintenance_drain_keys: "{{ elasticsearch_drain_cluster_settings | list }}"
+    _elasticsearch_maintenance_baseline: >-
+      {{ dict(_elasticsearch_maintenance_drain_keys
+              | zip([None] * (_elasticsearch_maintenance_drain_keys | length)))
+         | combine(elasticsearch_cluster_settings | default({}) | dict2items
+                   | selectattr('key', 'in', _elasticsearch_maintenance_drain_keys) | items2dict) }}
+  register: _elasticsearch_maintenance_restore
+  until: (_elasticsearch_maintenance_restore.json | default({})).acknowledged | default(false)
+  retries: 5
+  delay: 10
+  failed_when: false
+  no_log: "{{ elasticstack_no_log }}"
+  when: elasticsearch_drain_cluster_settings | length > 0
+
+- name: node_maintenance_end | Confirm the node rejoined the cluster
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_maintenance_url }}/_cat/nodes?h=name"
+    method: GET
+    return_content: true
+    user: elastic
+    password: "{{ elasticsearch_maintenance_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+  register: _elasticsearch_maintenance_nodes
+  until: elasticsearch_maintenance_wait_for_node in (_elasticsearch_maintenance_nodes.content | default('')).split()
+  retries: 60
+  delay: 10
+  changed_when: false
+  no_log: "{{ elasticstack_no_log }}"
+  when: elasticsearch_maintenance_wait_for_node | default('') | length > 0
+
+- name: node_maintenance_end | Wait for cluster health
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_maintenance_url }}/_cluster/health"
+    method: GET
+    user: elastic
+    password: "{{ elasticsearch_maintenance_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+  register: _elasticsearch_maintenance_health
+  until: >-
+    ((_elasticsearch_maintenance_health.json | default({})).status | default(''))
+    in (['green'] if elasticsearch_maintenance_wait_status == 'green' else ['green', 'yellow'])
+  retries: "{{ elasticsearch_maintenance_health_retries }}"
+  delay: "{{ elasticsearch_maintenance_health_delay }}"
+  changed_when: false
+  failed_when: false
+  no_log: "{{ elasticstack_no_log }}"
+  when: elasticsearch_maintenance_wait_health | bool
+
+# Hard stop for serialised maintenance loops: with any_errors_fatal in the
+# calling play this keeps the next node untouched on an unhealthy cluster.
+- name: node_maintenance_end | Require a workable cluster before continuing
+  ansible.builtin.assert:
+    that:
+      - _elasticsearch_maintenance_status in ['green', 'yellow']
+      - >-
+        not (elasticsearch_maintenance_require_green | bool)
+        or _elasticsearch_maintenance_status == 'green'
+    fail_msg: >-
+      Cluster status is '{{ _elasticsearch_maintenance_status }}' after maintenance;
+      not proceeding to the next node.
+    quiet: true
+  vars:
+    _elasticsearch_maintenance_status: >-
+      {{ (_elasticsearch_maintenance_health.json | default({})).status | default('unreachable') }}
+  when: elasticsearch_maintenance_wait_health | bool

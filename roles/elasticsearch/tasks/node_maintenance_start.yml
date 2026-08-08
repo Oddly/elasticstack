@@ -1,0 +1,134 @@
+---
+# Entry point: prepare the cluster for taking this node down (OS updates,
+# reboots, storage work — anything that stops Elasticsearch outside the role's
+# own upgrade/restart flows). Mirrors Elastic's rolling-upgrade procedure:
+# health gate -> voting exclusion -> allocation primaries -> ML upgrade mode ->
+# optional recovery boost -> flush.
+#
+# Call via:
+#   ansible.builtin.include_role:
+#     name: oddly.elasticstack.elasticsearch
+#     tasks_from: node_maintenance_start
+#   vars:
+#     elasticsearch_maintenance_password: "{{ your_elastic_password }}"
+#
+# Pair with node_maintenance_end (put it in an always block so cluster state
+# is restored even when the maintenance itself fails).
+
+- name: node_maintenance_start | Validate credentials
+  ansible.builtin.assert:
+    that:
+      - elasticsearch_maintenance_password is defined
+      - elasticsearch_maintenance_password | length > 0
+    fail_msg: elasticsearch_maintenance_password must be set to the elastic user password.
+    quiet: true
+
+- name: node_maintenance_start | Resolve API URL
+  ansible.builtin.set_fact:
+    _elasticsearch_maintenance_url: >-
+      {{ elasticsearch_maintenance_api_url
+         if elasticsearch_maintenance_api_url is defined
+         else elasticsearch_http_protocol ~ '://' ~ elasticsearch_api_host
+              ~ ':' ~ elasticstack_elasticsearch_http_port }}
+
+- name: node_maintenance_start | Wait for cluster API
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_maintenance_url }}/_cluster/health"
+    method: GET
+    status_code: [200, 503]
+    user: elastic
+    password: "{{ elasticsearch_maintenance_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+  register: _elasticsearch_maintenance_api
+  until: (_elasticsearch_maintenance_api.status | default(0)) == 200
+  retries: 12
+  delay: 10
+  changed_when: false
+  no_log: "{{ elasticstack_no_log }}"
+
+- name: node_maintenance_start | Wait for cluster health before draining this node
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_maintenance_url }}/_cluster/health"
+    method: GET
+    user: elastic
+    password: "{{ elasticsearch_maintenance_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+  register: _elasticsearch_maintenance_health
+  until: >-
+    ((_elasticsearch_maintenance_health.json | default({})).status | default(''))
+    in (['green'] if elasticsearch_maintenance_wait_status == 'green' else ['green', 'yellow'])
+  retries: "{{ elasticsearch_maintenance_health_retries }}"
+  delay: "{{ elasticsearch_maintenance_health_delay }}"
+  changed_when: false
+  no_log: "{{ elasticstack_no_log }}"
+
+- name: node_maintenance_start | Exclude this node from voting
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_maintenance_url }}/_cluster/voting_config_exclusions?node_names={{ elasticsearch_nodename | default(inventory_hostname) }}&timeout=60s"
+    method: POST
+    status_code: [200]
+    user: elastic
+    password: "{{ elasticsearch_maintenance_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+  no_log: "{{ elasticstack_no_log }}"
+
+- name: node_maintenance_start | Disable replica allocation
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_maintenance_url }}/_cluster/settings"
+    method: PUT
+    body: '{ "persistent": { "cluster.routing.allocation.enable": "primaries" } }'
+    body_format: json
+    user: elastic
+    password: "{{ elasticsearch_maintenance_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+  register: _elasticsearch_maintenance_alloc
+  until: (_elasticsearch_maintenance_alloc.json | default({})).acknowledged | default(false)
+  retries: 5
+  delay: 10
+  no_log: "{{ elasticstack_no_log }}"
+
+- name: node_maintenance_start | Enable ML upgrade mode
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_maintenance_url }}/_ml/set_upgrade_mode?enabled=true"
+    method: POST
+    status_code: [200]
+    user: elastic
+    password: "{{ elasticsearch_maintenance_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+  failed_when: false
+  no_log: "{{ elasticstack_no_log }}"
+
+- name: node_maintenance_start | Boost recovery settings for the drain window
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_maintenance_url }}/_cluster/settings"
+    method: PUT
+    body: "{{ {'persistent': elasticsearch_drain_cluster_settings} | to_json }}"
+    body_format: json
+    user: elastic
+    password: "{{ elasticsearch_maintenance_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+  register: _elasticsearch_maintenance_boost
+  until: (_elasticsearch_maintenance_boost.json | default({})).acknowledged | default(false)
+  retries: 5
+  delay: 10
+  no_log: "{{ elasticstack_no_log }}"
+  when: elasticsearch_drain_cluster_settings | length > 0
+
+- name: node_maintenance_start | Flush indices
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_maintenance_url }}/_flush"
+    method: POST
+    status_code: [200, 409, 503]
+    user: elastic
+    password: "{{ elasticsearch_maintenance_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+  failed_when: false
+  changed_when: false
+  no_log: "{{ elasticstack_no_log }}"

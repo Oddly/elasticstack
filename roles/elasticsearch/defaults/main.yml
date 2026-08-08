@@ -98,6 +98,23 @@ elasticsearch_upgrade_wait_status: green
 elasticsearch_upgrade_health_retries: 100
 # @var elasticsearch_upgrade_health_delay:description: Delay in seconds between cluster health polling attempts during a rolling upgrade
 elasticsearch_upgrade_health_delay: 30
+# @var elasticsearch_maintenance_wait_status:description: Minimum cluster health status the node maintenance entry points wait for. Use yellow or green
+elasticsearch_maintenance_wait_status: green
+# @var elasticsearch_maintenance_health_retries:description: Number of cluster health polling attempts in the node maintenance entry points
+elasticsearch_maintenance_health_retries: 60
+# @var elasticsearch_maintenance_health_delay:description: Delay in seconds between cluster health polling attempts in the node maintenance entry points
+elasticsearch_maintenance_health_delay: 30
+# @var elasticsearch_maintenance_wait_health:description: Wait for cluster health at the end of node maintenance. Disable for a defensive state reset at the start of a run
+elasticsearch_maintenance_wait_health: true
+# @var elasticsearch_maintenance_require_green:description: Fail node_maintenance_end unless the cluster returns to green. Default accepts yellow
+elasticsearch_maintenance_require_green: false
+# @var elasticsearch_drain_cluster_settings:description: >
+#   Persistent cluster settings applied while a node is drained for maintenance
+#   (typically a recovery throughput boost). node_maintenance_end restores every
+#   key listed here to its value in elasticsearch_cluster_settings, or removes
+#   it when no baseline is declared there.
+# @end
+elasticsearch_drain_cluster_settings: {}
 
 # @var elasticsearch_jvm_custom_parameters:description: Additional JVM parameters appended to jvm.options.d. Use for GC tuning, debug flags, etc
 # @var elasticsearch_jvm_custom_parameters:example: >

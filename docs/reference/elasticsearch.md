@@ -439,6 +439,31 @@ elasticsearch_config_restart_node_delay: 3
 
 `elasticsearch_config_restart_node_retries` and `elasticsearch_config_restart_node_delay` control how long the role waits for the node it just restarted to rejoin the cluster. Defaults give ~10 minutes per node (200 × 3s).
 
+### Node maintenance entry points
+
+For taking a node down outside the role's own upgrade and restart flows (OS updates, reboots, storage work), the role exposes two task entry points that follow the same drain procedure Elastic prescribes:
+
+```yaml
+- name: Drain this node
+  ansible.builtin.include_role:
+    name: oddly.elasticstack.elasticsearch
+    tasks_from: node_maintenance_start
+  vars:
+    elasticsearch_maintenance_password: "{{ elastic_password }}"
+
+# ... stop the service, patch, reboot, start the service ...
+
+- name: Restore cluster state
+  ansible.builtin.include_role:
+    name: oddly.elasticstack.elasticsearch
+    tasks_from: node_maintenance_end
+  vars:
+    elasticsearch_maintenance_password: "{{ elastic_password }}"
+    elasticsearch_maintenance_wait_for_node: "{{ inventory_hostname }}"
+```
+
+`node_maintenance_start` waits for cluster health, excludes the node from voting, sets allocation to primaries-only, enables ML upgrade mode, optionally applies `elasticsearch_drain_cluster_settings` (a recovery throughput boost for the drain window) and flushes. `node_maintenance_end` reverses all of it — restoring every boosted key to its baseline in `elasticsearch_cluster_settings` — waits for the node to rejoin when `elasticsearch_maintenance_wait_for_node` is set, and gates on `elasticsearch_maintenance_wait_status`. Restore steps are best-effort, so `node_maintenance_end` belongs in an `always` block and doubles as a defensive state reset (`elasticsearch_maintenance_wait_health: false` skips the health gate for that use).
+
 ### Rolling Upgrades
 
 The role validates the upgrade path before any work begins. When `elasticstack_release` is 9 or higher and Elasticsearch is currently installed, the role checks that the installed version is at least 8.19.0. If it finds an older 8.x version, the play fails immediately -- you must step through 8.19.x first. This matches [Elastic's official upgrade requirements](https://www.elastic.co/docs/deploy-manage/upgrade/deployment-or-cluster).
