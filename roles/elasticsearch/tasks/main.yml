@@ -304,11 +304,12 @@
         force: true
       when: elasticsearch_jvm_custom_parameters is defined and (elasticsearch_jvm_custom_parameters | string | length > 0)
 
+# Membership guard replaces the old loop-over-the-group construct, which only
+# ever matched the host itself and skipped every other iteration.
 - name: Update Elasticsearch if needed
   ansible.builtin.include_tasks: elasticsearch-rolling-upgrade.yml
-  loop: "{{ groups[elasticstack_elasticsearch_group_name] }}"
   when:
-    - "hostvars[item].inventory_hostname == inventory_hostname"
+    - inventory_hostname in groups[elasticstack_elasticsearch_group_name] | default([])
     - _elasticsearch_needs_rolling_upgrade | bool
     - elasticstack_password.stdout is defined
 
@@ -368,9 +369,8 @@
 
 - name: Rolling restart after package upgrade
   ansible.builtin.include_tasks: elasticsearch-rolling-upgrade.yml
-  loop: "{{ groups[elasticstack_elasticsearch_group_name] }}"
   when:
-    - "hostvars[item].inventory_hostname == inventory_hostname"
+    - inventory_hostname in groups[elasticstack_elasticsearch_group_name] | default([])
     - not (_elasticsearch_needs_rolling_upgrade | bool)
     - _elasticsearch_package_upgraded | default(false) | bool
     - elasticstack_password.stdout is defined
