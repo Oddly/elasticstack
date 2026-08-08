@@ -91,9 +91,9 @@ argument_specs:
         type: bool
         default: false
       elasticsearch_heap:
-        description: JVM heap size in GB. Auto-calculated as half of system RAM, capped at 30GB, minimum 1GB
+        description: JVM heap size in GB. Auto-calculated by the role default as half of system RAM, capped at 30GB, minimum 1GB.
+          No default here on purpose; computing it needs gathered facts, which a spec validation must not rely on.
         type: str
-        default: '{{ [[(ansible_facts.memtotal_mb // 1024) // 2, 30] | min, 1] | max }}'
       elasticsearch_pamlimits:
         description: Configure PAM limits for the elasticsearch user (open files, max processes)
         type: bool
