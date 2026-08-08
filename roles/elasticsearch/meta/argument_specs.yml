@@ -152,6 +152,21 @@ argument_specs:
         description: Delay in seconds between restarted node join checks
         type: int
         default: 3
+      elasticsearch_upgrade_wait_status:
+        description: Minimum cluster health status before each node is taken down during a rolling upgrade. Use yellow or green.
+        type: str
+        default: green
+        choices:
+          - green
+          - yellow
+      elasticsearch_upgrade_health_retries:
+        description: Number of cluster health polling attempts before taking a node down during a rolling upgrade
+        type: int
+        default: 100
+      elasticsearch_upgrade_health_delay:
+        description: Delay in seconds between cluster health polling attempts during a rolling upgrade
+        type: int
+        default: 30
       elasticsearch_jvm_custom_parameters:
         description: Additional JVM parameters appended to jvm.options.d. Use for GC tuning, debug flags, etc
         type: str

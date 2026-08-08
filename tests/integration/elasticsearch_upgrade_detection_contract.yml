@@ -106,3 +106,31 @@
           ansible.builtin.assert:
             that:
               - ansible_failed_result.msg is search('Elasticsearch 9.x requires 8.19.x first')
+
+    # The pre-node-down gate used to hard-code ['green', 'yellow'], so the
+    # next node in the rolling upgrade could come down before the previous
+    # node's replicas were fully recovered.
+    - name: Health gate before taking a node down honours elasticsearch_upgrade_wait_status
+      vars:
+        _gate_file: ../../roles/elasticsearch/tasks/elasticsearch-rolling-upgrade.yml
+      block:
+        - name: Read the rolling upgrade tasks
+          ansible.builtin.set_fact:
+            _gate_src: "{{ lookup('ansible.builtin.file', _gate_file) }}"
+
+        - name: Assert the pre-node gate is driven by the variable
+          ansible.builtin.assert:
+            that:
+              - _gate_src is search('_elasticsearch_upgrade_health_statuses')
+              - _gate_src is search('elasticsearch_upgrade_wait_status')
+            fail_msg: >-
+              The health gate before node shutdown no longer honours
+              elasticsearch_upgrade_wait_status.
+
+        - name: Assert the default demands green
+          ansible.builtin.assert:
+            that:
+              - _defaults.elasticsearch_upgrade_wait_status == 'green'
+            fail_msg: elasticsearch_upgrade_wait_status default must be green.
+          vars:
+            _defaults: "{{ lookup('ansible.builtin.file', '../../roles/elasticsearch/defaults/main.yml') | from_yaml }}"
