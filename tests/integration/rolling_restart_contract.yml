@@ -355,14 +355,24 @@
 
     # The include is expected to fail on es1 (simulated rejoin failure). The
     # peer play below then reads the fake API log to prove cleanup was still
-    # driven by es2. We ignore the error rather than catching it in a
-    # rescue: rescue at play scope runs across all hosts in the play and
-    # left es2 without a rescue path when the failure short-circuited es1
-    # before the sanity assert could run.
-    - name: Include rolling restart task (expected to fail on es1)  # noqa: run-once[task]
-      ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/restart_and_verify_elasticsearch_rolling.yml
-      run_once: true
-      ignore_errors: true
+    # driven by es2. We wrap the include in a block/rescue so that:
+    #  - the failure raised inside the included tasks is caught here,
+    #  - both es1 (which actually failed) and es2 (along for the ride but
+    #    never touched) leave the play clean.
+    # ignore_errors doesn't work here: it doesn't propagate into
+    # include_tasks children reliably, and the role explicitly fail:s with
+    # startup diagnostics on rejoin failure.
+    - name: Expect rolling restart to fail but cleanup via peer
+      block:
+        - name: Include rolling restart task  # noqa: run-once[task]
+          ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/restart_and_verify_elasticsearch_rolling.yml
+          run_once: true
+      rescue:
+        - name: Absorb expected failure
+          ansible.builtin.debug:
+            msg: >-
+              Rolling restart failed as expected on {{ inventory_hostname }};
+              the following play asserts cleanup landed on the surviving peer.
 
 - name: Verify cleanup used surviving peer
   hosts: localhost
