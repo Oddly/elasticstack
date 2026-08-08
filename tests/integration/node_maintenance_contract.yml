@@ -1,0 +1,219 @@
+---
+# Contract test for the node_maintenance_start / node_maintenance_end
+# entry points. Runs against the fake ES API from tests/fakes/ so it can
+# execute on a plain ubuntu-latest runner in CI without any real cluster.
+#
+# What it proves:
+#   - _start posts a voting exclusion for the node, disables replica
+#     allocation, enables ML upgrade mode, applies the drain boost, and
+#     flushes.
+#   - _end reverses all of it (allocation reset, ML disabled, exclusion
+#     deleted) AND restores each key in elasticsearch_drain_cluster_settings
+#     to its declared baseline from elasticsearch_cluster_settings (not
+#     null, which would silently drop declared settings back to defaults).
+#   - When elasticsearch_ml_enabled: false, both _start and _end skip the
+#     ML upgrade-mode calls entirely.
+
+- name: Start fake Elasticsearch API for node maintenance
+  hosts: localhost
+  gather_facts: false
+  vars:
+    _fake_es_log: /tmp/elasticstack-node-maintenance-api.jsonl
+  tasks:
+    - name: Stop previous fake API if present
+      ansible.builtin.shell: |
+        set -o pipefail
+        if [ -f /tmp/elasticstack-node-maintenance-api.pid ]; then
+          kill "$(cat /tmp/elasticstack-node-maintenance-api.pid)" 2>/dev/null || true
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Reset fake API log
+      ansible.builtin.copy:
+        dest: "{{ _fake_es_log }}"
+        content: ""
+        mode: "0644"
+
+    - name: Start fake API server
+      ansible.builtin.shell: |
+        set -o pipefail
+        nohup python3 {{ playbook_dir }}/../fakes/fake_es_rolling_api.py \
+          --ports 19210 \
+          --nodes esA \
+          --persistent-settings '{"indices.recovery.max_bytes_per_sec": "50mb"}' \
+          --log {{ _fake_es_log }} >/tmp/elasticstack-node-maintenance-api.out 2>&1 &
+        echo $!
+      args:
+        executable: /bin/bash
+      register: _fake_es_api
+      changed_when: true
+
+    - name: Store fake API PID
+      ansible.builtin.copy:
+        dest: /tmp/elasticstack-node-maintenance-api.pid
+        content: "{{ _fake_es_api.stdout }}"
+        mode: "0644"
+
+    - name: Wait for fake API
+      ansible.builtin.uri:
+        url: http://127.0.0.1:19210/_cluster/health
+        method: GET
+      register: _fake_api_health
+      until: _fake_api_health.status | default(0) == 200
+      retries: 10
+      delay: 1
+
+- name: Contract - node_maintenance_start drains, node_maintenance_end restores
+  hosts: localhost
+  gather_facts: false
+  vars:
+    elasticstack_elasticsearch_http_port: 19210
+    elasticsearch_api_host: 127.0.0.1
+    elasticsearch_http_protocol: http
+    elasticsearch_validate_api_certs: false
+    elasticstack_no_log: false
+    elasticsearch_ml_enabled: true
+    elasticsearch_nodename: esA
+    # Restore semantics: the boost bumps max_bytes_per_sec to 500mb; the
+    # baseline in elasticsearch_cluster_settings is 200mb. After _end the
+    # cluster setting must be 200mb (not null), otherwise a caller who
+    # declared a persistent recovery ceiling would silently lose it.
+    elasticsearch_cluster_settings:
+      indices.recovery.max_bytes_per_sec: "200mb"
+    elasticsearch_drain_cluster_settings:
+      indices.recovery.max_bytes_per_sec: "500mb"
+      cluster.routing.allocation.node_concurrent_recoveries: 8
+    elasticsearch_maintenance_password: fake-elastic-pw
+    elasticsearch_maintenance_health_retries: 1
+    elasticsearch_maintenance_health_delay: 0
+    elasticsearch_maintenance_wait_status: yellow
+    elasticsearch_maintenance_wait_health: true
+    elasticsearch_maintenance_require_green: false
+  tasks:
+    - name: Drain the node
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elasticsearch
+        tasks_from: node_maintenance_start
+
+    - name: Restore the node
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elasticsearch
+        tasks_from: node_maintenance_end
+
+- name: Verify drain/restore conversation
+  hosts: localhost
+  gather_facts: false
+  vars:
+    _fake_es_log: /tmp/elasticstack-node-maintenance-api.jsonl
+  tasks:
+    - name: Read fake API log
+      ansible.builtin.command:
+        cmd: cat {{ _fake_es_log }}
+      register: _log
+      changed_when: false
+
+    - name: Assert drain sequence hit every expected endpoint
+      ansible.builtin.assert:
+        that:
+          # Voting exclusion posted for the correct node
+          - _log.stdout is search('"method": "POST".*voting_config_exclusions.*node_names=esA')
+          # Allocation dropped to primaries
+          - _log.stdout is search('"method": "PUT".*"path": "/_cluster/settings".*primaries')
+          # ML upgrade mode enabled
+          - _log.stdout is search('"method": "POST".*_ml/set_upgrade_mode.*enabled=true')
+          # Boost applied (500mb from drain_cluster_settings)
+          - _log.stdout is search('"method": "PUT".*"path": "/_cluster/settings".*500mb')
+          # Flush called
+          - _log.stdout is search('"method": "POST".*"path": "/_flush"')
+        fail_msg: |
+          Drain sequence missing an endpoint in the log:
+          {{ _log.stdout }}
+
+    - name: Assert restore sequence hit every expected endpoint
+      ansible.builtin.assert:
+        that:
+          # Allocation reset (null)
+          - _log.stdout is search('"method": "PUT".*"path": "/_cluster/settings".*"cluster.routing.allocation.enable": null')
+          # ML upgrade mode disabled
+          - _log.stdout is search('"method": "POST".*_ml/set_upgrade_mode.*enabled=false')
+          # Voting exclusion cleared (DELETE)
+          - _log.stdout is search('"method": "DELETE".*voting_config_exclusions')
+          # Baseline restored: 200mb from elasticsearch_cluster_settings
+          - _log.stdout is search('"method": "PUT".*"path": "/_cluster/settings".*200mb')
+          # Boosted key that has no baseline (node_concurrent_recoveries) is
+          # explicitly nulled — not silently left at the boosted value
+          - _log.stdout is search('"method": "PUT".*"path": "/_cluster/settings".*"cluster.routing.allocation.node_concurrent_recoveries": null')
+        fail_msg: |
+          Restore sequence missing an endpoint in the log:
+          {{ _log.stdout }}
+
+    - name: Reset fake API log for the ML-disabled run
+      ansible.builtin.copy:
+        dest: "{{ _fake_es_log }}"
+        content: ""
+        mode: "0644"
+
+- name: Contract - ML-disabled nodes never hit ML upgrade mode
+  hosts: localhost
+  gather_facts: false
+  vars:
+    elasticstack_elasticsearch_http_port: 19210
+    elasticsearch_api_host: 127.0.0.1
+    elasticsearch_http_protocol: http
+    elasticsearch_validate_api_certs: false
+    elasticstack_no_log: false
+    elasticsearch_ml_enabled: false
+    elasticsearch_nodename: esA
+    elasticsearch_cluster_settings: {}
+    elasticsearch_drain_cluster_settings: {}
+    elasticsearch_maintenance_password: fake-elastic-pw
+    elasticsearch_maintenance_health_retries: 1
+    elasticsearch_maintenance_health_delay: 0
+    elasticsearch_maintenance_wait_status: yellow
+    elasticsearch_maintenance_wait_health: false
+    elasticsearch_maintenance_require_green: false
+  tasks:
+    - name: Drain the node (ML disabled)
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elasticsearch
+        tasks_from: node_maintenance_start
+
+    - name: Restore the node (ML disabled)
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elasticsearch
+        tasks_from: node_maintenance_end
+
+- name: Verify ML calls were skipped
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Read fake API log
+      ansible.builtin.command:
+        cmd: cat /tmp/elasticstack-node-maintenance-api.jsonl
+      register: _log
+      changed_when: false
+
+    - name: Assert _ml/set_upgrade_mode was never called
+      ansible.builtin.assert:
+        that:
+          - _log.stdout is not search('_ml/set_upgrade_mode')
+        fail_msg: |
+          ML upgrade mode call fired despite elasticsearch_ml_enabled: false.
+          Log:
+          {{ _log.stdout }}
+
+- name: Stop fake API
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Kill fake API
+      ansible.builtin.shell: |
+        set -o pipefail
+        if [ -f /tmp/elasticstack-node-maintenance-api.pid ]; then
+          kill "$(cat /tmp/elasticstack-node-maintenance-api.pid)" 2>/dev/null || true
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false

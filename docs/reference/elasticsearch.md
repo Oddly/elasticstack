@@ -459,7 +459,9 @@ For taking a node down outside the role's own upgrade and restart flows (OS upda
     tasks_from: node_maintenance_end
   vars:
     elasticsearch_maintenance_password: "{{ elastic_password }}"
-    elasticsearch_maintenance_wait_for_node: "{{ inventory_hostname }}"
+    # Wait matches on node.name, which the role sets from elasticsearch_nodename
+    # (defaults to the short hostname, may differ from inventory_hostname).
+    elasticsearch_maintenance_wait_for_node: "{{ elasticsearch_nodename | default(inventory_hostname) }}"
 ```
 
 `node_maintenance_start` waits for cluster health, excludes the node from voting, sets allocation to primaries-only, enables ML upgrade mode, optionally applies `elasticsearch_drain_cluster_settings` (a recovery throughput boost for the drain window) and flushes. `node_maintenance_end` reverses all of it — restoring every boosted key to its baseline in `elasticsearch_cluster_settings` — waits for the node to rejoin when `elasticsearch_maintenance_wait_for_node` is set, and gates on `elasticsearch_maintenance_wait_status`. Restore steps are best-effort, so `node_maintenance_end` belongs in an `always` block and doubles as a defensive state reset (`elasticsearch_maintenance_wait_health: false` skips the health gate for that use).
