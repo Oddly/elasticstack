@@ -118,15 +118,15 @@
       ansible.builtin.assert:
         that:
           # Voting exclusion posted for the correct node
-          - _log.stdout is search('"method": "POST".*voting_config_exclusions.*node_names=esA')
+          - "_log.stdout is search('\"method\": \"POST\".*voting_config_exclusions.*node_names=esA')"
           # Allocation dropped to primaries
-          - _log.stdout is search('"method": "PUT".*"path": "/_cluster/settings".*primaries')
+          - "_log.stdout is search('\"method\": \"PUT\".*\"path\": \"/_cluster/settings\".*primaries')"
           # ML upgrade mode enabled
-          - _log.stdout is search('"method": "POST".*_ml/set_upgrade_mode.*enabled=true')
+          - "_log.stdout is search('\"method\": \"POST\".*_ml/set_upgrade_mode.*enabled=true')"
           # Boost applied (500mb from drain_cluster_settings)
-          - _log.stdout is search('"method": "PUT".*"path": "/_cluster/settings".*500mb')
+          - "_log.stdout is search('\"method\": \"PUT\".*\"path\": \"/_cluster/settings\".*500mb')"
           # Flush called
-          - _log.stdout is search('"method": "POST".*"path": "/_flush"')
+          - "_log.stdout is search('\"method\": \"POST\".*\"path\": \"/_flush\"')"
         fail_msg: |
           Drain sequence missing an endpoint in the log:
           {{ _log.stdout }}
@@ -135,16 +135,16 @@
       ansible.builtin.assert:
         that:
           # Allocation reset (null)
-          - _log.stdout is search('"method": "PUT".*"path": "/_cluster/settings".*"cluster.routing.allocation.enable": null')
+          - "_log.stdout is search('\"method\": \"PUT\".*\"path\": \"/_cluster/settings\".*\"cluster.routing.allocation.enable\": null')"
           # ML upgrade mode disabled
-          - _log.stdout is search('"method": "POST".*_ml/set_upgrade_mode.*enabled=false')
+          - "_log.stdout is search('\"method\": \"POST\".*_ml/set_upgrade_mode.*enabled=false')"
           # Voting exclusion cleared (DELETE)
-          - _log.stdout is search('"method": "DELETE".*voting_config_exclusions')
+          - "_log.stdout is search('\"method\": \"DELETE\".*voting_config_exclusions')"
           # Baseline restored: 200mb from elasticsearch_cluster_settings
-          - _log.stdout is search('"method": "PUT".*"path": "/_cluster/settings".*200mb')
+          - "_log.stdout is search('\"method\": \"PUT\".*\"path\": \"/_cluster/settings\".*200mb')"
           # Boosted key that has no baseline (node_concurrent_recoveries) is
           # explicitly nulled — not silently left at the boosted value
-          - _log.stdout is search('"method": "PUT".*"path": "/_cluster/settings".*"cluster.routing.allocation.node_concurrent_recoveries": null')
+          - "_log.stdout is search('\"method\": \"PUT\".*\"path\": \"/_cluster/settings\".*\"cluster.routing.allocation.node_concurrent_recoveries\": null')"
         fail_msg: |
           Restore sequence missing an endpoint in the log:
           {{ _log.stdout }}
