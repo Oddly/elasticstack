@@ -340,6 +340,33 @@ argument_specs:
           set to true from a playbook to force renewal regardless of buffer.
         type: bool
         default: false
+      elasticsearch_maintenance_wait_status:
+        description: Minimum cluster health status the node maintenance entry points wait for. Use yellow or green.
+        type: str
+        default: green
+        choices: [green, yellow]
+      elasticsearch_maintenance_health_retries:
+        description: Number of cluster health polling attempts in the node maintenance entry points.
+        type: int
+        default: 60
+      elasticsearch_maintenance_health_delay:
+        description: Delay in seconds between cluster health polling attempts in the node maintenance entry points.
+        type: int
+        default: 30
+      elasticsearch_maintenance_wait_health:
+        description: Wait for cluster health at the end of node maintenance. Disable for a defensive state reset at the start of a run.
+        type: bool
+        default: true
+      elasticsearch_maintenance_require_green:
+        description: Fail node_maintenance_end unless the cluster returns to green. Default accepts yellow.
+        type: bool
+        default: false
+      elasticsearch_drain_cluster_settings:
+        description: Persistent cluster settings applied while a node is drained for maintenance (typically a recovery throughput
+          boost). node_maintenance_end restores every key listed here to its value in elasticsearch_cluster_settings, or removes
+          it when no baseline is declared there.
+        type: dict
+        default: {}
   node_maintenance_start:
     short_description: Prepare the cluster for taking this node down
     description: Health gate, voting exclusion, primaries-only allocation, ML upgrade mode, optional recovery boost and

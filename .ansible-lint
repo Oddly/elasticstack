@@ -10,7 +10,6 @@ exclude_paths:
 warn_list:
   - experimental
   - key-order[task]
-  - name[casing]
   - name[missing]
   - package-latest
   - schema[meta]
@@ -19,6 +18,12 @@ skip_list:
   - command-instead-of-module
   - galaxy[no-changelog]
   - line-length
+  # The repo uses `role_prefix | Verb` task names (lowercase prefix, uppercase
+  # verb) — matches the commit-message convention. This rule was in warn_list
+  # but ansible-lint still counts warnings against the moderate profile, so
+  # lint_full failed on the pre-existing cert_detect_content_mode tasks any
+  # time the changes filter marked their role for linting.
+  - name[casing]
   - no-handler
   - package-latest
   - role-name

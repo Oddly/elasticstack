@@ -44,15 +44,18 @@ def defaults_vars(path):
 
 
 def argspec_options(path):
-    """Option names declared under any entry point (main + role-scoped
-    task-file entry points like node_maintenance_start / _end)."""
+    """Option names declared under the role's `main` entry point.
+
+    Task-file entry points (e.g. node_maintenance_start / _end) are
+    invoked with per-call parameters that don't need to appear in
+    defaults/main.yml — they're inputs to a specific action, not
+    role-wide defaults. Only `main`'s options are role-wide vars.
+    """
     with open(path) as f:
         spec = yaml.safe_load(f) or {}
-    out = set()
-    for entry in (spec.get("argument_specs") or {}).values():
-        for name in (entry.get("options") or {}).keys():
-            out.add(name)
-    return out
+    entries = spec.get("argument_specs") or {}
+    main = entries.get("main") or {}
+    return set((main.get("options") or {}).keys())
 
 
 def main():
