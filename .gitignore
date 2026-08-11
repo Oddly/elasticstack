@@ -14,6 +14,7 @@ tests/integration/*
 !tests/integration/elasticsearch_template_contract.yml
 !tests/integration/elasticsearch_template_inventory.ini
 !tests/integration/elasticsearch_upgrade_detection_contract.yml
+!tests/integration/node_maintenance_contract.yml
 !tests/integration/rolling_restart_contract.yml
 !tests/integration/rolling_restart_inventory.ini
 site/

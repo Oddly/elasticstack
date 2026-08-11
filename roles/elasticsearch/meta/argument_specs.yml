@@ -340,3 +340,76 @@ argument_specs:
           set to true from a playbook to force renewal regardless of buffer.
         type: bool
         default: false
+  node_maintenance_start:
+    short_description: Prepare the cluster for taking this node down
+    description: Health gate, voting exclusion, primaries-only allocation, ML upgrade mode, optional recovery boost and
+      flush. Pair with node_maintenance_end in an always block so cluster state is restored even when the maintenance
+      itself fails.
+    options:
+      elasticsearch_maintenance_password:
+        description: Password for the elastic user, used for all API calls in the entry point.
+        type: str
+        required: true
+        no_log: true
+      elasticsearch_maintenance_api_url:
+        description: Base URL of the cluster API. Defaults to the role's protocol, API host and HTTP port.
+        type: str
+      elasticsearch_maintenance_wait_status:
+        description: Minimum cluster health status to wait for before draining. Use yellow or green.
+        type: str
+        default: green
+        choices: [green, yellow]
+      elasticsearch_maintenance_health_retries:
+        description: Number of cluster health polling attempts.
+        type: int
+        default: 60
+      elasticsearch_maintenance_health_delay:
+        description: Delay in seconds between cluster health polling attempts.
+        type: int
+        default: 30
+      elasticsearch_drain_cluster_settings:
+        description: Persistent cluster settings applied while the node is drained, typically a recovery throughput boost.
+        type: dict
+        default: {}
+  node_maintenance_end:
+    short_description: Restore cluster state after node maintenance
+    description: Re-enables allocation, disables ML upgrade mode, clears voting exclusions, restores boosted recovery
+      settings to their baseline from elasticsearch_cluster_settings, optionally waits for the node to rejoin, and gates
+      on cluster health. All restore steps are best-effort so the entry point is safe to run defensively.
+    options:
+      elasticsearch_maintenance_password:
+        description: Password for the elastic user, used for all API calls in the entry point.
+        type: str
+        required: true
+        no_log: true
+      elasticsearch_maintenance_api_url:
+        description: Base URL of the cluster API. Defaults to the role's protocol, API host and HTTP port.
+        type: str
+      elasticsearch_maintenance_wait_for_node:
+        description: Node name to wait for in _cat/nodes before the health gate. Empty skips the check.
+        type: str
+      elasticsearch_maintenance_wait_status:
+        description: Minimum cluster health status to wait for after maintenance. Use yellow or green.
+        type: str
+        default: green
+        choices: [green, yellow]
+      elasticsearch_maintenance_health_retries:
+        description: Number of cluster health polling attempts.
+        type: int
+        default: 60
+      elasticsearch_maintenance_health_delay:
+        description: Delay in seconds between cluster health polling attempts.
+        type: int
+        default: 30
+      elasticsearch_maintenance_wait_health:
+        description: Wait for cluster health at the end. Disable for a defensive state reset at the start of a run.
+        type: bool
+        default: true
+      elasticsearch_maintenance_require_green:
+        description: Fail unless the cluster returns to green. The default accepts yellow.
+        type: bool
+        default: false
+      elasticsearch_drain_cluster_settings:
+        description: Persistent cluster settings that were applied during the drain; every key is restored to its baseline.
+        type: dict
+        default: {}

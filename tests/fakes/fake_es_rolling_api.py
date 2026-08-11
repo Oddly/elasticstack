@@ -84,6 +84,19 @@ def handler(state):
             if self.path.startswith("/_flush"):
                 self._send_json({"_shards": {"failed": 0}})
                 return
+            if self.path.startswith("/_cluster/voting_config_exclusions"):
+                self._send_json({})
+                return
+            if self.path.startswith("/_ml/set_upgrade_mode"):
+                self._send_json({"acknowledged": True})
+                return
+            self._send_json({"error": "not found"}, status=404)
+
+        def do_DELETE(self):
+            state.log(self.server.server_port, "DELETE", self.path, "")
+            if self.path.startswith("/_cluster/voting_config_exclusions"):
+                self._send_json({})
+                return
             self._send_json({"error": "not found"}, status=404)
 
         def do_PUT(self):
