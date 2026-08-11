@@ -15,8 +15,13 @@
 - name: Set common password for common certificates
   ansible.builtin.set_fact:
     kibana_tls_key_passphrase: "{{ elasticstack_cert_pass }}"
+  # Same gotcha the elasticsearch role hit: setting elasticstack_cert_pass
+  # to "" was silently blanking kibana_tls_key_passphrase, which then went
+  # through as `--pass ` (empty) to elasticsearch-certutil and made the
+  # tool prompt for a password on stdin. The docstring says "Leave empty
+  # to use the per-role passphrases" — so respect that.
   when:
-    - elasticstack_cert_pass is defined
+    - elasticstack_cert_pass | default('') | length > 0
 
 - name: Set Elasticsearch hosts if used with other roles
   ansible.builtin.set_fact:
