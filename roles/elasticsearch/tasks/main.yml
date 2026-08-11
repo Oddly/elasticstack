@@ -63,8 +63,16 @@
 - name: Set common password for common certificates
   ansible.builtin.set_fact:
     elasticsearch_tls_key_passphrase: "{{ elasticstack_cert_pass }}"
+  # `is defined` was the old gate — that worked as long as the default in
+  # roles/elasticstack/defaults/main.yml was left commented out, because
+  # setting it to "" then still counted as defined and silently blanked
+  # elasticsearch_tls_key_passphrase, which cascaded into an empty stdin
+  # to elasticsearch-keystore and a failed keystore.add. The docstring
+  # already says "Leave empty to use the per-role passphrases" — respect
+  # that: only apply the override when the user actually supplied a
+  # non-empty value.
   when:
-    - elasticstack_cert_pass is defined
+    - elasticstack_cert_pass | default('') | length > 0
   tags:
     - certificates
     - renew_ca

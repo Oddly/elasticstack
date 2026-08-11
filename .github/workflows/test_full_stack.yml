@@ -95,9 +95,14 @@ jobs:
       # the shared incus-ci host. The memory-capacity gate in shared/create.yml
       # eventually admits every job, but without a matrix-level cap the full
       # 16-combo PR matrix would swamp the 131 GB host and starve the biggest
-      # scenarios (elasticstack_default, cert_renewal). 6 concurrent slots keep
-      # committed memory around 90-100 GB with head-room to spare.
-      max-parallel: 6
+      # scenarios (elasticstack_default, cert_renewal). 6 concurrent slots was
+      # the previous target, sized for the intended 90-100 GB steady state.
+      # Observed reality after landing several PRs concurrently: with all six
+      # slots filled, the 20 GB + 13.8 GB scenarios still lose the memory
+      # race and time out at the 45-min gate deadline. Halving to 3 keeps
+      # committed memory well under host capacity and lets the heavy jobs
+      # actually acquire without starvation. Wall clock roughly doubles.
+      max-parallel: 3
       matrix:
         # Standardise on rockylinux10 (not 9) for PR runs to match the rest
         # of the workflows. Rocky 10 exercises the EL≥9 branch in
