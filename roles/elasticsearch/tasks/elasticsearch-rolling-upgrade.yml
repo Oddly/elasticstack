@@ -154,11 +154,21 @@
         validate_certs: "{{ elasticsearch_validate_api_certs }}"
         force_basic_auth: true
       register: elasticsearch_response
-      until: ((elasticsearch_response.json | default({})).status | default('')) in _elasticsearch_upgrade_health_statuses
+      # Also gate on the expected node count: elasticsearch_api_host defaults
+      # to localhost, so a just-restarted node briefly reports
+      # number_of_nodes: 1 before peer discovery finishes. Without this
+      # guard, a mixed-version 2-node upgrade can lock at status: yellow +
+      # unassigned_shards: 1 until the health-retry budget times out —
+      # even though everything is fine, we're just too early.
+      until: >-
+        ((elasticsearch_response.json | default({})).status | default('')) in _elasticsearch_upgrade_health_statuses
+        and ((elasticsearch_response.json | default({})).number_of_nodes | default(0) | int)
+            >= _elasticsearch_upgrade_expected_nodes | int
       retries: "{{ elasticsearch_upgrade_health_retries | int }}"
       delay: "{{ elasticsearch_upgrade_health_delay | int }}"
       vars:
         _elasticsearch_upgrade_health_statuses: "{{ ['green'] if elasticsearch_upgrade_wait_status == 'green' else ['green', 'yellow'] }}"
+        _elasticsearch_upgrade_expected_nodes: "{{ groups[elasticstack_elasticsearch_group_name] | default([inventory_hostname]) | length }}"
       no_log: "{{ elasticstack_no_log }}"
       changed_when: false
       when: _elasticsearch_cluster_reachable | bool
@@ -315,13 +325,19 @@
         validate_certs: "{{ elasticsearch_validate_api_certs }}"
         force_basic_auth: true
       register: elasticsearch_response
-      until: ((elasticsearch_response.json | default({})).status | default('')) in _elasticsearch_upgrade_health_statuses
+      # Same expected-nodes guard as the pre-node-down wait — see comment
+      # there for the flake it prevents.
+      until: >-
+        ((elasticsearch_response.json | default({})).status | default('')) in _elasticsearch_upgrade_health_statuses
+        and ((elasticsearch_response.json | default({})).number_of_nodes | default(0) | int)
+            >= _elasticsearch_upgrade_expected_nodes | int
       retries: 30
       delay: 30
       vars:
         # Same gate as the pre-node-down health wait so both sides of the
         # rolling loop honour the same operator preference.
         _elasticsearch_upgrade_health_statuses: "{{ ['green'] if elasticsearch_upgrade_wait_status == 'green' else ['green', 'yellow'] }}"
+        _elasticsearch_upgrade_expected_nodes: "{{ groups[elasticstack_elasticsearch_group_name] | default([inventory_hostname]) | length }}"
       no_log: "{{ elasticstack_no_log }}"
       changed_when: false
 
