@@ -395,7 +395,6 @@
     _elasticsearch_extra_config_conflicts: >-
       {{ elasticsearch_extra_config.keys() | list | intersect(_elasticsearch_managed_keys) }}
   when:
-    - elasticsearch_extra_config is defined
     - _elasticsearch_extra_config_conflicts | length > 0
 
 - name: Configure Elasticsearch
