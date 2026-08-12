@@ -156,9 +156,14 @@ common lock because every job is continuously covered by reservation
   position, head scenario and its need, committed, reservations, free.
   Gate-caused OOMs become structurally impossible; a starved job is an
   explicit retryable failure instead of a 60-minute hang.
-- The deadline default becomes 2700s and the three call sites drop
-  their explicit `1800` argument, relying on the default; the second
-  positional argument remains supported for overrides.
+- The deadline default becomes 2700s, but it must always sit
+  meaningfully below the job's `timeout-minutes` so a starved job
+  fails at the gate with a verdict instead of at the workflow cancel
+  with nothing. `test_full_stack.yml` (180 min) and both
+  `test_elasticsearch_upgrade.yml` jobs (60 min) rely on the default;
+  `molecule.yml`, whose `timeout-minutes` is the caller-supplied
+  `inputs.timeout` (default 60, as low as 20), derives the deadline
+  as `(inputs.timeout − 15) × 60` seconds, floored at 300.
 - Every poll logs the same numbers so the Actions log shows the queue
   moving.
 
