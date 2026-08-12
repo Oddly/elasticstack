@@ -135,11 +135,21 @@ common lock because every job is continuously covered by reservation
 - On entry, acquire writes a ticket `q.<epoch>.<runner>` and refreshes
   its mtime on every 30s poll. Tickets not refreshed for >120s are
   GC'd under the lock (covers cancelled/killed jobs).
-- Under the lock, a waiter may claim capacity only if **(a)** it holds
-  the oldest live ticket, or **(b)** admitting it still leaves
-  `free − my_need ≥ head_need` — small jobs keep flowing around a
-  waiting heavy job but can never push it back. This is the
-  starvation fix that makes §4's throughput knobs safe.
+- Under the lock, a waiter may claim capacity if **(a)** it holds the
+  oldest live ticket and fits, or **(b)** it fits and the head ticket
+  has been overtaken fewer than K times (`GATE_MAX_OVERTAKES`,
+  default 10). A bypass increments the overtake counter stored in the
+  head's ticket; once the counter reaches K the queue is strict until
+  the head is admitted. Small jobs keep capacity utilized during
+  storms, while the head's extra wait is hard-bounded by K
+  admissions' worth of releases. This is the starvation fix that
+  makes §4's throughput knobs safe. (An earlier "no-harm bypass" —
+  admit a younger waiter only when `free − my_need ≥ head_need` — was
+  rejected during planning: that condition can only hold when the
+  head already fits, so it degenerates to strict FIFO.)
+- Ticket refresh must preserve the overtake counter: the owner
+  touches its ticket's mtime on each poll; only a bypasser rewrites
+  the file (to increment the counter).
 - On admission the waiter converts: writes `r.<runner>`, removes its
   ticket, releases the lock.
 - At the deadline acquire exits 1 with a one-line verdict: queue
@@ -201,17 +211,20 @@ we'd rather avoid the dependency), covering:
   default;
 - reservation accounting, TTL GC, and the conversion no-op (release
   after create.yml already deleted the file);
-- FIFO ordering: head admitted first; no-harm bypass admits a small
-  job only when `free − need ≥ head_need`, and blocks it otherwise;
+- FIFO ordering: head admitted first when it fits; a smaller job
+  bypasses a blocked head while the head's overtake counter is below
+  K, is refused once the counter reaches K, and each bypass
+  increments the counter; owner refresh preserves the counter;
 - ticket GC: a ticket not refreshed for >120s is removed and the
   queue re-heads;
 - fail-fast: deadline exceeded → exit 1 and the verdict line carries
   queue position, head need, committed, reservations, free;
 - **concurrency stress:** N parallel acquires (mixed needs, fake
   budget, `GATE_POLL_SECONDS=1`) with randomized start jitter; assert
-  the sum of admitted needs never exceeds the budget at any point,
-  no reservation file is orphaned, and admission order never violates
-  the FIFO/no-harm rule. Run with a fixed seed so failures reproduce.
+  the sum of admitted needs never exceeds the budget at any point
+  and no reservation or ticket file is orphaned at the end. Run with
+  a fixed seed so failures reproduce; ordering guarantees are covered
+  deterministically in the queue unit tests, not here.
 
 **CI wiring.** A `gate_tests` job on `ubuntu-latest` (everything is
 mocked, no self-hosted runner needed) added to the contracts workflow,
@@ -242,9 +255,9 @@ planted foreign reservation). Both observed via
 
 ## Rollout
 
-One PR, two commits: (1) gate rewrite + unit suite + `gate_tests` CI
-job + create.yml surgery + container limit bumps (atomic — nothing
-external needs to stay in sync); (2) `max-parallel` 3 → 6,
-independently revertable. The staged create.yml validation happens on
-the PR branch before the label goes on; the nightly-storm acceptance
-run decides whether commit (2) stays.
+One PR, incremental commits (test harness → gate → create.yml →
+limits → workflows), with the `max-parallel` 3 → 6 change as the
+final, independently revertable commit. The staged create.yml
+validation happens on the PR branch before the label goes on; the
+nightly-storm acceptance run decides whether the max-parallel commit
+stays.
