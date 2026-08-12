@@ -331,8 +331,8 @@
         ((elasticsearch_response.json | default({})).status | default('')) in _elasticsearch_upgrade_health_statuses
         and ((elasticsearch_response.json | default({})).number_of_nodes | default(0) | int)
             >= _elasticsearch_upgrade_expected_nodes | int
-      retries: 30
-      delay: 30
+      retries: "{{ elasticsearch_upgrade_health_retries | int }}"
+      delay: "{{ elasticsearch_upgrade_health_delay | int }}"
       vars:
         # Same gate as the pre-node-down health wait so both sides of the
         # rolling loop honour the same operator preference.
