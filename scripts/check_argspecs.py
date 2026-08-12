@@ -92,35 +92,96 @@ def argspec_options(path):
 IS_DEFINED_RE = re.compile(r"\b([a-z][\w]*)\s+is\s+defined\b")
 
 
-def scan_is_defined_gates(repo, empty_default_vars):
-    """Flag bare `X is defined` gates in role tasks where X is a default
-    var whose declared default is empty or null.
+def _paired_guard_for(var, expr):
+    """Return True iff `expr` also contains a same-var guard for `var`
+    that establishes non-emptiness or register-shape existence.
 
-    The problem this catches: a role default like `# foo:` or `foo: ""`
-    plus a downstream gate `when: foo is defined` silently changes
-    behavior the moment somebody uncomments or explicitly sets the
-    empty string — the elasticstack_cert_pass regression. Vars whose
-    defaults hold a real value are excluded because the gate is dead
-    but harmless.
+    Guards recognised (all with `var` as the target, no other names):
 
-    A line is considered SAFE when the match sits next to `length`,
-    `stdout`, or `content` on the same line — those are already the
-    non-empty / register-based forms this scanner wants to encourage.
+      - `var | ... | length ...`  (any filter chain that ends in `length`)
+      - `var.stdout` / `var.content`  (register reference)
+      - `var | ... | bool`  (truthy check — `""` is falsey)
+
+    The check is targeted at `var` specifically. An unrelated
+    `other.stdout` or `other | length` in the same expression does NOT
+    excuse a bare `var is defined`.
+    """
+    var_re = re.escape(var)
+    # `var` followed by any pipe-chain that ultimately reaches `length`
+    # or `bool` — matches `var | length`, `var | string | length > 0`,
+    # `var | default('') | length > 0`, `var | bool`, etc. Intermediate
+    # filters can be `name(args)` or bare names.
+    filter_chain = r"(?:\s*\|\s*\w+(?:\([^)]*\))?)*"
+    patterns = (
+        rf"\b{var_re}{filter_chain}\s*\|\s*length\b",
+        rf"\b{var_re}{filter_chain}\s*\|\s*bool\b",
+        rf"\b{var_re}\.(?:stdout|content)\b",
+    )
+    return any(re.search(p, expr) for p in patterns)
+
+
+def _flatten_when(when):
+    """Ansible's `when` is either a string, a list of strings, or a
+    boolean. Yield each condition-string; ignore booleans."""
+    if isinstance(when, str):
+        yield when
+    elif isinstance(when, list):
+        for item in when:
+            if isinstance(item, str):
+                yield item
+    # bool / None / dict → nothing to check
+
+
+def _walk_tasks(items, path, empties_for_role, hits):
+    """Recurse through a task list, inspecting each task's `when:`
+    (and any nested block/rescue/always children)."""
+    if not isinstance(items, list):
+        return
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+
+        name = str(item.get("name", ""))
+        for cond in _flatten_when(item.get("when")):
+            for m in IS_DEFINED_RE.finditer(cond):
+                var = m.group(1)
+                if var not in empties_for_role:
+                    continue
+                if _paired_guard_for(var, cond):
+                    continue
+                hits.append((path, name, var, cond.strip()))
+
+        for sub_key in ("block", "rescue", "always"):
+            if sub_key in item:
+                _walk_tasks(item[sub_key], path, empties_for_role, hits)
+
+
+def scan_is_defined_gates(repo, empty_default_vars_by_role):
+    """Flag bare `X is defined` gates in role tasks where X is a
+    same-role default var whose declared value is empty or null.
+
+    Task YAML is parsed and only `when:` expressions are inspected so
+    comments and task names never trigger a false positive. The empty
+    defaults set is scoped per role so an empty `foo` in role A does
+    not falsely flag `foo is defined` in role B (where `foo` may hold
+    a real default). A `X is defined` is exempted only when the same
+    condition also contains a same-var non-empty guard
+    (`X | length …`, `X | bool`, `X.stdout`, `X.content`, or
+    `X | default(...) | length …`).
     """
     hits = []
-    for f in sorted(repo.glob("roles/*/tasks/*.yml")):
-        try:
-            content = f.read_text()
-        except OSError:
+    for role_dir in sorted((repo / "roles").iterdir()):
+        if not role_dir.is_dir():
             continue
-        for i, line in enumerate(content.splitlines(), 1):
-            for m in IS_DEFINED_RE.finditer(line):
-                var = m.group(1)
-                if var not in empty_default_vars:
-                    continue
-                if any(marker in line for marker in ("length", ".stdout", ".content")):
-                    continue
-                hits.append((f.relative_to(repo), i, var, line.strip()))
+        empties = empty_default_vars_by_role.get(role_dir.name, set())
+        if not empties:
+            continue
+        for task_file in sorted((role_dir / "tasks").rglob("*.yml")):
+            try:
+                loaded = yaml.safe_load(task_file.read_text()) or []
+            except (OSError, yaml.YAMLError):
+                continue
+            _walk_tasks(loaded, task_file.relative_to(repo), empties, hits)
     return hits
 
 
@@ -128,7 +189,7 @@ def main():
     repo = Path(__file__).resolve().parent.parent
     roles = sorted(p for p in (repo / "roles").iterdir() if p.is_dir())
     exit_code = 0
-    empty_default_vars = set()
+    empty_default_vars_by_role = {}
 
     for role in roles:
         defaults = role / "defaults" / "main.yml"
@@ -144,7 +205,7 @@ def main():
             continue
 
         vars_ = defaults_vars(defaults)
-        empty_default_vars |= defaults_empty_vars(defaults)
+        empty_default_vars_by_role[role.name] = defaults_empty_vars(defaults)
         opts = argspec_options(specs)
         missing_in_spec = vars_ - opts
         extra_in_spec = opts - vars_
@@ -159,7 +220,7 @@ def main():
         else:
             print(f"[{role.name}] ok ({len(vars_)} vars)")
 
-    hits = scan_is_defined_gates(repo, empty_default_vars)
+    hits = scan_is_defined_gates(repo, empty_default_vars_by_role)
     if hits:
         exit_code = 1
         print("\nBare `X is defined` gates on role default vars:", file=sys.stderr)
@@ -170,8 +231,9 @@ def main():
             "non-empty explicitly, e.g. `X | default('') | length > 0`.",
             file=sys.stderr,
         )
-        for path, line_no, var, snippet in hits:
-            print(f"  {path}:{line_no} — {var}: {snippet}", file=sys.stderr)
+        for path, task_name, var, cond in hits:
+            label = task_name or "(unnamed task)"
+            print(f"  {path} — {label}: `{cond}` (var: {var})", file=sys.stderr)
 
     if exit_code:
         print(
