@@ -23,8 +23,8 @@
   ansible.builtin.command: "/usr/bin/metricbeat modules enable {{ item }}"
   args:
     creates: "/etc/metricbeat/modules.d/{{ item }}.yml"
-  loop: "{{ beats_metricbeat_modules }}"
-  when: beats_metricbeat_modules is defined
+  loop: "{{ beats_metricbeat_modules | default([], true) }}"
+  when: beats_metricbeat_modules | default([], true) | length > 0
 
 - name: metricbeat | Enable Ingest Pipelines
   ansible.builtin.shell: >
@@ -37,7 +37,7 @@
   notify:
     - Restart Metricbeat
   when:
-    - beats_metricbeat_modules is defined
+    - beats_metricbeat_modules | default([], true) | length > 0
     - beats_metricbeat_output == "elasticsearch"
 
 - name: metricbeat | Start Metricbeat
