@@ -2,201 +2,168 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the two overlapping CI memory gates with a single committed-limits admission gate (FIFO + bounded overtakes, fail-fast), tested hermetically in CI, and fix the container limits that caused the observed cgroup OOM kills.
+**Goal:** Ship the memory gate as a reusable public repo (`Oddly/incus-memory-gate`: script + composite action + hermetic test suite + own CI), and convert oddly/elasticstack into its first consumer (create.yml reservation conversion, container limit fixes, thin `uses:` wiring, max-parallel back to 6).
 
-**Architecture:** `scripts/wait-for-memory.sh` becomes the only admission decision, using `MemTotal − reserve − Σ committed limits.memory − Σ pending reservations`. Reservations convert into committed capacity when `molecule/shared/create.yml` deletes them right after `incus launch`. Queueing is FIFO tickets with a bounded-overtake bypass (default K=10). A plain-bash hermetic test suite in `tests/gate/` runs on ubuntu-latest via the contracts workflow.
+**Architecture:** The gate is a single-authority admission decision — `MemTotal − reserve − Σ committed limits.memory − Σ pending reservations` — with FIFO queueing, bounded overtakes (K=10), and fail-fast at a deadline. Reservations convert into committed capacity when the consumer's launch step deletes the reservation file right after `incus launch` (contract: file `r.<runner>` in the gate dir, content `<need_mb> <label>`). The gate repo owns the logic and tests; consumers own launch-side conversion and their capacity budgets.
 
-**Tech Stack:** bash (flock, GNU coreutils), python3 + PyYAML (parsing helpers), Ansible/molecule, GitHub Actions.
+**Tech Stack:** bash (flock, GNU coreutils), python3 + PyYAML (parsing helpers), composite GitHub Action, Ansible/molecule (consumer side).
 
-**Spec:** `docs/superpowers/specs/2026-08-12-memory-gate-redesign-design.md` (approved). Read it before starting.
+**Spec:** `docs/superpowers/specs/2026-08-12-memory-gate-redesign-design.md` (approved, incl. the 2026-08-13 Packaging section). Read it before starting.
 
 ## Global Constraints
 
-- Branch: `ci/memory-gate-redesign` (exists; spec commits already on it).
-- Commit style: Conventional Commits — `type(scope): imperative subject`, lowercase after colon, no trailing period; bodies are plain prose paragraphs, first person. NEVER mention any LLM/AI assistant in commits, code, or comments. No co-author trailers.
-- `yamllint .` and `ansible-lint` must be clean before any push.
-- Ansible: FQCN always (`ansible.builtin.shell`, not `shell`).
-- The gate tests are Linux-only (`flock`, GNU `stat -c`, `touch -d`). On this macOS workstation run them inside a Linux VM: `orb` (OrbStack) gives a shell where `bash tests/gate/run-tests.sh` works from the repo path. CI runs them on ubuntu-latest.
-- Gate env contract (referenced by several tasks):
-  `RUNNER_NAME`, `INCUS_HOST`, `MOLECULE_SSH_KEY`, `MOLECULE_GATE_DIR` (default `/tmp/molecule-gate`), `INCUS_RESERVE_MB` (default `12288`), `INCUS_DEFAULT_MEMORY_MB` (default `4096`), `MOLECULE_GATE_TTL` (default `3600`), `GATE_TICKET_STALE_SECONDS` (default `120`), `GATE_MAX_OVERTAKES` (default `10`), `GATE_MEMINFO` (default `/proc/meminfo`), `GATE_INCUS_QUERY` (default: ssh incus list), `GATE_POLL_SECONDS` (default `30`).
-- Gate file formats: reservation `r.<runner>` contains `<need_mb> <scenario>`; ticket `q.<epoch10>.<runner>` contains `<need_mb> <scenario> <overtakes>`. Ticket owners refresh with `touch` only (preserving the counter); only a bypasser rewrites a ticket.
+- Two working directories: gate repo `~/git/incus-memory-gate` (branch `main`, new repo — direct commits are fine) and consumer `~/git/elasticstack` (branch `ci/memory-gate-redesign`). Every task names its repo.
+- Commit style (both repos): Conventional Commits — `type(scope): imperative subject`, lowercase after colon, no trailing period; bodies are plain prose paragraphs, first person. NEVER mention any LLM/AI assistant in commits, code, or comments. No co-author trailers.
+- elasticstack: `yamllint .` and `ansible-lint` must be clean before any push; Ansible FQCN always.
+- The gate tests are Linux-only (`flock`, GNU `stat -c`, `touch -d`). On this macOS workstation run them via Docker (image `gate-test` = python:3.12-slim + pyyaml, already built):
+  `tar c -C ~/git/incus-memory-gate . | docker run --rm -i gate-test bash -c 'mkdir /r && tar x -C /r && cd /r && bash tests/run-tests.sh'`
+- Gate env contract: `RUNNER_NAME`, `INCUS_HOST`, `MOLECULE_SSH_KEY`, `MOLECULE_GATE_DIR` (default `/tmp/molecule-gate`), `INCUS_RESERVE_MB` (default `12288`), `INCUS_DEFAULT_MEMORY_MB` (default `4096`), `MOLECULE_GATE_TTL` (default `3600`), `GATE_TICKET_STALE_SECONDS` (default `120`), `GATE_MAX_OVERTAKES` (default `10`), `GATE_MEMINFO` (default `/proc/meminfo`), `GATE_INCUS_QUERY` (default: ssh incus list), `GATE_POLL_SECONDS` (default `30`). **Empty-string env values count as unset** (the action passes inputs through unconditionally) — every default goes through the `cfg` helper.
+- Gate CLI: `wait-for-memory.sh acquire (--need-mb <MB> | --molecule-scenario <name>) [--label <name>] [--deadline <seconds>]` (deadline default 2700; label defaults to the scenario name, else `job`) and `wait-for-memory.sh release`.
+- Gate file formats: reservation `r.<runner>` contains `<need_mb> <label>`; ticket `q.<epoch10>.<runner>` contains `<need_mb> <label> <overtakes>`. Ticket owners refresh with `touch` only (preserving the counter); only a bypasser rewrites a ticket.
 
 ---
 
-### Task 1: Hermetic test harness
+### Task 1: Gate repo scaffold + test harness
+
+**Repo:** `~/git/incus-memory-gate` (create it)
 
 **Files:**
-- Create: `tests/gate/helpers.sh`
-- Create: `tests/gate/run-tests.sh`
-- Create: `tests/gate/test_harness.sh`
+- Create: repo on GitHub (`Oddly/incus-memory-gate`, public) and locally
+- Create: `LICENSE` (GPL-3.0, copied from elasticstack), `README.md` (skeleton), `.github/workflows/test.yml`
+- Create: `tests/helpers.sh`, `tests/run-tests.sh`, `tests/test_harness.sh` (ported from the preserved elasticstack harness at `~/git/elasticstack/.superpowers/sdd/2026-08-12-memory-gate-redesign/ported-harness/`)
 
 **Interfaces:**
-- Produces: `setup`, `set_mem_total <mb>`, `set_incus_containers "<name>:<status>:<limit>" ...`, `make_scenario <name> <mb|none> ...`, `run_gate <runner> <action> [args]`, `assert_eq <got> <want> <msg>`, `assert_file <path>`, `assert_no_file <path>`, and the env vars exported by `setup`. Every later test task consumes these exact names.
+- Produces: harness helper names every later test task uses verbatim — `setup`, `set_mem_total <mb>`, `set_incus_containers "<name>:<status>:<limit>" ...`, `make_scenario <name> <mb|none> ...`, `run_gate <runner> <action> [args...]`, `assert_eq`, `assert_file`, `assert_no_file` — and the env vars `setup` exports (see Global Constraints; `setup` sets the `GATE_*` test hooks, `INCUS_RESERVE_MB=0`, and a 10240 MB MemTotal).
 
-- [ ] **Step 1: Write `tests/gate/helpers.sh`**
+- [ ] **Step 1: Create the repo**
 
 ```bash
-#!/usr/bin/env bash
-# Shared helpers for the memory-gate test suite. Source from test_*.sh.
-# Linux-only: needs flock, GNU stat, GNU touch.
-set -uo pipefail
+gh repo create Oddly/incus-memory-gate --public \
+  --description "Memory admission gate for CI jobs sharing one incus host: committed-limits ledger, FIFO queue with bounded overtakes, fail-fast" \
+  --clone
+mv incus-memory-gate ~/git/ 2>/dev/null || true
+cd ~/git/incus-memory-gate
+cp ~/git/elasticstack/LICENSE LICENSE
+```
 
-GATE_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/scripts/wait-for-memory.sh"
+- [ ] **Step 2: Port the harness** — copy the three files from `~/git/elasticstack/.superpowers/sdd/2026-08-12-memory-gate-redesign/ported-harness/` into `tests/`, then apply exactly these adaptations:
 
-setup() {
-  T="$(mktemp -d)"
-  export MOLECULE_GATE_DIR="$T/gate"
-  export GATE_MEMINFO="$T/meminfo"
-  export GATE_INCUS_QUERY="cat $T/incus.json"
-  export GATE_POLL_SECONDS=0.2
-  export GATE_TICKET_STALE_SECONDS=2
-  export INCUS_RESERVE_MB=0
-  REPO_FAKE="$T/repo"
-  mkdir -p "$REPO_FAKE/molecule"
-  echo '[]' > "$T/incus.json"
-  set_mem_total 10240
-  trap 'rm -rf "$T"' EXIT
-}
-
-set_mem_total() {
-  printf 'MemTotal:       %d kB\n' $(( $1 * 1024 )) > "$GATE_MEMINFO"
-}
-
-# Each argument: "<name>:<status>:<limits.memory>". No arguments = no containers.
-set_incus_containers() {
-  python3 - "$T/incus.json" "$@" <<'PY'
-import json, sys
-out = []
-for spec in sys.argv[2:]:
-    name, status, limit = spec.split(":")
-    out.append({"name": name, "status": status,
-                "config": {"limits.memory": limit}})
-json.dump(out, open(sys.argv[1], "w"))
-PY
-}
-
-# make_scenario <name> <memory_mb...>; pass the literal word "none" for a
-# platform that omits memory_mb (exercises the 4096 default).
-make_scenario() {
-  local dir="$REPO_FAKE/molecule/$1" i=0 mb
-  mkdir -p "$dir"
-  {
-    echo "platforms:"
+In `tests/helpers.sh`:
+- `GATE_SCRIPT` resolves to the repo root script:
+  ```bash
+  GATE_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/wait-for-memory.sh"
+  ```
+- `run_gate` stays exactly:
+  ```bash
+  run_gate() {
+    local name="$1"
     shift
-    for mb in "$@"; do
-      i=$(( i + 1 ))
-      echo "  - name: p$i"
-      if [ "$mb" != none ]; then
-        echo "    memory_mb: $mb"
-      fi
-    done
-  } > "$dir/molecule.yml"
-}
+    (cd "$REPO_FAKE" && RUNNER_NAME="$name" bash "$GATE_SCRIPT" "$@")
+  }
+  ```
+  (callers now pass CLI flags, e.g. `run_gate r1 acquire --molecule-scenario demo --deadline 1`).
 
-# run_gate <runner-name> <acquire|release> [args...] — runs from the fake
-# repo root so scenario paths resolve like they do in CI.
-run_gate() {
-  local name="$1"
-  shift
-  (cd "$REPO_FAKE" && RUNNER_NAME="$name" bash "$GATE_SCRIPT" "$@")
-}
+`tests/run-tests.sh` and `tests/test_harness.sh` are unchanged apart from living in `tests/` instead of `tests/gate/`.
 
-assert_eq() {
-  [ "$1" = "$2" ] || { echo "assert_eq failed: got '$1' want '$2' ($3)"; exit 1; }
-}
-assert_file() { [ -f "$1" ] || { echo "missing file: $1"; exit 1; }; }
-assert_no_file() { [ ! -f "$1" ] || { echo "unexpected file: $1"; exit 1; }; }
+- [ ] **Step 3: Write `README.md` skeleton** (completed in Task 5):
+
+```markdown
+# incus-memory-gate
+
+Memory admission gate for CI jobs that share one incus host:
+a committed-limits ledger, a FIFO queue with bounded overtakes,
+and fail-fast semantics. Ships as a composite GitHub Action and
+as a plain script.
+
+Documentation lands with the first release; see `action.yml` and
+the header of `wait-for-memory.sh` for the contract.
 ```
 
-- [ ] **Step 2: Write `tests/gate/run-tests.sh`**
+- [ ] **Step 4: Write `.github/workflows/test.yml`**
+
+```yaml
+---
+name: Test
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gate_tests:
+    # The suite is hermetic (fake meminfo, fake incus query, tmpdir gate
+    # state) — no incus and no self-hosted runner needed.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Install PyYAML
+        run: python3 -m pip install --user pyyaml
+
+      - name: Run gate tests
+        run: bash tests/run-tests.sh
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Shellcheck the gate and tests
+        run: shellcheck wait-for-memory.sh tests/*.sh
+```
+
+- [ ] **Step 5: Run the suite in the Linux test env; expect the harness smoke test green**
+
+Run: `tar c -C ~/git/incus-memory-gate . | docker run --rm -i gate-test bash -c 'mkdir /r && tar x -C /r && cd /r && bash tests/run-tests.sh'`
+Expected: `gate tests: 1 passed, 0 failed` (only `test_harness.sh` exists; it does not invoke the gate script).
+
+- [ ] **Step 6: Commit and push**
 
 ```bash
-#!/usr/bin/env bash
-# Runner for the hermetic memory-gate suite. Each test_*.sh runs in its own
-# bash process with a throwaway gate dir; a non-zero exit fails the suite.
-# Linux-only (flock, GNU stat); in CI this runs on ubuntu-latest.
-set -uo pipefail
-cd "$(dirname "$0")"
-pass=0 fail=0
-for t in test_*.sh; do
-  echo "== $t"
-  if bash "$t"; then
-    pass=$(( pass + 1 ))
-  else
-    fail=$(( fail + 1 ))
-    echo "FAILED: $t"
-  fi
-done
-echo "gate tests: $pass passed, $fail failed"
-[ "$fail" -eq 0 ]
+git add -A
+git commit -m "chore: scaffold the gate repo with its hermetic test harness"
+git push -u origin main
 ```
-
-- [ ] **Step 3: Write `tests/gate/test_harness.sh`** (smoke-tests the fixtures themselves)
-
-```bash
-#!/usr/bin/env bash
-source "$(dirname "$0")/helpers.sh"
-setup
-
-set_mem_total 4096
-grep -q 'MemTotal:       4194304 kB' "$GATE_MEMINFO" || { echo "meminfo fixture broken"; exit 1; }
-
-set_incus_containers "a:Running:2GiB" "b:Stopped:1GB"
-python3 -c '
-import json, sys
-data = json.load(open(sys.argv[1]))
-assert len(data) == 2, data
-assert data[0]["config"]["limits.memory"] == "2GiB", data
-' "$T/incus.json"
-
-make_scenario demo 4096 none
-grep -q 'memory_mb: 4096' "$REPO_FAKE/molecule/demo/molecule.yml" || exit 1
-assert_eq "$(grep -c 'name: p' "$REPO_FAKE/molecule/demo/molecule.yml")" "2" "two platforms"
-
-echo OK
-```
-
-- [ ] **Step 4: Run the suite; expect the harness smoke test to pass** (the gate rewrite doesn't exist yet, but this file doesn't invoke it)
-
-Run (inside a Linux shell): `bash tests/gate/run-tests.sh`
-Expected: `== test_harness.sh` … `OK` … `gate tests: 1 passed, 0 failed`
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add tests/gate/
-git commit -m "chore(ci): add hermetic test harness for the memory gate"
-```
+Then check `gh run watch` (or `gh run list --limit 1`) — the `gate_tests` job must pass on GitHub too; `shellcheck` must pass on the test files (the gate script doesn't exist yet, so keep `wait-for-memory.sh` out of the shellcheck args until Task 2 — use `shellcheck tests/*.sh` in this commit and extend it in Task 2).
 
 ---
 
-### Task 2: Gate rewrite — admission ledger, lifecycle, fail-fast (strict FIFO)
+### Task 2: Gate script — admission ledger, lifecycle, fail-fast (strict FIFO)
+
+**Repo:** `~/git/incus-memory-gate`
 
 **Files:**
-- Modify: `scripts/wait-for-memory.sh` (full rewrite)
-- Create: `tests/gate/test_admission.sh`
-- Create: `tests/gate/test_lifecycle.sh`
+- Create: `wait-for-memory.sh`
+- Create: `tests/test_admission.sh`, `tests/test_lifecycle.sh`
+- Modify: `.github/workflows/test.yml` (shellcheck args gain `wait-for-memory.sh`)
 
 **Interfaces:**
 - Consumes: harness helpers from Task 1.
-- Produces: the gate CLI `wait-for-memory.sh acquire <scenario> [timeout_s]` (deadline default 2700, exit 0 admitted / exit 1 starved) and `wait-for-memory.sh release`; log line vocabulary `need=`, `committed=`, `reserved=`, `free=`, `ADMITTED`, `STARVED`, `released`, `nothing to release` (tests grep these); the gate file formats from Global Constraints. Task 3 adds the overtake branch inside the admission decision; everything else is final here.
+- Produces: the gate CLI from Global Constraints (exit 0 admitted / exit 1 starved / exit 2 usage); log vocabulary `need=`, `committed=`, `reserved=`, `free=`, `ADMITTED`, `STARVED`, `released`, `nothing to release` (tests grep these); the `cfg` helper pattern; gate file formats. Task 3 adds the overtake branch at the `# BYPASS` marker; everything else is final here.
 
-- [ ] **Step 1: Write `tests/gate/test_admission.sh`**
+- [ ] **Step 1: Write `tests/test_admission.sh`**
 
 ```bash
 #!/usr/bin/env bash
 source "$(dirname "$0")/helpers.sh"
 setup
 
-# 1. need derivation sums platform memory_mb
+# 1. need derivation sums platform memory_mb (molecule mode)
 make_scenario demo 4096 2048
-out=$(run_gate r1 acquire demo 1)
+out=$(run_gate r1 acquire --molecule-scenario demo --deadline 1)
 echo "$out" | grep -q 'need=6144MB' || { echo "derivation: $out"; exit 1; }
 run_gate r1 release >/dev/null
 
 # 2. platform without memory_mb falls back to 4096
 make_scenario nodefault none
-out=$(run_gate r2 acquire nodefault 1)
+out=$(run_gate r2 acquire --molecule-scenario nodefault --deadline 1)
 echo "$out" | grep -q 'need=4096MB' || { echo "default: $out"; exit 1; }
 run_gate r2 release >/dev/null
 
@@ -207,54 +174,82 @@ platforms:
   - name: "es-${MOLECULE_DISTRO:-debian12}"
     memory_mb: ${TEST_MEM_MB:-2048}
 EOF
-out=$(run_gate r3 acquire envsub 1)
+out=$(run_gate r3 acquire --molecule-scenario envsub --deadline 1)
 echo "$out" | grep -q 'need=2048MB' || { echo "envsub default: $out"; exit 1; }
 run_gate r3 release >/dev/null
-out=$(TEST_MEM_MB=512 run_gate r4 acquire envsub 1)
+out=$(TEST_MEM_MB=512 run_gate r4 acquire --molecule-scenario envsub --deadline 1)
 echo "$out" | grep -q 'need=512MB' || { echo "envsub override: $out"; exit 1; }
 run_gate r4 release >/dev/null
 
-# 4. limits.memory unit parsing; stopped containers ignored
+# 4. --need-mb mode with a label; reservation carries the label
+out=$(run_gate r10 acquire --need-mb 1536 --label build-job --deadline 1)
+echo "$out" | grep -q 'need=1536MB' || { echo "need-mb mode: $out"; exit 1; }
+grep -q '^1536 build-job$' "$MOLECULE_GATE_DIR/r.r10" || { echo "label missing"; exit 1; }
+run_gate r10 release >/dev/null
+
+# 5. exactly one of --need-mb / --molecule-scenario is required
+if run_gate r11 acquire --deadline 1 >/dev/null 2>&1; then
+  echo "acquire without a need source must fail"; exit 1
+fi
+if run_gate r12 acquire --need-mb 512 --molecule-scenario demo --deadline 1 >/dev/null 2>&1; then
+  echo "acquire with both need sources must fail"; exit 1
+fi
+
+# 6. limits.memory unit parsing; stopped containers ignored
 set_incus_containers "a:Running:1GiB" "b:Running:1024MiB" "c:Running:1GB" "d:Stopped:512GB"
 make_scenario small 1024
-out=$(run_gate r5 acquire small 1)
+out=$(run_gate r5 acquire --molecule-scenario small --deadline 1)
 echo "$out" | grep -q 'committed=3072MB' || { echo "units: $out"; exit 1; }
 run_gate r5 release >/dev/null
 
-# 5. blocked -> fail fast with verdict, ticket cleaned up
+# 7. blocked -> fail fast with verdict, ticket cleaned up
 set_incus_containers "big:Running:8192MB"      # free = 10240 - 8192 = 2048
 make_scenario heavy 4096
-if out=$(run_gate r6 acquire heavy 1 2>&1); then
+if out=$(run_gate r6 acquire --molecule-scenario heavy --deadline 1 2>&1); then
   echo "should have starved: $out"; exit 1
 fi
 echo "$out" | grep -q 'STARVED' || { echo "verdict: $out"; exit 1; }
 assert_no_file "$MOLECULE_GATE_DIR/r.r6"
 [ -z "$(ls "$MOLECULE_GATE_DIR" 2>/dev/null | grep '^q\.')" ] || { echo "ticket leaked"; exit 1; }
 
-# 6. foreign reservations count against free
+# 8. foreign reservations count against free
 set_incus_containers
 echo "8192 other" > "$MOLECULE_GATE_DIR/r.other"
 make_scenario mid 4096                          # free = 10240 - 8192 = 2048
-if run_gate r7 acquire mid 1 >/dev/null 2>&1; then
+if run_gate r7 acquire --molecule-scenario mid --deadline 1 >/dev/null 2>&1; then
   echo "reservation not counted"; exit 1
 fi
 rm -f "$MOLECULE_GATE_DIR/r.other"
 
-# 7. incus query failure -> refuse to admit, non-zero exit
+# 9. incus query failure -> refuse to admit, non-zero exit
 make_scenario small2 1024
-if GATE_INCUS_QUERY=false run_gate r8 acquire small2 1 >/dev/null 2>&1; then
+if GATE_INCUS_QUERY=false run_gate r8 acquire --molecule-scenario small2 --deadline 1 >/dev/null 2>&1; then
   echo "admitted blind on query failure"; exit 1
 fi
 
-# 8. no INCUS_HOST and no GATE_INCUS_QUERY -> clear failure
-if (unset GATE_INCUS_QUERY INCUS_HOST; run_gate r9 acquire small2 1 >/dev/null 2>&1); then
+# 10. no INCUS_HOST and no GATE_INCUS_QUERY -> clear failure
+if (unset GATE_INCUS_QUERY INCUS_HOST; run_gate r9 acquire --molecule-scenario small2 --deadline 1 >/dev/null 2>&1); then
   echo "admitted blind without a query source"; exit 1
 fi
+
+# 11. empty-string env counts as unset (the action passes inputs through)
+out=$(INCUS_RESERVE_MB= GATE_MAX_OVERTAKES= run_gate r13 acquire --need-mb 1024 --deadline 1)
+echo "$out" | grep -q 'reserve=12288MB' || { echo "cfg empty-env: $out"; exit 1; }
+run_gate r13 release >/dev/null
 
 echo OK
 ```
 
-- [ ] **Step 2: Write `tests/gate/test_lifecycle.sh`**
+Note on case 11: `setup` exports `INCUS_RESERVE_MB=0`, so this case overrides it to the empty string and expects the built-in 12288 default to kick in — with MemTotal 10240 that makes free negative, so… **it must starve, not admit.** Write case 11 as:
+
+```bash
+if out=$(INCUS_RESERVE_MB= run_gate r13 acquire --need-mb 1024 --deadline 1 2>&1); then
+  echo "empty INCUS_RESERVE_MB must mean default 12288, which cannot fit: $out"; exit 1
+fi
+echo "$out" | grep -q 'reserve=12288MB' || { echo "cfg empty-env: $out"; exit 1; }
+```
+
+- [ ] **Step 2: Write `tests/test_lifecycle.sh`**
 
 ```bash
 #!/usr/bin/env bash
@@ -269,31 +264,32 @@ echo "$out" | grep -q 'released' || { echo "release: $out"; exit 1; }
 assert_no_file "$MOLECULE_GATE_DIR/r.rel1"
 assert_no_file "$MOLECULE_GATE_DIR/q.0000000001.rel1"
 
-# 2. release after create.yml already converted the reservation is a no-op
+# 2. release after the launcher already converted the reservation is a no-op
 out=$(run_gate rel2 release)
 echo "$out" | grep -q 'nothing to release' || { echo "noop release: $out"; exit 1; }
 
 # 3. reservations older than the TTL are garbage-collected by acquire
 echo "4096 stale" > "$MOLECULE_GATE_DIR/r.dead"
 touch -d '2 hours ago' "$MOLECULE_GATE_DIR/r.dead"
-make_scenario mid2 8192                # counts stale? 10240-4096=6144 < 8192
-run_gate live acquire mid2 1 >/dev/null || { echo "stale reservation not GCd"; exit 1; }
+make_scenario mid2 8192                # if stale counted: 10240-4096=6144 < 8192
+run_gate live acquire --molecule-scenario mid2 --deadline 1 >/dev/null \
+  || { echo "stale reservation not GCd"; exit 1; }
 assert_no_file "$MOLECULE_GATE_DIR/r.dead"
 run_gate live release >/dev/null
 
 echo OK
 ```
 
-- [ ] **Step 3: Run the suite to verify the new tests fail against the old script**
+- [ ] **Step 3: Run the suite to verify the new tests fail** (no `wait-for-memory.sh` exists yet)
 
-Run: `bash tests/gate/run-tests.sh`
-Expected: `test_harness.sh` passes; `test_admission.sh` and `test_lifecycle.sh` FAIL (the old script has no `need=`/`committed=` vocabulary, reads `/proc/meminfo` directly, and ignores `GATE_*` env).
+Run: `tar c -C ~/git/incus-memory-gate . | docker run --rm -i gate-test bash -c 'mkdir /r && tar x -C /r && cd /r && bash tests/run-tests.sh'`
+Expected: `test_harness.sh` passes; `test_admission.sh` and `test_lifecycle.sh` FAIL (script missing).
 
-- [ ] **Step 4: Rewrite `scripts/wait-for-memory.sh`** (complete file; the `# BYPASS` marker line is where Task 3 inserts the overtake branch)
+- [ ] **Step 4: Write `wait-for-memory.sh`** (complete file; the `# BYPASS` marker line is where Task 3 inserts the overtake branch)
 
 ```bash
 #!/usr/bin/env bash
-# Single-authority memory admission gate for the molecule runner pool.
+# Memory admission gate for CI jobs sharing one incus host.
 #
 # Admission formula (all MB):
 #
@@ -302,11 +298,12 @@ Expected: `test_harness.sh` passes; `test_admission.sh` and `test_lifecycle.sh` 
 #
 #   committed    sum of limits.memory over *running* incus containers
 #   reservations jobs admitted here whose containers are not launched yet;
-#                molecule/shared/create.yml deletes the reservation right
+#                the consumer's launch step deletes the reservation right
 #                after `incus launch`, converting it into committed capacity
-#   my_need      sum of memory_mb (default 4096) over the platforms in
-#                molecule/<scenario>/molecule.yml, after ${VAR:-default}
-#                resolution — no hardcoded scenario table to keep in sync
+#   my_need      --need-mb, or --molecule-scenario <name>: the sum of
+#                memory_mb (default 4096) over the platforms in
+#                molecule/<name>/molecule.yml relative to the working
+#                directory, after ${VAR:-default} resolution
 #
 # Queueing: FIFO tickets with bounded overtakes. A waiter that fits may
 # bypass a blocked head until the head's ticket has been overtaken
@@ -314,11 +311,13 @@ Expected: `test_harness.sh` passes; `test_admission.sh` and `test_lifecycle.sh` 
 # admitted. At the deadline the gate FAILS (exit 1) instead of barging in:
 # a starved job is an explicit retryable failure, not an OOM risk.
 #
-# Usage (run from the repo root, so molecule/<scenario>/ resolves):
-#   wait-for-memory.sh acquire <scenario> [timeout_s]   # default 2700
+# Usage:
+#   wait-for-memory.sh acquire --need-mb <MB> [--label <name>] [--deadline <s>]
+#   wait-for-memory.sh acquire --molecule-scenario <name> [--label <name>] [--deadline <s>]
 #   wait-for-memory.sh release
 #
-# Env:
+# Env (an empty value counts as unset — a composite action passes its
+# inputs through unconditionally):
 #   RUNNER_NAME               one reservation/ticket per runner instance
 #   INCUS_HOST                host queried for running containers
 #   MOLECULE_SSH_KEY          key for that query (optional if agent/config)
@@ -334,34 +333,48 @@ Expected: `test_harness.sh` passes; `test_admission.sh` and `test_lifecycle.sh` 
 
 set -euo pipefail
 
-action="${1:?usage: $0 <acquire|release> [args...]}"
+cfg() {  # cfg VAR DEFAULT — empty env value counts as unset
+  local v="${!1:-}"
+  if [ -n "$v" ]; then echo "$v"; else echo "$2"; fi
+}
 
-GATE_DIR="${MOLECULE_GATE_DIR:-/tmp/molecule-gate}"
+action="${1:?usage: $0 <acquire|release> [args...]}"
+shift
+
+GATE_DIR=$(cfg MOLECULE_GATE_DIR /tmp/molecule-gate)
 mkdir -p "$GATE_DIR"
 chmod 0777 "$GATE_DIR" 2>/dev/null || true
 LOCK="$GATE_DIR/.lock"
 
-TTL_SEC="${MOLECULE_GATE_TTL:-3600}"
-TICKET_STALE_SEC="${GATE_TICKET_STALE_SECONDS:-120}"
-POLL_SEC="${GATE_POLL_SECONDS:-30}"
-RESERVE_MB="${INCUS_RESERVE_MB:-12288}"
-MEMINFO="${GATE_MEMINFO:-/proc/meminfo}"
-MAX_OVERTAKES="${GATE_MAX_OVERTAKES:-10}"
+TTL_SEC=$(cfg MOLECULE_GATE_TTL 3600)
+TICKET_STALE_SEC=$(cfg GATE_TICKET_STALE_SECONDS 120)
+POLL_SEC=$(cfg GATE_POLL_SECONDS 30)
+RESERVE_MB=$(cfg INCUS_RESERVE_MB 12288)
+MEMINFO=$(cfg GATE_MEMINFO /proc/meminfo)
+MAX_OVERTAKES=$(cfg GATE_MAX_OVERTAKES 10)
 
-runner="${RUNNER_NAME:-runner-$$}"
+runner=$(cfg RUNNER_NAME "runner-$$")
 my_resv="$GATE_DIR/r.${runner}"
 
 mem_total_mb() { awk '/^MemTotal:/{print int($2/1024); exit}' "$MEMINFO"; }
 
 incus_query() {
-  if [ -n "${GATE_INCUS_QUERY:-}" ]; then
-    $GATE_INCUS_QUERY
+  local q
+  q=$(cfg GATE_INCUS_QUERY "")
+  if [ -n "$q" ]; then
+    $q
   else
-    : "${INCUS_HOST:?INCUS_HOST or GATE_INCUS_QUERY must be set - refusing to admit blind}"
+    local host key
+    host=$(cfg INCUS_HOST "")
+    key=$(cfg MOLECULE_SSH_KEY "")
+    [ -n "$host" ] || {
+      echo "INCUS_HOST or GATE_INCUS_QUERY must be set - refusing to admit blind" >&2
+      return 1
+    }
     # shellcheck disable=SC2086
     ssh -o StrictHostKeyChecking=no -o BatchMode=yes \
-      ${MOLECULE_SSH_KEY:+-i "$MOLECULE_SSH_KEY"} \
-      "root@${INCUS_HOST}" -- incus list -f json --project default < /dev/null
+      ${key:+-i "$key"} \
+      "root@${host}" -- incus list -f json --project default < /dev/null
   fi
 }
 
@@ -383,7 +396,7 @@ print(total)
 '
 }
 
-derive_need_mb() {  # $1 = scenario name; resolves molecule/<scenario>/molecule.yml
+derive_need_mb() {  # $1 = scenario name; resolves molecule/<name>/molecule.yml from CWD
   python3 -c '
 import os, re, sys, yaml
 raw = open(sys.argv[1]).read()
@@ -392,7 +405,7 @@ raw = re.sub(
     lambda m: os.environ.get(m.group(1), m.group(2) or ""),
     raw,
 )
-default = int(os.environ.get("INCUS_DEFAULT_MEMORY_MB", "4096"))
+default = int(os.environ.get("INCUS_DEFAULT_MEMORY_MB") or "4096")
 platforms = (yaml.safe_load(raw) or {}).get("platforms", [])
 print(sum(int(p.get("memory_mb", default)) for p in platforms))
 ' "molecule/$1/molecule.yml"
@@ -435,14 +448,32 @@ gc_tickets() {  # call under the lock
 
 case "$action" in
   acquire)
-    scenario="${2:?usage: $0 acquire <scenario> [timeout_s]}"
-    timeout_s="${3:-2700}"
-    need=$(derive_need_mb "$scenario")
+    need="" label="" scenario="" timeout_s=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --need-mb)           need="$2"; shift 2 ;;
+        --molecule-scenario) scenario="$2"; shift 2 ;;
+        --label)             label="$2"; shift 2 ;;
+        --deadline)          timeout_s="$2"; shift 2 ;;
+        *) echo "unknown argument: $1" >&2; exit 2 ;;
+      esac
+    done
+    if { [ -n "$need" ] && [ -n "$scenario" ]; } || { [ -z "$need" ] && [ -z "$scenario" ]; }; then
+      echo "acquire needs exactly one of --need-mb or --molecule-scenario" >&2
+      exit 2
+    fi
+    if [ -n "$scenario" ]; then
+      need=$(derive_need_mb "$scenario")
+      label="${label:-$scenario}"
+    fi
+    label="${label:-job}"
+    timeout_s="${timeout_s:-2700}"
+
     total=$(mem_total_mb)
     my_ticket="$GATE_DIR/q.$(printf '%010d' "$(date +%s)").${runner}"
 
-    printf 'molecule-gate[%s]: acquire scenario=%s need=%dMB total=%dMB reserve=%dMB timeout=%ds\n' \
-      "$runner" "$scenario" "$need" "$total" "$RESERVE_MB" "$timeout_s"
+    printf 'molecule-gate[%s]: acquire label=%s need=%dMB total=%dMB reserve=%dMB timeout=%ds\n' \
+      "$runner" "$label" "$need" "$total" "$RESERVE_MB" "$timeout_s"
 
     deadline=$(( $(date +%s) + timeout_s ))
     attempt=0
@@ -453,7 +484,7 @@ case "$action" in
       if [ -f "$my_ticket" ]; then
         touch "$my_ticket"   # refresh liveness; preserves the overtake counter
       else
-        printf '%d %s 0\n' "$need" "$scenario" > "$my_ticket"
+        printf '%d %s 0\n' "$need" "$label" > "$my_ticket"
       fi
       gc_tickets
       reserved=$(gc_and_sum_reservations)
@@ -473,7 +504,7 @@ case "$action" in
       fi
 
       if [ "$admit" = yes ]; then
-        printf '%d %s\n' "$need" "$scenario" > "$my_resv"
+        printf '%d %s\n' "$need" "$label" > "$my_resv"
         rm -f "$my_ticket"
         flock -u 9
         printf 'molecule-gate[%s]: ADMITTED committed=%dMB reserved=%dMB free=%dMB need=%dMB (attempt %d)\n' \
@@ -524,38 +555,44 @@ Implementation notes, read before writing:
 - `committed_mb` runs **inside** the lock. Reading it outside opens a race where a just-converted job is counted neither as reservation nor as committed, over-admitting a waiter.
 - `set -e` + command substitution: helpers that can fail end in `|| true` / `|| echo 0` internally, so assignments don't kill the script; the deliberate exceptions are `committed_mb` and `derive_need_mb` — their failure MUST abort (never admit blind).
 - Ticket filenames embed a zero-padded epoch so lexical `sort` is FIFO order; ties sort by runner name, which is stable and fair enough.
-- `rm -f "$GATE_DIR"/q.*."$runner"` in release: unmatched glob expands to itself and `rm -f` ignores it — no nullglob needed there.
+- `rm -f "$GATE_DIR"/q.*."$runner"` in release: an unmatched glob expands to itself and `rm -f` ignores it — no nullglob needed there.
+- `chmod +x wait-for-memory.sh`.
 
-- [ ] **Step 5: Run the suite; expect all three files green**
+- [ ] **Step 5: Extend shellcheck in `.github/workflows/test.yml`** — change the shellcheck step's run line to:
 
-Run: `bash tests/gate/run-tests.sh`
+```yaml
+        run: shellcheck wait-for-memory.sh tests/*.sh
+```
+
+- [ ] **Step 6: Run the suite; expect all three files green**
+
+Run: `tar c -C ~/git/incus-memory-gate . | docker run --rm -i gate-test bash -c 'mkdir /r && tar x -C /r && cd /r && bash tests/run-tests.sh'`
 Expected: `gate tests: 3 passed, 0 failed`
+Also run shellcheck locally: `docker run --rm -v ~/git/incus-memory-gate:/mnt koalaman/shellcheck:stable wait-for-memory.sh tests/*.sh` (or `shellcheck` if installed) — clean or justified disables only.
 
-- [ ] **Step 6: Check nothing else references the deleted REQ table**
-
-Run: `grep -rn "REQ\[" scripts/ .github/ molecule/ docs/ CLAUDE.md || echo clean`
-Expected: `clean` (CLAUDE.md's prose reference to per-scenario memory is rewritten in Task 6).
-
-- [ ] **Step 7: Commit**
+- [ ] **Step 7: Commit and push; confirm the repo CI is green**
 
 ```bash
-git add scripts/wait-for-memory.sh tests/gate/test_admission.sh tests/gate/test_lifecycle.sh
-git commit -m "feat(ci): rewrite the memory gate around a committed-limits ledger"
+git add wait-for-memory.sh tests/test_admission.sh tests/test_lifecycle.sh .github/workflows/test.yml
+git commit -m "feat: admission gate on a committed-limits ledger with fail-fast"
+git push && gh run watch --exit-status
 ```
 
 ---
 
 ### Task 3: Bounded-overtake queue policy
 
+**Repo:** `~/git/incus-memory-gate`
+
 **Files:**
-- Modify: `scripts/wait-for-memory.sh` (the `# BYPASS` marker inside the admission decision)
-- Create: `tests/gate/test_queue.sh`
+- Modify: `wait-for-memory.sh` (the `# BYPASS` marker inside the admission decision)
+- Create: `tests/test_queue.sh`
 
 **Interfaces:**
 - Consumes: the gate CLI and file formats from Task 2; harness helpers from Task 1.
-- Produces: the final admission decision consumed by CI. `GATE_MAX_OVERTAKES` becomes honored.
+- Produces: the final admission decision. `GATE_MAX_OVERTAKES` becomes honored.
 
-- [ ] **Step 1: Write `tests/gate/test_queue.sh`**
+- [ ] **Step 1: Write `tests/test_queue.sh`**
 
 ```bash
 #!/usr/bin/env bash
@@ -565,7 +602,7 @@ setup
 # 1. blocked head admits as soon as capacity frees (FIFO base case)
 set_incus_containers "big:Running:9216MB"        # free = 1024
 make_scenario twoG 2048
-run_gate first acquire twoG 6 >/dev/null &
+run_gate first acquire --molecule-scenario twoG --deadline 6 >/dev/null &
 fpid=$!
 sleep 1
 set_incus_containers                              # capacity freed
@@ -576,10 +613,10 @@ run_gate first release >/dev/null
 set_incus_containers "big:Running:8192MB"        # free = 2048
 make_scenario huge 4096
 make_scenario tiny 1024
-run_gate heavy acquire huge 8 >/dev/null 2>&1 &
+run_gate heavy acquire --molecule-scenario huge --deadline 8 >/dev/null 2>&1 &
 hpid=$!
 sleep 1                                           # heavy is now the head
-GATE_MAX_OVERTAKES=10 run_gate quick acquire tiny 3 >/dev/null \
+GATE_MAX_OVERTAKES=10 run_gate quick acquire --molecule-scenario tiny --deadline 3 >/dev/null \
   || { echo "bypass should admit a fitting job"; exit 1; }
 grep -q ' 1$' "$MOLECULE_GATE_DIR"/q.*.heavy \
   || { echo "head counter not incremented"; exit 1; }
@@ -588,10 +625,10 @@ run_gate quick release >/dev/null
 # 3. owner refresh preserves the counter; at K the queue goes strict
 head_ticket=$(ls "$MOLECULE_GATE_DIR"/q.*.heavy)
 need=$(awk '{print $1}' "$head_ticket")
-scen=$(awk '{print $2}' "$head_ticket")
-printf '%s %s 10\n' "$need" "$scen" > "$head_ticket"
+lbl=$(awk '{print $2}' "$head_ticket")
+printf '%s %s 10\n' "$need" "$lbl" > "$head_ticket"
 sleep 1   # heavy keeps polling; if it rewrote its ticket the counter resets
-if GATE_MAX_OVERTAKES=10 run_gate quick2 acquire tiny 2 >/dev/null 2>&1; then
+if GATE_MAX_OVERTAKES=10 run_gate quick2 acquire --molecule-scenario tiny --deadline 2 >/dev/null 2>&1; then
   echo "strict phase must refuse bypass at K overtakes"; exit 1
 fi
 grep -q ' 10$' "$head_ticket" || { echo "owner refresh clobbered the counter"; exit 1; }
@@ -605,7 +642,7 @@ wait "$hpid" && { echo "heavy should have starved"; exit 1; }
 set_incus_containers "big:Running:8192MB"        # free = 2048
 echo "9999 ghost 0" > "$MOLECULE_GATE_DIR/q.0000000001.ghost"
 touch -d '1 minute ago' "$MOLECULE_GATE_DIR/q.0000000001.ghost"
-GATE_MAX_OVERTAKES=0 run_gate solo acquire tiny 3 >/dev/null \
+GATE_MAX_OVERTAKES=0 run_gate solo acquire --molecule-scenario tiny --deadline 3 >/dev/null \
   || { echo "stale ticket should be GCd, not block"; exit 1; }
 run_gate solo release >/dev/null
 
@@ -614,7 +651,7 @@ echo OK
 
 - [ ] **Step 2: Run the suite to see the new tests fail**
 
-Run: `bash tests/gate/run-tests.sh`
+Run: the Docker suite command from Global Constraints.
 Expected: `test_queue.sh` FAILS at case 2 (no bypass branch yet); the other three files stay green.
 
 - [ ] **Step 3: Add the bypass branch** — replace the `# BYPASS` marker inside the `if [ "$free" -ge "$need" ]` block with:
@@ -624,37 +661,40 @@ Expected: `test_queue.sh` FAILS at case 2 (no bypass branch yet); the other thre
           # Bounded overtake: keep capacity utilized while the head cannot
           # fit, but count every bypass on the head ticket. At the cap the
           # queue goes strict until the head is admitted, so a heavy
-          # scenario's extra wait is bounded by K admissions' releases.
+          # job's extra wait is bounded by K admissions' releases.
           admit=yes
-          head_scenario=$(file_field "$head" 2 unknown)
-          printf '%s %s %d\n' "$head_need" "$head_scenario" \
+          head_label=$(file_field "$head" 2 unknown)
+          printf '%s %s %d\n' "$head_need" "$head_label" \
             $(( head_overtakes + 1 )) > "$head"
 ```
 
 - [ ] **Step 4: Run the suite; expect all green**
 
-Run: `bash tests/gate/run-tests.sh`
+Run: the Docker suite command.
 Expected: `gate tests: 4 passed, 0 failed`
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Commit and push; confirm repo CI green**
 
 ```bash
-git add scripts/wait-for-memory.sh tests/gate/test_queue.sh
-git commit -m "feat(ci): bound queue overtakes so heavy scenarios cannot starve"
+git add wait-for-memory.sh tests/test_queue.sh
+git commit -m "feat: bound queue overtakes so heavy jobs cannot starve"
+git push && gh run watch --exit-status
 ```
 
 ---
 
 ### Task 4: Concurrency stress test
 
+**Repo:** `~/git/incus-memory-gate`
+
 **Files:**
-- Create: `tests/gate/test_stress.sh`
+- Create: `tests/test_stress.sh`
 
 **Interfaces:**
 - Consumes: gate CLI (final), harness helpers.
 - Produces: nothing new — a regression tripwire for lock races.
 
-- [ ] **Step 1: Write `tests/gate/test_stress.sh`**
+- [ ] **Step 1: Write `tests/test_stress.sh`**
 
 ```bash
 #!/usr/bin/env bash
@@ -677,8 +717,7 @@ done
 
 worker() {
   local i="$1" need="$2" total f
-  make_scenario "stress$i" "$need"
-  if run_gate "w$i" acquire "stress$i" 30 >/dev/null 2>&1; then
+  if run_gate "w$i" acquire --need-mb "$need" --label "stress$i" --deadline 30 >/dev/null 2>&1; then
     (
       flock -s 9
       total=0
@@ -713,25 +752,155 @@ echo OK
 
 - [ ] **Step 2: Run the suite (twice, to shake out flakiness)**
 
-Run: `bash tests/gate/run-tests.sh && bash tests/gate/run-tests.sh`
+Run: the Docker suite command, twice.
 Expected: `gate tests: 5 passed, 0 failed` both times. If a run hangs longer than ~60s, a worker is deadlocked — that is a real gate bug, not a test problem.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Commit and push; confirm repo CI green**
 
 ```bash
-git add tests/gate/test_stress.sh
-git commit -m "test(ci): stress the memory gate ledger under concurrent acquires"
+git add tests/test_stress.sh
+git commit -m "test: stress the ledger under concurrent acquires"
+git push && gh run watch --exit-status
 ```
 
 ---
 
-### Task 5: create.yml — convert reservations, keep a dev-path check
+### Task 5: action.yml, README, release v1.0.0
+
+**Repo:** `~/git/incus-memory-gate`
+
+**Files:**
+- Create: `action.yml`
+- Modify: `README.md` (full documentation)
+
+**Interfaces:**
+- Consumes: gate CLI (final).
+- Produces: the action interface consumers use — inputs `mode`, `need-mb`, `molecule-scenario`, `label`, `deadline-seconds`, `incus-host`, `ssh-key`, `reserve-mb`, `max-overtakes`, `gate-dir` — and the release tag `v1.0.0` whose commit SHA Task 8 pins.
+
+- [ ] **Step 1: Write `action.yml`**
+
+```yaml
+---
+name: 'Incus memory gate'
+description: >-
+  Memory admission gate for CI jobs sharing one incus host: a
+  committed-limits ledger, a FIFO queue with bounded overtakes, and
+  fail-fast semantics.
+inputs:
+  mode:
+    description: 'acquire or release'
+    required: true
+  need-mb:
+    description: 'memory to reserve in MB (exclusive with molecule-scenario)'
+    default: ''
+  molecule-scenario:
+    description: >-
+      derive the need by summing memory_mb over the platforms in
+      molecule/<scenario>/molecule.yml in the workspace
+    default: ''
+  label:
+    description: 'diagnostic label for the reservation (defaults to the scenario name)'
+    default: ''
+  deadline-seconds:
+    description: 'acquire deadline in seconds (script default 2700)'
+    default: ''
+  incus-host:
+    description: 'host queried for running containers (required for acquire)'
+    default: ''
+  ssh-key:
+    description: 'path to the SSH key used for the incus query'
+    default: ''
+  reserve-mb:
+    description: 'MB reserved for host OS/runners/incusd (script default 12288)'
+    default: ''
+  max-overtakes:
+    description: 'bypasses a queue head tolerates before the queue goes strict (script default 10)'
+    default: ''
+  gate-dir:
+    description: 'shared gate state directory (script default /tmp/molecule-gate)'
+    default: ''
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        INCUS_HOST: ${{ inputs.incus-host }}
+        MOLECULE_SSH_KEY: ${{ inputs.ssh-key }}
+        INCUS_RESERVE_MB: ${{ inputs.reserve-mb }}
+        GATE_MAX_OVERTAKES: ${{ inputs.max-overtakes }}
+        MOLECULE_GATE_DIR: ${{ inputs.gate-dir }}
+      run: |
+        set -euo pipefail
+        case "${{ inputs.mode }}" in
+          acquire)
+            args=()
+            if [ -n "${{ inputs.need-mb }}" ]; then
+              args+=(--need-mb "${{ inputs.need-mb }}")
+            fi
+            if [ -n "${{ inputs.molecule-scenario }}" ]; then
+              args+=(--molecule-scenario "${{ inputs.molecule-scenario }}")
+            fi
+            if [ -n "${{ inputs.label }}" ]; then
+              args+=(--label "${{ inputs.label }}")
+            fi
+            if [ -n "${{ inputs.deadline-seconds }}" ]; then
+              args+=(--deadline "${{ inputs.deadline-seconds }}")
+            fi
+            bash "${{ github.action_path }}/wait-for-memory.sh" acquire "${args[@]}"
+            ;;
+          release)
+            bash "${{ github.action_path }}/wait-for-memory.sh" release
+            ;;
+          *)
+            echo "unknown mode: ${{ inputs.mode }}" >&2
+            exit 2
+            ;;
+        esac
+```
+
+- [ ] **Step 2: Write the full `README.md`** — sections, in this order, in plain prose:
+  1. What it is: one paragraph — the admission formula, why committed limits beat MemAvailable (hard cgroup caps make `Σ limits ≤ MemTotal − reserve` a real no-OOM guarantee), fail-fast philosophy.
+  2. Queue policy: FIFO tickets, bounded overtakes with K default 10, deadline verdict line.
+  3. Usage as an action: two YAML snippets — an acquire step (`mode: acquire`, `molecule-scenario`/`need-mb`, `incus-host`, `ssh-key`) and a paired release step (`if: always()`, `mode: release`). Note the SHA-pinning convention (`uses: Oddly/incus-memory-gate@<sha> # v1.0.0`).
+  4. Usage as a plain script: the CLI synopsis from the script header.
+  5. The conversion contract: reservation file `r.<runner>` (content `<need_mb> <label>`) in the gate dir; the launcher deletes it right after `incus launch` so the job is counted via committed `limits.memory` from then on. Include this exact shell fragment as the reference converter:
+     ```bash
+     # inside the flock'd launch section, after all `incus launch` calls:
+     if [ -n "$RUNNER_NAME" ]; then
+       rm -f "/tmp/molecule-gate/r.${RUNNER_NAME}"
+     fi
+     ```
+  6. Env reference: the table from the script header (name, default, meaning), noting empty-string-is-unset.
+  7. Requirements: Linux gate host, bash + flock + python3 + PyYAML on the runner, SSH root access to the incus host (or `GATE_INCUS_QUERY` override).
+  8. Testing: `bash tests/run-tests.sh` on Linux; what the suite covers.
+
+- [ ] **Step 3: Run the suite once more (nothing should change) and lint the action**
+
+Run: the Docker suite command → `gate tests: 5 passed, 0 failed`.
+Run: `docker run --rm -v ~/git/incus-memory-gate:/mnt koalaman/shellcheck:stable -s bash /dev/null` is not applicable to action.yml — instead validate YAML: `python3 -c "import yaml; yaml.safe_load(open('$HOME/git/incus-memory-gate/action.yml'))" && echo yaml-ok`.
+
+- [ ] **Step 4: Commit, push, tag and release v1.0.0**
+
+```bash
+git add action.yml README.md
+git commit -m "feat: composite action interface and documentation"
+git push && gh run watch --exit-status
+git tag -a v1.0.0 -m "First release: committed-limits ledger, bounded-overtake queue, fail-fast"
+git push origin v1.0.0
+git rev-parse v1.0.0^{commit}   # record this SHA — Task 8 pins it
+```
+
+---
+
+### Task 6: elasticstack create.yml — convert reservations, keep a dev-path check
+
+**Repo:** `~/git/elasticstack` (branch `ci/memory-gate-redesign`)
 
 **Files:**
 - Modify: `molecule/shared/create.yml` (header comment, vars, and the "Wait for capacity and launch containers (locked)" task)
 
 **Interfaces:**
-- Consumes: reservation file format `r.<runner>` = `<need_mb> <scenario>` in `/tmp/molecule-gate` (Task 2).
+- Consumes: reservation file format `r.<runner>` = `<need_mb> <label>` in `/tmp/molecule-gate` (Task 2's contract).
 - Produces: the conversion behavior the gate's ledger arithmetic assumes. No later task depends on names introduced here.
 
 - [ ] **Step 1: Update the header comment block** — replace lines 8–14 (the "Memory-based capacity gate:" paragraph) with:
@@ -739,8 +908,8 @@ git commit -m "test(ci): stress the memory gate ledger under concurrent acquires
 ```yaml
 # Memory admission:
 #   In CI, admission happens in the workflow's "Acquire memory slot" step
-#   (scripts/wait-for-memory.sh), which leaves a reservation file in
-#   /tmp/molecule-gate. When that file exists we launch unconditionally
+#   (the Oddly/incus-memory-gate action), which leaves a reservation file
+#   in /tmp/molecule-gate. When that file exists we launch unconditionally
 #   and delete it right after `incus launch` — from then on the job is
 #   counted via committed limits.memory, so nothing is double-counted.
 #   Runs without a reservation (local development) get a capacity check
@@ -859,7 +1028,9 @@ git commit -m "feat(ci): convert gate reservations into committed capacity at la
 
 ---
 
-### Task 6: Container memory limits + CLAUDE.md reference
+### Task 7: Container memory limits + CLAUDE.md reference
+
+**Repo:** `~/git/elasticstack` (branch `ci/memory-gate-redesign`)
 
 **Files:**
 - Modify: `molecule/repos_default/molecule.yml:12-15`
@@ -897,23 +1068,31 @@ Do NOT touch the `memory_mb: 4096` elasticsearch platforms in those files.
 
 ```markdown
 The heaviest scenarios by summed platform `memory_mb` in
-`molecule/<scenario>/molecule.yml` (which is exactly what
-`scripts/wait-for-memory.sh` admits on — there is no separate table to
-keep in sync): `elasticstack_default` (20 GB),
+`molecule/<scenario>/molecule.yml` (which is exactly what the
+Oddly/incus-memory-gate action admits on — there is no separate table
+to keep in sync): `elasticstack_default` (20 GB),
 `elasticsearch_roles_calculation` (16 GB), `es_kibana` (13.8 GB),
 `cert_renewal` (10.5 GB).
 ```
 
-Keep the rest of the paragraph (the `max-parallel` sentence) unchanged — Task 8 rewrites it.
+Keep the rest of the paragraph (the `max-parallel` sentence) unchanged — Task 9 rewrites it.
 
 - [ ] **Step 4: Lint + sanity-check derived needs**
 
-Run: `yamllint molecule/ && python3 -c "
+Run: `yamllint molecule/` then, from the repo root:
+```bash
+python3 - <<'PY'
 import yaml
-for s in ['repos_default','kibana_custom','kibana_custom_certs','kibana_extras']:
-    d = yaml.safe_load(open(f'molecule/{s}/molecule.yml').read().replace('\${MOLECULE_DISTRO:-debian12}','debian12').replace('\${ELASTIC_RELEASE:-9}','9').replace('\${MOLECULE_RUN_SUFFIX}',''))
+for s in ['repos_default', 'kibana_custom', 'kibana_custom_certs', 'kibana_extras']:
+    raw = open(f'molecule/{s}/molecule.yml').read()
+    for tok, val in [('${MOLECULE_DISTRO:-debian12}', 'debian12'),
+                     ('${ELASTIC_RELEASE:-9}', '9'),
+                     ('${MOLECULE_RUN_SUFFIX}', '')]:
+        raw = raw.replace(tok, val)
+    d = yaml.safe_load(raw)
     print(s, sum(int(p.get('memory_mb', 4096)) for p in d['platforms']))
-"`
+PY
+```
 Expected: `repos_default 2048`, `kibana_custom 7168`, `kibana_custom_certs 7168`, `kibana_extras 7168`.
 
 - [ ] **Step 5: Commit**
@@ -926,19 +1105,20 @@ git commit -m "fix(ci): give repos and kibana containers the memory they actuall
 
 ---
 
-### Task 7: Workflow wiring — acquire env, gate_tests job
+### Task 8: elasticstack workflow wiring — consume the action, drop the local script
+
+**Repo:** `~/git/elasticstack` (branch `ci/memory-gate-redesign`)
 
 **Files:**
-- Modify: `.github/workflows/molecule.yml` (Acquire memory slot step, ~line 114)
-- Modify: `.github/workflows/test_full_stack.yml` (Acquire memory slot step)
-- Modify: `.github/workflows/test_elasticsearch_upgrade.yml` (both Acquire memory slot steps)
-- Modify: `.github/workflows/test_contracts.yml` (paths + new job)
+- Modify: `.github/workflows/molecule.yml` (Acquire + Release memory slot steps)
+- Modify: `.github/workflows/test_full_stack.yml` (Acquire + Release memory slot steps)
+- Modify: `.github/workflows/test_elasticsearch_upgrade.yml` (both jobs' Acquire + Release steps)
+- Delete: `scripts/wait-for-memory.sh`
 
 **Interfaces:**
-- Consumes: gate CLI (`acquire <scenario>` — no timeout arg, default 2700) and its env contract; `tests/gate/run-tests.sh` from Task 1.
-- Produces: nothing later tasks use.
+- Consumes: the action interface from Task 5 and the `v1.0.0` commit SHA recorded there (referred to below as `<GATE_SHA>` — substitute the real 40-char SHA everywhere).
 
-- [ ] **Step 1a: Replace the acquire step in `test_full_stack.yml` and in both jobs of `test_elasticsearch_upgrade.yml`** (fixed job budgets of 180 and 60 minutes — the 2700s default deadline leaves 135 and 15 minutes of runway respectively). Exact step, identical in all three:
+- [ ] **Step 1: Replace the acquire step in `test_full_stack.yml` and in both jobs of `test_elasticsearch_upgrade.yml`** (fixed job budgets of 180 and 60 minutes — the 2700s default deadline leaves 135 and 15 minutes of runway respectively). Exact step, identical in all three:
 
 ```yaml
       - name: Acquire memory slot
@@ -948,82 +1128,85 @@ git commit -m "fix(ci): give repos and kibana containers the memory they actuall
         # in — a starved job is an explicit retryable failure, not an
         # OOM risk. create.yml converts the reservation into committed
         # capacity right after the containers launch.
-        run: bash scripts/wait-for-memory.sh acquire "${{ matrix.scenario }}"
-        env:
-          INCUS_HOST: ${{ secrets.INCUS_HOST }}
-          MOLECULE_SSH_KEY: ${{ runner.temp }}/molecule_id_ed25519
+        uses: Oddly/incus-memory-gate@<GATE_SHA>  # v1.0.0
+        with:
+          mode: acquire
+          molecule-scenario: ${{ matrix.scenario }}
+          incus-host: ${{ secrets.INCUS_HOST }}
+          ssh-key: ${{ runner.temp }}/molecule_id_ed25519
 ```
 
-- [ ] **Step 1b: Replace the acquire step in `molecule.yml`** — its `timeout-minutes` is the caller-supplied `inputs.timeout` (default 60, as low as 20 for `test_elasticsearch_modules`), so the deadline is derived to always leave 15 minutes for converge+verify, floored at 300s:
+- [ ] **Step 2: Replace the acquire step in `molecule.yml`** — its `timeout-minutes` is the caller-supplied `inputs.timeout` (default 60, as low as 20 for `test_elasticsearch_modules`), and GitHub expressions cannot do arithmetic, so a tiny step computes the deadline first:
 
 ```yaml
-      - name: Acquire memory slot
-        # Single-authority admission gate: MemTotal − reserve − committed
-        # limits.memory − pending reservations, FIFO with bounded
-        # overtakes. The deadline stays 15 minutes under this job's
-        # timeout-minutes so a starved job fails HERE with a queue/ledger
-        # verdict instead of at the workflow cancel with nothing.
-        # create.yml converts the reservation into committed capacity
-        # right after the containers launch.
+      - name: Compute gate deadline
+        # Keep the gate deadline 15 minutes under this job's
+        # timeout-minutes so a starved job fails at the gate with a
+        # queue/ledger verdict instead of at the workflow cancel with
+        # nothing. Floor of 300s.
+        id: gate
         run: |
           deadline=$(( (${{ inputs.timeout }} - 15) * 60 ))
           [ "$deadline" -ge 300 ] || deadline=300
-          bash scripts/wait-for-memory.sh acquire "${{ matrix.scenario }}" "$deadline"
-        env:
-          INCUS_HOST: ${{ secrets.INCUS_HOST }}
-          MOLECULE_SSH_KEY: ${{ runner.temp }}/molecule_id_ed25519
+          echo "deadline=$deadline" >> "$GITHUB_OUTPUT"
+
+      - name: Acquire memory slot
+        # Single-authority admission gate: MemTotal − reserve − committed
+        # limits.memory − pending reservations, FIFO with bounded
+        # overtakes. create.yml converts the reservation into committed
+        # capacity right after the containers launch.
+        uses: Oddly/incus-memory-gate@<GATE_SHA>  # v1.0.0
+        with:
+          mode: acquire
+          molecule-scenario: ${{ matrix.scenario }}
+          deadline-seconds: ${{ steps.gate.outputs.deadline }}
+          incus-host: ${{ secrets.INCUS_HOST }}
+          ssh-key: ${{ runner.temp }}/molecule_id_ed25519
 ```
 
-Leave every "Release memory slot" step exactly as it is (`if: always()`, `bash scripts/wait-for-memory.sh release`) — release needs no env.
-
-- [ ] **Step 2: test_contracts.yml — extend the pull_request paths filter**
+- [ ] **Step 3: Replace every "Release memory slot" step in the same four places** (keep the existing comment and `if: always()`):
 
 ```yaml
-    paths:
-      - 'roles/**'
-      - 'tests/integration/**'
-      - 'tests/fakes/**'
-      - 'tests/gate/**'
-      - 'scripts/wait-for-memory.sh'
-      - '.github/workflows/test_contracts.yml'
+      - name: Release memory slot
+        # Runs whether converge/verify/idempotence passed or failed, so
+        # the reservation is freed promptly. Normally a no-op: create.yml
+        # already converted the reservation at container launch.
+        if: always()
+        uses: Oddly/incus-memory-gate@<GATE_SHA>  # v1.0.0
+        with:
+          mode: release
 ```
 
-- [ ] **Step 3: test_contracts.yml — add the gate_tests job** after the `contracts` job:
+- [ ] **Step 4: Delete the local script**
 
-```yaml
-  gate_tests:
-    # The memory gate is pure coordination logic; its suite is hermetic
-    # (fake meminfo, fake incus query, tmpdir gate state) and needs no
-    # Incus and no self-hosted runner.
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Check out code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-
-      - name: Install PyYAML
-        run: python3 -m pip install --user pyyaml
-
-      - name: Run gate tests
-        run: bash tests/gate/run-tests.sh
+```bash
+git rm scripts/wait-for-memory.sh
 ```
+Then `grep -rn "wait-for-memory" . --exclude-dir=.git --exclude-dir=.superpowers --exclude-dir=docs` — the only hits left must be the workflow comments referencing the gate concept (fine) and none referencing `scripts/wait-for-memory.sh`.
 
-- [ ] **Step 4: Lint + step-order sanity check**
+- [ ] **Step 5: Lint + step-order sanity check**
 
-Run: `yamllint .github/workflows/ && for f in molecule.yml test_full_stack.yml test_elasticsearch_upgrade.yml; do awk '/Set up SSH key/{k=NR} /Acquire memory slot/{if(!k||NR<k){print FILENAME": acquire before ssh key"; exit 1}}' ".github/workflows/$f"; done && echo order-ok`
-Expected: clean, `order-ok` (the gate's SSH query needs the key material already on disk).
+Run: `yamllint .github/workflows/` and confirm in all three files that the "Set up SSH key for molecule" step precedes the acquire step (the gate's incus query needs the key on disk).
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add .github/workflows/molecule.yml .github/workflows/test_full_stack.yml \
-        .github/workflows/test_elasticsearch_upgrade.yml .github/workflows/test_contracts.yml
-git commit -m "chore(ci): wire the rewritten gate into the workflows and test it on every PR"
+        .github/workflows/test_elasticsearch_upgrade.yml
+git commit -m "chore(ci): consume the incus-memory-gate action instead of the local script
+
+The gate now lives in Oddly/incus-memory-gate with its own hermetic
+test suite and CI, pinned here by SHA. The reusable molecule workflow
+derives the gate deadline from its timeout input so a starved job
+always fails at the gate step with a queue verdict rather than at the
+workflow cancel."
 ```
 
 ---
 
-### Task 8: Raise full-stack max-parallel (separate, revertable)
+### Task 9: Raise full-stack max-parallel (separate, revertable)
+
+**Repo:** `~/git/elasticstack` (branch `ci/memory-gate-redesign`)
 
 **Files:**
 - Modify: `.github/workflows/test_full_stack.yml` (strategy block)
@@ -1048,8 +1231,8 @@ git commit -m "chore(ci): wire the rewritten gate into the workflows and test it
 - [ ] **Step 2: Update the CLAUDE.md sentence** about `max-parallel: 3` to:
 
 ```markdown
-`test_full_stack.yml` uses `max-parallel: 6`; the admission gate in
-`scripts/wait-for-memory.sh` (FIFO, bounded overtakes, fail-fast)
+`test_full_stack.yml` uses `max-parallel: 6`; the admission gate (the
+Oddly/incus-memory-gate action: FIFO, bounded overtakes, fail-fast)
 keeps the heaviest scenarios from being starved on the shared
 incus-ci host — the history of the 6→3→6 moves is in `git log
 .github/workflows/test_full_stack.yml`.
@@ -1072,15 +1255,15 @@ revert."
 
 ---
 
-### Task 9: Staged validation, PR, acceptance
+### Task 10: Staged validation, PR, acceptance
 
-**Files:** none (operational).
+**Repo:** `~/git/elasticstack` (operational; gate repo already released)
 
 - [ ] **Step 1: Push the branch and open the PR**
 
 ```bash
 git push -u origin ci/memory-gate-redesign
-gh pr create --title "ci: single-authority memory gate with bounded-overtake queueing" --body "$(cat <<'EOF'
+gh pr create --title "ci: consume the extracted incus-memory-gate action, fix container limits" --body "$(cat <<'EOF'
 We had two overlapping admission gates for the shared incus-ci host and
 they disagreed with each other: the workflow-level gate reasoned about
 MemAvailable minus reservations, create.yml reasoned about committed
@@ -1089,28 +1272,26 @@ for its whole run while its containers' real usage was already visible.
 That double-count is what starved the heavy scenarios and forced the
 full-stack matrix down to three slots.
 
-This makes scripts/wait-for-memory.sh the only admission decision,
-based on MemTotal minus reserve minus committed limits minus pending
-reservations. create.yml deletes the reservation right after incus
-launch, so from that moment the job is counted through its containers'
-limits and nothing is counted twice. Queueing is FIFO with bounded
-overtakes: smaller jobs can pass a blocked heavy job, but only ten
-times, then the queue goes strict until the head is admitted. At the
-45-minute deadline the gate now fails with a queue/ledger verdict
-instead of proceeding without headroom. The scenario memory table is
-gone too — the gate sums memory_mb straight from the scenario's
-molecule.yml, so there is nothing left to drift.
+The gate logic now lives in its own public repo,
+Oddly/incus-memory-gate, as a composite action with a hermetic test
+suite and its own CI, so other projects can reuse it. This PR makes the
+collection its first consumer: the workflows acquire through the
+action (SHA-pinned), create.yml deletes the reservation right after
+incus launch so the job is counted through its containers' limits from
+then on, and the old scripts/wait-for-memory.sh is gone along with its
+hand-maintained scenario memory table — the gate sums memory_mb
+straight from the scenario's molecule.yml.
 
-The gate logic has a hermetic test suite under tests/gate/ (fake
-meminfo, fake incus query, real flock) including a seeded concurrency
-stress case; it runs on ubuntu-latest via the contracts workflow on
-every PR. The repos and kibana container limits also go up: the host
-kernel journal shows dnf being OOM-killed inside the 1 GB repos
-container 56 times in the last month, and Kibana 9 dying at ~1.6 GB
-inside the 2 GB kibana containers, which is what was hanging those
-jobs to their timeout. The last commit returns full-stack max-parallel
-to six; if the next nightly storm shows starvation or OOMs, revert
-that commit first.
+Admission is FIFO with bounded overtakes: smaller jobs can pass a
+blocked heavy job, but only ten times, then the queue goes strict until
+the head is admitted. At the deadline the gate fails with a
+queue/ledger verdict instead of proceeding without headroom. The repos
+and kibana container limits also go up: the host kernel journal shows
+dnf being OOM-killed inside the 1 GB repos container 56 times in the
+last month, and Kibana 9 dying at ~1.6 GB inside the 2 GB kibana
+containers, which is what was hanging those jobs to their timeout. The
+last commit returns full-stack max-parallel to six; if the next nightly
+storm shows starvation or OOMs, revert that commit first.
 EOF
 )"
 ```
@@ -1157,6 +1338,7 @@ Compare full-stack wall clock against the 2026-08-12 baseline. If starvation or 
 
 ## Self-review notes
 
-- Spec coverage: §1 ledger → Task 2; §2 conversion + dev path → Task 5; §3 queue/fail-fast → Tasks 2–3; §4 limits/knobs → Tasks 6, 8; testing section → Tasks 1–4, 7 (gate_tests job), 9 (staged + acceptance); error-handling table rows are each covered by a named test case or Task 9 step.
-- The old script's `/var/lib/molecule-gate` first-choice dir is intentionally dropped (never writable in practice; `/tmp/molecule-gate` is the observed real path). `MOLECULE_GATE_DIR` still overrides.
-- Type consistency: ticket = `<need> <scenario> <overtakes>`, reservation = `<need> <scenario>`, grep vocab (`need=`, `committed=`, `ADMITTED`, `STARVED`) is identical between the script in Task 2 and every test in Tasks 2–4.
+- Spec coverage: Packaging section → Tasks 1, 5, 8; §1 ledger → Task 2; §2 conversion + dev path → Task 6; §3 queue/fail-fast → Tasks 2–3; §4 limits/knobs → Tasks 7, 9; testing section → Tasks 1–4 (suite), Task 1/5 (gate repo CI replaces the planned elasticstack gate_tests job, per the Packaging section), Task 10 (staged + acceptance).
+- The old script's `/var/lib/molecule-gate` first-choice dir is intentionally dropped (never writable in practice; `/tmp/molecule-gate` is the observed real path). `MOLECULE_GATE_DIR`/`gate-dir` still overrides.
+- Type consistency: ticket = `<need> <label> <overtakes>`, reservation = `<need> <label>`, grep vocab (`need=`, `committed=`, `ADMITTED`, `STARVED`) is identical between the script in Task 2 and every test in Tasks 2–4; the action inputs in Task 5 match the CLI flags consumed in Task 8.
+- elasticstack no longer gets `tests/gate/` or a `gate_tests` contracts job — the suite and CI live in the gate repo. The earlier elasticstack harness commit was dropped from the branch; the files were preserved and are ported by Task 1.

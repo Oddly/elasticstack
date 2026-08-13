@@ -52,6 +52,38 @@ Observed failure modes (kernel journal on the Proxmox host, 30 days to
 - Gate policy is fail-fast: a job that cannot get capacity by its
   deadline fails with a diagnostic message. No barge-in.
 
+## Packaging (added 2026-08-13)
+
+The gate is generic — nothing in the ledger, queue, or lifecycle logic
+is elasticstack-specific except deriving need from a molecule scenario
+file. It therefore lives in its own public repo,
+**`Oddly/incus-memory-gate`** (GPL-3.0, matching this collection),
+packaged as a **composite GitHub Action** plus the raw script:
+
+- `wait-for-memory.sh` — the gate, with a generic CLI:
+  `acquire --need-mb <MB> [--label <name>] [--deadline <s>]`,
+  `acquire --molecule-scenario <name> [--deadline <s>]` (sums
+  `memory_mb` from `molecule/<name>/molecule.yml` relative to the
+  working directory; label defaults to the scenario name), and
+  `release`. Empty-string env vars are treated as unset so the action
+  can pass inputs through unconditionally.
+- `action.yml` — composite action with `mode: acquire|release` and
+  inputs `need-mb`, `molecule-scenario`, `label`, `deadline-seconds`,
+  `incus-host`, `ssh-key`, `reserve-mb`, `max-overtakes`, `gate-dir`.
+- `tests/` — the full hermetic suite, run by the repo's own CI on
+  ubuntu-latest for every push/PR, plus shellcheck.
+- `README.md` — the admission formula, queue policy, env contract,
+  and the reservation-conversion contract (`r.<runner>` in the gate
+  dir, `<need_mb> <label>`) that launch-side converters like this
+  collection's `molecule/shared/create.yml` implement.
+
+This collection consumes the action SHA-pinned
+(`uses: Oddly/incus-memory-gate@<sha> # vX.Y.Z`), keeps the create.yml
+conversion (the contract is the file format, not the script), and
+deletes its local `scripts/wait-for-memory.sh`. The `gate_tests` CI
+job planned for the contracts workflow moves to the gate repo's own
+CI and is dropped here.
+
 ## Design
 
 ### 1. One ledger, one formula
