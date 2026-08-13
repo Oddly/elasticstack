@@ -823,7 +823,15 @@ runs:
   using: composite
   steps:
     - shell: bash
+      # Every input is routed through env — never interpolated as
+      # ${{ }} text inside the script body — so no input value can
+      # inject shell syntax (GitHub Actions hardening guidance).
       env:
+        GATE_MODE: ${{ inputs.mode }}
+        GATE_NEED_MB: ${{ inputs.need-mb }}
+        GATE_MOLECULE_SCENARIO: ${{ inputs.molecule-scenario }}
+        GATE_INPUT_LABEL: ${{ inputs.label }}
+        GATE_DEADLINE_SECONDS: ${{ inputs.deadline-seconds }}
         INCUS_HOST: ${{ inputs.incus-host }}
         MOLECULE_SSH_KEY: ${{ inputs.ssh-key }}
         INCUS_RESERVE_MB: ${{ inputs.reserve-mb }}
@@ -831,20 +839,20 @@ runs:
         MOLECULE_GATE_DIR: ${{ inputs.gate-dir }}
       run: |
         set -euo pipefail
-        case "${{ inputs.mode }}" in
+        case "$GATE_MODE" in
           acquire)
             args=()
-            if [ -n "${{ inputs.need-mb }}" ]; then
-              args+=(--need-mb "${{ inputs.need-mb }}")
+            if [ -n "$GATE_NEED_MB" ]; then
+              args+=(--need-mb "$GATE_NEED_MB")
             fi
-            if [ -n "${{ inputs.molecule-scenario }}" ]; then
-              args+=(--molecule-scenario "${{ inputs.molecule-scenario }}")
+            if [ -n "$GATE_MOLECULE_SCENARIO" ]; then
+              args+=(--molecule-scenario "$GATE_MOLECULE_SCENARIO")
             fi
-            if [ -n "${{ inputs.label }}" ]; then
-              args+=(--label "${{ inputs.label }}")
+            if [ -n "$GATE_INPUT_LABEL" ]; then
+              args+=(--label "$GATE_INPUT_LABEL")
             fi
-            if [ -n "${{ inputs.deadline-seconds }}" ]; then
-              args+=(--deadline "${{ inputs.deadline-seconds }}")
+            if [ -n "$GATE_DEADLINE_SECONDS" ]; then
+              args+=(--deadline "$GATE_DEADLINE_SECONDS")
             fi
             bash "${{ github.action_path }}/wait-for-memory.sh" acquire "${args[@]}"
             ;;
@@ -852,7 +860,7 @@ runs:
             bash "${{ github.action_path }}/wait-for-memory.sh" release
             ;;
           *)
-            echo "unknown mode: ${{ inputs.mode }}" >&2
+            echo "unknown mode: $GATE_MODE" >&2
             exit 2
             ;;
         esac
