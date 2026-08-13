@@ -8,6 +8,7 @@
   vars:
     incus_host: "{{ lookup('env', 'INCUS_HOST') | default('172.30.0.172', true) }}"
     molecule_ssh_key: "{{ lookup('env', 'MOLECULE_SSH_KEY') | default(lookup('env', 'HOME') ~ '/.ssh/molecule_id_ed25519', true) }}"
+    ci_run_id: "{{ lookup('env', 'GITHUB_RUN_ID') | default('', true) }}"
     # Resolve ${VAR:-default} shell substitutions in raw molecule.yml
     _resolve_envsubst: >-
       python3 -c 'import re,os,sys;
@@ -20,6 +21,56 @@
       -i {{ molecule_ssh_key }} root@{{ incus_host }}
 
   tasks:
+    # Best-effort per-container memory telemetry, taken before the
+    # container is deleted so we can right-size memory_mb from real
+    # numbers (see ci/README.md). Reads the top-level payload cgroup on
+    # the incus host: memory.peak is the kernel cache-inclusive
+    # high-water (an upper bound on total need), anon/cache are the
+    # final split, oom_kill is the definitive kill count. The continuous
+    # sampler in ci/ captures the true anon *peak*; this task guarantees
+    # a per-container record on every run and appends it to an
+    # accumulating ledger on the host. It never fails a teardown.
+    - name: Record peak memory before delete  # noqa: risky-shell-pipe
+      ansible.builtin.shell:
+        cmd: |
+          {{ _ssh_cmd }} bash -s <<'REMOTE'
+          name="{{ item.name }}"
+          dir=$(find /sys/fs/cgroup -type d -name "lxc.payload.${name}" 2>/dev/null | head -1)
+          b2m() { echo $(( ${1:-0} / 1048576 )); }
+          stamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          if [ -z "$dir" ]; then
+            line="{\"@timestamp\":\"${stamp}\",\"run\":\"{{ ci_run_id }}\",\"container\":\"${name}\",\"note\":\"no cgroup at teardown\"}"
+          else
+            peak=$(b2m "$(cat "$dir/memory.peak" 2>/dev/null || echo 0)")
+            anon=$(b2m "$(awk '/^anon /{print $2; exit}' "$dir/memory.stat" 2>/dev/null || echo 0)")
+            cache=$(b2m "$(awk '/^file /{print $2; exit}' "$dir/memory.stat" 2>/dev/null || echo 0)")
+            mx=$(cat "$dir/memory.max" 2>/dev/null || echo max)
+            if [ "$mx" = "max" ]; then lim=0; else lim=$(b2m "$mx"); fi
+            oom=$(awk '/^oom_kill /{print $2; exit}' "$dir/memory.events" 2>/dev/null || echo 0)
+            line="{\"@timestamp\":\"${stamp}\",\"run\":\"{{ ci_run_id }}\",\"container\":\"${name}\",\"limit_mb\":${lim},\"peak_mb\":${peak},\"anon_final_mb\":${anon},\"cache_final_mb\":${cache},\"oom_kill\":${oom}}"
+          fi
+          mkdir -p /root/mem-peaks
+          printf '%s\n' "$line" >> /root/mem-peaks/teardown.ndjson
+          printf '%s\n' "$line"
+          REMOTE
+      args:
+        executable: /bin/bash
+      loop: "{{ molecule_yml.platforms }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: _mem_teardown
+      failed_when: false
+      changed_when: false
+
+    - name: Save teardown telemetry to the ephemeral dir
+      ansible.builtin.copy:
+        dest: "{{ molecule_ephemeral_directory }}/mem-teardown.ndjson"
+        content: |
+          {{ _mem_teardown.results | default([]) | map(attribute='stdout') | select('string') | join('\n') }}
+        mode: "0644"
+      failed_when: false
+      changed_when: false
+
     - name: Destroy containers
       ansible.builtin.command:
         cmd: "{{ _ssh_cmd }} incus delete {{ item.name }} --force"

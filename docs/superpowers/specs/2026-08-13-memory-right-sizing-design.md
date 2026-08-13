@@ -80,21 +80,29 @@ down before the host-side sampler stabilized. Their anon floor
 headroom against 4096, but we have no peak for them yet. Capturing
 them reliably is the point of the teardown hook below.
 
-## Next increment: teardown telemetry
+## Teardown telemetry (implemented)
 
 The sampler is host-side and only records while it happens to be
 running. To get a guaranteed per-container record on every CI run,
-add a best-effort task to `molecule/shared/destroy.yml` that, before
-each `incus delete`, reads from the container's top-level payload
-cgroup: `memory.peak` (cache-inclusive high-water, an upper bound),
-final `anon`/`file` from `memory.stat`, the limit from `memory.max`,
-and `oom_kill` from `memory.events`. Append one NDJSON line per
-container under `MOLECULE_EPHEMERAL_DIRECTORY` and upload it as a CI
-artifact. Guard it with `failed_when: false` so telemetry can never
-fail a teardown. It complements the sampler: the sampler gives the
-true anon peak, the teardown record guarantees coverage and the
-definitive `oom_kill` count for every scenario, including the
-config-only ones this run missed.
+`molecule/shared/destroy.yml` now runs a best-effort task before each
+`incus delete` that reads the container's top-level payload cgroup:
+`memory.peak` (cache-inclusive high-water, an upper bound), final
+`anon`/`file` from `memory.stat`, the limit from `memory.max`, and
+`oom_kill` from `memory.events`. It writes one NDJSON line per
+container to an accumulating ledger on the host
+(`/root/mem-peaks/teardown.ndjson`) and a copy under
+`MOLECULE_EPHEMERAL_DIRECTORY`, and is guarded with
+`failed_when: false` so telemetry can never fail a teardown. It
+complements the sampler: the sampler gives the true anon peak, the
+teardown record guarantees coverage and the definitive `oom_kill`
+count for every scenario, including the config-only ones this storm
+missed.
+
+This lands unvalidated against a live container (none were running
+when it was written; the read logic was tested against a substitute
+cgroup). The first labelled CI run on this branch is what confirms it
+end to end; because it is `failed_when: false` it cannot break that
+run even if a field reads wrong.
 
 ## Out of scope
 
