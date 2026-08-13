@@ -1339,8 +1339,9 @@ While it runs: `ssh root@172.30.0.172 'watch -n30 ls -la /tmp/molecule-gate/'` a
 ```bash
 ssh root@lab "journalctl -k --since '1 day ago' | grep -c 'oom_memcg=/lxc/305/ns/lxc.payload'"   # expect 0
 gh run list --created <nightly-date> --json name,conclusion   # expect no failure/cancelled from gate starvation or timeout
+ssh root@172.30.0.172 "grep -E 'MemFree|MemAvailable' /proc/meminfo"   # spot-check during the storm too: host free memory must stay positive
 ```
-Compare full-stack wall clock against the 2026-08-12 baseline. If starvation or OOMs appear, revert the max-parallel commit first, investigate the gate second.
+Compare full-stack wall clock against the 2026-08-12 baseline. Watch host free memory as well as cgroup kills: the 12288 MB reserve is a flat allowance while the runner-side footprint scales with concurrency, and max-parallel 6 packs committed limits right up to MemTotal − reserve — if host MemAvailable approaches zero during the storm, the reserve is undersized. If starvation, OOMs, or host memory exhaustion appear, revert the max-parallel commit first, investigate the gate second.
 
 ---
 
