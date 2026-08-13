@@ -149,8 +149,10 @@ per-OS variable files live at
 with a fallback to `{{ ansible_facts.os_family }}.yml`, loaded via
 `include_vars` with `with_first_found` (see `roles/elasticsearch/tasks/main.yml`).
 
-The heaviest scenarios by declared per-scenario memory in
-`scripts/wait-for-memory.sh`: `elasticstack_default` (20 GB),
+The heaviest scenarios by summed platform `memory_mb` in
+`molecule/<scenario>/molecule.yml` (which is exactly what the
+Oddly/incus-memory-gate action admits on — there is no separate table
+to keep in sync): `elasticstack_default` (20 GB),
 `elasticsearch_roles_calculation` (16 GB), `es_kibana` (13.8 GB),
 `cert_renewal` (10.5 GB). `test_full_stack.yml` uses `max-parallel: 3`
 because 6-way concurrency across the top four starved the biggest
