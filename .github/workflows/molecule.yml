@@ -111,13 +111,29 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -t ed25519 ${{ secrets.INCUS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
+      - name: Compute gate deadline
+        # Keep the gate deadline 15 minutes under this job's
+        # timeout-minutes so a starved job fails at the gate with a
+        # queue/ledger verdict instead of at the workflow cancel with
+        # nothing. Floor of 300s.
+        id: gate
+        run: |
+          deadline=$(( (${{ inputs.timeout }} - 15) * 60 ))
+          [ "$deadline" -ge 300 ] || deadline=300
+          echo "deadline=$deadline" >> "$GITHUB_OUTPUT"
+
       - name: Acquire memory slot
-        # Coordinated admission gate. Takes an flock'd reservation on the
-        # runner host's RAM budget so the pool can scale past the point where
-        # every concurrent slot fits at peak memory_mb. Times out and proceeds
-        # without a reservation rather than failing — better one OOM than a
-        # stuck queue.
-        run: bash scripts/wait-for-memory.sh acquire "${{ matrix.scenario }}" 1800
+        # Single-authority admission gate: MemTotal − reserve − committed
+        # limits.memory − pending reservations, FIFO with bounded
+        # overtakes. create.yml converts the reservation into committed
+        # capacity right after the containers launch.
+        uses: Oddly/incus-memory-gate@ce1c0240b0076db36b0b5b7c439690a7076d9de7  # v1.0.1
+        with:
+          mode: acquire
+          molecule-scenario: ${{ matrix.scenario }}
+          deadline-seconds: ${{ steps.gate.outputs.deadline }}
+          incus-host: ${{ secrets.INCUS_HOST }}
+          ssh-key: ${{ runner.temp }}/molecule_id_ed25519
 
       - name: Converge
         run: molecule converge -s ${{ matrix.scenario }}
@@ -158,11 +174,13 @@ jobs:
           DISTRO_CACHE_URL: http://${{ secrets.REGISTRY_HOST }}:8081
 
       - name: Release memory slot
-        # Runs whether converge/verify/idempotence passed or failed, so the
-        # reservation is freed promptly. Stale reservations (>1h) are also
-        # GC'd by the next acquire under the same lock as a safety net.
+        # Runs whether converge/verify/idempotence passed or failed, so
+        # the reservation is freed promptly. Normally a no-op: create.yml
+        # already converted the reservation at container launch.
         if: always()
-        run: bash scripts/wait-for-memory.sh release
+        uses: Oddly/incus-memory-gate@ce1c0240b0076db36b0b5b7c439690a7076d9de7  # v1.0.1
+        with:
+          mode: release
 
       - name: Collect and upload diagnostics
         if: failure()

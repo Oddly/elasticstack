@@ -164,12 +164,18 @@ jobs:
           ssh-keyscan -t ed25519 ${{ secrets.INCUS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Acquire memory slot
-        # Coordinated admission gate — reserves the scenario's memory_mb on
-        # the shared incus-ci host so the biggest scenarios don't trample
-        # each other or the parallel test_role_* / test_elasticsearch_*
-        # workflows. This step was missing from the standalone workflow;
-        # the reusable molecule.yml wrapper has always had it.
-        run: bash scripts/wait-for-memory.sh acquire "${{ matrix.scenario }}" 1800
+        # Single-authority admission gate: MemTotal − reserve − committed
+        # limits.memory − pending reservations, FIFO with bounded
+        # overtakes. Fails after its 45-min deadline instead of barging
+        # in — a starved job is an explicit retryable failure, not an
+        # OOM risk. create.yml converts the reservation into committed
+        # capacity right after the containers launch.
+        uses: Oddly/incus-memory-gate@ce1c0240b0076db36b0b5b7c439690a7076d9de7  # v1.0.1
+        with:
+          mode: acquire
+          molecule-scenario: ${{ matrix.scenario }}
+          incus-host: ${{ secrets.INCUS_HOST }}
+          ssh-key: ${{ runner.temp }}/molecule_id_ed25519
 
       - name: Converge
         run: molecule converge -s ${{ matrix.scenario }}
@@ -210,11 +216,13 @@ jobs:
           DISTRO_CACHE_URL: http://${{ secrets.REGISTRY_HOST }}:8081
 
       - name: Release memory slot
-        # Runs whether converge/verify/idempotence passed or failed, so the
-        # reservation is freed promptly. Stale reservations (>1h) are also
-        # GC'd by the next acquire under the same lock as a safety net.
+        # Runs whether converge/verify/idempotence passed or failed, so
+        # the reservation is freed promptly. Normally a no-op: create.yml
+        # already converted the reservation at container launch.
         if: always()
-        run: bash scripts/wait-for-memory.sh release
+        uses: Oddly/incus-memory-gate@ce1c0240b0076db36b0b5b7c439690a7076d9de7  # v1.0.1
+        with:
+          mode: release
 
       - name: Collect and upload diagnostics
         if: failure()
