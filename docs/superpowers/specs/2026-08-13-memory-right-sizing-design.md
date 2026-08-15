@@ -93,16 +93,43 @@ install spike on the distro that actually OOMs. Trimming any
 package-installing scenario toward these numbers would walk straight
 back into that OOM class.
 
-## Revised plan
+## Third dataset: forced full distro run (2026-08-15), and the result
 
-Do not trim off the reduced-matrix data. The instrumentation is now in
-place, and the scheduled nightlies run the full distro set including
-rockylinux9 and release 8. Let the sampler and teardown hook
-accumulate two or three nightlies, then right-size against the
-cross-distro peak — which is what those two mechanisms exist to
-provide. `repos_default` in particular stays where the gate PR put it
-until rockylinux9 data says otherwise. The 48-node reduced-matrix
-table is kept only as a steady-state reference, not a target.
+Rather than wait for the nightlies, we dispatched the role and
+config-ES workflows on the gate branch, which fall through to the full
+seven-distro, both-release matrix on `workflow_dispatch`. The sampler
+captured every distro (rockylinux9 165 rows, all others 165-236) and
+both releases, with zero OOM across the run.
+
+The full data inverts the reduced-matrix picture. The memory
+high-water is the package-install phase, and EL9's dnf plus the
+Elasticsearch/beats install pushes almost every scenario far above the
+lean-distro steady state:
+
+- `roles_calculation`: ~85 MiB on the lean distros, 946 MiB peak on
+  rockylinux9/r8.
+- beats agents: ~130 MiB lean, 1073 MiB peak — trimming to 1024 would
+  have OOM'd.
+- `repos_default`: 961 MiB peak on rockylinux9/r8, which is why the
+  gate PR raised it to 2048 and why it stays there.
+
+Against the current limits, the cross-distro peaks land at 40-98% for
+all but one scenario. The reduced-matrix "headroom" was an artifact of
+the missing distros, and acting on it would have walked straight back
+into the OOM class the gate work removed.
+
+## The one change
+
+`kibana_default` is the only genuinely over-provisioned scenario: its
+single ES+Kibana node peaked at 923 MiB anon across all seven distros
+and both releases, against the 4096 MB default it inherited. It is cut
+to 3072 MB. The cut is conservative on purpose — that node also holds
+a 2.3-2.5 GB page-cache working set, so 3072 reclaims a gigabyte of
+gate ledger while keeping the cache room that ES wants; 2048 would
+squeeze it and risk cache thrash. Watch memory PSI on the first run at
+3072 before considering anything tighter. Every other limit is left as
+measured — the current sizing, including the gate PR's bumps, is
+correct once rockylinux9 and release 8 are in the data.
 
 ## Teardown telemetry (implemented)
 
