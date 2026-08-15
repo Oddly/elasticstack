@@ -66,19 +66,43 @@ limit — arguably already tight), `cert_renewal` (64-65%), and the
 `elasticstack_default` cluster nodes (52% peak but heavily
 cache-active during converge).
 
-## Gap this run did not close
+## Second dataset: full role matrix (2026-08-14), and why it is not
+## yet a safe trim basis
 
-The scenarios the gate's own sizing notes flag as the real fat — the
-config-only Elasticsearch scenarios still at 4096 with a 1 GB heap
-(`elasticsearch_default`, `_custom`, `_custom_certs`,
-`_custom_certs_minimal`, `_cert_content`, `_security_api`,
-`_no-security`, and the ES node inside the `kibana_*` scenarios) — did
-not land cleanly in this storm's sampler data. They run in the role
-matrix, which executed on separate runs whose containers were torn
-down before the host-side sampler stabilized. Their anon floor
-(~1.9 GB for a 1 GB-heap ES node, from spot readings) suggests real
-headroom against 4096, but we have no peak for them yet. Capturing
-them reliably is the point of the teardown hook below.
+A labelled run of the whole PR matrix, with the sampler and the
+teardown hook both in place, captured 48 node-classes including the
+config-only ES scenarios the storm missed (`elasticsearch_default`,
+`_custom`, `_cert_content`, `_custom_certs`, `_no-security`,
+`roles_calculation`, etc.). Zero OOM across all 115 teardown records.
+Measured anon peaks against the current limits showed dramatic
+apparent headroom: `roles_calculation` nodes at 4-5%, beats agents at
+6-8%, `repos_default` at 9%, `kibana_default` at 22%, the config-only
+ES nodes at 45-49%.
+
+Those numbers are a **lower bound, not a safe trim basis**, because a
+`ci:run` label triggers the `pull_request` path and therefore the
+reduced PR matrix. Distro coverage in the data was debian13 and
+rockylinux10 almost exclusively (rockylinux9 only 3 records, none for
+repos), and releases skewed to 9. The memory high-water for these
+scenarios is the package-install phase, and EL9's dnf is the hog —
+`repos_default` was OOM-killed ~960 MiB on rockylinux9 (the reason the
+gate PR raised it to 2048), while rockylinux10's dnf peaked under
+96 MiB. rockylinux9 is exactly the distro this run did not measure, so
+the low anon peaks are steady-state on the lean distros, not the
+install spike on the distro that actually OOMs. Trimming any
+package-installing scenario toward these numbers would walk straight
+back into that OOM class.
+
+## Revised plan
+
+Do not trim off the reduced-matrix data. The instrumentation is now in
+place, and the scheduled nightlies run the full distro set including
+rockylinux9 and release 8. Let the sampler and teardown hook
+accumulate two or three nightlies, then right-size against the
+cross-distro peak — which is what those two mechanisms exist to
+provide. `repos_default` in particular stays where the gate PR put it
+until rockylinux9 data says otherwise. The 48-node reduced-matrix
+table is kept only as a steady-state reference, not a target.
 
 ## Teardown telemetry (implemented)
 
