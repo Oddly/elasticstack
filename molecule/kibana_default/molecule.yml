@@ -9,6 +9,15 @@ driver:
 platforms:
   - name: "kib-def-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
     distro: "${MOLECULE_DISTRO:-debian12}"
+    # 3072 MiB: this single ES+Kibana node peaked at 923 MiB anon RSS
+    # across all seven distros and both releases (2026-08 full-matrix
+    # sampling), against the 4096 default it used to inherit. 3072 keeps
+    # ~2.1 GB for the page cache, close to the observed 2.3-2.5 GB
+    # working set, so we reclaim a gigabyte of gate ledger without
+    # squeezing the Lucene cache. The other scenarios measured at
+    # 40-98% of their limits once rockylinux9's dnf install spike is
+    # included and are left as-is.
+    memory_mb: 3072
 provisioner:
   name: ansible
   env:
