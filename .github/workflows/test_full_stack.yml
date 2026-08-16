@@ -91,18 +91,15 @@ jobs:
 
     strategy:
       fail-fast: false
-      # Each scenario/distro/release combo needs 15-25 GB of container RAM on
-      # the shared incus-ci host. The memory-capacity gate in shared/create.yml
-      # eventually admits every job, but without a matrix-level cap the full
-      # 16-combo PR matrix would swamp the 131 GB host and starve the biggest
-      # scenarios (elasticstack_default, cert_renewal). 6 concurrent slots was
-      # the previous target, sized for the intended 90-100 GB steady state.
-      # Observed reality after landing several PRs concurrently: with all six
-      # slots filled, the 20 GB + 13.8 GB scenarios still lose the memory
-      # race and time out at the 45-min gate deadline. Halving to 3 keeps
-      # committed memory well under host capacity and lets the heavy jobs
-      # actually acquire without starvation. Wall clock roughly doubles.
-      max-parallel: 3
+      # Each scenario/distro/release combo needs 15-25 GB of container RAM
+      # on the shared incus-ci host. The admission gate (FIFO with bounded
+      # overtakes, fail-fast) now guarantees heavy scenarios can't be
+      # starved by smaller jobs, so the cap is back to the throughput
+      # target it was originally sized for. The 3-slot value was a
+      # workaround for gate starvation that no longer exists; if the
+      # nightly storm shows starved jobs or OOMs, revert this commit
+      # first and investigate the gate second.
+      max-parallel: 6
       matrix:
         # Standardise on rockylinux10 (not 9) for PR runs to match the rest
         # of the workflows. Rocky 10 exercises the EL≥9 branch in
@@ -164,12 +161,18 @@ jobs:
           ssh-keyscan -t ed25519 ${{ secrets.INCUS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Acquire memory slot
-        # Coordinated admission gate — reserves the scenario's memory_mb on
-        # the shared incus-ci host so the biggest scenarios don't trample
-        # each other or the parallel test_role_* / test_elasticsearch_*
-        # workflows. This step was missing from the standalone workflow;
-        # the reusable molecule.yml wrapper has always had it.
-        run: bash scripts/wait-for-memory.sh acquire "${{ matrix.scenario }}" 1800
+        # Single-authority admission gate: MemTotal − reserve − committed
+        # limits.memory − pending reservations, FIFO with bounded
+        # overtakes. Fails after its 45-min deadline instead of barging
+        # in — a starved job is an explicit retryable failure, not an
+        # OOM risk. create.yml converts the reservation into committed
+        # capacity right after the containers launch.
+        uses: Oddly/incus-memory-gate@ce1c0240b0076db36b0b5b7c439690a7076d9de7  # v1.0.1
+        with:
+          mode: acquire
+          molecule-scenario: ${{ matrix.scenario }}
+          incus-host: ${{ secrets.INCUS_HOST }}
+          ssh-key: ${{ runner.temp }}/molecule_id_ed25519
 
       - name: Converge
         run: molecule converge -s ${{ matrix.scenario }}
@@ -210,11 +213,13 @@ jobs:
           DISTRO_CACHE_URL: http://${{ secrets.REGISTRY_HOST }}:8081
 
       - name: Release memory slot
-        # Runs whether converge/verify/idempotence passed or failed, so the
-        # reservation is freed promptly. Stale reservations (>1h) are also
-        # GC'd by the next acquire under the same lock as a safety net.
+        # Runs whether converge/verify/idempotence passed or failed, so
+        # the reservation is freed promptly. Normally a no-op: create.yml
+        # already converted the reservation at container launch.
         if: always()
-        run: bash scripts/wait-for-memory.sh release
+        uses: Oddly/incus-memory-gate@ce1c0240b0076db36b0b5b7c439690a7076d9de7  # v1.0.1
+        with:
+          mode: release
 
       - name: Collect and upload diagnostics
         if: failure()

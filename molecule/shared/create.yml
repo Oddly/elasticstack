@@ -5,13 +5,14 @@
 # Containers use pre-baked images (molecule-*) with SSH, python3,
 # python3-cryptography, and the molecule SSH key already installed.
 #
-# Memory-based capacity gate:
-#   Each platform gets a memory_mb field (defaults to 4096 = 4GB).
-#   Before launching, the script sums limits.memory of all running
-#   containers and checks if there's enough headroom on the host.
-#   This replaces the old fixed container count limit, allowing the
-#   host to pack more lightweight containers while still protecting
-#   against OOM from too many heavy ones.
+# Memory admission:
+#   In CI, admission happens in the workflow's "Acquire memory slot" step
+#   (the Oddly/incus-memory-gate action), which leaves a reservation file
+#   in /tmp/molecule-gate. When that file exists we launch unconditionally
+#   and delete it right after `incus launch` — from then on the job is
+#   counted via committed limits.memory, so nothing is double-counted.
+#   Runs without a reservation (local development) get a capacity check
+#   against the same ledger here, so a laptop run cannot stampede CI.
 - name: Create containers on Incus
   hosts: localhost
   connection: local
@@ -39,6 +40,9 @@
     # 12 GB accounts for ~20 runner processes, dnsmasq, sshd, LVM, and
     # kernel page cache that isn't reclaimable under cgroup pressure.
     incus_reserve_mb: "{{ lookup('env', 'INCUS_RESERVE_MB') | default(12288, true) | int }}"
+    # Set by GitHub Actions; empty for local development runs.
+    runner_name: "{{ lookup('env', 'RUNNER_NAME') | default('', true) }}"
+    molecule_gate_dir: "{{ lookup('env', 'MOLECULE_GATE_DIR') | default('/tmp/molecule-gate', true) }}"
     # Total memory this batch of containers needs (MB).
     _needed_mb: "{{ molecule_yml.platforms | map(attribute='memory_mb', default=incus_default_memory_mb) | map('int') | sum }}"
     # Incus storage pool for containers.  LVM thin on NVMe gives CoW
@@ -68,11 +72,10 @@
       failed_when: false
       changed_when: false
 
-    # Use flock on the Incus host to serialize capacity check + launch.
-    # Without this, all jobs check simultaneously, all see plenty of
-    # memory, all pass the gate, and all launch — causing OOM.
-    # The lock is acquired with a 60s wait, then memory is checked.
-    # If insufficient, exit 1 releases the lock and Ansible retries.
+    # Launch under the host-side lock. CI jobs arrive holding a gate
+    # reservation and launch unconditionally; the reservation is deleted
+    # right after the launches, converting it into committed limits.memory.
+    # Dev runs (no reservation) check the shared ledger first.
     - name: Wait for capacity and launch containers (locked)  # noqa: risky-shell-pipe
       ansible.builtin.shell: |
         {{ _ssh_cmd }} bash -s << 'REMOTE_SCRIPT'
@@ -80,39 +83,44 @@
         exec 9>/var/lock/molecule-create.lock
         flock -x -w 60 9 || exit 1
 
-        # Total host memory in MB
-        total_mb=$(free -m | awk '/Mem:/{print $2}')
-        reserve_mb={{ incus_reserve_mb }}
+        gate_dir={{ molecule_gate_dir }}
+        my_resv="$gate_dir/r.{{ runner_name }}"
 
-        # Sum limits.memory of all running containers (in MB)
-        committed_mb=$(incus list -f json --project default < /dev/null | \
-          python3 -c '
-        import json, sys, re
-        data = json.load(sys.stdin)
+        if [ -n "{{ runner_name }}" ] && [ -f "$my_resv" ]; then
+          echo "Gate reservation present for {{ runner_name }} — admission already granted."
+        else
+          total_mb=$(free -m | awk '/Mem:/{print $2}')
+          reserve_mb={{ incus_reserve_mb }}
+          committed_mb=$(incus list -f json --project default < /dev/null | \
+            python3 -c '
+        import json, re, sys
         total = 0
-        for c in data:
-            if c["status"] != "Running":
+        for c in json.load(sys.stdin):
+            if c.get("status") != "Running":
                 continue
-            mem = c.get("config", {}).get("limits.memory", "0")
+            mem = (c.get("config") or {}).get("limits.memory") or "0"
             m = re.match(r"(\d+)\s*(GB|GiB|MB|MiB)?", mem)
             if m:
                 val = int(m.group(1))
-                unit = (m.group(2) or "MB").upper()
-                if unit in ("GB", "GIB"):
+                if (m.group(2) or "MB").upper() in ("GB", "GIB"):
                     val *= 1024
                 total += val
         print(total)
         ')
-
-        needed_mb={{ _needed_mb }}
-        available_mb=$((total_mb - reserve_mb - committed_mb))
-
-        if [ "$available_mb" -lt "$needed_mb" ]; then
-          echo "No capacity: ${committed_mb}MB committed + ${needed_mb}MB needed > ${available_mb}MB available (${total_mb}MB total - ${reserve_mb}MB reserve)"
-          exit 1
+          reserved_mb=0
+          for f in "$gate_dir"/r.*; do
+            [ -f "$f" ] || continue
+            mb=$(awk '{print $1+0; exit}' "$f")
+            reserved_mb=$(( reserved_mb + mb ))
+          done
+          needed_mb={{ _needed_mb }}
+          available_mb=$(( total_mb - reserve_mb - committed_mb - reserved_mb ))
+          if [ "$available_mb" -lt "$needed_mb" ]; then
+            echo "No capacity: ${committed_mb}MB committed + ${reserved_mb}MB reserved + ${needed_mb}MB needed > ${total_mb}MB total - ${reserve_mb}MB reserve"
+            exit 1
+          fi
+          echo "Memory OK: ${committed_mb}MB committed, ${reserved_mb}MB reserved, ${needed_mb}MB needed, ${available_mb}MB available"
         fi
-
-        echo "Memory OK: ${committed_mb}MB committed + ${needed_mb}MB needed, ${available_mb}MB available"
 
         {% for item in molecule_yml.platforms %}
         {% set mem_mb = item.memory_mb | default(incus_default_memory_mb) | int %}
@@ -127,19 +135,22 @@
           {{ "-c user.ci-run-id=" ~ ci_run_id if ci_run_id else "" }} \
           {{ "-c user.ci-repository=" ~ ci_repository if ci_repository else "" }} < /dev/null || exit 1
         {% endfor %}
+
+        # Conversion: the containers are Running and therefore counted as
+        # committed limits.memory by every ledger reader, so the
+        # reservation must go now.
+        if [ -n "{{ runner_name }}" ]; then
+          rm -f "$my_resv"
+        fi
         REMOTE_SCRIPT
       changed_when: true
       register: _launch_result
-      # 90 retries × 30s = 45 min. Deliberately shorter than the workflow
-      # timeout (60 min for the standard molecule.yml call, 180 min for
-      # full_stack) so the task fails loudly with the last "No capacity:
-      # …" stdout instead of being silently cancelled by the workflow
-      # timeout — that made the queue-starvation cases very hard to
-      # diagnose (see PR investigating the elasticsearch_roles_calculation
-      # / elasticstack_default post-outage hangs). Bumped from 30 after a
-      # sustained multi-PR CI storm evicted every heavy scenario on the
-      # first attempt.
-      retries: 90
+      # Dev-path capacity retries: 10 × 30s keeps a laptop run patient for
+      # five minutes. CI jobs (reservation present) only land here on
+      # genuine incus launch errors, where a retry is also the right call.
+      # CI queueing happens in the workflow's acquire step now, before any
+      # converge work is done — not in this loop.
+      retries: 10
       delay: 30
       until: _launch_result.rc == 0
 
