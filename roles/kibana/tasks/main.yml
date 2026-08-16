@@ -168,6 +168,7 @@
             exit 0
           fi
           exit 1
+        executable: /bin/bash
       register: _kibana_wait_result
       until: _kibana_wait_result.rc == 0
       retries: 60

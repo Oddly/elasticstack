@@ -42,6 +42,7 @@
             exit 0
           fi
           exit 1
+        executable: /bin/bash
       register: _kibana_http_check
       until: _kibana_http_check.rc == 0
       retries: 60
