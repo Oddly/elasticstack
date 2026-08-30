@@ -81,6 +81,7 @@
                 exit 0
               fi
               exit 1
+            executable: /bin/bash
           register: _dead_probe
           failed_when: false
           changed_when: false
