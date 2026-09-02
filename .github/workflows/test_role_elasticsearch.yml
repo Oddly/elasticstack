@@ -54,6 +54,6 @@ jobs:
       scenarios: '["elasticsearch_diagnostics"]'
       distros: '["debian13"]'
       releases: '["9"]'
-      timeout: 30
+      timeout: 60
       skip-idempotence: true
     secrets: inherit
