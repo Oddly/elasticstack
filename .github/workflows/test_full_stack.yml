@@ -167,7 +167,7 @@ jobs:
         # in — a starved job is an explicit retryable failure, not an
         # OOM risk. create.yml converts the reservation into committed
         # capacity right after the containers launch.
-        uses: Oddly/incus-memory-gate@ce1c0240b0076db36b0b5b7c439690a7076d9de7  # v1.0.1
+        uses: Oddly/incus-memory-gate@a4be4db5ffc59c8ee77c8fd7ff589612eb16be61  # v1.0.2
         with:
           mode: acquire
           molecule-scenario: ${{ matrix.scenario }}
@@ -217,7 +217,7 @@ jobs:
         # the reservation is freed promptly. Normally a no-op: create.yml
         # already converted the reservation at container launch.
         if: always()
-        uses: Oddly/incus-memory-gate@ce1c0240b0076db36b0b5b7c439690a7076d9de7  # v1.0.1
+        uses: Oddly/incus-memory-gate@a4be4db5ffc59c8ee77c8fd7ff589612eb16be61  # v1.0.2
         with:
           mode: release
 
