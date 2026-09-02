@@ -149,7 +149,13 @@ jobs:
           mode: release
 
       - name: Collect and upload diagnostics
-        if: failure()
+        # !success() (not failure()) so diagnostics are still collected when a
+        # job is ended by timeout-minutes. GitHub records a timeout as
+        # "cancelled", and if: failure() steps are skipped on cancellation —
+        # which is exactly how the multi-node upgrade flake used to discard
+        # its own evidence. Collecting on any non-success keeps that from
+        # happening again.
+        if: ${{ !success() }}
         uses: ./.github/actions/collect-diagnostics
         with:
           artifact-name: diag-${{ matrix.scenario }}-${{ matrix.distro }}
@@ -287,7 +293,13 @@ jobs:
           mode: release
 
       - name: Collect and upload diagnostics
-        if: failure()
+        # !success() (not failure()) so diagnostics are still collected when a
+        # job is ended by timeout-minutes. GitHub records a timeout as
+        # "cancelled", and if: failure() steps are skipped on cancellation —
+        # which is exactly how the multi-node upgrade flake used to discard
+        # its own evidence. Collecting on any non-success keeps that from
+        # happening again.
+        if: ${{ !success() }}
         uses: ./.github/actions/collect-diagnostics
         with:
           artifact-name: diag-${{ matrix.scenario }}-${{ matrix.distro }}

@@ -2,7 +2,7 @@
 # Elasticsearch 8.x to 9.x upgrade test
 #
 # This scenario tests a rolling upgrade from Elasticsearch 8.x to 9.x:
-# 1. Install ES 8.x cluster (2 nodes)
+# 1. Install ES 8.x cluster (3 nodes)
 # 2. Verify cluster is green
 # 3. Index some test data
 # 4. Upgrade to ES 9.x (rolling upgrade)
