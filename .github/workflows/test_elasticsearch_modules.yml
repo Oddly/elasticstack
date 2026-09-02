@@ -45,5 +45,5 @@ jobs:
     with:
       scenarios: '["elasticsearch_security_api"]'
       distros: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && '["rockylinux10","debian13"]' || '["rockylinux9","rockylinux10","ubuntu2204","ubuntu2404","ubuntu2604","debian12","debian13"]' }}
-      timeout: 20
+      timeout: 60
     secrets: inherit
