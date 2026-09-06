@@ -10,8 +10,6 @@ argument_specs:
           (e.g. the reverse proxy / VIP) when Kibana runs behind a proxy, so generated absolute URLs (reporting, share links)
           are correct.
         type: str
-        default: http{% if kibana_tls | bool %}s{% endif %}://{{ elasticstack_kibana_host | default(ansible_facts.fqdn) }}:{{
-          elasticstack_kibana_port }}
       kibana_node_max_old_space_size:
         description: Max V8 old-space heap in MB (maps to --max-old-space-size in node.options). When set, the existing node.options
           line is uncommented/updated. When empty, the package default is left in place.

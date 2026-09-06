@@ -59,7 +59,9 @@ elasticsearch_logpath: /var/log/elasticsearch
 # @var elasticsearch_create_logpath:description: Create the log directory if it does not exist
 elasticsearch_create_logpath: false
 # @var elasticsearch_heap:description: JVM heap size in GB. Auto-calculated as half of system RAM, capped at 30GB, minimum 1GB
-elasticsearch_heap: "{{ [[(ansible_facts.memtotal_mb // 1024) // 2, 30] | min, 1] | max }}"
+# The default(0) keeps arg-spec validation working when facts are absent (tag-limited
+# runs with a warm fact cache); a real converge always has facts before this is used.
+elasticsearch_heap: "{{ [[((ansible_facts.memtotal_mb | default(0)) // 1024) // 2, 30] | min, 1] | max }}"
 # @var elasticsearch_pamlimits:description: Configure PAM limits for the elasticsearch user (open files, max processes)
 elasticsearch_pamlimits: true
 # @var elasticsearch_os_tuning:description: >
