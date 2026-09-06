@@ -188,7 +188,7 @@
     state: present
     reload: true
   loop:
-    - { name: vm.max_map_count, value: "262144" }
+    - { name: vm.max_map_count, value: "1048576" }
     - { name: vm.swappiness, value: "1" }
     - { name: net.ipv4.tcp_retries2, value: "5" }
   loop_control:
