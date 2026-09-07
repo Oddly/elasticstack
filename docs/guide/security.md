@@ -7,7 +7,7 @@ On a fresh deployment, the Elasticsearch role handles the full security setup au
 1. **Bootstrap password** — sets a temporary password in the keystore for initial cluster formation
 2. **Cluster start** — Elasticsearch starts with security enabled
 3. **Password generation** — creates random passwords for built-in users (`elastic`, `kibana_system`, `logstash_system`, etc.) and writes them to `/usr/share/elasticsearch/initial_passwords`
-4. **User and role creation** — creates the `logstash_writer` role and user for Logstash output
+4. **User and role creation** — creates the `logstash_writer` role and user for Logstash output when `logstash_create_user` is enabled; this requires an explicit `logstash_user_password`
 5. **Password distribution** — other roles (Kibana, Logstash, Beats) read the generated passwords from the CA host
 
 On subsequent runs, the role detects the existing security setup and skips initialization.
@@ -19,7 +19,13 @@ On subsequent runs, the role detects the existing security setup and skips initi
 | `elastic` | Superuser | Admin access, initial setup |
 | `kibana_system` | Kibana backend | Kibana → Elasticsearch connection |
 | `logstash_system` | Logstash monitoring | Logstash → Elasticsearch monitoring |
-| `logstash_writer` | Logstash output | Logstash → Elasticsearch data ingestion |
+| `beats_system` | Beats monitoring | Beats → Elasticsearch monitoring |
+| `apm_system` | APM server | APM server → Elasticsearch |
+| `remote_monitoring_user` | Stack monitoring | Monitoring collection |
+
+`logstash_writer` is a collection-created custom user, not an Elasticsearch
+built-in user. Its password has no safe default and must be supplied through
+`logstash_user_password` when Logstash creates it.
 
 ## Custom passwords
 
@@ -32,6 +38,72 @@ kibana_system_password: "my-known-password"
 ```
 
 The Kibana role changes the password via the Elasticsearch security API and configures Kibana to use it. Useful for external monitoring or multi-Kibana deployments that need a consistent password.
+
+## Declarative users, roles, and role mappings
+
+The Elasticsearch role can manage native security objects after the cluster is
+initialized. The API calls run once through the CA host using the `elastic`
+credential that the role fetched from `elasticstack_initial_passwords`, or the
+value supplied through `elasticsearch_elastic_password`.
+
+Define custom roles before users and LDAP or Active Directory mappings:
+
+```yaml
+elasticsearch_security_roles:
+  - name: app_writer
+    cluster: [monitor]
+    indices:
+      - names: ["app-*"]
+        privileges: [read, write]
+
+elasticsearch_users:
+  - name: app_ingest
+    password: "{{ vault_app_ingest_password }}"
+    roles: [app_writer]
+    full_name: Application ingest user
+
+elasticsearch_role_mappings:
+  - name: app_admins
+    roles: [app_writer]
+    rules:
+      field:
+        groups: "cn=app-admins,dc=example,dc=com"
+```
+
+The account used by the role needs the `manage_security` privilege. Role
+mappings reference roles and do not create them, so declare a referenced role
+in `elasticsearch_security_roles` first.
+
+New custom users require `password` or `password_hash`. Passwords are sent
+only to the security API under `no_log`; keep them in Ansible Vault or a
+secrets manager. The API does not return a user's password, so an existing
+user's password is left alone on repeated runs. Set `password_update: true`
+for an intentional rotation:
+
+```yaml
+elasticsearch_users:
+  - name: app_ingest
+    password: "{{ vault_new_app_ingest_password }}"
+    password_update: true
+    roles: [app_writer]
+```
+
+Built-in passwords are explicit rotations because Elasticsearch cannot expose
+the current secret for comparison:
+
+```yaml
+elasticsearch_builtin_passwords:
+  kibana_system: "{{ vault_kibana_system_password }}"
+  logstash_system: "{{ vault_logstash_system_password }}"
+  beats_system: "{{ vault_beats_system_password }}"
+  remote_monitoring_user: "{{ vault_remote_monitoring_password }}"
+```
+
+The map is applied on every run that contains an entry. Use
+`elasticsearch_elastic_password` for the `elastic` superuser so the role can
+continue authenticating after the password changes. The generated
+`initial_passwords` file remains the source for built-in passwords until you
+replace them deliberately.
 
 ### Custom keystore entries
 
@@ -48,6 +120,10 @@ elasticsearch_keystore_entries:
 Values are passed via stdin — they never appear in process listings or Ansible logs. The role only writes entries that have changed, so Elasticsearch is only restarted when a value actually differs.
 
 Entries removed from the dictionary are automatically cleaned up from the keystore on the next run.
+
+### Logstash output credentials
+
+`logstash_user_password` has no built-in password. Set it explicitly from Ansible Vault or a secret manager whenever Logstash creates its Elasticsearch user or the secured standard output is enabled. A missing, blank, or too-short value fails before the role changes the host. The generated Logstash pipeline and Kibana configuration are readable by their service group only (`0640`); Kibana's backend password is stored in its keystore rather than rendered into `kibana.yml`.
 
 !!! warning
     Don't set role-managed keys (bootstrap password, SSL keystore passwords) via `elasticsearch_keystore_entries` — the role manages those automatically. It will fail with a clear error if you try.

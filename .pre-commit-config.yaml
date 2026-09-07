@@ -1,15 +1,16 @@
 ---
 repos:
   - repo: https://github.com/ansible/ansible-lint
-    rev: v25.4.0
+    rev: 665d9e07a1943254d2910faffc106adaf7ea7294 # v26.8.0
     hooks:
       - id: ansible-lint
         pass_filenames: false
+        language_version: python3.12
         additional_dependencies:
-          - ansible
+          - ansible-core>=2.20,<2.21
 
   - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.22.0
+    rev: 3766ad839ad3a74558031510b3bc9872bb1d9980 # v0.22.0
     hooks:
       - id: markdownlint-cli2
         # Globs are driven entirely by .markdownlint-cli2.yaml so the hook

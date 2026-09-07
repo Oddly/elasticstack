@@ -257,10 +257,11 @@
     # Extract CA chain from the already-deployed transport cert on the node.
     # Uses copy+content for idempotency (only writes when content changes).
     - name: elasticsearch-security | Read CA chain from PEM bundle (transport cert)
-      ansible.builtin.shell:
-        cmd: >-
-          awk '/-----BEGIN CERTIFICATE-----/{n++} n>1'
-          /etc/elasticsearch/certs/{{ inventory_hostname }}-transport.crt
+      ansible.builtin.command:
+        argv:
+          - awk
+          - '/-----BEGIN CERTIFICATE-----/{n++} n>1'
+          - "/etc/elasticsearch/certs/{{ inventory_hostname }}-transport.crt"
       register: _elasticsearch_extracted_ca_chain
       changed_when: false
       when:
@@ -604,6 +605,11 @@
 # Post-certificate tasks (shared by both cert sources)
 # ============================================================
 
+- name: elasticsearch-security | Set Elasticsearch HTTP protocol for API calls
+  ansible.builtin.set_fact:
+    elasticsearch_http_protocol: "https"
+  when: elasticsearch_http_security
+
 - name: elasticsearch-security | Start Elasticsearch for security tasks
   ansible.builtin.service:
     name: elasticsearch
@@ -615,6 +621,15 @@
 - name: elasticsearch-security | Wait for all instances to start
   ansible.builtin.include_tasks: wait_for_instance.yml
   loop: "{{ groups[elasticstack_elasticsearch_group_name] }}"
+
+# An initialized cluster already has a usable elastic credential at this point.
+# Apply declared persistent settings before certificate/configuration handlers
+# are flushed below, so a rolling restart uses the requested recovery settings.
+# Fresh clusters skip this pass because the user-defined password has not been
+# applied yet; the final include in main.yml runs after initial setup instead.
+- name: elasticsearch-security | Apply persistent cluster settings before restart
+  ansible.builtin.include_tasks: elasticsearch-cluster-settings.yml
+  when: elasticsearch_cluster_set_up | bool
 
 - name: elasticsearch-security | Restart if Elasticsearch was already running
   when:
@@ -641,11 +656,6 @@
     path: "{{ elasticstack_initial_passwords }}"
   delegate_to: "{{ elasticstack_ca_host }}"
   register: elasticsearch_passwords_file
-
-- name: elasticsearch-security | Setting elasticsearch_http_protocol
-  ansible.builtin.set_fact:
-    elasticsearch_http_protocol: "https"
-  when: elasticsearch_http_security
 
 - name: elasticsearch-security | Runtime cluster setup (requires running Elasticsearch)
   when: not ansible_check_mode
@@ -691,9 +701,13 @@
         - not elasticsearch_cluster_set_up | bool
       block:
         - name: elasticsearch-security | Reset elastic user password via elasticsearch-reset-password
-          ansible.builtin.command: >
-            /usr/share/elasticsearch/bin/elasticsearch-reset-password
-            -u elastic -b -s
+          ansible.builtin.command:
+            argv:
+              - /usr/share/elasticsearch/bin/elasticsearch-reset-password
+              - -u
+              - elastic
+              - -b
+              - -s
           register: _elasticsearch_elastic_reset_pw
           changed_when: true
           no_log: "{{ elasticstack_no_log }}"
@@ -905,8 +919,8 @@
       ansible.builtin.shell: >
         set -o pipefail;
         /usr/share/elasticsearch/bin/elasticsearch-setup-passwords auto -b >
-        {{ elasticstack_initial_passwords }}.tmp &&
-        mv {{ elasticstack_initial_passwords }}.tmp {{ elasticstack_initial_passwords }}
+        {{ (elasticstack_initial_passwords ~ '.tmp') | quote }} &&
+        mv {{ (elasticstack_initial_passwords ~ '.tmp') | quote }} {{ elasticstack_initial_passwords | quote }}
       args:
         executable: /bin/bash
         creates: "{{ elasticstack_initial_passwords }}"
@@ -930,9 +944,13 @@
           register: _elasticsearch_pw_file_check
 
         - name: elasticsearch-security | Reset built-in user passwords
-          ansible.builtin.command: >
-            /usr/share/elasticsearch/bin/elasticsearch-reset-password
-            -u {{ item }} -b -s
+          ansible.builtin.command:
+            argv:
+              - /usr/share/elasticsearch/bin/elasticsearch-reset-password
+              - -u
+              - "{{ item }}"
+              - -b
+              - -s
           loop:
             - elastic
             - kibana_system

@@ -1,0 +1,56 @@
+---
+
+- name: elasticsearch-node-role-check | Set node role variable to master
+  ansible.builtin.set_fact:
+    elasticsearch_role: "master"
+  when:
+    - "'master' in elasticsearch_node_types"
+
+- name: elasticsearch-node-role-check | Set node role variable to data
+  ansible.builtin.set_fact:
+    elasticsearch_role: "data"
+  when:
+    - "'master' not in elasticsearch_node_types"
+    - "'data' in elasticsearch_node_types"
+
+- name: elasticsearch-node-role-check | Set node role variable to other
+  ansible.builtin.set_fact:
+    elasticsearch_role: "other"
+  when:
+    - "'master' not in elasticsearch_node_types"
+    - "'data' not in elasticsearch_node_types"
+
+# The dynamic group is still used by the configuration template when it
+# builds cluster.initial_master_nodes. It must not be used for the quorum
+# count: group_by is evaluated once per host and can be incomplete when a
+# caller uses the free strategy.
+- name: elasticsearch-node-role-check | Create groups of nodes
+  ansible.builtin.group_by:
+    key: "elasticsearch_role_{{ elasticsearch_role }}"
+  changed_when: false
+
+- name: elasticsearch-node-role-check | Count master nodes
+  ansible.builtin.set_fact:
+    elasticsearch_count_of_master_nodes: >-
+      {%- set master_count = namespace(value=0) -%}
+      {%- for host in ansible_play_hosts_all -%}
+      {%- set node_types = hostvars[host].get('elasticsearch_node_types', elasticsearch_node_types) -%}
+      {%- if 'master' in node_types -%}
+      {%- set master_count.value = master_count.value + 1 -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ master_count.value }}
+
+# An existing cluster already has its own master-eligible quorum. The hosts
+# in this play may only be a limited subset of the cluster while a node is
+# being added, so the bootstrap-only odd-count check does not apply there.
+- name: elasticsearch-node-role-check | Check count of master nodes
+  ansible.builtin.fail:
+    msg: "There must be an odd count of master nodes. You have {{ elasticsearch_count_of_master_nodes }}"
+  when:
+    - elasticsearch_count_of_master_nodes | int % 2 == 0
+    - not elasticsearch_cluster_set_up | bool
+
+- name: elasticsearch-node-role-check | End play in checks
+  ansible.builtin.meta: end_host
+  when: elasticsearch_check_calculation | bool

@@ -1,0 +1,79 @@
+---
+- name: elasticsearch-security-role-mapping | Validate role mapping definition
+  ansible.builtin.assert:
+    that:
+      - _elasticsearch_security_role_mapping is mapping
+      - _elasticsearch_security_role_mapping.name is defined
+      - _elasticsearch_security_role_mapping.name | string | trim | length > 0
+      - _elasticsearch_security_role_mapping.rules is defined
+      - _elasticsearch_security_role_mapping.rules is mapping
+      - _elasticsearch_security_role_mapping.roles is not defined or (_elasticsearch_security_role_mapping.roles is sequence and _elasticsearch_security_role_mapping.roles is not string)
+      - _elasticsearch_security_role_mapping.enabled is not defined or _elasticsearch_security_role_mapping.enabled is boolean
+    fail_msg: >-
+      Each elasticsearch_role_mappings item must contain a non-empty name and
+      rules; roles, when present, must be a list and enabled, when present,
+      must be a boolean.
+
+- name: elasticsearch-security-role-mapping | Build role mapping request body
+  ansible.builtin.set_fact:
+    _elasticsearch_security_role_mapping_body: >-
+      {{ (_elasticsearch_security_role_mapping | combine({
+           'roles': _elasticsearch_security_role_mapping.roles | default([]),
+           'enabled': _elasticsearch_security_role_mapping.enabled | default(true)
+         }))
+         | dict2items
+         | rejectattr('key', 'equalto', 'name')
+         | list
+         | items2dict }}
+
+- name: elasticsearch-security-role-mapping | Read current role mapping
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_security_api_url }}/_security/role_mapping/{{ _elasticsearch_security_role_mapping.name | urlencode }}"
+    method: GET
+    user: elastic
+    password: "{{ _elasticsearch_security_api_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+    unredirected_headers:
+      - Authorization
+    return_content: true
+    status_code: [200, 404]
+  register: _elasticsearch_security_role_mapping_current
+  changed_when: false
+  failed_when: _elasticsearch_security_role_mapping_current.status | int not in [200, 404]
+  delegate_to: "{{ elasticstack_ca_host }}"
+  no_log: "{{ elasticstack_no_log }}"
+
+- name: elasticsearch-security-role-mapping | Compare role mapping with the desired definition
+  ansible.builtin.set_fact:
+    _elasticsearch_security_role_mapping_changed: "{{ _elasticsearch_security_role_mapping_needs_update | trim }}"
+  vars:
+    _elasticsearch_security_role_mapping_needs_update: >-
+      {% set current = (_elasticsearch_security_role_mapping_current.json | default({})).get(_elasticsearch_security_role_mapping.name, {}) %}
+      {% set ns = namespace(changed=(_elasticsearch_security_role_mapping_current.status | int == 404)) %}
+      {% for key, value in _elasticsearch_security_role_mapping_body.items() %}
+      {%   if key not in current or current[key] != value %}
+      {%     set ns.changed = true %}
+      {%   endif %}
+      {% endfor %}
+      {{ ns.changed }}
+
+- name: elasticsearch-security-role-mapping | Create or update role mapping
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_security_api_url }}/_security/role_mapping/{{ _elasticsearch_security_role_mapping.name | urlencode }}"
+    method: PUT
+    user: elastic
+    password: "{{ _elasticsearch_security_api_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+    unredirected_headers:
+      - Authorization
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: "{{ _elasticsearch_security_role_mapping_body }}"
+    status_code: 200
+  when: _elasticsearch_security_role_mapping_changed | bool
+  changed_when: true
+  delegate_to: "{{ elasticstack_ca_host }}"
+  no_log: "{{ elasticstack_no_log }}"

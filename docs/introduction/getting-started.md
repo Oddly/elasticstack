@@ -2,8 +2,8 @@
 
 ## Prerequisites
 
-- Ansible 2.18 or later
-- Target hosts running Debian 12/13, Ubuntu 22.04/24.04/26.04, or Rocky Linux/RHEL 9/10
+- Ansible 2.20 or later
+- Target hosts running Debian 13, Ubuntu 22.04/24.04/26.04, or Rocky Linux/RHEL 9/10
 - SSH access to target hosts with root or sudo privileges
 - Minimum 4 GB RAM per Elasticsearch node (8 GB recommended)
 - Python 3 on all target hosts (with `python3-apt` on Debian/Ubuntu)
@@ -59,7 +59,7 @@ ansible-playbook -i inventory.yml playbook.yml
 After the run completes, Elasticsearch will be listening on `https://localhost:9200` with security enabled. The `elastic` superuser password and all built-in user passwords are stored in `/usr/share/elasticsearch/initial_passwords` on the host. You can retrieve the `elastic` password with:
 
 ```bash
-grep "PASSWORD elastic" /usr/share/elasticsearch/initial_passwords | awk '{print $4}'
+awk '$1 == "PASSWORD" && $2 == "elastic" { print $4; exit }' /usr/share/elasticsearch/initial_passwords
 ```
 
 In multi-node deployments, this file lives on the CA host (the first node in the `elasticsearch` group) and other roles fetch passwords from it automatically via `delegate_to`.

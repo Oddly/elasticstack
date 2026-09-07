@@ -110,7 +110,7 @@ logstash_filter_files: []
 # === Output Configuration ===
 
 # @var logstash_output_elasticsearch:description: Enable the Elasticsearch output plugin
-logstash_output_elasticsearch: true
+logstash_output_elasticsearch: "{{ logstash_elasticsearch_output | default(true) }}"
 # @var logstash_elasticsearch_hosts:description: List of Elasticsearch hosts. Leave empty to auto-discover from inventory
 logstash_elasticsearch_hosts: []
 # @var logstash_elasticsearch_index:description: Index name pattern. Leave empty for the default (logstash-%{+YYYY.MM.dd})
@@ -183,8 +183,12 @@ logstash_role_indicies_privileges:
 logstash_create_user: true
 # @var logstash_user_name:description: Username for the Logstash Elasticsearch user
 logstash_user_name: logstash_writer
-# @var logstash_user_password:description: Password for the Logstash Elasticsearch user. Change this in production
-logstash_user_password: password
+# @var logstash_user_password:description: >
+#   Password for the Logstash Elasticsearch user. Required when
+#   logstash_create_user is enabled or when the secured standard Elasticsearch
+#   output is enabled. Supply it from Ansible Vault or a secret manager.
+# @end
+logstash_user_password: ""
 # @var logstash_user_email:description: Email address for the Logstash Elasticsearch user
 logstash_user_email: ""
 # @var logstash_user_fullname:description: Full name for the Logstash Elasticsearch user

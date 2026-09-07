@@ -91,7 +91,7 @@ CI and is dropped here.
 `scripts/wait-for-memory.sh acquire` becomes the only admission
 decision and stops reading `MemAvailable`:
 
-```
+```text
 free = MemTotal − reserve_mb − Σ committed − Σ reservations
 admit when free ≥ my_need
 ```

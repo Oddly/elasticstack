@@ -1,0 +1,73 @@
+---
+# Manage users, roles, and role mappings through the Elasticsearch security API.
+# The role runs this once from the CA host because elasticstack_password is
+# fetched there and the security objects are cluster-wide.
+
+- name: elasticsearch-security-management | Resolve the security API endpoint  # noqa: run-once[task]
+  ansible.builtin.set_fact:
+    _elasticsearch_security_api_protocol: >-
+      {{ 'https' if (hostvars[elasticstack_ca_host].elasticsearch_http_security
+         | default(elasticsearch_http_security) | bool) else 'http' }}
+    _elasticsearch_security_api_host: >-
+      {{ hostvars[elasticstack_ca_host].elasticsearch_api_host
+         | default(elasticsearch_api_host) }}
+    _elasticsearch_security_api_port: >-
+      {{ hostvars[elasticstack_ca_host].elasticstack_elasticsearch_http_port
+         | default(elasticstack_elasticsearch_http_port) }}
+    _elasticsearch_security_api_password: >-
+      {{ (hostvars[elasticstack_ca_host].elasticstack_password
+         | default(elasticstack_password | default({}), true)).stdout
+         | default('') }}
+  run_once: true
+  no_log: true
+
+- name: elasticsearch-security-management | Build the security API URL  # noqa: run-once[task]
+  ansible.builtin.set_fact:
+    _elasticsearch_security_api_url: >-
+      {{ _elasticsearch_security_api_protocol }}://{{ _elasticsearch_security_api_host }}:{{ _elasticsearch_security_api_port }}
+  run_once: true
+
+- name: elasticsearch-security-management | Require an administrative credential  # noqa: run-once[task]
+  ansible.builtin.assert:
+    that:
+      - _elasticsearch_security_api_password | string | trim | length > 0
+    fail_msg: >-
+      Elasticsearch security objects are configured, but the elastic password
+      is unavailable. Set elasticsearch_elastic_password or make sure the
+      generated password at elasticstack_initial_passwords is readable on
+      elasticstack_ca_host. Keep the value in Ansible Vault or a secrets
+      manager.
+  when: >-
+    (elasticsearch_security_roles | default([]) | length)
+    + (elasticsearch_users | default([]) | length)
+    + (elasticsearch_builtin_passwords | default({}) | length)
+    + (elasticsearch_role_mappings | default([]) | length) > 0
+  run_once: true
+
+- name: elasticsearch-security-management | Manage configured Elasticsearch roles
+  ansible.builtin.include_tasks: elasticsearch-security-role.yml
+  loop: "{{ elasticsearch_security_roles | default([]) }}"
+  loop_control:
+    loop_var: _elasticsearch_security_role
+    label: "{{ _elasticsearch_security_role.name | default('unnamed') }}"
+
+- name: elasticsearch-security-management | Manage configured Elasticsearch users
+  ansible.builtin.include_tasks: elasticsearch-security-user.yml
+  loop: "{{ elasticsearch_users | default([]) }}"
+  loop_control:
+    loop_var: _elasticsearch_security_user
+    label: "{{ _elasticsearch_security_user.name | default('unnamed') }}"
+
+- name: elasticsearch-security-management | Set configured built-in user passwords
+  ansible.builtin.include_tasks: elasticsearch-security-builtins.yml
+  loop: "{{ elasticsearch_builtin_passwords | default({}) | dict2items }}"
+  loop_control:
+    loop_var: _elasticsearch_security_builtin
+    label: "{{ _elasticsearch_security_builtin.key }}"
+
+- name: elasticsearch-security-management | Manage configured role mappings
+  ansible.builtin.include_tasks: elasticsearch-security-role-mapping.yml
+  loop: "{{ elasticsearch_role_mappings | default([]) }}"
+  loop_control:
+    loop_var: _elasticsearch_security_role_mapping
+    label: "{{ _elasticsearch_security_role_mapping.name | default('unnamed') }}"

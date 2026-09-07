@@ -45,7 +45,7 @@ jobs:
         run: |
           uv venv "$RUNNER_TEMP/venv" --python /usr/bin/python3
           source "$RUNNER_TEMP/venv/bin/activate"
-          uv pip install pycodestyle
+          uv pip install 'pycodestyle>=2.11,<3'
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
@@ -62,7 +62,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ansible_core: ["2.18", "2.19", "2.20"]
+        ansible_core: ["2.20", "2.21"]
 
     env:
       COLLECTION_NAMESPACE: oddly
@@ -76,7 +76,7 @@ jobs:
         id: pyver
         run: |
           PYTHON=/usr/bin/python3
-          if [[ "${{ matrix.ansible_core }}" == "2.20" ]] && command -v python3.12 &>/dev/null; then
+          if [[ "${{ matrix.ansible_core }}" == "2.20" || "${{ matrix.ansible_core }}" == "2.21" ]] && command -v python3.12 &>/dev/null; then
             PYTHON=$(command -v python3.12)
           fi
           echo "python=$PYTHON" >> "$GITHUB_OUTPUT"
@@ -132,7 +132,7 @@ jobs:
         run: |
           uv venv "$RUNNER_TEMP/venv" --python /usr/bin/python3
           source "$RUNNER_TEMP/venv/bin/activate"
-          uv pip install ansible
+          uv pip install 'ansible-core>=2.20,<2.21' 'cryptography>=41,<47'
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
@@ -152,6 +152,7 @@ jobs:
 
       - name: Test `cert_info` module
         run: |
+          export PYTHONPATH="$ANSIBLE_COLLECTIONS_PATH${PYTHONPATH:+:$PYTHONPATH}"
           python tests/unit/plugins/modules/test_cert_info.py
         env:
           PY_COLORS: '1'
@@ -159,10 +160,14 @@ jobs:
 
       - name: Test `certs` module util
         run: |
+          export PYTHONPATH="$ANSIBLE_COLLECTIONS_PATH${PYTHONPATH:+:$PYTHONPATH}"
           python tests/unit/plugins/module_utils/test_certs.py
         env:
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
+
+      - name: Test repository contracts
+        run: python tests/unit/test_repository_contracts.py
 
   python:
     needs: pycodestyle
@@ -181,7 +186,7 @@ jobs:
         run: |
           uv venv "$RUNNER_TEMP/venv" --python /usr/bin/python3
           source "$RUNNER_TEMP/venv/bin/activate"
-          uv pip install ansible
+          uv pip install 'ansible-core>=2.20,<2.21' 'cryptography>=41,<47'
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
@@ -218,7 +223,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ansible_core_version: [2.18.12, 2.19.5, 2.20.1]
+        ansible_core_version: [2.20.1, 2.21.3]
 
     steps:
       - name: Check out code
@@ -228,7 +233,7 @@ jobs:
         id: pyver
         run: |
           PYTHON=/usr/bin/python3
-          if [[ "${{ matrix.ansible_core_version }}" == 2.20* ]] && command -v python3.12 &>/dev/null; then
+          if [[ "${{ matrix.ansible_core_version }}" == 2.2* ]] && command -v python3.12 &>/dev/null; then
             PYTHON=$(command -v python3.12)
           fi
           echo "python=$PYTHON" >> "$GITHUB_OUTPUT"
@@ -285,7 +290,7 @@ jobs:
           uv venv "$RUNNER_TEMP/venv" --python /usr/bin/python3
           source "$RUNNER_TEMP/venv/bin/activate"
           uv pip install cryptography==${{ matrix.python_cryptography_version }}
-          uv pip install ansible
+          uv pip install 'ansible-core>=2.20,<2.21'
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt

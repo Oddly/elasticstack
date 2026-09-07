@@ -281,6 +281,113 @@
         content: ""
         mode: "0644"
 
+- name: Restart fake API reporting a red cluster
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Stop previous fake API
+      ansible.builtin.shell: |
+        set -o pipefail
+        if [ -f /tmp/elasticstack-rolling-restart-api.pid ]; then
+          kill "$(cat /tmp/elasticstack-rolling-restart-api.pid)" 2>/dev/null || true
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Reset fake API log
+      ansible.builtin.copy:
+        dest: /tmp/elasticstack-rolling-restart-api.jsonl
+        content: ""
+        mode: "0644"
+
+    - name: Start fake API reporting red with in-flight shards
+      ansible.builtin.shell: |
+        set -o pipefail
+        nohup python3 {{ playbook_dir }}/../fakes/fake_es_rolling_api.py \
+          --ports 19200,19201 \
+          --nodes es1,es2 \
+          --health-status red \
+          --in-flight 2 \
+          --log /tmp/elasticstack-rolling-restart-api.jsonl \
+          >/tmp/elasticstack-rolling-restart-api.out 2>&1 &
+        echo $!
+      args:
+        executable: /bin/bash
+      register: _fake_es_api
+      changed_when: true
+
+    - name: Store fake API PID
+      ansible.builtin.copy:
+        dest: /tmp/elasticstack-rolling-restart-api.pid
+        content: "{{ _fake_es_api.stdout }}"
+        mode: "0644"
+
+    - name: Wait for red fake API
+      ansible.builtin.uri:
+        url: http://127.0.0.1:19200/_cluster/health
+        method: GET
+      register: _fake_api_health
+      until: _fake_api_health.status | default(0) == 200
+      retries: 10
+      delay: 1
+
+- name: Rolling restart contract - report health gate failures accurately
+  hosts: elasticsearch[0]
+  gather_facts: false
+  vars:
+    _elasticsearch_restart_test_mode: true
+    elasticsearch_security: false
+    elasticstack_no_log: false
+    elasticstack_elasticsearch_group_name: elasticsearch
+    elasticsearch_http_protocol: http
+    elasticsearch_validate_api_certs: false
+    elasticsearch_config_restart_strategy: rolling
+    elasticsearch_config_restart_flush: false
+    elasticsearch_config_restart_wait_status: green
+    elasticsearch_config_restart_health_retries: 1
+    elasticsearch_config_restart_health_delay: 0
+    elasticsearch_config_restart_node_retries: 1
+    elasticsearch_config_restart_node_delay: 0
+  tasks:
+    - name: Mark one host for restart
+      ansible.builtin.set_fact:
+        _elasticsearch_restart_requested: true
+
+    - name: Expect health gate failure with cluster diagnostics
+      block:
+        - name: Include rolling restart task  # noqa: run-once[task]
+          ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/restart_and_verify_elasticsearch_rolling.yml
+          run_once: true
+      rescue:
+        - name: Assert health gate failure identifies the cluster state
+          ansible.builtin.assert:
+            that:
+              - "ansible_failed_result.msg is search('cluster health gate did not reach an accepted status')"
+              - "ansible_failed_result.msg is search('status: red')"
+              - "ansible_failed_result.msg is search('relocating_shards: 2')"
+              - "ansible_failed_result.msg is search('initializing_shards: 2')"
+
+- name: Reset fake API log before rejoin failure contract
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Stop previous fake API
+      ansible.builtin.shell: |
+        set -o pipefail
+        if [ -f /tmp/elasticstack-rolling-restart-api.pid ]; then
+          kill "$(cat /tmp/elasticstack-rolling-restart-api.pid)" 2>/dev/null || true
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Reset fake API log
+      ansible.builtin.copy:
+        dest: /tmp/elasticstack-rolling-restart-api.jsonl
+        content: ""
+        mode: "0644"
+
 - name: Restart fake API with simulated rejoin failure on es1
   hosts: localhost
   gather_facts: false

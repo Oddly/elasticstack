@@ -9,10 +9,10 @@ dependency:
 driver:
   name: default
 platforms:
-  - name: "es-upgs-${MOLECULE_DISTRO:-debian12}${MOLECULE_RUN_SUFFIX}"
+  - name: "es-upgs-${MOLECULE_DISTRO:-debian13}${MOLECULE_RUN_SUFFIX}"
     groups:
       - elasticsearch
-    distro: "${MOLECULE_DISTRO:-debian12}"
+    distro: "${MOLECULE_DISTRO:-debian13}"
     memory_mb: 4096
 provisioner:
   name: ansible

@@ -46,6 +46,42 @@ elasticsearch_bootstrap_pw: PleaseChangeMe
 #   auto-generated password from the initial_passwords file.
 # @end
 elasticsearch_elastic_password: ""
+# @var elasticsearch_security_roles:description: Declarative Elasticsearch roles to create or update through the security API
+# @var elasticsearch_security_roles:example: |
+# elasticsearch_security_roles:
+#   - name: app_writer
+#     cluster: [monitor]
+#     indices:
+#       - names: ["app-*"]
+#         privileges: [read, write]
+# @end
+elasticsearch_security_roles: []
+# @var elasticsearch_users:description: Declarative custom Elasticsearch users. Passwords are used on creation or when password_update is true
+# @var elasticsearch_users:example: |
+# elasticsearch_users:
+#   - name: app_ingest
+#     password: "{{ vault_app_ingest_password }}"
+#     roles: [app_writer]
+#     full_name: Application ingest user
+# @end
+elasticsearch_users: []
+# @var elasticsearch_builtin_passwords:description: Passwords to explicitly set for built-in Elasticsearch users. Use elasticsearch_elastic_password for the elastic superuser
+# @var elasticsearch_builtin_passwords:example: |
+# elasticsearch_builtin_passwords:
+#   kibana_system: "{{ vault_kibana_system_password }}"
+#   logstash_system: "{{ vault_logstash_system_password }}"
+# @end
+elasticsearch_builtin_passwords: {}
+# @var elasticsearch_role_mappings:description: Declarative Elasticsearch role mappings for LDAP, Active Directory, and other realms
+# @var elasticsearch_role_mappings:example: |
+# elasticsearch_role_mappings:
+#   - name: app_admins
+#     roles: [app_writer]
+#     rules:
+#       field:
+#         groups: "cn=app-admins,dc=example,dc=com"
+# @end
+elasticsearch_role_mappings: []
 # @var elasticsearch_http_security:description: Enable TLS on the Elasticsearch HTTP interface (port 9200)
 elasticsearch_http_security: true
 # @var elasticsearch_http_protocol:description: Protocol for Elasticsearch HTTP API. Automatically set to https when security is enabled
@@ -144,8 +180,10 @@ elasticsearch_logsdb: "{{ elasticstack_release | int >= 9 }}"
 
 # @var elasticsearch_cluster_settings:description: >
 #   Persistent cluster settings applied via PUT _cluster/settings after the
-#   cluster is healthy. Accepts any setting the cluster settings API supports.
-#   Only applied when non-empty. Runs once per play on the CA host.
+#   cluster is healthy. On initialized secured clusters they are applied before
+#   certificate/configuration restart handlers; fresh clusters apply them after
+#   initial security setup. Accepts any setting the cluster settings API
+#   supports. Only applied when non-empty. Runs once per play on the CA host.
 #   Example:
 #     elasticsearch_cluster_settings:
 #       indices.recovery.max_bytes_per_sec: "100mb"

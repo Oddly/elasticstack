@@ -27,7 +27,7 @@ graph TD
 
 ## Requirements
 
-- Minimum Ansible version: `2.18`
+- Minimum Ansible version: `2.20`
 - The `elasticsearch` role must have completed (Kibana needs a running ES cluster to connect to)
 
 ## Default Variables

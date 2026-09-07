@@ -95,59 +95,8 @@
   when: elasticsearch_cluster_set_up is not defined
 
 - name: Check if master node count is correct
-  when:
-    - elasticsearch_node_types is defined
-  block:
-
-    # the following is a way to simplify handling information
-    # about nodes. For some tasks it's only important if a node
-    # has a specific roles and the others are irrelevant
-    #
-    - name: Set node role variable to master
-      ansible.builtin.set_fact:
-        elasticsearch_role: "master"
-      when:
-        - "'master' in elasticsearch_node_types"
-
-    - name: Set node role variable to data
-      ansible.builtin.set_fact:
-        elasticsearch_role: "data"
-      when:
-        - "'master' not in elasticsearch_node_types"
-        - "'data' in elasticsearch_node_types"
-
-    - name: Set node role variable to other
-      ansible.builtin.set_fact:
-        elasticsearch_role: "other"
-      when:
-        - "'master' not in elasticsearch_node_types"
-        - "'data' not in elasticsearch_node_types"
-
-    - name: Create groups of nodes
-      ansible.builtin.group_by:
-        key: "elasticsearch_role_{{ elasticsearch_role }}"
-      changed_when: false
-
-    - name: Count master nodes
-      ansible.builtin.set_fact:
-        elasticsearch_count_of_master_nodes: >-
-          {{ ansible_play_hosts_all | intersect(groups['elasticsearch_role_master'] | default([])) | length }}
-
-    # The odd-master-count rule is required for a fresh-bootstrapped cluster
-    # to have a stable initial quorum. When joining an existing cluster
-    # (elasticsearch_cluster_set_up: true) the cluster already has its own
-    # master-eligible quorum independent of how many new nodes are added in
-    # this play, so the check is irrelevant and would block legitimate joins.
-    - name: Check count of master nodes
-      ansible.builtin.fail:
-        msg: "There must be an odd count of master nodes. You have {{ elasticsearch_count_of_master_nodes }}"
-      when:
-        - elasticsearch_count_of_master_nodes | int % 2  == 0
-        - not elasticsearch_cluster_set_up | bool
-
-    - name: End play in checks
-      ansible.builtin.meta: end_host
-      when: elasticsearch_check_calculation | bool
+  ansible.builtin.include_tasks: elasticsearch-node-role-check.yml
+  when: elasticsearch_node_types is defined
 
 - name: Install openssl if security is activated
   ansible.builtin.package:
@@ -562,8 +511,11 @@
       when: _elasticsearch_keystore_nosec.stat.exists
 
     - name: Remove orphaned SSL keystore entries
-      ansible.builtin.command: >
-        /usr/share/elasticsearch/bin/elasticsearch-keystore remove {{ item }}
+      ansible.builtin.command:
+        argv:
+          - /usr/share/elasticsearch/bin/elasticsearch-keystore
+          - remove
+          - "{{ item }}"
       loop: "{{ _elasticsearch_keystore_entries_nosec.stdout_lines | default([]) | select('match', 'xpack\\.security\\.') | list }}"
       loop_control:
         label: "{{ item }}"
@@ -656,3 +608,17 @@
 
 - name: Apply persistent cluster settings
   ansible.builtin.include_tasks: elasticsearch-cluster-settings.yml
+
+# -- Declarative security objects via the Elasticsearch security API --
+
+- name: Manage Elasticsearch security objects
+  ansible.builtin.include_tasks: elasticsearch-security-management.yml
+  when:
+    - elasticsearch_security | bool
+    - not ansible_check_mode
+    - >-
+      (elasticsearch_security_roles | default([]) | length)
+      + (elasticsearch_users | default([]) | length)
+      + (elasticsearch_builtin_passwords | default({}) | length)
+      + (elasticsearch_role_mappings | default([]) | length) > 0
+  run_once: true

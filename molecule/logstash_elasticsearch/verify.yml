@@ -71,6 +71,23 @@
       loop: "{{ cert_check.results }}"
       when: "'logstash' in group_names"
 
+    - name: Check Logstash output configuration permissions
+      ansible.builtin.stat:
+        path: /etc/logstash/conf.d/main/90-output.conf
+      register: logstash_output_config
+      when: "'logstash' in group_names"
+
+    - name: Assert Logstash output configuration is service-readable and private
+      ansible.builtin.assert:
+        that:
+          - logstash_output_config.stat.pw_name == 'root'
+          - logstash_output_config.stat.gr_name == 'logstash'
+          - logstash_output_config.stat.mode == '0640'
+        fail_msg: >-
+          Logstash output configuration must be root:logstash 0640 because it
+          contains the Elasticsearch writer password.
+      when: "'logstash' in group_names"
+
     - name: Stop Logstash for syntax check
       ansible.builtin.service:
         name: logstash

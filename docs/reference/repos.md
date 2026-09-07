@@ -32,7 +32,7 @@ graph TD
 
 ## Requirements
 
-- Minimum Ansible version: `2.18`
+- Minimum Ansible version: `2.20`
 
 ## What it does per OS family
 
@@ -42,7 +42,7 @@ graph TD
 2. Downloads the Elastic GPG key to `/usr/share/keyrings/elasticsearch.asc`
 3. Removes legacy repository files from previous major versions (cleans up `/etc/apt/sources.list.d/artifacts_elastic_co_packages_{7,8,9}_x_apt.list`)
 4. Configures the APT repository with signed-by pointing at the downloaded keyring:
-   ```
+   ```text
    deb [signed-by=/usr/share/keyrings/elasticsearch.asc] <base_url>/packages/<release>.x/apt stable main
    ```
 

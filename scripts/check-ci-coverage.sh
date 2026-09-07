@@ -11,7 +11,7 @@ EXIT_CODE=0
 
 # Scenarios that are not standalone tests (utility dirs, shared includes,
 # or playbooks invoked directly by ansible-playbook rather than `molecule`)
-EXCLUDED_SCENARIOS="default shared cert_info_module"
+EXCLUDED_SCENARIOS=(default shared cert_info_module)
 
 echo "=== Molecule scenario CI coverage check ==="
 echo
@@ -20,16 +20,23 @@ echo
 echo "--- Checking for orphaned scenarios ---"
 for scenario_dir in "$MOLECULE_DIR"/*/; do
     scenario="$(basename "$scenario_dir")"
+    # CI checks the committed checkout; ignore local scenario directories
+    # that have not been added to Git yet.
+    if ! git -C "$REPO_ROOT" ls-files --error-unmatch -- "molecule/$scenario/molecule.yml" >/dev/null 2>&1; then
+        continue
+    fi
 
     # Skip excluded scenarios
     skip=false
-    for excluded in $EXCLUDED_SCENARIOS; do
+    for excluded in "${EXCLUDED_SCENARIOS[@]}"; do
         if [ "$scenario" = "$excluded" ]; then
             skip=true
             break
         fi
     done
-    $skip && continue
+    if [[ "$skip" == true ]]; then
+        continue
+    fi
 
     # Check if any workflow references this scenario name
     if ! grep -rql "$scenario" "$WORKFLOWS_DIR"/test_*.yml 2>/dev/null; then
@@ -38,7 +45,7 @@ for scenario_dir in "$MOLECULE_DIR"/*/; do
     fi
 done
 
-if [ $EXIT_CODE -eq 0 ]; then
+if [ "$EXIT_CODE" -eq 0 ]; then
     echo "OK: All scenarios are referenced by at least one workflow"
 fi
 echo
@@ -47,15 +54,21 @@ echo
 echo "--- Checking for missing verify.yml ---"
 for scenario_dir in "$MOLECULE_DIR"/*/; do
     scenario="$(basename "$scenario_dir")"
+    # Keep the check aligned with the committed checkout.
+    if ! git -C "$REPO_ROOT" ls-files --error-unmatch -- "molecule/$scenario/molecule.yml" >/dev/null 2>&1; then
+        continue
+    fi
 
     skip=false
-    for excluded in $EXCLUDED_SCENARIOS; do
+    for excluded in "${EXCLUDED_SCENARIOS[@]}"; do
         if [ "$scenario" = "$excluded" ]; then
             skip=true
             break
         fi
     done
-    $skip && continue
+    if [[ "$skip" == true ]]; then
+        continue
+    fi
 
     if [ ! -f "$scenario_dir/verify.yml" ]; then
         echo "FAIL: molecule/$scenario has no verify.yml"
@@ -63,7 +76,7 @@ for scenario_dir in "$MOLECULE_DIR"/*/; do
     fi
 done
 
-if [ $EXIT_CODE -eq 0 ]; then
+if [ "$EXIT_CODE" -eq 0 ]; then
     echo "OK: All scenarios have verify.yml"
 fi
 echo
@@ -81,4 +94,4 @@ done
 echo
 
 echo "=== Done ==="
-exit $EXIT_CODE
+exit "$EXIT_CODE"

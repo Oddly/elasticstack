@@ -28,7 +28,12 @@
   block:
 
     - name: filebeat | Enable modules
-      ansible.builtin.command: "filebeat modules enable {{ item }}"
+      ansible.builtin.command:
+        argv:
+          - filebeat
+          - modules
+          - enable
+          - "{{ item }}"
       args:
         creates: "/etc/filebeat/modules.d/{{ item }}.yml"
       loop: "{{ beats_filebeat_modules }}"
@@ -46,7 +51,7 @@
     - name: filebeat | Enable Ingest Pipelines
       ansible.builtin.shell: >
         /usr/bin/filebeat setup --pipelines &&
-        /usr/bin/filebeat version > /etc/filebeat/{{ item }}_pipeline_created
+        /usr/bin/filebeat version > {{ ('/etc/filebeat/' ~ item ~ '_pipeline_created') | quote }}
       args:
         creates: "/etc/filebeat/{{ item }}_pipeline_created"
       loop: "{{ beats_filebeat_modules }}"

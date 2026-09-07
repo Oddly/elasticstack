@@ -30,6 +30,21 @@
           - (_ci_ok.not_valid_after | regex_replace('[+-]\d{2}:\d{2}$', '') | to_datetime('%Y-%m-%d %H:%M:%S')).year >= 2020
         fail_msg: "cert_info happy-path did not return the expected dict shape: {{ _ci_ok }}"
 
+    - name: Run cert_info on a valid PEM certificate
+      oddly.elasticstack.cert_info:
+        path: files/es-ca/ca.crt
+        format: pem
+      register: _ci_pem
+
+    - name: Assert PEM result returned the expected fields
+      ansible.builtin.assert:
+        that:
+          - _ci_pem is not failed
+          - _ci_pem.subject is defined
+          - _ci_pem.issuer is defined
+          - _ci_pem.extensions is mapping
+        fail_msg: "cert_info PEM path did not return the expected dict shape: {{ _ci_pem }}"
+
     - name: Compute days until expiry (smoke-test the typical caller pattern)
       ansible.builtin.debug:
         msg: >-
@@ -40,16 +55,15 @@
 
     # --- Negative paths ---
     #
-    # Each negative case must explicitly fail. The previous version used
-    # `failed_when: false` with no register/assertion, so a regression where
-    # cert_info started swallowing bad inputs (e.g. missing passphrase
-    # falling back to "" and succeeding) would have passed silently.
+    # Each negative case must explicitly fail. Keep the module failure in the
+    # registered result with `ignore_errors`; `failed_when: false` clears the
+    # `failed` flag and would make these assertions pass for the wrong reason.
 
     - name: Run cert_info with missing path argument  # noqa: args[module]
       oddly.elasticstack.cert_info:
         passphrase: PleaseChangeMe
       register: _ci_missing_path
-      failed_when: false
+      ignore_errors: true  # noqa: ignore-errors
 
     - name: Assert missing-path call failed
       ansible.builtin.assert:
@@ -62,7 +76,7 @@
         path: does-not-exist.p12
         passphrase: PleaseChangeMe
       register: _ci_bad_path
-      failed_when: false
+      ignore_errors: true  # noqa: ignore-errors
 
     - name: Assert bad-path call failed
       ansible.builtin.assert:
@@ -75,7 +89,7 @@
         path: files/es-ca/elastic-stack-ca.p12
         passphrase: PleaseChangeMe-wrong
       register: _ci_bad_pass
-      failed_when: false
+      ignore_errors: true  # noqa: ignore-errors
 
     - name: Assert wrong-passphrase call failed
       ansible.builtin.assert:
@@ -87,7 +101,7 @@
       oddly.elasticstack.cert_info:
         path: files/es-ca/elastic-stack-ca.p12
       register: _ci_no_pass
-      failed_when: false
+      ignore_errors: true  # noqa: ignore-errors
 
     - name: Assert no-passphrase call failed
       ansible.builtin.assert:
@@ -98,7 +112,7 @@
     - name: Run cert_info with no parameters at all  # noqa: args[module]
       oddly.elasticstack.cert_info:
       register: _ci_no_params
-      failed_when: false
+      ignore_errors: true  # noqa: ignore-errors
 
     - name: Assert no-parameters call failed
       ansible.builtin.assert:

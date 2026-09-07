@@ -135,10 +135,11 @@
 
     # Extract CA chain from the already-deployed cert on the node
     - name: kibana-security | Read CA chain from PEM bundle
-      ansible.builtin.shell:
-        cmd: >-
-          awk '/-----BEGIN CERTIFICATE-----/{n++} n>1'
-          /etc/kibana/certs/{{ inventory_hostname }}-kibana.crt
+      ansible.builtin.command:
+        argv:
+          - awk
+          - '/-----BEGIN CERTIFICATE-----/{n++} n>1'
+          - "/etc/kibana/certs/{{ inventory_hostname }}-kibana.crt"
       register: _kibana_extracted_ca_chain
       changed_when: false
       when:
@@ -306,7 +307,7 @@
       ansible.builtin.shell: >
         set -o pipefail;
         openssl rand -base64 36 >
-        {{ elasticstack_ca_dir }}/encryption_key
+        {{ (elasticstack_ca_dir ~ '/encryption_key') | quote }}
       args:
         executable: /bin/bash
         creates: "{{ elasticstack_ca_dir }}/encryption_key"
@@ -333,7 +334,7 @@
       ansible.builtin.shell: >
         set -o pipefail;
         openssl rand -base64 36 >
-        {{ elasticstack_ca_dir }}/savedobjects_encryption_key
+        {{ (elasticstack_ca_dir ~ '/savedobjects_encryption_key') | quote }}
       args:
         executable: /bin/bash
         creates: "{{ elasticstack_ca_dir }}/savedobjects_encryption_key"

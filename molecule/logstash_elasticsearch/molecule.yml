@@ -7,15 +7,15 @@ dependency:
 driver:
   name: default
 platforms:
-  - name: "ls-es-es1-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
+  - name: "ls-es-es1-${MOLECULE_DISTRO:-debian13}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
     groups:
       - elasticsearch
-    distro: "${MOLECULE_DISTRO:-debian12}"
+    distro: "${MOLECULE_DISTRO:-debian13}"
     memory_mb: 4096
-  - name: "ls-es-ls1-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
+  - name: "ls-es-ls1-${MOLECULE_DISTRO:-debian13}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
     groups:
       - logstash
-    distro: "${MOLECULE_DISTRO:-debian12}"
+    distro: "${MOLECULE_DISTRO:-debian13}"
     memory_mb: 3072
 provisioner:
   name: ansible

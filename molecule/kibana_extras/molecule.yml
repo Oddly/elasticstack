@@ -13,15 +13,15 @@ dependency:
 driver:
   name: default
 platforms:
-  - name: "kib-extra-es1-${MOLECULE_DISTRO:-debian12}${MOLECULE_RUN_SUFFIX}"
+  - name: "kib-extra-es1-${MOLECULE_DISTRO:-debian13}${MOLECULE_RUN_SUFFIX}"
     groups:
       - elasticsearch
-    distro: "${MOLECULE_DISTRO:-debian12}"
+    distro: "${MOLECULE_DISTRO:-debian13}"
     memory_mb: 4096
-  - name: "kib-extra-kb1-${MOLECULE_DISTRO:-debian12}${MOLECULE_RUN_SUFFIX}"
+  - name: "kib-extra-kb1-${MOLECULE_DISTRO:-debian13}${MOLECULE_RUN_SUFFIX}"
     groups:
       - kibana
-    distro: "${MOLECULE_DISTRO:-debian12}"
+    distro: "${MOLECULE_DISTRO:-debian13}"
     # 3072 MiB to match the other kibana scenarios, whose 2048 limits were
     # proven undersized by kernel-journal OOM kills of Kibana 9 (~1.6 GB anon
     # RSS) in 2026-08. This scenario has no recorded kills of its own, but it

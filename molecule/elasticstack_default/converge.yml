@@ -16,6 +16,7 @@
     elasticstack_full_stack: true
     elasticstack_no_log: false
     logstash_pipeline_unsafe_shutdown: true
+    logstash_user_password: "MoleculeLogstashPassword!"
     logstash_input_beats_ssl: true
     beats_filebeat_journald: true
     beats_filebeat_modules:

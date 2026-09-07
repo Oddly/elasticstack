@@ -15,7 +15,7 @@ Complete variable reference for each role in the collection. Every role can be u
 
 Roles should be applied in this order:
 
-```
+```text
 repos → elasticsearch → kibana → logstash → beats
 ```
 

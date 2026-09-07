@@ -106,8 +106,8 @@
     src: kibana.yml.j2
     dest: /etc/kibana/kibana.yml
     owner: root
-    group: root
-    mode: "0644"
+    group: kibana
+    mode: "0640"
     backup: "{{ kibana_config_backup }}"
   notify:
     - Restart Kibana
@@ -201,4 +201,3 @@
           Recent log output:
           {{ _kibana_wait_journal.stdout }}
       when: _kibana_wait_result.rc | default(0) != 2
-

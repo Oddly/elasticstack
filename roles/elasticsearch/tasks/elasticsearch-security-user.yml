@@ -1,0 +1,124 @@
+---
+- name: elasticsearch-security-user | Validate user definition
+  ansible.builtin.assert:
+    that:
+      - _elasticsearch_security_user is mapping
+      - _elasticsearch_security_user.name is defined
+      - _elasticsearch_security_user.name | string | trim | length > 0
+      - _elasticsearch_security_user.password is not defined or _elasticsearch_security_user.password | string | length >= 6
+      - _elasticsearch_security_user.password_hash is not defined or _elasticsearch_security_user.password_hash | string | length > 0
+      - not (_elasticsearch_security_user.password is defined and _elasticsearch_security_user.password_hash is defined)
+      - _elasticsearch_security_user.roles is not defined or (_elasticsearch_security_user.roles is sequence and _elasticsearch_security_user.roles is not string)
+      - _elasticsearch_security_user.enabled is not defined or _elasticsearch_security_user.enabled is boolean
+      - _elasticsearch_security_user.name not in _elasticsearch_security_builtin_users
+      - (_elasticsearch_security_user.password is defined or _elasticsearch_security_user.password_hash is defined) or not (_elasticsearch_security_user.password_update | default(false) | bool)
+    fail_msg: >-
+      Each elasticsearch_users item needs a valid custom name. A new user
+      needs password or password_hash (passwords must be at least 6 characters),
+      password and password_hash are mutually exclusive, built-in users must
+      be managed with elasticsearch_builtin_passwords, and password_update
+      requires a password or password_hash.
+  vars:
+    _elasticsearch_security_builtin_users:
+      - elastic
+      - kibana_system
+      - logstash_system
+      - beats_system
+      - apm_system
+      - remote_monitoring_user
+
+- name: elasticsearch-security-user | Read current user
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_security_api_url }}/_security/user/{{ _elasticsearch_security_user.name | urlencode }}"
+    method: GET
+    user: elastic
+    password: "{{ _elasticsearch_security_api_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+    unredirected_headers:
+      - Authorization
+    return_content: true
+    status_code: [200, 404]
+  register: _elasticsearch_security_user_current
+  changed_when: false
+  failed_when: _elasticsearch_security_user_current.status | int not in [200, 404]
+  delegate_to: "{{ elasticstack_ca_host }}"
+  no_log: "{{ elasticstack_no_log }}"
+
+- name: elasticsearch-security-user | Require a password when creating a user
+  ansible.builtin.assert:
+    that:
+      - _elasticsearch_security_user.password is defined or _elasticsearch_security_user.password_hash is defined
+    fail_msg: >-
+      User {{ _elasticsearch_security_user.name }} does not exist. Set its
+      password or password_hash in elasticsearch_users; keep the value in
+      Ansible Vault or a secrets manager.
+  when: _elasticsearch_security_user_current.status | int == 404
+
+- name: elasticsearch-security-user | Build public user request body
+  ansible.builtin.set_fact:
+    _elasticsearch_security_user_public_body: >-
+      {{ {
+           'roles': _elasticsearch_security_user.roles | default([]),
+           'enabled': _elasticsearch_security_user.enabled | default(true)
+         }
+         | combine({'full_name': _elasticsearch_security_user.full_name}
+                   if _elasticsearch_security_user.full_name is defined else {})
+         | combine({'email': _elasticsearch_security_user.email}
+                   if _elasticsearch_security_user.email is defined else {})
+         | combine({'metadata': _elasticsearch_security_user.metadata}
+                   if _elasticsearch_security_user.metadata is defined else {}) }}
+  no_log: "{{ elasticstack_no_log }}"
+
+- name: elasticsearch-security-user | Compare public user fields
+  ansible.builtin.set_fact:
+    _elasticsearch_security_user_changed: "{{ _elasticsearch_security_user_needs_update | trim }}"
+  vars:
+    _elasticsearch_security_user_needs_update: >-
+      {% set current = (_elasticsearch_security_user_current.json | default({})).get(_elasticsearch_security_user.name, {}) %}
+      {% set ns = namespace(changed=(_elasticsearch_security_user_current.status | int == 404)) %}
+      {% for key, value in _elasticsearch_security_user_public_body.items() %}
+      {%   if key not in current or current[key] != value %}
+      {%     set ns.changed = true %}
+      {%   endif %}
+      {% endfor %}
+      {{ ns.changed }}
+  no_log: "{{ elasticstack_no_log }}"
+
+- name: elasticsearch-security-user | Build user request body
+  ansible.builtin.set_fact:
+    _elasticsearch_security_user_body: >-
+      {{ _elasticsearch_security_user_public_body
+         | combine({'password': _elasticsearch_security_user.password}
+                   if _elasticsearch_security_user.password is defined
+                   and ((_elasticsearch_security_user_current.status | int == 404)
+                        or (_elasticsearch_security_user.password_update | default(false) | bool))
+                   else {})
+         | combine({'password_hash': _elasticsearch_security_user.password_hash}
+                   if _elasticsearch_security_user.password_hash is defined
+                   and ((_elasticsearch_security_user_current.status | int == 404)
+                        or (_elasticsearch_security_user.password_update | default(false) | bool))
+                   else {}) }}
+  no_log: "{{ elasticstack_no_log }}"
+
+- name: elasticsearch-security-user | Create or update user
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_security_api_url }}/_security/user/{{ _elasticsearch_security_user.name | urlencode }}"
+    method: PUT
+    user: elastic
+    password: "{{ _elasticsearch_security_api_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+    unredirected_headers:
+      - Authorization
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: "{{ _elasticsearch_security_user_body }}"
+    status_code: 200
+  when:
+    - _elasticsearch_security_user_changed | bool
+      or _elasticsearch_security_user.password_update | default(false) | bool
+  changed_when: true
+  delegate_to: "{{ elasticstack_ca_host }}"
+  no_log: "{{ elasticstack_no_log }}"

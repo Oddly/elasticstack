@@ -66,6 +66,24 @@ argument_specs:
           password from the initial_passwords file.
         type: str
         default: ''
+      elasticsearch_security_roles:
+        description: Declarative Elasticsearch roles to create or update through the security API. Each item must contain a name and may contain any fields accepted by the put role API.
+        type: list
+        default: []
+      elasticsearch_users:
+        description: Declarative custom Elasticsearch users. Passwords are used on creation or when password_update is true. Store password values in Ansible Vault or a secrets manager.
+        type: list
+        default: []
+        no_log: true
+      elasticsearch_builtin_passwords:
+        description: Passwords to explicitly set for built-in Elasticsearch users. Use elasticsearch_elastic_password for the elastic superuser. Store values in Ansible Vault or a secrets manager.
+        type: dict
+        default: {}
+        no_log: true
+      elasticsearch_role_mappings:
+        description: Declarative Elasticsearch role mappings for LDAP, Active Directory, and other realms. Each item must contain a name and rules.
+        type: list
+        default: []
       elasticsearch_http_security:
         description: Enable TLS on the Elasticsearch HTTP interface (port 9200)
         type: bool

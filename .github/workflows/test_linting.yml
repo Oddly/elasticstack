@@ -61,6 +61,10 @@ jobs:
               ansible.posix:2.1.0
           fi
 
+      - name: Lint Markdown.
+        run: npx --yes markdownlint-cli2@0.22.0
+        if: ${{ inputs.rolename == '' }}
+
       - name: Lint code (yamllint).
         run: |
           yamllint .

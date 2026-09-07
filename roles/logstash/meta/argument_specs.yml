@@ -180,9 +180,13 @@ argument_specs:
         type: str
         default: logstash_writer
       logstash_user_password:
-        description: Password for the Logstash Elasticsearch user. Change this in production
+        description: >-
+          Password for the Logstash Elasticsearch user. Required when
+          logstash_create_user is enabled or when the secured standard
+          Elasticsearch output is enabled. Supply it from Ansible Vault or a
+          secret manager.
         type: str
-        default: password
+        default: ''
       logstash_user_email:
         description: Email address for the Logstash Elasticsearch user
         type: str

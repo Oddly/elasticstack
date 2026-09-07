@@ -7,10 +7,10 @@ dependency:
 driver:
   name: default
 platforms:
-  - name: "es-diag-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}"
+  - name: "es-diag-${MOLECULE_DISTRO:-debian13}-r${ELASTIC_RELEASE:-9}"
     groups:
       - elasticsearch
-    distro: "${MOLECULE_DISTRO:-debian12}"
+    distro: "${MOLECULE_DISTRO:-debian13}"
     memory_mb: 4096
 provisioner:
   name: ansible

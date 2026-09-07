@@ -8,11 +8,14 @@ import threading
 
 
 class State:
-    def __init__(self, nodes, log_path, persistent_settings, fail_nodes_on, in_flight):
+    def __init__(
+        self, nodes, log_path, persistent_settings, fail_nodes_on, health_status, in_flight
+    ):
         self.nodes = nodes
         self.log_path = log_path
         self.persistent_settings = persistent_settings
         self.fail_nodes_on = fail_nodes_on
+        self.health_status = health_status
         self.in_flight = in_flight
         self.lock = threading.Lock()
 
@@ -59,7 +62,7 @@ def handler(state):
             if self.path.startswith("/_cluster/health"):
                 self._send_json(
                     {
-                        "status": "green",
+                        "status": state.health_status,
                         "relocating_shards": state.in_flight,
                         "initializing_shards": state.in_flight,
                     }
@@ -140,6 +143,12 @@ def main():
         help="Comma-separated ports whose /_cat/nodes endpoint returns 503",
     )
     parser.add_argument(
+        "--health-status",
+        choices=["green", "yellow", "red"],
+        default="green",
+        help="Cluster status returned by /_cluster/health",
+    )
+    parser.add_argument(
         "--in-flight",
         type=int,
         default=0,
@@ -156,6 +165,7 @@ def main():
         args.log,
         json.loads(args.persistent_settings),
         fail_nodes_on,
+        args.health_status,
         args.in_flight,
     )
 

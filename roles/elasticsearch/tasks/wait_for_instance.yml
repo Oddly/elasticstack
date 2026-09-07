@@ -14,7 +14,7 @@
           if ! systemctl is-active --quiet elasticsearch; then
             exit 2
           fi
-          if ss -tln | grep -q ':{{ elasticstack_elasticsearch_http_port }} '; then
+          if ss -tln | grep -q -- {{ (':' ~ elasticstack_elasticsearch_http_port ~ ' ') | quote }}; then
             exit 0
           fi
           exit 1

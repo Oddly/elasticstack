@@ -14,16 +14,16 @@
 #   _cert_format:   "p12" (default) or "pem"
 
 - name: certs | cert_generate | Generate certificate - {{ _cert_name }}
-  ansible.builtin.command: >
+  ansible.builtin.command: >-
     /usr/share/elasticsearch/bin/elasticsearch-certutil cert
-    --ca {{ elasticstack_ca_dir }}/elastic-stack-ca.p12
-    --ca-pass {{ elasticstack_ca_pass }}
-    --name {{ _cert_name }}
-    --ip {{ _cert_ip }}
-    --dns {{ _cert_dns }}
-    --days {{ _cert_validity }}
-    --pass {{ _cert_pass }}
-    --out {{ _cert_out }}
+    --ca {{ (elasticstack_ca_dir ~ '/elastic-stack-ca.p12') | quote }}
+    --ca-pass {{ elasticstack_ca_pass | quote }}
+    --name {{ _cert_name | quote }}
+    --ip {{ _cert_ip | quote }}
+    --dns {{ _cert_dns | quote }}
+    --days {{ _cert_validity | quote }}
+    --pass {{ _cert_pass | quote }}
+    --out {{ _cert_out | quote }}
     {{ '--pem' if (_cert_format | default('p12')) == 'pem' else '' }}
   args:
     creates: "{{ _cert_out }}"

@@ -64,6 +64,12 @@
     - certificates
     - renew_ca
     - renew_logstash_cert
+    - preflight
+
+- name: Validate Logstash Elasticsearch password
+  ansible.builtin.include_tasks: logstash-password-validation.yml
+  tags:
+    - preflight
 
 - name: Activate TLS for Beats input in full stack mode
   ansible.builtin.set_fact:
@@ -87,13 +93,6 @@
   when:
     - logstash_beats_input is defined
     - logstash_input_beats is undefined
-
-- name: Handle backwards compatibility for logstash_elasticsearch_output
-  ansible.builtin.set_fact:
-    logstash_output_elasticsearch: "{{ logstash_elasticsearch_output }}"
-  when:
-    - logstash_elasticsearch_output is defined
-    - logstash_output_elasticsearch is undefined
 
 - name: Construct exact name of Logstash package (RedHat)
   ansible.builtin.set_fact:
@@ -197,12 +196,13 @@
     src: logstash.yml.j2
     dest: /etc/logstash/logstash.yml
     owner: root
-    group: root
-    mode: "0644"
+    group: logstash
+    mode: "0640"
     backup: "{{ logstash_config_backup }}"
   notify:
     - Restart Logstash
   when: logstash_manage_yaml | bool
+  no_log: "{{ elasticstack_no_log }}"
   tags:
     - configuration
     - logstash_configuration
@@ -264,10 +264,11 @@
         src: custom-pipeline.conf.j2
         dest: "/etc/logstash/conf.d/main/pipeline.conf"
         owner: root
-        group: root
-        mode: "0644"
+        group: logstash
+        mode: "0640"
       notify:
         - Restart Logstash noauto
+      no_log: "{{ elasticstack_no_log }}"
       tags:
         - configuration
         - logstash_configuration
@@ -302,14 +303,15 @@
         src: 10-input.conf.j2
         dest: "/etc/logstash/conf.d/main/10-input.conf"
         owner: root
-        group: root
-        mode: "0644"
+        group: logstash
+        mode: "0640"
       notify:
         - Restart Logstash noauto
       when:
         - logstash_input_beats | default(true) | bool or
           logstash_input_elastic_agent | default(false) | bool or
           logstash_extra_inputs | default('') | length > 0
+      no_log: "{{ elasticstack_no_log }}"
       tags:
         - configuration
         - logstash_configuration
@@ -319,13 +321,14 @@
         src: 50-filter.conf.j2
         dest: "/etc/logstash/conf.d/main/50-filter.conf"
         owner: root
-        group: root
-        mode: "0644"
+        group: logstash
+        mode: "0640"
       notify:
         - Restart Logstash noauto
       when:
         - logstash_filters | default('') | length > 0 or
           logstash_filter_files | default([]) | length > 0
+      no_log: "{{ elasticstack_no_log }}"
       tags:
         - configuration
         - logstash_configuration
@@ -335,13 +338,14 @@
         src: "{{ item }}"
         dest: "/etc/logstash/conf.d/main/"
         owner: root
-        group: root
-        mode: "0644"
+        group: logstash
+        mode: "0640"
       loop: "{{ logstash_filter_files | default([]) }}"
       notify:
         - Restart Logstash noauto
       when:
         - logstash_filter_files | default([]) | length > 0
+      no_log: "{{ elasticstack_no_log }}"
       tags:
         - configuration
         - logstash_configuration
@@ -351,13 +355,14 @@
         src: 90-output.conf.j2
         dest: "/etc/logstash/conf.d/main/90-output.conf"
         owner: root
-        group: root
-        mode: "0644"
+        group: logstash
+        mode: "0640"
       notify:
         - Restart Logstash noauto
       when:
         - logstash_output_elasticsearch | default(true) | bool or
           logstash_extra_outputs | default('') | length > 0
+      no_log: "{{ elasticstack_no_log }}"
       tags:
         - configuration
         - logstash_configuration
@@ -375,6 +380,7 @@
   when:
     - logstash_manage_pipelines | bool
     - not logstash_no_pipelines | bool
+  no_log: "{{ elasticstack_no_log }}"
   tags:
     - configuration
     - logstash_configuration
@@ -393,4 +399,3 @@
     enabled: true
   when: logstash_enable | bool
   register: _logstash_freshstart
-

@@ -162,7 +162,7 @@ The role sets lenient disk watermarks (97/98/99%) during the upgrade to prevent 
 
 Upgraded clusters have `logsdb.prior_logs_usage: true` set internally, which causes `cluster.logsdb.enabled` to default to `false`. Fresh 9.x installs get LogsDB enabled by default. If you want the same behaviour on an upgraded cluster, enable it manually after the upgrade completes:
 
-```
+```http
 PUT _cluster/settings
 { "persistent": { "cluster.logsdb.enabled": true } }
 
@@ -230,8 +230,8 @@ The collection handles ES 8.x and 9.x with version-conditional templates and gua
 
 ## Password and secret defaults
 
-!!! warning "Change all default passwords before deploying to production"
-    All roles ship with placeholder passwords. Store real values in Ansible Vault or a secrets manager.
+!!! warning "Change placeholder secrets before deploying to production"
+    Several TLS and bootstrap settings use placeholder values. Store real values in Ansible Vault or a secrets manager. `logstash_user_password` has no default and must be supplied for secured Logstash deployments.
 
 | Variable | Default | Role |
 |----------|---------|------|
@@ -240,7 +240,7 @@ The collection handles ES 8.x and 9.x with version-conditional templates and gua
 | `elasticsearch_tls_key_passphrase` | `PleaseChangeMeIndividually` | elasticsearch |
 | `kibana_tls_key_passphrase` | `PleaseChangeMe` | kibana |
 | `logstash_tls_key_passphrase` | `LogstashChangeMe` | logstash |
-| `logstash_user_password` | `password` | logstash |
+| `logstash_user_password` | Required when Logstash creates its user or uses secured output | logstash |
 | `beats_tls_key_passphrase` | `BeatsChangeMe` | beats |
 
-The `elastic` superuser password is auto-generated during security initialization and stored in `/usr/share/elasticsearch/initial_passwords`.
+The collection does not assign a fixed login password to Elasticsearch's built-in users. Elasticsearch generates passwords for `elastic`, `kibana_system`, `logstash_system`, and `beats_system` during security initialization and stores them in `/usr/share/elasticsearch/initial_passwords`. The collection-created `logstash_writer` user is different: its password must come from your Vault or secret manager. The passphrases listed above protect bootstrap state or private keys and should also be replaced in deployed environments.

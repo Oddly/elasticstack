@@ -1,3 +1,4 @@
 ---
 collections:
-  - community.general
+  - name: community.general
+    version: ">=12.3.0,<13.0.0"

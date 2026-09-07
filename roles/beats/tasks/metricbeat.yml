@@ -20,7 +20,12 @@
     - beats_configuration
 
 - name: metricbeat | Enable modules
-  ansible.builtin.command: "/usr/bin/metricbeat modules enable {{ item }}"
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/metricbeat
+      - modules
+      - enable
+      - "{{ item }}"
   args:
     creates: "/etc/metricbeat/modules.d/{{ item }}.yml"
   loop: "{{ beats_metricbeat_modules | default([], true) }}"

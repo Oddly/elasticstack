@@ -18,7 +18,13 @@
   rescue:
     - name: restart_and_verify_beat | "Get recent journal output — {{ _beat_service_name }}"  # noqa: name[template]
       ansible.builtin.command:
-        cmd: "journalctl -u {{ _beat_service_name }} --no-pager -n 50"
+        argv:
+          - journalctl
+          - -u
+          - "{{ _beat_service_name }}"
+          - --no-pager
+          - -n
+          - "50"
       register: _beats_journal
       changed_when: false
 

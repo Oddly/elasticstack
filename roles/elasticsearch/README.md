@@ -2,6 +2,43 @@
 
 Deploys and manages Elasticsearch nodes — cluster formation, JVM tuning, TLS certificate management, security initialization, and rolling upgrades from 8.x to 9.x.
 
+## Declarative security objects
+
+The role can create or update native security roles, custom users, and LDAP or
+Active Directory role mappings after the cluster is initialized. Store password
+values in Ansible Vault or a secrets manager.
+
+```yaml
+elasticsearch_security_roles:
+  - name: app_writer
+    cluster: [monitor]
+    indices:
+      - names: ["app-*"]
+        privileges: [read, write]
+
+elasticsearch_users:
+  - name: app_ingest
+    password: "{{ vault_app_ingest_password }}"
+    roles: [app_writer]
+
+elasticsearch_builtin_passwords:
+  kibana_system: "{{ vault_kibana_system_password }}"
+
+elasticsearch_role_mappings:
+  - name: app_admins
+    roles: [app_writer]
+    rules:
+      field:
+        groups: "cn=app-admins,dc=example,dc=com"
+```
+
+The role applies these objects once through `elasticstack_ca_host` using the
+`elastic` credential. Custom user passwords are sent on creation and are left
+unchanged on later runs; set `password_update: true` for an intentional
+rotation. Built-in password entries are explicit rotations and run on every
+convergence because Elasticsearch cannot expose the current secret. Use
+`elasticsearch_elastic_password` for the `elastic` superuser.
+
 ## Custom TLS Certificates
 
 By default the role generates certificates from a built-in CA (`elasticsearch_cert_source: elasticsearch_ca`). To use your own certificates — from a corporate CA, ACME, Vault PKI, etc. — set `elasticsearch_cert_source: external`.

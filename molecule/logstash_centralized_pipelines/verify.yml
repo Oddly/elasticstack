@@ -22,13 +22,17 @@
     - name: Verify management username
       ansible.builtin.assert:
         that:
-          - "'xpack.management.elasticsearch.username: logstash_internal' in logstash_config"
+          - >-
+            'xpack.management.elasticsearch.username: "logstash_internal"' in
+            logstash_config
         fail_msg: "Management username not configured"
 
     - name: Verify management password
       ansible.builtin.assert:
         that:
-          - "'xpack.management.elasticsearch.password: testpassword' in logstash_config"
+          - >-
+            'xpack.management.elasticsearch.password: "testpassword"' in
+            logstash_config
         fail_msg: "Management password not configured"
 
     - name: Verify management ES hosts

@@ -35,7 +35,7 @@ graph TD
 
 ## Requirements
 
-- Minimum Ansible version: `2.18`
+- Minimum Ansible version: `2.20`
 - In a full-stack deployment, Elasticsearch (and optionally Logstash) should be running before applying this role
 
 ## Default Variables
