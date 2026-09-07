@@ -45,10 +45,25 @@
   vars:
     ansible_managed: "Ansible managed"
     elasticstack_elasticsearch_group_name: elasticsearch
+    elasticstack_elasticsearch_http_port: 9200
+    elasticstack_temperature: warm
     elasticsearch_datapath: /var/lib/elasticsearch
     elasticsearch_logpath: /var/log/elasticsearch
     elasticsearch_clustername: template-multi
     elasticsearch_cluster_set_up: false
+    elasticsearch_network_host:
+      - 10.10.10.10
+      - _site_
+    elasticsearch_http_publish_host: 10.10.10.20
+    elasticsearch_http_publish_port: 19200
+    elasticsearch_transport_port: 19300
+    elasticsearch_node_types:
+      - master
+      - data
+      - ingest
+    elasticsearch_seed_hosts:
+      - 10.10.10.1
+      - 10.10.10.2
     elasticsearch_ml_enabled: true
     elasticsearch_security: true
     elasticsearch_http_security: true
@@ -81,6 +96,14 @@
         that:
           - "'cluster.name: \"template-multi\"' in (_multi_template.content | b64decode)"
           - "'discovery.type: single-node' not in (_multi_template.content | b64decode)"
+          - "'network.host: [\"10.10.10.10\", \"_site_\"]' in (_multi_template.content | b64decode)"
+          - "'http.port: \"9200\"' in (_multi_template.content | b64decode)"
+          - "'transport.port: \"19300\"' in (_multi_template.content | b64decode)"
+          - "'http.publish_host: \"10.10.10.20\"' in (_multi_template.content | b64decode)"
+          - "'http.publish_port: 19200' in (_multi_template.content | b64decode)"
+          - "'node.roles: [\"master\", \"data\", \"ingest\"]' in (_multi_template.content | b64decode)"
+          - "'discovery.seed_hosts: [\"10.10.10.1\", \"10.10.10.2\"]' in (_multi_template.content | b64decode)"
+          - "'node.attr.temp: \"warm\"' in (_multi_template.content | b64decode)"
           - "'10.10.10.1' in (_multi_template.content | b64decode)"
           - "'10.10.10.2' in (_multi_template.content | b64decode)"
           - "'es-node-1' in (_multi_template.content | b64decode)"

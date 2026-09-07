@@ -162,9 +162,9 @@ logstash_custom_pipeline: |
 ### Input Configuration
 
 ```yaml
-logstash_input_beats: true
+# logstash_input_beats: true
 logstash_input_beats_port: 5044
-logstash_input_beats_ssl: "{{ logstash_beats_tls | default(omit) }}"
+# logstash_input_beats_ssl: false
 # logstash_input_beats_client_auth: required
 # logstash_input_beats_timeout: 60s
 
@@ -176,13 +176,13 @@ logstash_extra_inputs: ""
 ```
 
 `logstash_input_beats`
-:   Enable the Beats input plugin, which listens for events from Filebeat, Metricbeat, Heartbeat, and other Beats agents. This is the primary ingest path for most Elastic Stack deployments.
+:   Enable the Beats input plugin, which listens for events from Filebeat, Metricbeat, Heartbeat, and other Beats agents. Leave it undefined for the effective default (`true`), or set it to `false` to disable the input. This is the primary ingest path for most Elastic Stack deployments.
 
 `logstash_input_beats_port`
 :   TCP port the Beats input binds to. All Beat agents in your fleet must target this port. If you also enable the Elastic Agent input, give it a different port to avoid conflicts.
 
 `logstash_input_beats_ssl`
-:   Enable TLS encryption on the Beats input. In full-stack mode (`elasticstack_full_stack: true`), this defaults to `true` automatically. Accepts the legacy variable name `logstash_beats_tls` for backwards compatibility. When enabled, the input requires certificate files in `logstash_certs_dir`.
+:   Enable TLS encryption on the Beats input. Leave it undefined in full-stack mode (`elasticstack_full_stack: true`) to inherit the stack security setting, or set it explicitly to override that behavior. Accepts the legacy variable name `logstash_beats_tls` for backwards compatibility. When enabled, the input requires certificate files in `logstash_certs_dir`.
 
 `logstash_input_beats_client_auth`
 :   Whether the Beats input requires clients to present a TLS certificate. Accepts `required` (clients must authenticate — the default), `optional` (certificates are validated if presented), or `none` (no client certificate required). Only relevant when `logstash_input_beats_ssl` is enabled.
@@ -266,7 +266,7 @@ logstash_filter_files:
 ### Output Configuration
 
 ```yaml
-logstash_output_elasticsearch: true
+# logstash_output_elasticsearch: true
 logstash_elasticsearch_hosts: []
 logstash_elasticsearch_index: ""
 logstash_validate_after_inactivity: 300
@@ -277,7 +277,7 @@ logstash_extra_outputs: ""
 ```
 
 `logstash_output_elasticsearch`
-:   Enable the Elasticsearch output plugin. Disable this if Logstash writes to a different destination (Kafka, S3, etc.) and you are providing all outputs via `logstash_extra_outputs`.
+:   Enable the Elasticsearch output plugin. Leave it undefined for the effective default (`true`), or set it to `false` when Logstash writes to a different destination (Kafka, S3, etc.) through `logstash_extra_outputs`.
 
 `logstash_elasticsearch_hosts`
 :   Explicit list of Elasticsearch host addresses. When empty (the default), the role auto-discovers hosts from the inventory group defined by `elasticstack_elasticsearch_group_name` in full-stack mode, or falls back to `localhost` as a last resort. Each host is combined with `elasticstack_elasticsearch_http_port` (default `9200`) in the output config.

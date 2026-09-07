@@ -72,6 +72,12 @@
           - "'log.format: json' in logstash_config"
         fail_msg: "Log format not set to json"
 
+    - name: Verify logstash_global_ecs is v8
+      ansible.builtin.assert:
+        that:
+          - "'pipeline.ecs_compatibility: v8' in logstash_config"
+        fail_msg: "Global ECS compatibility mode not set to v8"
+
     # --- Monitoring ---
 
     - name: Verify monitoring is disabled

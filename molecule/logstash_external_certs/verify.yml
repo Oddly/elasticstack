@@ -70,6 +70,23 @@
           - ca_cert.stat.exists
         fail_msg: "CA certificate not found in /etc/logstash/certs/"
 
+    - name: Verify logstash_tls_certificate_file and logstash_tls_key_file were consumed
+      ansible.builtin.assert:
+        that:
+          - server_cert.stat.exists
+          - server_key.stat.exists
+        fail_msg: >-
+          logstash_tls_certificate_file or logstash_tls_key_file was not
+          copied from the configured external source.
+
+    - name: Verify logstash_tls_ca_file and logstash_tls_remote_src were consumed
+      ansible.builtin.assert:
+        that:
+          - ca_cert.stat.exists
+        fail_msg: >-
+          logstash_tls_ca_file or logstash_tls_remote_src did not produce a
+          usable CA file on the managed Logstash host.
+
     # --- Input SSL verification ---
 
     - name: Read input configuration
@@ -83,6 +100,10 @@
           - "'beats {' in (input_content.content | b64decode)"
           - "'port => 5044' in (input_content.content | b64decode)"
           - "'ssl_enabled' in (input_content.content | b64decode) or 'ssl => true' in (input_content.content | b64decode)"
+          - "'client_inactivity_timeout => \"45s\"' in (input_content.content | b64decode)"
+          - >-
+            (ansible_facts.distribution_major_version | int < 9) or
+            ('ssl_client_authentication => optional' in (input_content.content | b64decode))
         fail_msg: "Beats input with SSL not properly configured"
 
     # --- Port check ---

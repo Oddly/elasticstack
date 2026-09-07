@@ -16,7 +16,7 @@ api.http.port: {{ logstash_http_port }}
 pipeline.ecs_compatibility: {{ logstash_global_ecs }}
 {% endif %}
 {% if logstash_pipeline_unsafe_shutdown is defined %}
-pipeline.unsafe_shutdown: {{ logstash_pipeline_unsafe_shutdown }}
+pipeline.unsafe_shutdown: {{ logstash_pipeline_unsafe_shutdown | bool | string | lower }}
 {% endif %}
 {% if logstash_pipeline_buffer_type is defined and logstash_pipeline_buffer_type | length > 0 %}
 pipeline.buffer.type: {{ logstash_pipeline_buffer_type }}

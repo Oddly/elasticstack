@@ -88,6 +88,23 @@
           contains the Elasticsearch writer password.
       when: "'logstash' in group_names"
 
+    - name: Read secured Elasticsearch output configuration
+      ansible.builtin.slurp:
+        src: /etc/logstash/conf.d/main/90-output.conf
+      register: logstash_output_content
+      when: "'logstash' in group_names"
+
+    - name: Verify logstash_security, logstash_output_elasticsearch, and sniffing variables
+      ansible.builtin.assert:
+        that:
+          - "'elasticsearch {' in (logstash_output_content.content | b64decode)"
+          - "'ssl_enabled' in (logstash_output_content.content | b64decode) or 'ssl => true' in (logstash_output_content.content | b64decode)"
+          - "'sniffing => true' in (logstash_output_content.content | b64decode)"
+          - "'sniffing_delay => 8' in (logstash_output_content.content | b64decode)"
+          - "'sniffing_path => \"/_nodes/http\"' in (logstash_output_content.content | b64decode)"
+        fail_msg: "Secured Elasticsearch output or sniffing variables did not render"
+      when: "'logstash' in group_names"
+
     - name: Stop Logstash for syntax check
       ansible.builtin.service:
         name: logstash

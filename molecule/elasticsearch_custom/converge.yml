@@ -7,6 +7,23 @@
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticstack_full_stack: false
     elasticstack_no_log: false
+    # Explicit network and bootstrap inputs. These are safe for the
+    # single-node rollout and exercise the optional template branches.
+    elasticstack_temperature: warm
+    elasticsearch_network_host:
+      - "0.0.0.0"
+    elasticsearch_http_publish_host: 127.0.0.1
+    elasticsearch_http_publish_port: 9200
+    elasticsearch_transport_port: 19300
+    elasticsearch_nodename: custom-es-node
+    elasticsearch_node_types:
+      - master
+      - data
+      - ingest
+    elasticsearch_seed_hosts:
+      - 127.0.0.1
+    elasticsearch_security_enrollment: true
+    elasticsearch_cluster_set_up: false
     # Custom paths
     elasticsearch_datapath: /data/elasticsearch
     elasticsearch_create_datapath: true

@@ -26,6 +26,12 @@ argument_specs:
         type: list
         default:
         - localhost
+      beats_fields:
+        description: Optional raw YAML field lines added to every Filebeat input
+        type: list
+      beats_filebeat_output_file_path:
+        description: Directory used by Filebeat's file output. Defaults to /tmp/filebeat-output when unset
+        type: str
       beats_logging:
         description: Logging destination. Set to 'file' for file-based logging
         type: str

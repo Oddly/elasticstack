@@ -10,6 +10,11 @@
     elasticstack_no_log: false
     elasticsearch_heap: "1"
     logstash_heap: "512m"
+    logstash_security: true
+    logstash_output_elasticsearch: true
+    logstash_sniffing: true
+    logstash_sniffing_delay: 8
+    logstash_sniffing_path: /_nodes/http
     logstash_pipeline_unsafe_shutdown: true
     logstash_user_password: "MoleculeLogstashPassword!"
     logstash_filters: |

@@ -17,6 +17,8 @@
     logstash_input_beats: true
     logstash_input_beats_ssl: true
     logstash_input_beats_port: 5044
+    logstash_input_beats_client_auth: optional
+    logstash_input_beats_timeout: 45s
     # External certificate configuration
     logstash_cert_source: external
     logstash_tls_certificate_file: /tmp/test-certs/server.crt

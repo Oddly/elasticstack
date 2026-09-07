@@ -14,9 +14,13 @@
           ansible.builtin.assert:
             that:
               - "'server.protocol: \"http1\"' in (kibana_yml.content | b64decode)"
+              - >-
+                'server.publicBaseUrl: "http://kibana-extras.example.test:5601"'
+                in (kibana_yml.content | b64decode)
+              - groups['elasticsearch'][0] in (kibana_yml.content | b64decode)
             fail_msg: >-
-              server.protocol not emitted; kibana_server_protocol branch in
-              kibana.yml.j2 did not render.
+              Kibana server or explicit Elasticsearch host configuration did
+              not render.
 
         - name: Assert elasticsearch.sniffOnConnectionFault fired
           ansible.builtin.assert:
@@ -26,6 +30,14 @@
               sniffOnConnectionFault not rendered; the < 9 gate on
               kibana_sniff_on_connection_fault may have flipped without
               this scenario noticing.
+
+        - name: Assert elasticsearch.sniffOnStart fired
+          ansible.builtin.assert:
+            that:
+              - "'elasticsearch.sniffOnStart: true' in (kibana_yml.content | b64decode)"
+            fail_msg: >-
+              sniffOnStart not rendered; the < 9 gate on kibana_sniff_on_start
+              may have flipped without this scenario noticing.
 
         - name: Assert elasticsearch.sniffInterval fired
           ansible.builtin.assert:

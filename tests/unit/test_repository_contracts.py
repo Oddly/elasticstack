@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 import stat
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -11,6 +12,10 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts"))
+
+from gen_argspecs import parse_defaults  # noqa: E402
+
 ACTION_SHA = re.compile(r"^[0-9a-f]{40}$")
 COLLECTION_CONSTRAINTS = {
     "community.general": ">=12.3.0,<13.0.0",
@@ -28,6 +33,26 @@ def _run(command, cwd):
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
+
+
+def _assertion_text(path):
+    """Return the expressions under every Ansible assert task's ``that`` key."""
+    document = yaml.safe_load(path.read_text()) or {}
+    expressions = []
+
+    def visit(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key == "that":
+                    values = value if isinstance(value, list) else [value]
+                    expressions.extend(str(item) for item in values)
+                visit(value)
+        elif isinstance(node, list):
+            for item in node:
+                visit(item)
+
+    visit(document)
+    return "\n".join(expressions)
 
 
 class TestRepositoryContracts(unittest.TestCase):
@@ -153,6 +178,116 @@ class TestRepositoryContracts(unittest.TestCase):
         options = elasticsearch_specs["argument_specs"]["main"]["options"]
         self.assertTrue(options["elasticsearch_users"]["no_log"])
         self.assertTrue(options["elasticsearch_builtin_passwords"]["no_log"])
+
+    def test_public_variables_have_argument_specs_and_executable_coverage(self):
+        coverage = yaml.safe_load((ROOT / "tests" / "variable_coverage.yml").read_text())
+        baselines = coverage["baselines"]
+        explicit = coverage["explicit"]
+        rollouts = coverage["rollouts"]
+        workflow_sources = "\n".join(
+            path.read_text() for path in (ROOT / ".github" / "workflows").glob("*.yml")
+        )
+
+        for role in sorted(baselines):
+            defaults_path = ROOT / "roles" / role / "defaults" / "main.yml"
+            specs_path = ROOT / "roles" / role / "meta" / "argument_specs.yml"
+            entries = parse_defaults(defaults_path)
+            public = {entry["name"] for entry in entries}
+            optional = {
+                entry["name"] for entry in entries if not entry.get("has_default", False)
+            }
+            options = yaml.safe_load(specs_path.read_text())["argument_specs"]["main"]["options"]
+
+            self.assertEqual(public, set(options), f"{role} public variable catalog drifted")
+            self.assertEqual(
+                optional,
+                set(explicit.get(role, {})),
+                f"{role} optional variables must have explicit executable coverage",
+            )
+            self.assertEqual(
+                optional,
+                set(rollouts.get(role, {})),
+                f"{role} optional variables must have Molecule rollout coverage",
+            )
+
+            for variable, paths in explicit.get(role, {}).items():
+                assignment = re.compile(
+                    rf"(?m)^(?!\s*#)\s*{re.escape(variable)}\s*:"
+                )
+                self.assertTrue(paths, f"{role}.{variable} has no coverage path")
+                for relative_path in paths:
+                    path = ROOT / relative_path
+                    self.assertTrue(path.exists(), f"Missing coverage file: {relative_path}")
+                    self.assertRegex(
+                        path.read_text(),
+                        assignment,
+                        f"{relative_path} does not assign {variable}",
+                    )
+
+            for relative_path in baselines[role]:
+                path = ROOT / relative_path
+                self.assertTrue(path.exists(), f"Missing baseline scenario: {relative_path}")
+                source = path.read_text()
+                scenario = path.parent.name
+                self.assertTrue(
+                    (path.parent / "verify.yml").exists(),
+                    f"{scenario} baseline has no rollout verification",
+                )
+                self.assertIn(
+                    scenario,
+                    workflow_sources,
+                    f"{scenario} baseline is not referenced by a CI workflow",
+                )
+                if role != "elasticstack":
+                    self.assertIn(
+                        f"oddly.elasticstack.{role}",
+                        source,
+                        f"{relative_path} does not execute the {role} role",
+                    )
+
+            for variable, rollout in rollouts.get(role, {}).items():
+                scenario = rollout["scenario"]
+                converge = ROOT / "molecule" / scenario / "converge.yml"
+                verify = ROOT / "molecule" / scenario / "verify.yml"
+                self.assertTrue(converge.exists(), f"Missing rollout converge: {converge}")
+                self.assertTrue(verify.exists(), f"Missing rollout verify: {verify}")
+                self.assertIn(
+                    scenario,
+                    workflow_sources,
+                    f"{scenario} rollout is not referenced by a CI workflow",
+                )
+                if role != "elasticstack":
+                    self.assertIn(
+                        f"oddly.elasticstack.{role}",
+                        converge.read_text(),
+                        f"{scenario} rollout does not execute the {role} role",
+                    )
+                assignment = re.compile(
+                    rf"(?m)^(?!\s*#)\s*{re.escape(variable)}\s*:"
+                )
+                self.assertRegex(
+                    converge.read_text(),
+                    assignment,
+                    f"{scenario} does not assign rollout variable {variable}",
+                )
+                assertions_path = ROOT / rollout.get(
+                    "assertions_file", f"molecule/{scenario}/verify.yml"
+                )
+                self.assertTrue(
+                    assertions_path.exists(),
+                    f"Missing rollout assertions file: {assertions_path}",
+                )
+                verify_source = _assertion_text(assertions_path)
+                self.assertTrue(
+                    rollout.get("expected"),
+                    f"{scenario} has no assertion markers for {variable}",
+                )
+                for expected in rollout.get("expected", []):
+                    self.assertIn(
+                        expected,
+                        verify_source,
+                        f"{scenario} verify.yml does not assert {variable}: {expected}",
+                    )
 
     def test_markdownlint_scope_enforces_the_new_rules(self):
         config = yaml.safe_load((ROOT / ".markdownlint-cli2.yaml").read_text())

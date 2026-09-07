@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Verify that every role's meta/argument_specs.yml lists the same variables
-its defaults/main.yml defines. Fails CI when the two drift.
+Verify that every role's meta/argument_specs.yml lists the same public
+variables documented in defaults/main.yml. Fails CI when the two drift.
 
 Runs across every role that has a meta/argument_specs.yml. Roles without
 one (e.g. `repos`, which uses variables from `elasticstack` instead) are
@@ -12,9 +12,10 @@ Exit codes:
   1  At least one role has drift (details on stderr)
   2  Usage / setup error
 
-The parser only looks at the top-level `varname: value` lines in
-defaults/main.yml. Internal-only vars (leading underscore) are ignored
-so vars/main.yml-style facts don't need arg-spec entries.
+Public variables are the `@var NAME:description:` entries in defaults/main.yml.
+This includes optional inputs whose example assignment remains commented out.
+Internal-only vars (leading underscore) are ignored so vars/main.yml-style
+facts don't need arg-spec entries.
 """
 import sys
 import re
@@ -28,6 +29,7 @@ except ImportError:
 
 
 VAR_LINE = re.compile(r"^([A-Za-z][\w]*)\s*:")
+DOCUMENTED_VAR_LINE = re.compile(r"^# @var\s+([A-Za-z][\w.]*)\s*:description:")
 
 
 def defaults_vars(path):
@@ -40,6 +42,17 @@ def defaults_vars(path):
                 name = m.group(1)
                 if not name.startswith("_"):
                     out.add(name)
+    return out
+
+
+def documented_vars(path):
+    """Public variable names declared by @var description docblocks."""
+    out = set()
+    with open(path) as f:
+        for line in f:
+            match = DOCUMENTED_VAR_LINE.match(line)
+            if match and not match.group(1).startswith("_"):
+                out.add(match.group(1))
     return out
 
 
@@ -204,21 +217,25 @@ def main():
             exit_code = 1
             continue
 
-        vars_ = defaults_vars(defaults)
+        default_vars = defaults_vars(defaults)
+        documented = documented_vars(defaults)
         empty_default_vars_by_role[role.name] = defaults_empty_vars(defaults)
         opts = argspec_options(specs)
-        missing_in_spec = vars_ - opts
-        extra_in_spec = opts - vars_
+        undocumented = default_vars - documented
+        missing_in_spec = documented - opts
+        extra_in_spec = opts - documented
 
-        if missing_in_spec or extra_in_spec:
+        if undocumented or missing_in_spec or extra_in_spec:
             exit_code = 1
             print(f"\n[{role.name}] argument_specs drift:", file=sys.stderr)
+            for v in sorted(undocumented):
+                print(f"  - in defaults but missing @var documentation: {v}", file=sys.stderr)
             for v in sorted(missing_in_spec):
-                print(f"  - in defaults but missing from spec: {v}", file=sys.stderr)
+                print(f"  - documented public var but missing from spec: {v}", file=sys.stderr)
             for v in sorted(extra_in_spec):
-                print(f"  - in spec but no longer in defaults: {v}", file=sys.stderr)
+                print(f"  - in spec but missing @var documentation: {v}", file=sys.stderr)
         else:
-            print(f"[{role.name}] ok ({len(vars_)} vars)")
+            print(f"[{role.name}] ok ({len(documented)} public vars)")
 
     hits = scan_is_defined_gates(repo, empty_default_vars_by_role)
     if hits:
@@ -237,7 +254,8 @@ def main():
 
     if exit_code:
         print(
-            "\nFix drift by editing meta/argument_specs.yml or regenerating with "
+            "\nFix drift by documenting the variable and editing meta/argument_specs.yml "
+            "or regenerating with "
             "`scripts/gen_argspecs.py <role_path>`.",
             file=sys.stderr,
         )

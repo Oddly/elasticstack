@@ -8,10 +8,13 @@
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticstack_full_stack: false
     elasticstack_no_log: false
-    logstash_output_elasticsearch: false
     logstash_create_user: false
     logstash_create_role: false
-    logstash_input_beats_ssl: false
+    # Exercise the historical aliases through a real Logstash rollout.
+    # The compatibility tasks translate these to the current variable names.
+    logstash_beats_input: true
+    logstash_beats_tls: false
+    logstash_elasticsearch_output: false
     logstash_pipeline_unsafe_shutdown: true
     logstash_heap: "512m"
     # Config backup
@@ -23,6 +26,7 @@
     logstash_queue_max_bytes: 512mb
     # Auto-reload (default, but explicit)
     logstash_config_autoreload: true
+    logstash_config_autoreload_interval: 7s
     # Ident and pipeline identifier
     logstash_ident: true
     logstash_ident_field_name: "[logstash][instance]"

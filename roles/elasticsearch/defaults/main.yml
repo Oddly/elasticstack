@@ -37,6 +37,8 @@ elasticsearch_logging_audit: true
 
 # @var elasticsearch_security:description: Enable Elasticsearch security features (TLS, authentication, RBAC)
 elasticsearch_security: true
+# @var elasticsearch_security_enrollment:description: Enable the Elasticsearch security enrollment API when security is enabled
+# elasticsearch_security_enrollment: true
 # @var elasticsearch_bootstrap_pw:description: Bootstrap password for the elastic superuser during initial cluster setup
 elasticsearch_bootstrap_pw: PleaseChangeMe
 # @var elasticsearch_elastic_password:description: >
@@ -108,6 +110,20 @@ elasticsearch_os_tuning: true
 elasticsearch_check_calculation: false
 # @var elasticsearch_clustername:description: Name of the Elasticsearch cluster
 elasticsearch_clustername: elasticsearch
+# @var elasticsearch_network_host:description: Address or list of addresses Elasticsearch binds to. Undefined uses [_local_, _site_]
+# elasticsearch_network_host: ["_local_", "_site_"]
+# @var elasticsearch_http_publish_host:description: HTTP address Elasticsearch advertises to clients and peer nodes on multi-homed hosts
+# elasticsearch_http_publish_host: 10.0.0.5
+# @var elasticsearch_http_publish_port:description: HTTP port Elasticsearch advertises to clients and peer nodes
+# elasticsearch_http_publish_port: 9200
+# @var elasticsearch_transport_port:description: Transport port Elasticsearch listens on
+# elasticsearch_transport_port: 9300
+# @var elasticsearch_nodename:description: Elasticsearch node name. Undefined defaults to the managed host's hostname
+# elasticsearch_nodename: node-1
+# @var elasticsearch_node_types:description: Explicit Elasticsearch node.roles list. Undefined lets Elasticsearch use its default roles
+# elasticsearch_node_types: ["master", "data", "ingest"]
+# @var elasticsearch_seed_hosts:description: Explicit discovery.seed_hosts list. Undefined derives seed hosts from the Elasticsearch inventory group
+# elasticsearch_seed_hosts: ["10.0.0.1", "10.0.0.2"]
 # @var elasticsearch_conf_dir:description: Path to the Elasticsearch configuration directory
 elasticsearch_conf_dir: "/etc/elasticsearch/"
 # @var elasticsearch_group:description: Linux group that owns Elasticsearch files
@@ -191,6 +207,8 @@ elasticsearch_cluster_settings: {}
 
 # @var elasticsearch_initialized_file:description: Marker file path that indicates the cluster has been initialized
 elasticsearch_initialized_file: "{{ elasticstack_initial_passwords | dirname }}/cluster_initialized"
+# @var elasticsearch_cluster_set_up:description: Tell the role that this node is joining an already bootstrapped cluster and skip bootstrap-only checks
+# elasticsearch_cluster_set_up: true
 # @var elasticsearch_tls_key_passphrase:description: Passphrase for the Elasticsearch node TLS private key
 elasticsearch_tls_key_passphrase: PleaseChangeMeIndividually
 # @var elasticsearch_cert_validity_period:description: Validity period in days for generated TLS certificates

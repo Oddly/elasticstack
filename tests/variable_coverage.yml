@@ -1,0 +1,298 @@
+---
+# Optional variables must be assigned by an executable contract or Molecule
+# scenario. Variables with runtime defaults are covered by the role's baseline
+# scenario; feature-specific non-default branches have their own scenarios.
+baselines:
+  beats:
+    - molecule/beats_default/converge.yml
+  elasticsearch:
+    - molecule/elasticsearch_default/converge.yml
+  elasticstack:
+    - molecule/elasticstack_default/converge.yml
+  kibana:
+    - molecule/kibana_default/converge.yml
+  logstash:
+    - molecule/logstash_default/converge.yml
+
+explicit:
+  beats:
+    beats_fields:
+      - tests/integration/collection_variable_contract.yml
+    beats_filebeat_output_file_path:
+      - tests/integration/collection_variable_contract.yml
+  elasticsearch:
+    elasticsearch_security_enrollment:
+      - tests/integration/collection_variable_contract.yml
+    elasticsearch_network_host:
+      - tests/integration/collection_variable_contract.yml
+    elasticsearch_http_publish_host:
+      - tests/integration/collection_variable_contract.yml
+    elasticsearch_http_publish_port:
+      - tests/integration/collection_variable_contract.yml
+    elasticsearch_transport_port:
+      - tests/integration/collection_variable_contract.yml
+    elasticsearch_nodename:
+      - tests/integration/collection_variable_contract.yml
+    elasticsearch_node_types:
+      - tests/integration/collection_variable_contract.yml
+    elasticsearch_seed_hosts:
+      - tests/integration/collection_variable_contract.yml
+    elasticsearch_cluster_set_up:
+      - tests/integration/collection_variable_contract.yml
+  elasticstack:
+    elasticstack_version:
+      - tests/integration/collection_variable_contract.yml
+    elasticstack_kibana_host:
+      - tests/integration/collection_variable_contract.yml
+    elasticstack_temperature:
+      - tests/integration/collection_variable_contract.yml
+  kibana:
+    kibana_elasticsearch_hosts:
+      - tests/integration/collection_variable_contract.yml
+    kibana_server_protocol:
+      - tests/integration/collection_variable_contract.yml
+    kibana_sniff_interval:
+      - tests/integration/collection_variable_contract.yml
+  logstash:
+    logstash_security:
+      - tests/integration/collection_variable_contract.yml
+    logstash_input_beats:
+      - tests/integration/collection_variable_contract.yml
+    logstash_input_beats_ssl:
+      - tests/integration/collection_variable_contract.yml
+    logstash_config_autoreload_interval:
+      - tests/integration/collection_variable_contract.yml
+    logstash_http_host:
+      - tests/integration/collection_variable_contract.yml
+    logstash_http_port:
+      - tests/integration/collection_variable_contract.yml
+    logstash_input_beats_client_auth:
+      - tests/integration/collection_variable_contract.yml
+    logstash_input_beats_timeout:
+      - tests/integration/collection_variable_contract.yml
+    logstash_beats_tls:
+      - tests/integration/collection_variable_contract.yml
+    logstash_beats_input:
+      - tests/integration/collection_variable_contract.yml
+    logstash_sniffing_delay:
+      - tests/integration/collection_variable_contract.yml
+    logstash_sniffing_path:
+      - tests/integration/collection_variable_contract.yml
+    logstash_output_elasticsearch:
+      - tests/integration/collection_variable_contract.yml
+    logstash_elasticsearch_output:
+      - tests/integration/collection_variable_contract.yml
+    logstash_tls_certificate_file:
+      - molecule/logstash_external_certs/converge.yml
+    logstash_tls_key_file:
+      - molecule/logstash_external_certs/converge.yml
+    logstash_tls_ca_file:
+      - molecule/logstash_external_certs/converge.yml
+    logstash_tls_remote_src:
+      - molecule/logstash_external_certs/converge.yml
+    logstash_dead_letter_queue_enable:
+      - tests/integration/collection_variable_contract.yml
+    logstash_dead_letter_queue_retain_age:
+      - tests/integration/collection_variable_contract.yml
+    logstash_log_format:
+      - tests/integration/collection_variable_contract.yml
+    logstash_global_ecs:
+      - tests/integration/collection_variable_contract.yml
+    logstash_monitoring_enabled:
+      - tests/integration/collection_variable_contract.yml
+    logstash_xpack_management_elasticsearch_username:
+      - tests/integration/collection_variable_contract.yml
+    logstash_xpack_management_elasticsearch_password:
+      - tests/integration/collection_variable_contract.yml
+    logstash_xpack_management_elasticsearch_hosts:
+      - tests/integration/collection_variable_contract.yml
+    logstash_xpack_management_pipeline_id:
+      - tests/integration/collection_variable_contract.yml
+
+# The same optional variables must also be exercised by a Molecule scenario
+# that installs and starts the affected service. `expected` values are checked
+# in that scenario's verify.yml (or an explicit assertions_file) so this ledger
+# cannot devolve into converge-only assignments that never get asserted.
+rollouts:
+  beats:
+    beats_fields:
+      scenario: beats_advanced
+      expected:
+        - "deployment: beats-advanced"
+    beats_filebeat_output_file_path:
+      scenario: beats_advanced
+      expected:
+        - "/var/lib/filebeat/test-output"
+  elasticsearch:
+    elasticsearch_security_enrollment:
+      scenario: elasticsearch_custom
+      expected:
+        - "xpack.security.enrollment.enabled: true"
+    elasticsearch_network_host:
+      scenario: elasticsearch_custom
+      expected:
+        - "network.host:"
+    elasticsearch_http_publish_host:
+      scenario: elasticsearch_custom
+      expected:
+        - "http.publish_host:"
+    elasticsearch_http_publish_port:
+      scenario: elasticsearch_custom
+      expected:
+        - "http.publish_port: 9200"
+    elasticsearch_transport_port:
+      scenario: elasticsearch_custom
+      expected:
+        - "transport.port:"
+    elasticsearch_nodename:
+      scenario: elasticsearch_custom
+      expected:
+        - "custom-es-node"
+    elasticsearch_node_types:
+      scenario: elasticsearch_custom
+      expected:
+        - "node.roles:"
+    elasticsearch_seed_hosts:
+      scenario: elasticsearch_custom
+      expected:
+        - "discovery.seed_hosts:"
+    elasticsearch_cluster_set_up:
+      scenario: elasticsearch_custom
+      expected:
+        - "initial_passwords.stat.exists"
+  elasticstack:
+    elasticstack_version:
+      scenario: elasticsearch_upgrade_8to9_single
+      assertions_file: molecule/elasticsearch_upgrade_8to9_single/converge.yml
+      expected:
+        - "es_info.json.version.number is version('8.10.0'"
+    elasticstack_kibana_host:
+      scenario: kibana_extras
+      expected:
+        - "kibana-extras.example.test"
+    elasticstack_temperature:
+      scenario: elasticsearch_custom
+      expected:
+        - "node.attr.temp:"
+  kibana:
+    kibana_elasticsearch_hosts:
+      scenario: kibana_extras
+      expected:
+        - "groups['elasticsearch'][0]"
+    kibana_server_protocol:
+      scenario: kibana_extras
+      expected:
+        - "server.protocol:"
+    kibana_sniff_interval:
+      scenario: kibana_extras
+      expected:
+        - "elasticsearch.sniffInterval: 30000"
+  logstash:
+    logstash_security:
+      scenario: logstash_elasticsearch
+      expected:
+        - "ssl_enabled' in"
+    logstash_input_beats:
+      scenario: logstash_external_certs
+      expected:
+        - "beats {"
+    logstash_input_beats_ssl:
+      scenario: logstash_external_certs
+      expected:
+        - "ssl_enabled"
+    logstash_config_autoreload_interval:
+      scenario: logstash_advanced
+      expected:
+        - "config.reload.interval: 7s"
+    logstash_http_host:
+      scenario: logstash_centralized_pipelines
+      expected:
+        - "api.http.host: 127.0.0.1"
+    logstash_http_port:
+      scenario: logstash_centralized_pipelines
+      expected:
+        - "api.http.port: 9600"
+    logstash_input_beats_client_auth:
+      scenario: logstash_external_certs
+      expected:
+        - "ssl_client_authentication => optional"
+    logstash_input_beats_timeout:
+      scenario: logstash_external_certs
+      expected:
+        - "client_inactivity_timeout =>"
+    logstash_beats_tls:
+      scenario: logstash_advanced
+      expected:
+        - "ssl_enabled' not in"
+    logstash_beats_input:
+      scenario: logstash_advanced
+      expected:
+        - "beats {' in"
+    logstash_sniffing_delay:
+      scenario: logstash_elasticsearch
+      expected:
+        - "sniffing_delay => 8"
+    logstash_sniffing_path:
+      scenario: logstash_elasticsearch
+      expected:
+        - "sniffing_path =>"
+    logstash_output_elasticsearch:
+      scenario: logstash_elasticsearch
+      expected:
+        - "elasticsearch {"
+    logstash_elasticsearch_output:
+      scenario: logstash_advanced
+      expected:
+        - "elasticsearch {' not in"
+    logstash_tls_certificate_file:
+      scenario: logstash_external_certs
+      expected:
+        - "server_cert.stat.exists"
+    logstash_tls_key_file:
+      scenario: logstash_external_certs
+      expected:
+        - "server_key.stat.exists"
+    logstash_tls_ca_file:
+      scenario: logstash_external_certs
+      expected:
+        - "ca_cert.stat.exists"
+    logstash_tls_remote_src:
+      scenario: logstash_external_certs
+      expected:
+        - "ca_cert.stat.exists"
+    logstash_dead_letter_queue_enable:
+      scenario: logstash_centralized_pipelines
+      expected:
+        - "dead_letter_queue.enable: true"
+    logstash_dead_letter_queue_retain_age:
+      scenario: logstash_centralized_pipelines
+      expected:
+        - "dead_letter_queue.retain.age: 7d"
+    logstash_log_format:
+      scenario: logstash_centralized_pipelines
+      expected:
+        - "log.format: json"
+    logstash_global_ecs:
+      scenario: logstash_centralized_pipelines
+      expected:
+        - "pipeline.ecs_compatibility: v8"
+    logstash_monitoring_enabled:
+      scenario: logstash_centralized_pipelines
+      expected:
+        - "monitoring.enabled: false"
+    logstash_xpack_management_elasticsearch_username:
+      scenario: logstash_centralized_pipelines
+      expected:
+        - "logstash_internal"
+    logstash_xpack_management_elasticsearch_password:
+      scenario: logstash_centralized_pipelines
+      expected:
+        - "testpassword"
+    logstash_xpack_management_elasticsearch_hosts:
+      scenario: logstash_centralized_pipelines
+      expected:
+        - "es-001.example.com:9200"
+    logstash_xpack_management_pipeline_id:
+      scenario: logstash_centralized_pipelines
+      expected:
+        - "agent-input-pipeline"

@@ -47,6 +47,8 @@ elasticstack_cert_pass: ""
 elasticstack_ca_validity_period: 1095
 # === General Settings ===
 
+# @var elasticstack_version:description: Optional exact Elastic Stack package version, or latest to follow the newest version in the selected major release
+# elasticstack_version: "9.2.0"
 # @var elasticstack_enable_repos:description: Let the repos role manage Elastic APT/YUM repositories
 elasticstack_enable_repos: true
 # @var elasticstack_full_stack:description: Running a full Elastic Stack deployment. Enables auto-discovery of hosts from inventory groups and cross-role TLS setup
@@ -57,6 +59,8 @@ elasticstack_initial_passwords: /usr/share/elasticsearch/initial_passwords
 elasticstack_override_beats_tls: false
 # @var elasticstack_release:description: Major version of the Elastic Stack to install (8 or 9)
 elasticstack_release: 8
+# @var elasticstack_kibana_host:description: Public hostname used when constructing Kibana's server.publicBaseUrl
+# elasticstack_kibana_host: kibana.example.com
 # @var elasticstack_repo_base_url:description: Base URL for Elastic package repositories. Override to use a local mirror or cache
 # @var elasticstack_repo_base_url:example: >
 # elasticstack_repo_base_url: "https://my-mirror.example.com/elastic"
@@ -73,6 +77,9 @@ elasticstack_security: true
 
 # @var elasticstack_no_log:description: Suppress sensitive output in Ansible logs. Set to false for debugging
 elasticstack_no_log: true
+
+# @var elasticstack_temperature:description: Optional Elasticsearch node.attr.temp value used for data tier routing
+# elasticstack_temperature: warm
 
 # @var elasticstack_ca_will_expire_soon:description: >
 #   Force renewal of the CA certificate on the next run.

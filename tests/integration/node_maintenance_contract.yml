@@ -40,7 +40,7 @@
       ansible.builtin.shell: |
         set -o pipefail
         nohup python3 {{ playbook_dir }}/../fakes/fake_es_rolling_api.py \
-          --ports 19210 \
+          --ports 19211 \
           --nodes esA \
           --persistent-settings '{"indices.recovery.max_bytes_per_sec": "50mb"}' \
           --log {{ _fake_es_log }} >/tmp/elasticstack-node-maintenance-api.out 2>&1 &
@@ -58,7 +58,7 @@
 
     - name: Wait for fake API
       ansible.builtin.uri:
-        url: http://127.0.0.1:19210/_cluster/health
+        url: http://127.0.0.1:19211/_cluster/health
         method: GET
       register: _fake_api_health
       until: _fake_api_health.status | default(0) == 200
@@ -69,7 +69,7 @@
   hosts: localhost
   gather_facts: false
   vars:
-    elasticstack_elasticsearch_http_port: 19210
+    elasticstack_elasticsearch_http_port: 19211
     elasticsearch_api_host: 127.0.0.1
     elasticsearch_http_protocol: http
     elasticsearch_validate_api_certs: false
@@ -165,7 +165,7 @@
   hosts: localhost
   gather_facts: false
   vars:
-    elasticstack_elasticsearch_http_port: 19210
+    elasticstack_elasticsearch_http_port: 19211
     elasticsearch_api_host: 127.0.0.1
     elasticsearch_http_protocol: http
     elasticsearch_validate_api_certs: false

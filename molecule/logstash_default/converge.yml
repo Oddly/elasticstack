@@ -6,6 +6,7 @@
     elasticstack_full_stack: false
     elasticstack_no_log: false
     logstash_output_elasticsearch: false
+    logstash_security: false
     logstash_create_user: false
     logstash_create_role: false
     logstash_input_beats_ssl: false

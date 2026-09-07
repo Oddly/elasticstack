@@ -57,19 +57,8 @@
     - configuration
     - logstash_configuration
 
-- name: Set up security flag
-  ansible.builtin.set_fact:
-    _logstash_security: "{{ logstash_security | default(elasticstack_security | default(false)) }}"
-  tags:
-    - certificates
-    - renew_ca
-    - renew_logstash_cert
-    - preflight
-
-- name: Validate Logstash Elasticsearch password
-  ansible.builtin.include_tasks: logstash-password-validation.yml
-  tags:
-    - preflight
+- name: Normalize backwards-compatible Logstash variables
+  ansible.builtin.import_tasks: logstash-compatibility.yml
 
 - name: Activate TLS for Beats input in full stack mode
   ansible.builtin.set_fact:
@@ -80,19 +69,10 @@
     - elasticstack_full_stack | default(false) | bool
     - not elasticstack_override_beats_tls | default(false) | bool
 
-- name: Handle backwards compatibility for logstash_beats_tls
-  ansible.builtin.set_fact:
-    logstash_input_beats_ssl: "{{ logstash_beats_tls }}"
-  when:
-    - logstash_beats_tls is defined
-    - logstash_input_beats_ssl is undefined
-
-- name: Handle backwards compatibility for logstash_beats_input
-  ansible.builtin.set_fact:
-    logstash_input_beats: "{{ logstash_beats_input }}"
-  when:
-    - logstash_beats_input is defined
-    - logstash_input_beats is undefined
+- name: Validate Logstash Elasticsearch password
+  ansible.builtin.include_tasks: logstash-password-validation.yml
+  tags:
+    - preflight
 
 - name: Construct exact name of Logstash package (RedHat)
   ansible.builtin.set_fact:

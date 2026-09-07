@@ -56,6 +56,9 @@ argument_specs:
         description: Enable Elasticsearch security features (TLS, authentication, RBAC)
         type: bool
         default: true
+      elasticsearch_security_enrollment:
+        description: Enable the Elasticsearch security enrollment API when security is enabled
+        type: bool
       elasticsearch_bootstrap_pw:
         description: Bootstrap password for the elastic superuser during initial cluster setup
         type: str
@@ -67,21 +70,25 @@ argument_specs:
         type: str
         default: ''
       elasticsearch_security_roles:
-        description: Declarative Elasticsearch roles to create or update through the security API. Each item must contain a name and may contain any fields accepted by the put role API.
+        description: Declarative Elasticsearch roles to create or update through the security API. Each item must contain
+          a name and may contain any fields accepted by the put role API.
         type: list
         default: []
       elasticsearch_users:
-        description: Declarative custom Elasticsearch users. Passwords are used on creation or when password_update is true. Store password values in Ansible Vault or a secrets manager.
+        description: Declarative custom Elasticsearch users. Passwords are used on creation or when password_update is true.
+          Store password values in Ansible Vault or a secrets manager.
         type: list
         default: []
         no_log: true
       elasticsearch_builtin_passwords:
-        description: Passwords to explicitly set for built-in Elasticsearch users. Use elasticsearch_elastic_password for the elastic superuser. Store values in Ansible Vault or a secrets manager.
+        description: Passwords to explicitly set for built-in Elasticsearch users. Use elasticsearch_elastic_password for
+          the elastic superuser. Store values in Ansible Vault or a secrets manager.
         type: dict
         default: {}
         no_log: true
       elasticsearch_role_mappings:
-        description: Declarative Elasticsearch role mappings for LDAP, Active Directory, and other realms. Each item must contain a name and rules.
+        description: Declarative Elasticsearch role mappings for LDAP, Active Directory, and other realms. Each item must
+          contain a name and rules.
         type: list
         default: []
       elasticsearch_http_security:
@@ -129,6 +136,27 @@ argument_specs:
         description: Name of the Elasticsearch cluster
         type: str
         default: elasticsearch
+      elasticsearch_network_host:
+        description: Address or list of addresses Elasticsearch binds to. Undefined uses [_local_, _site_]
+        type: list
+      elasticsearch_http_publish_host:
+        description: HTTP address Elasticsearch advertises to clients and peer nodes on multi-homed hosts
+        type: str
+      elasticsearch_http_publish_port:
+        description: HTTP port Elasticsearch advertises to clients and peer nodes
+        type: int
+      elasticsearch_transport_port:
+        description: Transport port Elasticsearch listens on
+        type: int
+      elasticsearch_nodename:
+        description: Elasticsearch node name. Undefined defaults to the managed host's hostname
+        type: str
+      elasticsearch_node_types:
+        description: Explicit Elasticsearch node.roles list. Undefined lets Elasticsearch use its default roles
+        type: list
+      elasticsearch_seed_hosts:
+        description: Explicit discovery.seed_hosts list. Undefined derives seed hosts from the Elasticsearch inventory group
+        type: list
       elasticsearch_conf_dir:
         description: Path to the Elasticsearch configuration directory
         type: str
@@ -171,12 +199,13 @@ argument_specs:
         type: int
         default: 3
       elasticsearch_upgrade_wait_status:
-        description: Minimum cluster health status before each node is taken down during a rolling upgrade. Use yellow or green.
+        description: Minimum cluster health status before each node is taken down during a rolling upgrade. Use yellow or
+          green.
         type: str
         default: green
         choices:
-          - green
-          - yellow
+        - green
+        - yellow
       elasticsearch_upgrade_health_retries:
         description: Number of cluster health polling attempts before taking a node down during a rolling upgrade
         type: int
@@ -185,6 +214,36 @@ argument_specs:
         description: Delay in seconds between cluster health polling attempts during a rolling upgrade
         type: int
         default: 30
+      elasticsearch_maintenance_wait_status:
+        description: Minimum cluster health status the node maintenance entry points wait for. Use yellow or green.
+        type: str
+        default: green
+        choices:
+        - green
+        - yellow
+      elasticsearch_maintenance_health_retries:
+        description: Number of cluster health polling attempts in the node maintenance entry points.
+        type: int
+        default: 60
+      elasticsearch_maintenance_health_delay:
+        description: Delay in seconds between cluster health polling attempts in the node maintenance entry points.
+        type: int
+        default: 30
+      elasticsearch_maintenance_wait_health:
+        description: Wait for cluster health at the end of node maintenance. Disable for a defensive state reset at the start
+          of a run.
+        type: bool
+        default: true
+      elasticsearch_maintenance_require_green:
+        description: Fail node_maintenance_end unless the cluster returns to green. Default accepts yellow.
+        type: bool
+        default: false
+      elasticsearch_drain_cluster_settings:
+        description: Persistent cluster settings applied while a node is drained for maintenance (typically a recovery throughput
+          boost). node_maintenance_end restores every key listed here to its value in elasticsearch_cluster_settings, or removes
+          it when no baseline is declared there.
+        type: dict
+        default: {}
       elasticsearch_jvm_custom_parameters:
         description: Additional JVM parameters appended to jvm.options.d. Use for GC tuning, debug flags, etc
         type: str
@@ -222,6 +281,9 @@ argument_specs:
         description: Marker file path that indicates the cluster has been initialized
         type: str
         default: '{{ elasticstack_initial_passwords | dirname }}/cluster_initialized'
+      elasticsearch_cluster_set_up:
+        description: Tell the role that this node is joining an already bootstrapped cluster and skip bootstrap-only checks
+        type: bool
       elasticsearch_tls_key_passphrase:
         description: Passphrase for the Elasticsearch node TLS private key
         type: str
@@ -358,38 +420,10 @@ argument_specs:
           set to true from a playbook to force renewal regardless of buffer.
         type: bool
         default: false
-      elasticsearch_maintenance_wait_status:
-        description: Minimum cluster health status the node maintenance entry points wait for. Use yellow or green.
-        type: str
-        default: green
-        choices: [green, yellow]
-      elasticsearch_maintenance_health_retries:
-        description: Number of cluster health polling attempts in the node maintenance entry points.
-        type: int
-        default: 60
-      elasticsearch_maintenance_health_delay:
-        description: Delay in seconds between cluster health polling attempts in the node maintenance entry points.
-        type: int
-        default: 30
-      elasticsearch_maintenance_wait_health:
-        description: Wait for cluster health at the end of node maintenance. Disable for a defensive state reset at the start of a run.
-        type: bool
-        default: true
-      elasticsearch_maintenance_require_green:
-        description: Fail node_maintenance_end unless the cluster returns to green. Default accepts yellow.
-        type: bool
-        default: false
-      elasticsearch_drain_cluster_settings:
-        description: Persistent cluster settings applied while a node is drained for maintenance (typically a recovery throughput
-          boost). node_maintenance_end restores every key listed here to its value in elasticsearch_cluster_settings, or removes
-          it when no baseline is declared there.
-        type: dict
-        default: {}
   node_maintenance_start:
     short_description: Prepare the cluster for taking this node down
-    description: Health gate, voting exclusion, primaries-only allocation, ML upgrade mode, optional recovery boost and
-      flush. Pair with node_maintenance_end in an always block so cluster state is restored even when the maintenance
-      itself fails.
+    description: Health gate, voting exclusion, primaries-only allocation, ML upgrade mode, optional recovery boost and flush.
+      Pair with node_maintenance_end in an always block so cluster state is restored even when the maintenance itself fails.
     options:
       elasticsearch_maintenance_password:
         description: Password for the elastic user, used for all API calls in the entry point.
@@ -403,7 +437,9 @@ argument_specs:
         description: Minimum cluster health status to wait for before draining. Use yellow or green.
         type: str
         default: green
-        choices: [green, yellow]
+        choices:
+        - green
+        - yellow
       elasticsearch_maintenance_health_retries:
         description: Number of cluster health polling attempts.
         type: int
@@ -418,9 +454,9 @@ argument_specs:
         default: {}
   node_maintenance_end:
     short_description: Restore cluster state after node maintenance
-    description: Re-enables allocation, disables ML upgrade mode, clears voting exclusions, restores boosted recovery
-      settings to their baseline from elasticsearch_cluster_settings, optionally waits for the node to rejoin, and gates
-      on cluster health. All restore steps are best-effort so the entry point is safe to run defensively.
+    description: Re-enables allocation, disables ML upgrade mode, clears voting exclusions, restores boosted recovery settings
+      to their baseline from elasticsearch_cluster_settings, optionally waits for the node to rejoin, and gates on cluster
+      health. All restore steps are best-effort so the entry point is safe to run defensively.
     options:
       elasticsearch_maintenance_password:
         description: Password for the elastic user, used for all API calls in the entry point.
@@ -437,7 +473,9 @@ argument_specs:
         description: Minimum cluster health status to wait for after maintenance. Use yellow or green.
         type: str
         default: green
-        choices: [green, yellow]
+        choices:
+        - green
+        - yellow
       elasticsearch_maintenance_health_retries:
         description: Number of cluster health polling attempts.
         type: int

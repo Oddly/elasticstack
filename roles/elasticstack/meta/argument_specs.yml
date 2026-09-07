@@ -59,6 +59,10 @@ argument_specs:
         description: Validity period in days for the CA certificate
         type: int
         default: 1095
+      elasticstack_version:
+        description: Optional exact Elastic Stack package version, or latest to follow the newest version in the selected
+          major release
+        type: str
       elasticstack_enable_repos:
         description: Let the repos role manage Elastic APT/YUM repositories
         type: bool
@@ -80,6 +84,9 @@ argument_specs:
         description: Major version of the Elastic Stack to install (8 or 9)
         type: int
         default: 8
+      elasticstack_kibana_host:
+        description: Public hostname used when constructing Kibana's server.publicBaseUrl
+        type: str
       elasticstack_repo_base_url:
         description: Base URL for Elastic package repositories. Override to use a local mirror or cache
         type: str
@@ -100,6 +107,9 @@ argument_specs:
         description: Suppress sensitive output in Ansible logs. Set to false for debugging
         type: bool
         default: true
+      elasticstack_temperature:
+        description: Optional Elasticsearch node.attr.temp value used for data tier routing
+        type: str
       elasticstack_ca_will_expire_soon:
         description: Force renewal of the CA certificate on the next run. Normally flipped to true automatically by the cert_check_expiry
           task when the certificate is within `elasticstack_ca_expiration_buffer` days of expiry; set to true from a playbook

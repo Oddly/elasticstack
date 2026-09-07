@@ -7,6 +7,7 @@ on:
     paths:
       - 'roles/**'
       - 'tests/integration/**'
+      - 'tests/variable_coverage.yml'
       - 'tests/fakes/**'
       - '.github/workflows/test_contracts.yml'
   push:

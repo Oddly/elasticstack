@@ -17,6 +17,8 @@ logstash_heap: ""
 
 # === Service Management ===
 
+# @var logstash_security:description: Override the inherited stack security setting for Logstash. Undefined follows elasticstack_security
+# logstash_security: true
 # @var logstash_enable:description: Whether to enable and start the Logstash service
 logstash_enable: true
 # @var logstash_config_backup:description: Create a backup of logstash.yml before overwriting
@@ -62,15 +64,19 @@ logstash_queue_max_bytes: 1gb
 # === Input Configuration ===
 
 # @var logstash_input_beats:description: Enable the Beats input plugin (receives from Filebeat, Metricbeat, etc.)
-logstash_input_beats: true
+# logstash_input_beats: true
 # @var logstash_input_beats_port:description: Port for the Beats input listener
 logstash_input_beats_port: 5044
 # @var logstash_input_beats_ssl:description: Enable TLS on the Beats input. Inherits from logstash_beats_tls for backwards compatibility
-logstash_input_beats_ssl: "{{ logstash_beats_tls | default(omit) }}"
+# logstash_input_beats_ssl: false
 # @var logstash_input_beats_client_auth:description: Client TLS authentication mode for the Beats input (required | optional | none)
 # logstash_input_beats_client_auth: required
 # @var logstash_input_beats_timeout:description: Idle timeout for Beats input connections. Connections idle longer than this are closed
 # logstash_input_beats_timeout: 60s
+# @var logstash_beats_tls:description: Deprecated alias for logstash_input_beats_ssl
+# logstash_beats_tls: true
+# @var logstash_beats_input:description: Deprecated alias for logstash_input_beats
+# logstash_beats_input: true
 
 # @var logstash_input_elastic_agent:description: Enable the Elastic Agent input plugin
 logstash_input_elastic_agent: false
@@ -110,7 +116,7 @@ logstash_filter_files: []
 # === Output Configuration ===
 
 # @var logstash_output_elasticsearch:description: Enable the Elasticsearch output plugin
-logstash_output_elasticsearch: "{{ logstash_elasticsearch_output | default(true) }}"
+# logstash_output_elasticsearch: true
 # @var logstash_elasticsearch_hosts:description: List of Elasticsearch hosts. Leave empty to auto-discover from inventory
 logstash_elasticsearch_hosts: []
 # @var logstash_elasticsearch_index:description: Index name pattern. Leave empty for the default (logstash-%{+YYYY.MM.dd})
@@ -123,6 +129,8 @@ logstash_sniffing: false
 # logstash_sniffing_delay: 5
 # @var logstash_sniffing_path:description: ES API path used for node sniffing
 # logstash_sniffing_path: "/_nodes/http"
+# @var logstash_elasticsearch_output:description: Deprecated alias for logstash_output_elasticsearch
+# logstash_elasticsearch_output: true
 
 # @var logstash_extra_outputs:description: Raw Logstash output config appended to the output section of the pipeline
 # @var logstash_extra_outputs:example: >
@@ -199,9 +207,13 @@ logstash_user_fullname: "Internal Logstash User"
 logstash_cert_source: elasticsearch_ca
 
 # For external certificates (when logstash_cert_source: external)
+# @var logstash_tls_certificate_file:description: Path to the externally managed Logstash TLS certificate
 # logstash_tls_certificate_file: "/path/to/server.crt"
+# @var logstash_tls_key_file:description: Path to the externally managed Logstash TLS private key
 # logstash_tls_key_file: "/path/to/server.key"
+# @var logstash_tls_ca_file:description: Optional path to the externally managed CA certificate
 # logstash_tls_ca_file: "/path/to/ca.crt"
+# @var logstash_tls_remote_src:description: Read external Logstash TLS files from the managed host instead of the Ansible controller
 # logstash_tls_remote_src: false  # Set true if cert files are on remote host
 
 # @var logstash_tls_copy_certs:description: >
@@ -238,6 +250,8 @@ logstash_tls_key_passphrase: LogstashChangeMe
 
 # @var logstash_log_format:description: Log output format ('plain' or 'json')
 # logstash_log_format: plain
+# @var logstash_global_ecs:description: Global pipeline ECS compatibility mode ('disabled', 'v1', or 'v8')
+# logstash_global_ecs: disabled
 
 # === Monitoring ===
 
