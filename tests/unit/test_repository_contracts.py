@@ -134,6 +134,22 @@ class TestRepositoryContracts(unittest.TestCase):
                     f"{path} leaves {collection['name']} unresolved",
                 )
 
+    def test_ci_uses_python_312_for_ansible_220_dependencies(self):
+        workflows = (
+            ROOT / ".github" / "workflows" / "test_linting.yml",
+            ROOT / ".github" / "workflows" / "molecule.yml",
+            ROOT / ".github" / "workflows" / "test_full_stack.yml",
+            ROOT / ".github" / "workflows" / "test_elasticsearch_upgrade.yml",
+            ROOT / ".github" / "workflows" / "test_plugins.yml",
+        )
+        for path in workflows:
+            source = path.read_text()
+            self.assertIn(
+                "command -v python3.12",
+                source,
+                f"{path} must select Python 3.12 for Ansible 2.20",
+            )
+
     def test_supported_ansible_metadata_is_consistent(self):
         runtime = yaml.safe_load((ROOT / "meta" / "runtime.yml").read_text())
         self.assertEqual(runtime["requires_ansible"], ">=2.20.0")

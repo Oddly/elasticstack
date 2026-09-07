@@ -123,7 +123,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install dependencies
-        run: uv pip install --system --break-system-packages --python /usr/bin/python3 -r requirements-test.txt
+        run: uv pip install --system --break-system-packages --python "$(command -v python3.12)" -r requirements-test.txt
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 

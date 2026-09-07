@@ -71,7 +71,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv venv "$RUNNER_TEMP/venv" --python /usr/bin/python3
+          uv venv "$RUNNER_TEMP/venv" --python "$(command -v python3.12)"
           source "$RUNNER_TEMP/venv/bin/activate"
           uv pip install -r requirements-test.txt
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
