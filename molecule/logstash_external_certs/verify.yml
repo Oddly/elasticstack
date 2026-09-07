@@ -100,7 +100,7 @@
           - "'beats {' in (input_content.content | b64decode)"
           - "'port => 5044' in (input_content.content | b64decode)"
           - "'ssl_enabled' in (input_content.content | b64decode) or 'ssl => true' in (input_content.content | b64decode)"
-          - "'client_inactivity_timeout => \"45s\"' in (input_content.content | b64decode)"
+          - "'client_inactivity_timeout => 45' in (input_content.content | b64decode)"
           - >-
             (ansible_facts.distribution_major_version | int < 9) or
             ('ssl_client_authentication => optional' in (input_content.content | b64decode))

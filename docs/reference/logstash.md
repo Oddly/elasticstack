@@ -198,7 +198,7 @@ logstash_extra_inputs: ""
     Renders as `ssl_verify_mode => force_peer` (hardcoded; the variable has no effect in 8.x).
 
 `logstash_input_beats_timeout`
-:   Idle timeout for Beats connections. Connections with no data for this duration are closed. Accepts a duration string like `60s` or `300s`. When undefined, the Beats input uses its built-in default. Set this lower if you have many idle Beat agents holding open connections.
+:   Idle timeout for Beats connections. Connections with no data for this duration are closed. Accepts a duration string ending in `s`, such as `60s` or `300s`; the role renders the value as the numeric seconds required by Logstash. When undefined, the Beats input uses its built-in default. Set this lower if you have many idle Beat agents holding open connections.
 
 <!-- markdownlint-enable MD046 -->
 

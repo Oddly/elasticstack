@@ -219,7 +219,7 @@ rollouts:
     logstash_input_beats_timeout:
       scenario: logstash_external_certs
       expected:
-        - "client_inactivity_timeout =>"
+        - "client_inactivity_timeout => 45"
     logstash_beats_tls:
       scenario: logstash_advanced
       expected:
