@@ -149,6 +149,26 @@ class TestRepositoryContracts(unittest.TestCase):
                 source,
                 f"{path} must select Python 3.12 for Ansible 2.20",
             )
+            self.assertIn(
+                'uv venv "$RUNNER_TEMP/venv"',
+                source,
+                f"{path} must install into an isolated Python 3.12 environment",
+            )
+            self.assertIn(
+                'echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"',
+                source,
+                f"{path} must put the Python 3.12 executables first on PATH",
+            )
+
+        for path in (
+            ROOT / ".github" / "workflows" / "test_full_stack.yml",
+            ROOT / ".github" / "workflows" / "test_elasticsearch_upgrade.yml",
+        ):
+            self.assertIn(
+                "ansible-playbook --version",
+                path.read_text(),
+                f"{path} must verify the Ansible executable used by rollout jobs",
+            )
 
     def test_supported_ansible_metadata_is_consistent(self):
         runtime = yaml.safe_load((ROOT / "meta" / "runtime.yml").read_text())

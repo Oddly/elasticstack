@@ -63,13 +63,10 @@ jobs:
     runs-on: self-hosted
     needs: [changes, lint_full]
     if: needs.changes.outputs.should_test == 'true' || github.event_name != 'pull_request'
-    # 180 min: elasticstack_default is the heaviest scenario and observed
-    # runs range 70-105 min in isolation, but the extra queue wait added
-    # by the memory-capacity gate on a busy runner can push a single job
-    # past the previous 120-min cap.  The memory-gate retry cap in
-    # shared/create.yml is now 15 min so this ceiling is only reached
-    # when the scenario genuinely runs long, not when the queue starves it.
-    timeout-minutes: 180
+    # 240 min: elasticstack_default is the heaviest scenario and observed
+    # runs range 70-105 min in isolation. The extra queue wait added by the
+    # memory-capacity gate on a busy runner needs its own budget.
+    timeout-minutes: 240
 
     env:
       COLLECTION_NAMESPACE: oddly
@@ -92,14 +89,10 @@ jobs:
     strategy:
       fail-fast: false
       # Each scenario/distro/release combo needs 15-25 GB of container RAM
-      # on the shared incus-ci host. The admission gate (FIFO with bounded
-      # overtakes, fail-fast) now guarantees heavy scenarios can't be
-      # starved by smaller jobs, so the cap is back to the throughput
-      # target it was originally sized for. The 3-slot value was a
-      # workaround for gate starvation that no longer exists; if the
-      # nightly storm shows starved jobs or OOMs, revert this commit
-      # first and investigate the gate second.
-      max-parallel: 6
+      # on the shared incus-ci host. Keep this matrix bounded while the
+      # role-specific matrices run alongside it; the admission gate still
+      # accounts for the exact memory requested by every scenario.
+      max-parallel: 3
       matrix:
         # Standardise on rockylinux10 (not 9) for PR runs to match the rest
         # of the workflows. Rocky 10 exercises the EL≥9 branch in
@@ -123,9 +116,18 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install dependencies
-        run: uv pip install --system --break-system-packages --python "$(command -v python3.12)" -r requirements-test.txt
+        run: |
+          uv venv "$RUNNER_TEMP/venv" --python "$(command -v python3.12)"
+          source "$RUNNER_TEMP/venv/bin/activate"
+          uv pip install -r requirements-test.txt
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+
+      - name: Verify Ansible executable
+        run: |
+          command -v ansible-playbook
+          ansible-playbook --version | grep -Eq 'core 2\.20\.'
 
       - name: Set up collections path
         run: |
@@ -160,17 +162,20 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -t ed25519 ${{ secrets.INCUS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
+      - name: Compute gate deadline
+        id: gate
+        run: echo "deadline=$((120 * 60))" >> "$GITHUB_OUTPUT"
+
       - name: Acquire memory slot
         # Single-authority admission gate: MemTotal − reserve − committed
         # limits.memory − pending reservations, FIFO with bounded
-        # overtakes. Fails after its 45-min deadline instead of barging
-        # in — a starved job is an explicit retryable failure, not an
-        # OOM risk. create.yml converts the reservation into committed
-        # capacity right after the containers launch.
+        # overtakes. The 120-minute deadline leaves a 120-minute rollout
+        # window inside this job's 240-minute timeout.
         uses: Oddly/incus-memory-gate@a4be4db5ffc59c8ee77c8fd7ff589612eb16be61  # v1.0.2
         with:
           mode: acquire
           molecule-scenario: ${{ matrix.scenario }}
+          deadline-seconds: ${{ steps.gate.outputs.deadline }}
           incus-host: ${{ secrets.INCUS_HOST }}
           ssh-key: ${{ runner.temp }}/molecule_id_ed25519
 
