@@ -181,6 +181,26 @@ class TestRepositoryContracts(unittest.TestCase):
                 f"{path} must put the Python 3.12 executables first on PATH",
             )
 
+    def test_molecule_prepare_files_use_shared_name_resolution(self):
+        common = (ROOT / "molecule" / "shared" / "prepare_common.yml").read_text()
+        self.assertIn("Populate /etc/hosts with molecule instances", common)
+        self.assertIn("hostvars[item]['ansible_host']", common)
+
+        prepare_files = sorted((ROOT / "molecule").glob("*/prepare.yml"))
+        self.assertTrue(prepare_files)
+        for path in prepare_files:
+            source = path.read_text()
+            self.assertIn(
+                "include_tasks: ../shared/prepare_common.yml",
+                source,
+                f"{path} must include the shared prepare tasks",
+            )
+            self.assertNotIn(
+                "Populate /etc/hosts with molecule instances",
+                source,
+                f"{path} must use shared name resolution",
+            )
+
         for path in (
             ROOT / ".github" / "workflows" / "test_full_stack.yml",
             ROOT / ".github" / "workflows" / "test_elasticsearch_upgrade.yml",

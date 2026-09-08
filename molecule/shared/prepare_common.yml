@@ -4,6 +4,17 @@
 # When distro_cache_url is set (from DISTRO_CACHE_URL env), overrides repo config
 # to use the local cache. When unset, keeps the pre-baked image repos as-is.
 
+# Molecule's delegated Incus driver writes each instance's address to
+# instance_config.yml. Make the inventory names resolvable inside every
+# multi-host scenario before service roles start talking to one another.
+- name: Populate /etc/hosts with molecule instances
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: ".*{{ item }}$"
+    line: "{{ hostvars[item]['ansible_host'] }} {{ item }}"
+  loop: "{{ groups['all'] }}"
+  when: groups['all'] | length > 1
+
 # --- Repo cache configuration ---
 
 - name: Point Rocky repos at local cache
