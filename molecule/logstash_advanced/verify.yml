@@ -37,12 +37,13 @@
         src: /etc/logstash/conf.d/main/10-input.conf
       register: input_content
 
-    - name: Verify beats and http inputs are configured
+    - name: Verify logstash_beats_input and logstash_beats_tls aliases are honored
       ansible.builtin.assert:
         that:
           - "'beats {' in (input_content.content | b64decode)"
           - "'http {' in (input_content.content | b64decode)"
           - "'port => 8080' in (input_content.content | b64decode)"
+          - "'ssl_enabled' not in (input_content.content | b64decode)"
         fail_msg: "Expected beats and http inputs not found"
 
     # --- Filter file verification ---
@@ -103,9 +104,10 @@
         src: /etc/logstash/conf.d/main/90-output.conf
       register: output_content
 
-    - name: Verify file output is configured
+    - name: Verify logstash_elasticsearch_output alias disables the Elasticsearch output
       ansible.builtin.assert:
         that:
+          - "'elasticsearch {' not in (output_content.content | b64decode)"
           - "'file {' in (output_content.content | b64decode)"
           - "'advanced-output.log' in (output_content.content | b64decode)"
         fail_msg: "File output not properly configured"
@@ -121,6 +123,7 @@
       ansible.builtin.assert:
         that:
           - "'config.reload.automatic: true' in (logstash_yml.content | b64decode)"
+          - "'config.reload.interval: 7s' in (logstash_yml.content | b64decode)"
         fail_msg: "Config autoreload not enabled"
 
     - name: Verify pipeline.unsafe_shutdown is set

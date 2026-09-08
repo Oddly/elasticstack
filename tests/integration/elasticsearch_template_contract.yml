@@ -1,4 +1,4 @@
----
+---  # noqa: run-once[play]
 - name: Elasticsearch template contract - single node
   hosts: single_es
   gather_facts: false
@@ -45,10 +45,25 @@
   vars:
     ansible_managed: "Ansible managed"
     elasticstack_elasticsearch_group_name: elasticsearch
+    elasticstack_elasticsearch_http_port: 9200
+    elasticstack_temperature: warm
     elasticsearch_datapath: /var/lib/elasticsearch
     elasticsearch_logpath: /var/log/elasticsearch
     elasticsearch_clustername: template-multi
     elasticsearch_cluster_set_up: false
+    elasticsearch_network_host:
+      - 10.10.10.10
+      - _site_
+    elasticsearch_http_publish_host: 10.10.10.20
+    elasticsearch_http_publish_port: 19200
+    elasticsearch_transport_port: 19300
+    elasticsearch_node_types:
+      - master
+      - data
+      - ingest
+    elasticsearch_seed_hosts:
+      - 10.10.10.1
+      - 10.10.10.2
     elasticsearch_ml_enabled: true
     elasticsearch_security: true
     elasticsearch_http_security: true
@@ -81,6 +96,14 @@
         that:
           - "'cluster.name: \"template-multi\"' in (_multi_template.content | b64decode)"
           - "'discovery.type: single-node' not in (_multi_template.content | b64decode)"
+          - "'network.host: [\"10.10.10.10\", \"_site_\"]' in (_multi_template.content | b64decode)"
+          - "'http.port: \"9200\"' in (_multi_template.content | b64decode)"
+          - "'transport.port: \"19300\"' in (_multi_template.content | b64decode)"
+          - "'http.publish_host: \"10.10.10.20\"' in (_multi_template.content | b64decode)"
+          - "'http.publish_port: 19200' in (_multi_template.content | b64decode)"
+          - "'node.roles: [\"master\", \"data\", \"ingest\"]' in (_multi_template.content | b64decode)"
+          - "'discovery.seed_hosts: [\"10.10.10.1\", \"10.10.10.2\"]' in (_multi_template.content | b64decode)"
+          - "'node.attr.temp: \"warm\"' in (_multi_template.content | b64decode)"
           - "'10.10.10.1' in (_multi_template.content | b64decode)"
           - "'10.10.10.2' in (_multi_template.content | b64decode)"
           - "'es-node-1' in (_multi_template.content | b64decode)"
@@ -90,3 +113,40 @@
           - "'xpack.security.transport.ssl.certificate_authorities: [\"certs/ca.crt\"]' in (_multi_template.content | b64decode)"
           - "'bootstrap.memory_lock: true' in (_multi_template.content | b64decode)"
           - "'/mnt/snapshots' in (_multi_template.content | b64decode)"
+
+- name: Elasticsearch quorum contract - even bootstrap count is rejected
+  hosts: elasticsearch
+  gather_facts: false
+  strategy: free
+  vars:
+    elasticsearch_node_types:
+      - master
+      - data
+    elasticsearch_cluster_set_up: false
+    elasticsearch_check_calculation: false
+  tasks:
+    # Delay one host so the old group_by-based count would be evaluated before
+    # the peer joined the dynamic group. The actual count must be identical on
+    # both hosts even with the free strategy.
+    - name: Stagger one quorum host
+      ansible.builtin.command:
+        argv:
+          - sleep
+          - "1"
+      changed_when: false
+      when: inventory_hostname == groups['elasticsearch'][1]
+
+    - name: Run quorum guard
+      block:
+        - name: Include the role's quorum guard
+          ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/elasticsearch-node-role-check.yml
+      rescue:
+        - name: Record expected quorum failure
+          ansible.builtin.set_fact:
+            _quorum_guard_failed: true
+
+    - name: Assert the even quorum was rejected consistently
+      ansible.builtin.assert:
+        that:
+          - _quorum_guard_failed | default(false) | bool
+          - elasticsearch_count_of_master_nodes | int == 2

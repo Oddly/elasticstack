@@ -36,7 +36,7 @@ jobs:
 
       - name: Install test dependencies.
         run: |
-          uv venv "$RUNNER_TEMP/venv" --python /usr/bin/python3
+          uv venv "$RUNNER_TEMP/venv" --python "$(command -v python3.12)"
           source "$RUNNER_TEMP/venv/bin/activate"
           uv pip install -r requirements-test.txt
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
@@ -60,6 +60,16 @@ jobs:
               community.crypto:3.1.1 \
               ansible.posix:2.1.0
           fi
+
+      - name: Set up Node.js for Markdown lint.
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24.x'
+        if: ${{ inputs.rolename == '' }}
+
+      - name: Lint Markdown.
+        run: npx --yes markdownlint-cli2@0.22.0
+        if: ${{ inputs.rolename == '' }}
 
       - name: Lint code (yamllint).
         run: |

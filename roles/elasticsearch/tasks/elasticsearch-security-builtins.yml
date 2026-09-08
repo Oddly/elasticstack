@@ -1,0 +1,39 @@
+---
+- name: elasticsearch-security-builtins | Validate built-in user password
+  ansible.builtin.assert:
+    that:
+      - _elasticsearch_security_builtin.key != 'elastic'
+      - _elasticsearch_security_builtin.key in _elasticsearch_security_builtin_users
+      - _elasticsearch_security_builtin.value is not none
+      - _elasticsearch_security_builtin.value | string | length >= 6
+    fail_msg: >-
+      elasticsearch_builtin_passwords only accepts supported built-in users
+      other than elastic (use elasticsearch_elastic_password for elastic), and
+      each password must be at least 6 characters.
+  vars:
+    _elasticsearch_security_builtin_users:
+      - kibana_system
+      - logstash_system
+      - beats_system
+      - apm_system
+      - remote_monitoring_user
+
+- name: elasticsearch-security-builtins | Set built-in user password
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_security_api_url }}/_security/user/{{ _elasticsearch_security_builtin.key | urlencode }}/_password"
+    method: PUT
+    user: elastic
+    password: "{{ _elasticsearch_security_api_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+    unredirected_headers:
+      - Authorization
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body:
+      password: "{{ _elasticsearch_security_builtin.value }}"
+    status_code: 200
+  changed_when: true
+  delegate_to: "{{ elasticstack_ca_host }}"
+  no_log: "{{ elasticstack_no_log }}"

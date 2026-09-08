@@ -215,17 +215,41 @@
       delegate_facts: true
 
   rescue:
+    - name: restart_and_verify_elasticsearch_rolling_node | Capture failure context
+      ansible.builtin.set_fact:
+        _elasticsearch_restart_failed_task: "{{ ansible_failed_task.name | default('unknown') }}"
+        _elasticsearch_restart_failed_health: >-
+          {{
+            (_elasticsearch_pre_restart_health.json | default({}))
+            if 'before restart' in (ansible_failed_task.name | default(''))
+            else (_elasticsearch_post_restart_health.json | default({}))
+            if 'after restart' in (ansible_failed_task.name | default(''))
+            else {}
+          }}
+
     - name: restart_and_verify_elasticsearch_rolling_node | Get recent Elasticsearch journal output
       ansible.builtin.command:
         cmd: journalctl -u elasticsearch --no-pager -n 50
       register: _elasticsearch_restart_journal
       changed_when: false
+      failed_when: false
       delegate_to: "{{ _elasticsearch_restart_host }}"
 
-    - name: restart_and_verify_elasticsearch_rolling_node | Fail with startup diagnostics
+    - name: restart_and_verify_elasticsearch_rolling_node | Fail with restart diagnostics
       ansible.builtin.fail:
         msg: |
-          Elasticsearch failed to restart on {{ _elasticsearch_restart_host }}.
+          Elasticsearch rolling restart failed on {{ _elasticsearch_restart_host }}.
+          Failed task: {{ _elasticsearch_restart_failed_task }}
+
+          {% if 'cluster health' in _elasticsearch_restart_failed_task %}
+          The cluster health gate did not reach an accepted status.
+          Last cluster health response:
+            status: {{ _elasticsearch_restart_failed_health.status | default('unknown') }}
+            relocating_shards: {{ _elasticsearch_restart_failed_health.relocating_shards | default('unknown') }}
+            initializing_shards: {{ _elasticsearch_restart_failed_health.initializing_shards | default('unknown') }}
+            unassigned_shards: {{ _elasticsearch_restart_failed_health.unassigned_shards | default('unknown') }}
+            number_of_nodes: {{ _elasticsearch_restart_failed_health.number_of_nodes | default('unknown') }}
+          {% endif %}
 
           Recent log output:
           {{ _elasticsearch_restart_journal.stdout }}

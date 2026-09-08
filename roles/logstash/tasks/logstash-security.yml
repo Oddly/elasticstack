@@ -290,9 +290,11 @@
               - -topk8
               - -nocrypt
               - -passin
-              - "pass:{{ logstash_tls_key_passphrase }}"
+              - stdin
               - -out
               - "{{ logstash_certs_dir }}/{{ inventory_hostname }}.key"
+            stdin: "{{ logstash_tls_key_passphrase }}"
+            stdin_add_newline: false
           changed_when: true
           no_log: "{{ elasticstack_no_log }}"
           tags:
@@ -340,20 +342,33 @@
 
     - name: logstash-security | Generate standalone CA key
       ansible.builtin.command:
-        cmd: >-
-          openssl genrsa -out {{ logstash_certs_dir }}/standalone-ca.key 4096
+        argv:
+          - openssl
+          - genrsa
+          - -out
+          - "{{ logstash_certs_dir }}/standalone-ca.key"
+          - "4096"
         creates: "{{ logstash_certs_dir }}/standalone-ca.key"
       tags:
         - certificates
 
     - name: logstash-security | Generate standalone CA certificate
       ansible.builtin.command:
-        cmd: >-
-          openssl req -x509 -new -nodes
-          -key {{ logstash_certs_dir }}/standalone-ca.key
-          -sha256 -days {{ logstash_cert_validity_period }}
-          -out {{ logstash_certs_dir }}/standalone-ca.crt
-          -subj "/CN=Logstash Standalone CA"
+        argv:
+          - openssl
+          - req
+          - -x509
+          - -new
+          - -nodes
+          - -key
+          - "{{ logstash_certs_dir }}/standalone-ca.key"
+          - -sha256
+          - -days
+          - "{{ logstash_cert_validity_period }}"
+          - -out
+          - "{{ logstash_certs_dir }}/standalone-ca.crt"
+          - -subj
+          - /CN=Logstash Standalone CA
         creates: "{{ logstash_certs_dir }}/standalone-ca.crt"
       tags:
         - certificates
@@ -375,18 +390,18 @@
       ansible.builtin.shell: |
         set -e
         openssl req -new \
-          -key {{ logstash_certs_dir }}/{{ inventory_hostname }}.key \
-          -out {{ logstash_certs_dir }}/{{ inventory_hostname }}.csr \
-          -subj "/CN={{ inventory_hostname }}" \
-          -addext "subjectAltName=DNS:{{ inventory_hostname }},DNS:{{ ansible_facts.hostname }},DNS:{{ ansible_facts.fqdn }},IP:{{ ansible_facts.default_ipv4.address | default(ansible_facts.all_ipv4_addresses[0]) }},DNS:localhost,IP:127.0.0.1"
+          -key {{ (logstash_certs_dir ~ '/' ~ inventory_hostname ~ '.key') | quote }} \
+          -out {{ (logstash_certs_dir ~ '/' ~ inventory_hostname ~ '.csr') | quote }} \
+          -subj {{ ('/CN=' ~ inventory_hostname) | quote }} \
+          -addext {{ ('subjectAltName=DNS:' ~ inventory_hostname ~ ',DNS:' ~ ansible_facts.hostname ~ ',DNS:' ~ ansible_facts.fqdn ~ ',IP:' ~ (ansible_facts.default_ipv4.address | default(ansible_facts.all_ipv4_addresses[0])) ~ ',DNS:localhost,IP:127.0.0.1') | quote }}
         openssl x509 -req \
-          -in {{ logstash_certs_dir }}/{{ inventory_hostname }}.csr \
-          -CA {{ logstash_certs_dir }}/standalone-ca.crt \
-          -CAkey {{ logstash_certs_dir }}/standalone-ca.key \
+          -in {{ (logstash_certs_dir ~ '/' ~ inventory_hostname ~ '.csr') | quote }} \
+          -CA {{ (logstash_certs_dir ~ '/standalone-ca.crt') | quote }} \
+          -CAkey {{ (logstash_certs_dir ~ '/standalone-ca.key') | quote }} \
           -CAcreateserial \
-          -out {{ logstash_certs_dir }}/{{ inventory_hostname }}-server.crt \
-          -days {{ logstash_cert_validity_period }} -sha256 \
-          -extfile <(printf "subjectAltName=DNS:{{ inventory_hostname }},DNS:{{ ansible_facts.hostname }},DNS:{{ ansible_facts.fqdn }},IP:{{ ansible_facts.default_ipv4.address | default(ansible_facts.all_ipv4_addresses[0]) }},DNS:localhost,IP:127.0.0.1")
+          -out {{ (logstash_certs_dir ~ '/' ~ inventory_hostname ~ '-server.crt') | quote }} \
+          -days {{ logstash_cert_validity_period | quote }} -sha256 \
+          -extfile <(printf '%s' {{ ('subjectAltName=DNS:' ~ inventory_hostname ~ ',DNS:' ~ ansible_facts.hostname ~ ',DNS:' ~ ansible_facts.fqdn ~ ',IP:' ~ (ansible_facts.default_ipv4.address | default(ansible_facts.all_ipv4_addresses[0])) ~ ',DNS:localhost,IP:127.0.0.1') | quote }})
       args:
         creates: "{{ logstash_certs_dir }}/{{ inventory_hostname }}-server.crt"
         executable: /bin/bash
@@ -407,13 +422,23 @@
         - certificates
 
     - name: logstash-security | Create PKCS12 keystore for ES output
-      ansible.builtin.command: >
-        openssl pkcs12 -export
-        -in {{ logstash_certs_dir }}/{{ inventory_hostname }}-server.crt
-        -inkey {{ logstash_certs_dir }}/{{ inventory_hostname }}.key
-        -out {{ logstash_certs_dir }}/keystore.pfx
-        -passout pass:{{ logstash_tls_key_passphrase }}
-        -name {{ inventory_hostname }}
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - pkcs12
+          - -export
+          - -in
+          - "{{ logstash_certs_dir }}/{{ inventory_hostname }}-server.crt"
+          - -inkey
+          - "{{ logstash_certs_dir }}/{{ inventory_hostname }}.key"
+          - -out
+          - "{{ logstash_certs_dir }}/keystore.pfx"
+          - -passout
+          - stdin
+          - -name
+          - "{{ inventory_hostname }}"
+        stdin: "{{ logstash_tls_key_passphrase }}"
+        stdin_add_newline: false
       args:
         creates: "{{ logstash_certs_dir }}/keystore.pfx"
       no_log: "{{ elasticstack_no_log }}"
@@ -451,11 +476,6 @@
 - name: logstash-security | Manage Elasticsearch user and role
   when: _logstash_cert_mode in ['elasticsearch_ca', 'standalone']
   block:
-    - name: logstash-security | Validate logstash user password length
-      ansible.builtin.fail:
-        msg: "Logstash user password must be at least 6 characters long"
-      when: logstash_user_password | length < 6
-
     - name: logstash-security | Fetch Elastic admin password
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/fetch_password.yml"

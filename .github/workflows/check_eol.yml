@@ -64,7 +64,6 @@ jobs:
           echo "=== Checking OS distributions ==="
           check_eol "rocky-linux" "9" "Rocky Linux 9"
           check_eol "rocky-linux" "10" "Rocky Linux 10"
-          check_eol "debian" "12" "Debian 12 (Bookworm)"
           check_eol "debian" "13" "Debian 13 (Trixie)"
           check_eol "ubuntu" "22.04" "Ubuntu 22.04 (Jammy)"
           check_eol "ubuntu" "24.04" "Ubuntu 24.04 (Noble)"
@@ -78,9 +77,8 @@ jobs:
 
           echo ""
           echo "=== Checking Ansible versions ==="
-          check_eol "ansible-core" "2.18" "ansible-core 2.18"
-          check_eol "ansible-core" "2.19" "ansible-core 2.19"
           check_eol "ansible-core" "2.20" "ansible-core 2.20"
+          check_eol "ansible-core" "2.21" "ansible-core 2.21"
 
           echo ""
           if [ -n "$issues" ]; then

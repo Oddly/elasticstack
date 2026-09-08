@@ -22,7 +22,16 @@ ansible-playbook -i inventory.yml playbook.yml
 The CA generates a new certificate for `es4`, distributes it, and the node joins the cluster. Existing nodes are updated with the new `discovery.seed_hosts` list.
 
 !!! note
-    If you're adding your first even-numbered master-eligible node (e.g. going from 3 to 4), the role will fail with a quorum warning. Either add the node as data-only (`elasticsearch_node_types: ["data", "ingest"]`) or add two nodes at once to maintain an odd master count.
+    During a fresh bootstrap, the role fails when the current play contains an even number of master-eligible hosts. If you run a limited play for a node joining an existing cluster, set `elasticsearch_cluster_set_up: true` so the bootstrap check is skipped. Keep the established cluster's master-eligible count odd; add a new node as data-only (`elasticsearch_node_types: ["data", "ingest"]`) or add two master-eligible nodes together.
+
+For a limited join play, set the existing-cluster flag explicitly on the new
+host. Its local initialization marker does not exist yet, so automatic
+detection cannot identify the cluster state:
+
+```yaml title="host_vars/es4.yml"
+elasticsearch_cluster_set_up: true
+elasticsearch_node_types: ["data", "ingest"]
+```
 
 ## Dedicated node roles (hot/warm/cold)
 

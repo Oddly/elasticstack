@@ -22,13 +22,17 @@
     - name: Verify management username
       ansible.builtin.assert:
         that:
-          - "'xpack.management.elasticsearch.username: logstash_internal' in logstash_config"
+          - >-
+            'xpack.management.elasticsearch.username: "logstash_internal"' in
+            logstash_config
         fail_msg: "Management username not configured"
 
     - name: Verify management password
       ansible.builtin.assert:
         that:
-          - "'xpack.management.elasticsearch.password: testpassword' in logstash_config"
+          - >-
+            'xpack.management.elasticsearch.password: "testpassword"' in
+            logstash_config
         fail_msg: "Management password not configured"
 
     - name: Verify management ES hosts
@@ -67,6 +71,12 @@
         that:
           - "'log.format: json' in logstash_config"
         fail_msg: "Log format not set to json"
+
+    - name: Verify logstash_global_ecs is v8
+      ansible.builtin.assert:
+        that:
+          - "'pipeline.ecs_compatibility: v8' in logstash_config"
+        fail_msg: "Global ECS compatibility mode not set to v8"
 
     # --- Monitoring ---
 

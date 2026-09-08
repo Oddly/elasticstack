@@ -1,22 +1,14 @@
 ---
 - name: Verify ES security API (role and user CRUD)
   hosts: all
+  vars:
+    security_api_admin_password: "TestElasticPassword123!"
   tasks:
-    - name: Fetch Elastic password
-      ansible.builtin.shell: |
-        set -o pipefail
-        grep "PASSWORD elastic " /usr/share/elasticsearch/initial_passwords |
-        awk {' print $4 '}
-      args:
-        executable: /bin/bash
-      register: elastic_pass
-      changed_when: false
-
     - name: Get ES version
       ansible.builtin.uri:
         url: https://localhost:9200/
         user: elastic
-        password: "{{ elastic_pass.stdout }}"
+        password: "{{ security_api_admin_password }}"
         force_basic_auth: true
         validate_certs: false
         return_content: true
@@ -30,7 +22,7 @@
         url: https://localhost:9200/_security/role/api-test-role
         method: PUT
         user: elastic
-        password: "{{ elastic_pass.stdout }}"
+        password: "{{ security_api_admin_password }}"
         force_basic_auth: true
         validate_certs: false
         body_format: json
@@ -61,7 +53,7 @@
         url: https://localhost:9200/_security/user/api-test-user
         method: PUT
         user: elastic
-        password: "{{ elastic_pass.stdout }}"
+        password: "{{ security_api_admin_password }}"
         force_basic_auth: true
         validate_certs: false
         body_format: json
@@ -89,7 +81,7 @@
         url: https://localhost:9200/_security/role/api-test-role
         method: PUT
         user: elastic
-        password: "{{ elastic_pass.stdout }}"
+        password: "{{ security_api_admin_password }}"
         force_basic_auth: true
         validate_certs: false
         body_format: json
@@ -120,7 +112,7 @@
       ansible.builtin.uri:
         url: https://localhost:9200/_security/role/api-test-role
         user: elastic
-        password: "{{ elastic_pass.stdout }}"
+        password: "{{ security_api_admin_password }}"
         force_basic_auth: true
         validate_certs: false
       register: role_check
@@ -139,7 +131,7 @@
         url: https://localhost:9200/_security/user/api-test-user
         method: DELETE
         user: elastic
-        password: "{{ elastic_pass.stdout }}"
+        password: "{{ security_api_admin_password }}"
         force_basic_auth: true
         validate_certs: false
         status_code: [200]
@@ -159,7 +151,7 @@
         url: https://localhost:9200/_security/role/api-test-role
         method: DELETE
         user: elastic
-        password: "{{ elastic_pass.stdout }}"
+        password: "{{ security_api_admin_password }}"
         force_basic_auth: true
         validate_certs: false
         status_code: [200]

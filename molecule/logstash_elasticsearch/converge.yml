@@ -10,7 +10,27 @@
     elasticstack_no_log: false
     elasticsearch_heap: "1"
     logstash_heap: "512m"
+    logstash_security: true
+    logstash_output_elasticsearch: true
+    logstash_sniffing: true
+    logstash_sniffing_delay: 8
+    logstash_sniffing_path: /_nodes/http
     logstash_pipeline_unsafe_shutdown: true
+    logstash_create_role: true
+    logstash_role_name: molecule_writer
+    logstash_role_cluster_privileges:
+      - monitor
+      - manage_ilm
+    logstash_role_indicies_names:
+      - molecule-logs-*
+    logstash_role_indicies_privileges:
+      - write
+      - create_index
+    logstash_create_user: true
+    logstash_user_name: molecule_writer
+    logstash_user_password: "MoleculeLogstashPassword!"
+    logstash_user_email: molecule@example.test
+    logstash_user_fullname: Molecule Logstash Writer
     logstash_filters: |
       grok {
         match => { "message" => "%{SYSLOGLINE}" }

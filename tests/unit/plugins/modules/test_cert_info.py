@@ -1,11 +1,20 @@
 import json
-import sys
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 from ansible.module_utils import basic
 from ansible.module_utils.common.text.converters import to_bytes
-sys.path.append('/home/runner/.ansible/collections/')
 from ansible_collections.oddly.elasticstack.plugins.modules import cert_info
+
+
+CERTIFICATE_PATH = (
+    Path(__file__).resolve().parents[4]
+    / 'molecule'
+    / 'cert_info_module'
+    / 'files'
+    / 'es-ca'
+    / 'elastic-stack-ca.p12'
+)
 
 certificate = {
     "changed": False,
@@ -49,6 +58,7 @@ def set_module_args(args):
     """prepare arguments so that they will be picked up during module creation"""
     args = json.dumps({'ANSIBLE_MODULE_ARGS': args})
     basic._ANSIBLE_ARGS = to_bytes(args)
+    basic._ANSIBLE_PROFILE = 'legacy'
 
 
 class AnsibleExitJson(Exception):
@@ -114,7 +124,7 @@ class TestCertInfo(unittest.TestCase):
     def test_module_fail_when_wrong_password(self):
         with self.assertRaises(AnsibleFailJson):
             set_module_args({
-                'path': 'molecule/plugins/files/es-ca/elastic-stack-ca.p12',
+                'path': str(CERTIFICATE_PATH),
                 'passphrase': 'wrong-password'
             })
             cert_info.main()
@@ -122,14 +132,14 @@ class TestCertInfo(unittest.TestCase):
     def test_module_fail_when_password_missing_but_required(self):
         with self.assertRaises(AnsibleFailJson):
             set_module_args({
-                'path': 'molecule/plugins/files/es-ca/elastic-stack-ca.p12'
+                'path': str(CERTIFICATE_PATH)
             })
             cert_info.main()
 
     def test_module_exit_when_path_and_password_correct(self):
         with self.assertRaises(AnsibleExitJson):
             set_module_args({
-                'path': 'molecule/plugins/files/es-ca/elastic-stack-ca.p12',
+                'path': str(CERTIFICATE_PATH),
                 'passphrase': 'PleaseChangeMe'
             })
             cert_info.main()

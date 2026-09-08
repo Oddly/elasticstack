@@ -30,6 +30,12 @@ First release of the `oddly.elasticstack` collection, forked from
 - Beats Filebeat `filestream` input type for 9.x (replacing deprecated `log`).
 - Logstash `elastic_agent` input plugin support.
 - Elasticsearch `cluster_settings` for runtime cluster configuration via API.
+- Persistent cluster settings are applied before certificate-triggered rolling
+  restarts on initialized Elasticsearch clusters.
+- Master quorum validation counts the current play's host variables
+  consistently, including when Ansible uses the `free` strategy.
+- Declarative Elasticsearch security roles, custom users, built-in passwords,
+  and LDAP/Active Directory role mappings.
 - LogsDB support with automatic enablement on fresh 9.x installs.
 - Elasticsearch filesystem snapshot repository configuration.
 - Cgroup-aware JVM heap auto-calculation for containerised deployments.
@@ -42,16 +48,17 @@ First release of the `oddly.elasticstack` collection, forked from
 
 ### Supported platforms
 
-- Debian 12 (bookworm), 13 (trixie)
+- Debian 13 (trixie)
 - Ubuntu 22.04 (jammy), 24.04 (noble), 26.04 (resolute)
 - Rocky Linux / RHEL 9, 10
 - Elastic Stack 8.x and 9.x
-- Ansible 2.18+
+- Ansible 2.20+
 
 ### Breaking changes from netways.elasticstack
 
 - Namespace changed from `netways` to `oddly`.
-- Minimum Ansible version raised to 2.18 (was 2.9).
+- Minimum Ansible version raised to 2.20 (was 2.9).
+- Debian 12 (bookworm) dropped from the supported platform matrix after its EOL.
 - Debian 10/11 and Ubuntu 20.04 dropped from supported platforms.
 - `elasticsearch_security: false` no longer permitted on ES 8.x+ (Elastic
   upstream requirement).

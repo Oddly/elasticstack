@@ -10,6 +10,9 @@ argument_specs:
           when empty, the package default (usually 1g) is left in place.
         type: str
         default: ''
+      logstash_security:
+        description: Override the inherited stack security setting for Logstash. Undefined follows elasticstack_security
+        type: bool
       logstash_enable:
         description: Whether to enable and start the Logstash service
         type: bool
@@ -30,6 +33,9 @@ argument_specs:
         description: Automatically reload pipeline configuration when files change
         type: bool
         default: true
+      logstash_config_autoreload_interval:
+        description: How often Logstash checks for pipeline config changes when autoreload is enabled
+        type: str
       logstash_config_path_data:
         description: Filesystem path for Logstash persistent data (queue, dead letter queue)
         type: str
@@ -38,6 +44,12 @@ argument_specs:
         description: Filesystem path for Logstash log files
         type: str
         default: /var/log/logstash
+      logstash_http_host:
+        description: Bind address for the Logstash monitoring API. Only written to logstash.yml when defined
+        type: str
+      logstash_http_port:
+        description: Port range for the Logstash monitoring API. Only written to logstash.yml when defined
+        type: str
       logstash_pipeline_buffer_type:
         description: Pipeline buffer type ('direct' or 'heap'). Logstash 9.x changed the default from 'direct' to 'heap'.
           This is set version-aware to prevent silent behaviour changes during 8.x to 9.x upgrades.
@@ -62,15 +74,25 @@ argument_specs:
       logstash_input_beats:
         description: Enable the Beats input plugin (receives from Filebeat, Metricbeat, etc.)
         type: bool
-        default: true
       logstash_input_beats_port:
         description: Port for the Beats input listener
         type: int
         default: 5044
       logstash_input_beats_ssl:
         description: Enable TLS on the Beats input. Inherits from logstash_beats_tls for backwards compatibility
+        type: bool
+      logstash_input_beats_client_auth:
+        description: Client TLS authentication mode for the Beats input (required | optional | none)
         type: str
-        default: '{{ logstash_beats_tls | default(omit) }}'
+      logstash_input_beats_timeout:
+        description: Idle timeout for Beats input connections. Connections idle longer than this are closed
+        type: str
+      logstash_beats_tls:
+        description: Deprecated alias for logstash_input_beats_ssl
+        type: bool
+      logstash_beats_input:
+        description: Deprecated alias for logstash_input_beats
+        type: bool
       logstash_input_elastic_agent:
         description: Enable the Elastic Agent input plugin
         type: bool
@@ -98,7 +120,6 @@ argument_specs:
       logstash_output_elasticsearch:
         description: Enable the Elasticsearch output plugin
         type: bool
-        default: true
       logstash_elasticsearch_hosts:
         description: List of Elasticsearch hosts. Leave empty to auto-discover from inventory
         type: list
@@ -115,6 +136,15 @@ argument_specs:
         description: Enable Elasticsearch node sniffing to discover all cluster members
         type: bool
         default: false
+      logstash_sniffing_delay:
+        description: Seconds between ES sniffing requests when sniffing is enabled
+        type: int
+      logstash_sniffing_path:
+        description: ES API path used for node sniffing
+        type: str
+      logstash_elasticsearch_output:
+        description: Deprecated alias for logstash_output_elasticsearch
+        type: bool
       logstash_extra_outputs:
         description: Raw Logstash output config appended to the output section of the pipeline
         type: str
@@ -180,9 +210,10 @@ argument_specs:
         type: str
         default: logstash_writer
       logstash_user_password:
-        description: Password for the Logstash Elasticsearch user. Change this in production
+        description: Password for the Logstash Elasticsearch user. Required when logstash_create_user is enabled or when the
+          secured standard Elasticsearch output is enabled. Supply it from Ansible Vault or a secret manager.
         type: str
-        default: password
+        default: ''
       logstash_user_email:
         description: Email address for the Logstash Elasticsearch user
         type: str
@@ -196,6 +227,18 @@ argument_specs:
           'external' uses provided files
         type: str
         default: elasticsearch_ca
+      logstash_tls_certificate_file:
+        description: Path to the externally managed Logstash TLS certificate
+        type: str
+      logstash_tls_key_file:
+        description: Path to the externally managed Logstash TLS private key
+        type: str
+      logstash_tls_ca_file:
+        description: Optional path to the externally managed CA certificate
+        type: str
+      logstash_tls_remote_src:
+        description: Read external Logstash TLS files from the managed host instead of the Ansible controller
+        type: bool
       logstash_tls_copy_certs:
         description: "Copy externally-managed certificate files into `logstash_certs_dir` (default). Set to `false` to reference\
           \ the `logstash_tls_*_file` paths directly from the pipeline config \u2014 Logstash reads them in place. Use this\
@@ -224,10 +267,37 @@ argument_specs:
         description: Passphrase for the Logstash TLS private key
         type: str
         default: LogstashChangeMe
+      logstash_dead_letter_queue_enable:
+        description: Enable the dead letter queue for failed events
+        type: bool
+      logstash_dead_letter_queue_retain_age:
+        description: Retention period for dead letter queue entries
+        type: str
+      logstash_log_format:
+        description: Log output format ('plain' or 'json')
+        type: str
+      logstash_global_ecs:
+        description: Global pipeline ECS compatibility mode ('disabled', 'v1', or 'v8')
+        type: str
+      logstash_monitoring_enabled:
+        description: Enable internal monitoring collection
+        type: bool
       logstash_xpack_management:
         description: Enable centralized pipeline management via Elasticsearch
         type: bool
         default: false
+      logstash_xpack_management_elasticsearch_username:
+        description: Elasticsearch username for pipeline management
+        type: str
+      logstash_xpack_management_elasticsearch_password:
+        description: Elasticsearch password for pipeline management
+        type: str
+      logstash_xpack_management_elasticsearch_hosts:
+        description: Elasticsearch hosts for pipeline management
+        type: list
+      logstash_xpack_management_pipeline_id:
+        description: List of pipeline IDs to manage centrally
+        type: list
       logstash_extra_config:
         description: Dictionary of additional logstash.yml settings not covered by dedicated variables. Keys are written as-is
           into logstash.yml. Nested values are rendered as YAML.

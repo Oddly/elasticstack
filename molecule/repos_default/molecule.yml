@@ -7,8 +7,8 @@ dependency:
 driver:
   name: default
 platforms:
-  - name: "repos-def-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
-    distro: "${MOLECULE_DISTRO:-debian12}"
+  - name: "repos-def-${MOLECULE_DISTRO:-debian13}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
+    distro: "${MOLECULE_DISTRO:-debian13}"
     # 2048 MiB: dnf/python3 on rockylinux9 peaks near 1 GB during the
     # security-packages install (56 cgroup OOM kills at the old 1024 in
     # the 30 days to 2026-08-12, per the host kernel journal).

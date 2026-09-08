@@ -44,7 +44,7 @@ jobs:
     uses: ./.github/workflows/molecule.yml
     with:
       scenarios: '["elasticsearch_default","elasticsearch_roles_calculation","elasticsearch_custom","elasticsearch_no-security","elasticsearch_cert_content"]'
-      distros: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && '["rockylinux10","debian13"]' || '["rockylinux9","rockylinux10","ubuntu2204","ubuntu2404","ubuntu2604","debian12","debian13"]' }}
+      distros: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && '["rockylinux10","debian13"]' || '["rockylinux9","rockylinux10","ubuntu2204","ubuntu2404","ubuntu2604","debian13"]' }}
     secrets: inherit
 
   molecule_elasticsearch_diagnostics:
@@ -54,6 +54,6 @@ jobs:
       scenarios: '["elasticsearch_diagnostics"]'
       distros: '["debian13"]'
       releases: '["9"]'
-      timeout: 60
+      timeout: 180
       skip-idempotence: true
     secrets: inherit

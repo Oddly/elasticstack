@@ -54,8 +54,10 @@
     # logstash_tls_key_passphrase: "CHANGE-ME-logstash-key-passphrase"
     # beats_tls_key_passphrase: "CHANGE-ME-beats-key-passphrase"
 
-    # Logstash writer user password (used by Logstash to write to Elasticsearch)
-    # logstash_user_password: "CHANGE-ME-logstash-writer-password"
+    # Logstash writer user password (required when security is enabled).
+    # Define vault_logstash_user_password in an encrypted vars file or replace
+    # this reference with your secret-manager lookup.
+    logstash_user_password: "{{ vault_logstash_user_password }}"
 
     # ==========================================================================
     # Elasticsearch

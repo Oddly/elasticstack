@@ -1,0 +1,76 @@
+---
+- name: Verify Kibana inline certificate content
+  hosts: kibana
+  tasks:
+    - name: Check Kibana service is running
+      ansible.builtin.service:
+        name: kibana
+        state: started
+      check_mode: true
+      register: _kibana_service
+      failed_when: _kibana_service.changed
+
+    - name: Stat deployed Kibana certificate files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "/etc/kibana/certs/{{ inventory_hostname }}-kibana.crt"
+        - "/etc/kibana/certs/{{ inventory_hostname }}-kibana.key"
+        - /etc/kibana/certs/ca.crt
+      register: _kibana_cert_stat
+
+    - name: Assert Kibana content files exist with restricted permissions
+      ansible.builtin.assert:
+        that:
+          - _kibana_cert_stat.results | selectattr('stat.exists') | list | length == 3
+          - _kibana_cert_stat.results | selectattr('stat.mode', 'equalto', '0640') | list | length == 3
+
+    - name: Hash source and deployed Kibana certificate material
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          for pair in \
+            "/tmp/test-certs/server.crt /etc/kibana/certs/{{ inventory_hostname }}-kibana.crt" \
+            "/tmp/test-certs/server.key /etc/kibana/certs/{{ inventory_hostname }}-kibana.key" \
+            "/tmp/test-certs/ca.crt /etc/kibana/certs/ca.crt"; do
+            src=$(echo "$pair" | awk '{print $1}')
+            dst=$(echo "$pair" | awk '{print $2}')
+            src_sum=$(sha256sum "$src" | awk '{print $1}')
+            dst_sum=$(sha256sum "$dst" | awk '{print $1}')
+            echo "$src_sum $dst_sum"
+          done
+        executable: /bin/bash
+      register: _kibana_cert_hashes
+      changed_when: false
+
+    - name: Assert Kibana content is copied byte-for-byte
+      ansible.builtin.assert:
+        that:
+          - _kibana_cert_hashes.stdout_lines | length == 3
+          - _kibana_cert_hashes.stdout_lines | select('match', '^(\\S+) \\1$') | list | length == 3
+
+    - name: Read kibana.yml
+      ansible.builtin.slurp:
+        src: /etc/kibana/kibana.yml
+      register: _kibana_yml
+
+    - name: Assert Kibana renders PEM TLS and the plain Elasticsearch backend
+      ansible.builtin.assert:
+        that:
+          - "'server.ssl.enabled: true' in (_kibana_yml.content | b64decode)"
+          - "'server.ssl.certificate:' in (_kibana_yml.content | b64decode)"
+          - "'server.ssl.key:' in (_kibana_yml.content | b64decode)"
+          - "'server.ssl.keystore.path' not in (_kibana_yml.content | b64decode)"
+          - "'http://' in (_kibana_yml.content | b64decode)"
+
+    - name: Wait for Kibana HTTPS readiness
+      ansible.builtin.uri:
+        url: https://localhost:5601/api/status
+        method: GET
+        validate_certs: false
+        status_code: [200, 503]
+        return_content: true
+      register: _kibana_status
+      until: _kibana_status.status == 200
+      retries: 36
+      delay: 5

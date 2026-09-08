@@ -17,4 +17,8 @@ tests/integration/*
 !tests/integration/node_maintenance_contract.yml
 !tests/integration/rolling_restart_contract.yml
 !tests/integration/rolling_restart_inventory.ini
+!tests/integration/collection_variable_contract.yml
+!tests/integration/elasticsearch_security_management_contract.yml
+!tests/integration/elasticsearch_security_management_inventory.ini
+!tests/integration/security_and_certificate_contract.yml
 site/

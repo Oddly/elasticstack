@@ -31,7 +31,12 @@
 
 - name: certs | cert_validate | Probe for PEM format — {{ _validate_service }}
   ansible.builtin.command:
-    cmd: openssl x509 -in {{ _validate_cert_path }} -noout
+    argv:
+      - openssl
+      - x509
+      - -in
+      - "{{ _validate_cert_path }}"
+      - -noout
   register: _elasticstack_validate_pem_probe
   failed_when: false
   changed_when: false
@@ -41,9 +46,16 @@
 
 - name: certs | cert_validate | Probe for P12 format — {{ _validate_service }}
   ansible.builtin.command:
-    cmd: >-
-      openssl pkcs12 -in {{ _validate_cert_path }} -noout
-      {{ ('-passin pass:' ~ _validate_pass) if (_validate_pass | default('', true) | length > 0) else '-passin pass:' }}
+    argv:
+      - openssl
+      - pkcs12
+      - -in
+      - "{{ _validate_cert_path }}"
+      - -noout
+      - -passin
+      - "{{ 'stdin' if (_validate_pass | default('', true) | length > 0) else 'pass:' }}"
+    stdin: "{{ _validate_pass | default('', true) }}"
+    stdin_add_newline: false
   register: _elasticstack_validate_p12_probe
   failed_when: false
   changed_when: false
@@ -114,7 +126,11 @@
   block:
     - name: certs | cert_validate | Count PEM blocks in certificate file — {{ _validate_service }}
       ansible.builtin.command:
-        cmd: grep -c 'BEGIN CERTIFICATE' {{ _validate_cert_path }}
+        argv:
+          - grep
+          - -c
+          - BEGIN CERTIFICATE
+          - "{{ _validate_cert_path }}"
       register: _elasticstack_validate_pem_count
       changed_when: false
       check_mode: false
@@ -134,7 +150,14 @@
 
 - name: certs | cert_validate | Check certificate has not expired — {{ _validate_service }}
   ansible.builtin.command:
-    cmd: openssl x509 -in {{ _validate_cert_path }} -noout -checkend 0
+    argv:
+      - openssl
+      - x509
+      - -in
+      - "{{ _validate_cert_path }}"
+      - -noout
+      - -checkend
+      - "0"
   register: _elasticstack_validate_expiry_check
   failed_when: false
   changed_when: false
@@ -161,7 +184,10 @@
   block:
     - name: certs | cert_validate | Get certificate modulus — {{ _validate_service }}
       ansible.builtin.shell:
-        cmd: set -o pipefail && openssl x509 -in {{ _validate_cert_path }} -noout -modulus 2>/dev/null | openssl md5
+        cmd: >-
+          set -o pipefail &&
+          openssl x509 -in {{ _validate_cert_path | quote }} -noout -modulus 2>/dev/null |
+          openssl md5
         executable: /bin/bash
       register: _elasticstack_validate_cert_modulus
       changed_when: false
@@ -173,10 +199,12 @@
       ansible.builtin.shell:
         cmd: >-
           set -o pipefail &&
-          openssl rsa -in {{ lookup('vars', _validate_key_fact) }} -noout -modulus
-          {{ ('-passin pass:' ~ _validate_pass) if (_validate_pass | default('', true) | length > 0) else '' }}
+          openssl rsa -in {{ lookup('vars', _validate_key_fact) | quote }} -noout -modulus
+          {{ '-passin stdin' if (_validate_pass | default('', true) | length > 0) else '' }}
           2>/dev/null | openssl md5
         executable: /bin/bash
+        stdin: "{{ _validate_pass | default('', true) }}"
+        stdin_add_newline: false
       register: _elasticstack_validate_key_modulus
       changed_when: false
       failed_when: false
@@ -190,10 +218,12 @@
       ansible.builtin.shell:
         cmd: >-
           set -o pipefail &&
-          openssl ec -in {{ lookup('vars', _validate_key_fact) }} -pubout
-          {{ ('-passin pass:' ~ _validate_pass) if (_validate_pass | default('', true) | length > 0) else '' }}
+          openssl ec -in {{ lookup('vars', _validate_key_fact) | quote }} -pubout
+          {{ '-passin stdin' if (_validate_pass | default('', true) | length > 0) else '' }}
           2>/dev/null | openssl md5
         executable: /bin/bash
+        stdin: "{{ _validate_pass | default('', true) }}"
+        stdin_add_newline: false
       register: _elasticstack_validate_ec_key_fp
       changed_when: false
       failed_when: false
@@ -205,7 +235,10 @@
 
     - name: certs | cert_validate | Get EC cert public key fingerprint — {{ _validate_service }}
       ansible.builtin.shell:
-        cmd: set -o pipefail && openssl x509 -in {{ _validate_cert_path }} -noout -pubkey 2>/dev/null | openssl md5
+        cmd: >-
+          set -o pipefail &&
+          openssl x509 -in {{ _validate_cert_path | quote }} -noout -pubkey 2>/dev/null |
+          openssl md5
         executable: /bin/bash
       register: _elasticstack_validate_ec_cert_fp
       changed_when: false
@@ -242,11 +275,18 @@
   when: _elasticstack_validate_pem_probe.rc == 0
   block:
     - name: certs | cert_validate | Extract SAN from certificate — {{ _validate_service }}
-      ansible.builtin.shell:
-        cmd: openssl x509 -in {{ _validate_cert_path }} -noout -ext subjectAltName 2>/dev/null || true
-        executable: /bin/bash
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - x509
+          - -in
+          - "{{ _validate_cert_path }}"
+          - -noout
+          - -ext
+          - subjectAltName
       register: _elasticstack_validate_san_output
       changed_when: false
+      failed_when: false
       check_mode: false
       delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
       become: "{{ _validate_remote_src | bool }}"

@@ -139,10 +139,11 @@
 
     # Extract CA chain from the already-deployed cert on the node
     - name: beats-security | Read CA chain from PEM bundle
-      ansible.builtin.shell:
-        cmd: >-
-          awk '/-----BEGIN CERTIFICATE-----/{n++} n>1'
-          /etc/beats/certs/{{ inventory_hostname }}-beats.crt
+      ansible.builtin.command:
+        argv:
+          - awk
+          - '/-----BEGIN CERTIFICATE-----/{n++} n>1'
+          - "{{ '/etc/beats/certs/' ~ inventory_hostname ~ '-beats.crt' }}"
       register: _beats_extracted_ca_chain
       changed_when: false
       when:

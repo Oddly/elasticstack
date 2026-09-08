@@ -1,0 +1,72 @@
+---
+- name: Verify Beats external certificate deployment
+  hosts: all
+  tasks:
+    - name: Check Filebeat service is running
+      ansible.builtin.service:
+        name: filebeat
+        state: started
+      check_mode: true
+      register: _filebeat_service
+      failed_when: _filebeat_service.changed
+
+    - name: Stat deployed certificate files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "/etc/beats/certs/{{ inventory_hostname }}-beats.crt"
+        - "/etc/beats/certs/{{ inventory_hostname }}-beats.key"
+        - /etc/beats/certs/ca.crt
+      register: _beats_cert_stat
+
+    - name: Assert external certificate files exist with restricted permissions
+      ansible.builtin.assert:
+        that:
+          - _beats_cert_stat.results | selectattr('stat.exists') | list | length == 3
+          - _beats_cert_stat.results | selectattr('stat.mode', 'equalto', '0640') | list | length == 3
+        fail_msg: "The Beats external certificate files were not deployed with mode 0640"
+
+    - name: Hash source and deployed certificate material
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          for pair in \
+            "/tmp/test-certs/server.crt /etc/beats/certs/{{ inventory_hostname }}-beats.crt" \
+            "/tmp/test-certs/server.key /etc/beats/certs/{{ inventory_hostname }}-beats.key" \
+            "/tmp/test-certs/ca.crt /etc/beats/certs/ca.crt"; do
+            src=$(echo "$pair" | awk '{print $1}')
+            dst=$(echo "$pair" | awk '{print $2}')
+            src_sum=$(sha256sum "$src" | awk '{print $1}')
+            dst_sum=$(sha256sum "$dst" | awk '{print $1}')
+            echo "$src_sum $dst_sum"
+          done
+        executable: /bin/bash
+      register: _beats_cert_hashes
+      changed_when: false
+
+    - name: Assert external certificate material is copied byte-for-byte
+      ansible.builtin.assert:
+        that:
+          - _beats_cert_hashes.stdout_lines | length == 3
+          - _beats_cert_hashes.stdout_lines | select('match', '^(\\S+) \\1$') | list | length == 3
+
+    - name: Read Filebeat configuration
+      ansible.builtin.slurp:
+        src: /etc/filebeat/filebeat.yml
+      register: _filebeat_yml
+
+    - name: Assert Filebeat has the isolated file output configuration
+      ansible.builtin.assert:
+        that:
+          - "'output.file' in (_filebeat_yml.content | b64decode)"
+          - "'path: /var/lib/filebeat/external-output' in (_filebeat_yml.content | b64decode)"
+
+    - name: Validate the installed Filebeat configuration
+      ansible.builtin.command:
+        argv:
+          - filebeat
+          - test
+          - config
+          - -c
+          - /etc/filebeat/filebeat.yml
+      changed_when: false

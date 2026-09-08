@@ -257,10 +257,11 @@
     # Extract CA chain from the already-deployed transport cert on the node.
     # Uses copy+content for idempotency (only writes when content changes).
     - name: elasticsearch-security | Read CA chain from PEM bundle (transport cert)
-      ansible.builtin.shell:
-        cmd: >-
-          awk '/-----BEGIN CERTIFICATE-----/{n++} n>1'
-          /etc/elasticsearch/certs/{{ inventory_hostname }}-transport.crt
+      ansible.builtin.command:
+        argv:
+          - awk
+          - '/-----BEGIN CERTIFICATE-----/{n++} n>1'
+          - "/etc/elasticsearch/certs/{{ inventory_hostname }}-transport.crt"
       register: _elasticsearch_extracted_ca_chain
       changed_when: false
       when:
@@ -514,8 +515,31 @@
             - renew_es_cert
       vars:
         _cert_name: "{{ hostvars[item].inventory_hostname_short }}"
-        _cert_ip: "{{ hostvars[item].ansible_host | default(hostvars[item].inventory_hostname) }}"
-        _cert_dns: "{{ hostvars[item].inventory_hostname_short }},{{ hostvars[item].inventory_hostname }}"
+        # The local password utilities connect to the configured API host.
+        # Include that host and loopback in the generated certificate SANs so
+        # the CLI endpoint has the same identity as the service endpoint.
+        _cert_ip: >-
+          {{ [
+               hostvars[item].ansible_host | default(''),
+               '127.0.0.1',
+               hostvars[item].elasticsearch_api_host | default('localhost', true)
+             ]
+             | reject('equalto', '')
+             | select('match', '^[0-9A-Fa-f:.]+$')
+             | unique
+             | join(',') }}
+        _cert_dns: >-
+          {{ [
+               hostvars[item].inventory_hostname_short,
+               hostvars[item].inventory_hostname,
+               'localhost',
+               hostvars[item].ansible_host | default(''),
+               hostvars[item].elasticsearch_api_host | default('localhost', true)
+             ]
+             | reject('equalto', '')
+             | reject('match', '^[0-9A-Fa-f:.]+$')
+             | unique
+             | join(',') }}
         _cert_out: "{{ elasticstack_ca_dir }}/{{ hostvars[item].inventory_hostname_short }}.p12"
         _cert_pass: "{{ (hostvars[item].elasticsearch_tls_key_passphrase is defined) | ternary(hostvars[item].elasticsearch_tls_key_passphrase, elasticsearch_tls_key_passphrase) }}"
         _cert_validity: "{{ elasticsearch_cert_validity_period }}"
@@ -604,6 +628,11 @@
 # Post-certificate tasks (shared by both cert sources)
 # ============================================================
 
+- name: elasticsearch-security | Set Elasticsearch HTTP protocol for API calls
+  ansible.builtin.set_fact:
+    elasticsearch_http_protocol: "https"
+  when: elasticsearch_http_security
+
 - name: elasticsearch-security | Start Elasticsearch for security tasks
   ansible.builtin.service:
     name: elasticsearch
@@ -615,6 +644,15 @@
 - name: elasticsearch-security | Wait for all instances to start
   ansible.builtin.include_tasks: wait_for_instance.yml
   loop: "{{ groups[elasticstack_elasticsearch_group_name] }}"
+
+# An initialized cluster already has a usable elastic credential at this point.
+# Apply declared persistent settings before certificate/configuration handlers
+# are flushed below, so a rolling restart uses the requested recovery settings.
+# Fresh clusters skip this pass because the user-defined password has not been
+# applied yet; the final include in main.yml runs after initial setup instead.
+- name: elasticsearch-security | Apply persistent cluster settings before restart
+  ansible.builtin.include_tasks: elasticsearch-cluster-settings.yml
+  when: elasticsearch_cluster_set_up | bool
 
 - name: elasticsearch-security | Restart if Elasticsearch was already running
   when:
@@ -641,11 +679,6 @@
     path: "{{ elasticstack_initial_passwords }}"
   delegate_to: "{{ elasticstack_ca_host }}"
   register: elasticsearch_passwords_file
-
-- name: elasticsearch-security | Setting elasticsearch_http_protocol
-  ansible.builtin.set_fact:
-    elasticsearch_http_protocol: "https"
-  when: elasticsearch_http_security
 
 - name: elasticsearch-security | Runtime cluster setup (requires running Elasticsearch)
   when: not ansible_check_mode
@@ -691,9 +724,15 @@
         - not elasticsearch_cluster_set_up | bool
       block:
         - name: elasticsearch-security | Reset elastic user password via elasticsearch-reset-password
-          ansible.builtin.command: >
-            /usr/share/elasticsearch/bin/elasticsearch-reset-password
-            -u elastic -b -s
+          ansible.builtin.command:
+            argv:
+              - /usr/share/elasticsearch/bin/elasticsearch-reset-password
+              - -u
+              - elastic
+              - -b
+              - -s
+              - --url
+              - "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}"
           register: _elasticsearch_elastic_reset_pw
           changed_when: true
           no_log: "{{ elasticstack_no_log }}"
@@ -839,10 +878,22 @@
     - name: elasticsearch-security | Work around low resources on CI/CD nodes
       when: ansible_facts.virtualization_type in ["container", "docker", "lxc"]
       block:
-        - name: elasticsearch-security | Remove cache
-          ansible.builtin.shell:
-            cmd: rm -rf /var/cache/*
-            executable: /bin/bash
+        - name: elasticsearch-security | Find cache entries
+          ansible.builtin.find:
+            paths: /var/cache
+            file_type: any
+            hidden: true
+            recurse: false
+          register: _elasticsearch_cache_entries
+          changed_when: false
+
+        - name: elasticsearch-security | Remove cache entries
+          ansible.builtin.file:
+            path: "{{ item.path }}"
+            state: absent
+          loop: "{{ _elasticsearch_cache_entries.files }}"
+          loop_control:
+            label: "{{ item.path }}"
           changed_when: false
 
         - name: elasticsearch-security | Set lenient disk watermarks for CI containers
@@ -902,13 +953,14 @@
     # ES 8.x: elasticsearch-setup-passwords creates all built-in user passwords
     # ES 9.x: setup-passwords is removed; use elasticsearch-reset-password per user
     - name: elasticsearch-security | Create initial passwords (ES 8.x)
-      ansible.builtin.shell: >
-        set -o pipefail;
-        /usr/share/elasticsearch/bin/elasticsearch-setup-passwords auto -b >
-        {{ elasticstack_initial_passwords }}.tmp &&
-        mv {{ elasticstack_initial_passwords }}.tmp {{ elasticstack_initial_passwords }}
+      ansible.builtin.command:
+        argv:
+          - /usr/share/elasticsearch/bin/elasticsearch-setup-passwords
+          - auto
+          - -b
+          - --url
+          - "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}"
       args:
-        executable: /bin/bash
         creates: "{{ elasticstack_initial_passwords }}"
       register: _elasticsearch_setup_passwords_result
       until: _elasticsearch_setup_passwords_result.rc | default(1) == 0
@@ -917,6 +969,20 @@
       when:
         - inventory_hostname == elasticstack_ca_host
         - elasticstack_release | int < 9
+      no_log: "{{ elasticstack_no_log }}"
+
+    - name: elasticsearch-security | Persist initial passwords (ES 8.x)
+      ansible.builtin.copy:
+        dest: "{{ elasticstack_initial_passwords }}"
+        content: "{{ _elasticsearch_setup_passwords_result.stdout }}"
+        owner: root
+        group: root
+        mode: "0600"
+      when:
+        - inventory_hostname == elasticstack_ca_host
+        - elasticstack_release | int < 9
+        - _elasticsearch_setup_passwords_result.changed | default(false) | bool
+        - _elasticsearch_setup_passwords_result.rc | default(1) == 0
       no_log: "{{ elasticstack_no_log }}"
 
     - name: elasticsearch-security | Create initial passwords (ES 9.x)
@@ -930,9 +996,15 @@
           register: _elasticsearch_pw_file_check
 
         - name: elasticsearch-security | Reset built-in user passwords
-          ansible.builtin.command: >
-            /usr/share/elasticsearch/bin/elasticsearch-reset-password
-            -u {{ item }} -b -s
+          ansible.builtin.command:
+            argv:
+              - /usr/share/elasticsearch/bin/elasticsearch-reset-password
+              - -u
+              - "{{ item }}"
+              - -b
+              - -s
+              - --url
+              - "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}"
           loop:
             - elastic
             - kibana_system

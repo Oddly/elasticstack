@@ -21,11 +21,10 @@
     - name: CI — set lenient disk watermarks
       ansible.builtin.include_tasks: ../shared/set_ci_watermarks.yml
 
-# Second cluster, same run. Without the fix for #143, group_by from the
-# first play would have left 3 masters in elasticsearch_role_master; this
-# play would then see 3 + 1 = 4 masters and fail the odd-count assertion.
-# With the fix, the count is scoped to ansible_play_hosts_all, so this
-# cluster sees 1 master.
+# Second cluster, same run. The dynamic role group from the first play must
+# not affect the second cluster's template or quorum calculation. The
+# calculation reads the node-role variables for the current play, so this
+# cluster sees one master even though the earlier play had three.
 - name: Converge monitoring cluster (1 master-eligible node, same run)
   hosts: elasticsearch_mon
   vars:

@@ -11,7 +11,7 @@ Since binascii.hexlify doesn't support a second parameter, which would define a 
 
 **Parameter:** A __bytes__ object that represent a hexadecimal value (e.g. b'\\x82S \\x11\\xc7s\\xa7^*w\\xc1\\xdf\"\\xe4#\\xb4\\xc4P\\xba\\xcf')
 
-**Return:** A hexadecimal __string__ seperated by colons (e.g. "82:53:20:11:C7:73:A7:5E:2A:77:C1:DF:22:E4:23:B4:C4:50:BA:CF") 
+**Return:** A hexadecimal __string__ seperated by colons (e.g. "82:53:20:11:C7:73:A7:5E:2A:77:C1:DF:22:E4:23:B4:C4:50:BA:CF")
 
 ### `check_supported_extensions()` function
 

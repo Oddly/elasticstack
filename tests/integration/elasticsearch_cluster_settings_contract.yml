@@ -64,6 +64,20 @@
     elasticsearch_validate_api_certs: false
     elasticstack_ca_host: localhost
   tasks:
+    - name: Read Elasticsearch security task source
+      ansible.builtin.set_fact:
+        _elasticsearch_security_source: >-
+          {{ lookup('ansible.builtin.file', '../../roles/elasticsearch/tasks/elasticsearch-security.yml') }}
+
+    - name: Assert settings are applied before security handlers flush
+      ansible.builtin.assert:
+        that:
+          - "_elasticsearch_security_source.find('include_tasks: elasticsearch-cluster-settings.yml') >= 0"
+          - "_elasticsearch_security_source.find('include_tasks: elasticsearch-cluster-settings.yml') < _elasticsearch_security_source.find('meta: flush_handlers')"
+        fail_msg: >-
+          Existing-cluster settings must be applied before the security task
+          flushes configuration handlers.
+
     - name: Apply cluster settings first time
       ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/elasticsearch-cluster-settings.yml
 

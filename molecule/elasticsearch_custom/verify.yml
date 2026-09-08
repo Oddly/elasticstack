@@ -83,6 +83,33 @@
           - "'discovery.type: single-node' in es_yml.content | b64decode"
         fail_msg: "Single-node cluster should have discovery.type: single-node"
 
+    - name: Verify optional Elasticsearch network and bootstrap variables
+      ansible.builtin.assert:
+        that:
+          - "'network.host: [\"0.0.0.0\"]' in es_yml.content | b64decode"
+          - "'http.publish_host: \"127.0.0.1\"' in es_yml.content | b64decode"
+          - "'http.publish_port: 9200' in es_yml.content | b64decode"
+          - "'transport.port: \"19300\"' in es_yml.content | b64decode"
+          - "'node.name: \"custom-es-node\"' in es_yml.content | b64decode"
+          - "'node.roles: [\"master\", \"data\", \"ingest\"]' in es_yml.content | b64decode"
+          - "'discovery.seed_hosts: [\"127.0.0.1\"]' in es_yml.content | b64decode"
+          - "'node.attr.temp: \"warm\"' in es_yml.content | b64decode"
+          - "'xpack.security.enrollment.enabled: true' in es_yml.content | b64decode"
+        fail_msg: "Optional Elasticsearch network or bootstrap variables did not render"
+
+    - name: Verify elasticsearch_cluster_set_up false bootstraps a fresh node
+      ansible.builtin.stat:
+        path: /usr/share/elasticsearch/initial_passwords
+      register: initial_passwords
+
+    - name: Assert fresh bootstrap completed with elasticsearch_cluster_set_up false
+      ansible.builtin.assert:
+        that:
+          - initial_passwords.stat.exists
+        fail_msg: >-
+          The explicit elasticsearch_cluster_set_up: false rollout did not
+          complete the fresh-cluster security bootstrap.
+
     # ── Custom paths ──────────────────────────────────────────────
 
     - name: Verify custom data directory is used

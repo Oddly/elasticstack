@@ -7,6 +7,13 @@ exclude_paths:
   - mkdocs.yml
   - docs/
 
+# ansible-lint 26.8.0 has not added the current supported core releases to
+# its built-in list yet. Keep the metadata rule aligned with this collection's
+# supported Ansible test matrix.
+supported_ansible_also:
+  - "2.20"
+  - "2.21"
+
 warn_list:
   - experimental
   - key-order[task]

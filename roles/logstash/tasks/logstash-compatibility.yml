@@ -1,0 +1,34 @@
+---
+# Keep the historical variable names working without defining them in
+# defaults/main.yml. Leaving the aliases undefined is significant: it lets
+# the current variables and the full-stack security fallback distinguish
+# "not supplied" from an explicit false value.
+- name: Set up security flag
+  ansible.builtin.set_fact:
+    _logstash_security: "{{ logstash_security | default(elasticstack_security | default(false)) }}"
+  tags:
+    - certificates
+    - renew_ca
+    - renew_logstash_cert
+    - preflight
+
+- name: Handle backwards compatibility for logstash_beats_tls
+  ansible.builtin.set_fact:
+    logstash_input_beats_ssl: "{{ logstash_beats_tls }}"
+  when:
+    - logstash_beats_tls is defined
+    - logstash_input_beats_ssl is undefined
+
+- name: Handle backwards compatibility for logstash_beats_input
+  ansible.builtin.set_fact:
+    logstash_input_beats: "{{ logstash_beats_input }}"
+  when:
+    - logstash_beats_input is defined
+    - logstash_input_beats is undefined
+
+- name: Handle backwards compatibility for logstash_elasticsearch_output
+  ansible.builtin.set_fact:
+    logstash_output_elasticsearch: "{{ logstash_elasticsearch_output }}"
+  when:
+    - logstash_elasticsearch_output is defined
+    - logstash_output_elasticsearch is undefined

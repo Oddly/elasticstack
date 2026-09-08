@@ -1,0 +1,76 @@
+---
+- name: elasticsearch-security-role | Validate role definition
+  ansible.builtin.assert:
+    that:
+      - _elasticsearch_security_role is mapping
+      - _elasticsearch_security_role.name is defined
+      - _elasticsearch_security_role.name | string | trim | length > 0
+      - _elasticsearch_security_role.cluster is not defined or (_elasticsearch_security_role.cluster is sequence and _elasticsearch_security_role.cluster is not string)
+      - _elasticsearch_security_role.indices is not defined or (_elasticsearch_security_role.indices is sequence and _elasticsearch_security_role.indices is not string)
+    fail_msg: >-
+      Each elasticsearch_security_roles item must contain a non-empty name;
+      cluster and indices, when present, must be lists.
+
+- name: elasticsearch-security-role | Build role request body
+  ansible.builtin.set_fact:
+    _elasticsearch_security_role_body: >-
+      {{ (_elasticsearch_security_role | combine({
+           'cluster': _elasticsearch_security_role.cluster | default([]),
+           'indices': _elasticsearch_security_role.indices | default([])
+         }))
+         | dict2items
+         | rejectattr('key', 'equalto', 'name')
+         | list
+         | items2dict }}
+
+- name: elasticsearch-security-role | Read current role
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_security_api_url }}/_security/role/{{ _elasticsearch_security_role.name | urlencode }}"
+    method: GET
+    user: elastic
+    password: "{{ _elasticsearch_security_api_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+    unredirected_headers:
+      - Authorization
+    return_content: true
+    status_code: [200, 404]
+  register: _elasticsearch_security_role_current
+  changed_when: false
+  failed_when: _elasticsearch_security_role_current.status | int not in [200, 404]
+  delegate_to: "{{ elasticstack_ca_host }}"
+  no_log: "{{ elasticstack_no_log }}"
+
+- name: elasticsearch-security-role | Compare role with the desired definition
+  ansible.builtin.set_fact:
+    _elasticsearch_security_role_changed: "{{ _elasticsearch_security_role_needs_update | trim }}"
+  vars:
+    _elasticsearch_security_role_needs_update: >-
+      {% set current = (_elasticsearch_security_role_current.json | default({})).get(_elasticsearch_security_role.name, {}) %}
+      {% set ns = namespace(changed=(_elasticsearch_security_role_current.status | int == 404)) %}
+      {% for key, value in _elasticsearch_security_role_body.items() %}
+      {%   if key not in current or current[key] != value %}
+      {%     set ns.changed = true %}
+      {%   endif %}
+      {% endfor %}
+      {{ ns.changed }}
+
+- name: elasticsearch-security-role | Create or update role
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_security_api_url }}/_security/role/{{ _elasticsearch_security_role.name | urlencode }}"
+    method: PUT
+    user: elastic
+    password: "{{ _elasticsearch_security_api_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+    unredirected_headers:
+      - Authorization
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: "{{ _elasticsearch_security_role_body }}"
+    status_code: 200
+  when: _elasticsearch_security_role_changed | bool
+  changed_when: true
+  delegate_to: "{{ elasticstack_ca_host }}"
+  no_log: "{{ elasticstack_no_log }}"

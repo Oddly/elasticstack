@@ -1,0 +1,39 @@
+---
+# Exercises the elasticstack_cert_pass propagation path — the class of
+# bug that took multiple rounds to diagnose during the #186 merge.
+#
+# elasticstack_cert_pass is an opt-in "common passphrase" that gets
+# copied into elasticsearch_tls_key_passphrase and
+# kibana_tls_key_passphrase on include. When the propagation gate was
+# `is defined` and the default was left commented out, callers who
+# explicitly wrote `elasticstack_cert_pass: ""` silently blanked the
+# downstream passphrases — the empty string then reached
+# elasticsearch-keystore add (empty stdin → rejected) and
+# elasticsearch-certutil --pass (no value, no TTY → java crash).
+#
+# This scenario deploys ES + Kibana single-node with a non-empty
+# shared passphrase and asserts the deployment finishes without a
+# keystore/certutil error. verify.yml pins the passphrase value that
+# actually landed in the keystore so a future regression to blanking
+# behaviour would fail the assertion instead of exiting green.
+- name: Converge
+  hosts: all
+  vars:
+    elasticstack_full_stack: true
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    elasticstack_no_log: false
+    # The value under test. If elasticstack_cert_pass is silently
+    # blanked, the deploy fails before verify runs.
+    elasticstack_cert_pass: "SharedPassphrase123!"
+    elasticstack_kibana_group_name: kibana
+    elasticstack_elasticsearch_group_name: elasticsearch
+  tasks:
+    - name: Include Elastic Repos
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.repos
+    - name: Deploy Elasticsearch
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elasticsearch
+    - name: Deploy Kibana
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.kibana

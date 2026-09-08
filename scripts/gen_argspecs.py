@@ -13,7 +13,13 @@ from pathlib import Path
 
 
 def parse_defaults(path):
-    """Returns list of dicts: [{'name': str, 'description': str, 'default': any}]"""
+    """Return documented variables and their default/type information.
+
+    A commented value is an optional input: it contributes an argument-spec
+    option and a type inferred from the example, but it must not acquire a
+    runtime default. That distinction matters for role code that deliberately
+    uses ``is defined`` to choose an auto-discovery or fallback path.
+    """
     with open(path) as f:
         text = f.read()
     lines = text.splitlines()
@@ -59,14 +65,13 @@ def parse_defaults(path):
 
         # Also skip `# @var ...:example:` blocks
         if re.match(r"^# @var\s+[\w.]+:example:", line):
-            # skip the example block similarly
-            if line.rstrip().endswith('>'):
+            # Examples are block scalars in this repository, but accept a
+            # single-line example as well. Stop at @end so example keys are
+            # never mistaken for optional variable declarations.
+            i += 1
+            while i < len(lines) and not lines[i].strip().startswith("# @end"):
                 i += 1
-                while i < len(lines) and not lines[i].strip().startswith("# @end"):
-                    i += 1
-                if i < len(lines):
-                    i += 1
-            else:
+            if i < len(lines):
                 i += 1
             continue
 
@@ -96,18 +101,39 @@ def parse_defaults(path):
             except Exception:
                 default_val = None
             entries.append(
-                {"name": varname, "description": pending_desc or "", "default": default_val}
+                {
+                    "name": varname,
+                    "description": pending_desc or "",
+                    "default": default_val,
+                    "has_default": True,
+                }
             )
             pending_var = None
             pending_desc = None
             i = block_end
             continue
 
-        # Also handle: commented-out defaults (# varname:) — skip but record with unset default
-        m = re.match(r"^#\s*(\w+):\s*$", line)
+        # Also handle commented-out optional values (# varname: value). The
+        # value is used only to infer the argument-spec type; it is never
+        # emitted as a runtime default.
+        m = re.match(r"^#\s*(\w+):\s*(.*)$", line)
         if m and pending_var == m.group(1):
+            sample = None
+            raw_value = m.group(2).strip()
+            if raw_value:
+                try:
+                    parsed = yaml.safe_load(f"{m.group(1)}: {raw_value}")
+                    if isinstance(parsed, dict):
+                        sample = parsed.get(m.group(1))
+                except yaml.YAMLError:
+                    sample = None
             entries.append(
-                {"name": m.group(1), "description": pending_desc or "", "default": None}
+                {
+                    "name": m.group(1),
+                    "description": pending_desc or "",
+                    "default": sample,
+                    "has_default": False,
+                }
             )
             pending_var = None
             pending_desc = None
@@ -139,11 +165,11 @@ def build_argument_specs(role_name, entries, short_desc, long_desc):
     options = {}
     for e in entries:
         opt = {"description": e["description"] or f"See defaults/main.yml for {e['name']}."}
-        if e["default"] is not None:
+        if e.get("has_default", e["default"] is not None):
             opt["type"] = infer_type(e["default"])
             opt["default"] = e["default"]
         else:
-            opt["type"] = "raw"
+            opt["type"] = infer_type(e["default"]) if e["default"] is not None else "raw"
         options[e["name"]] = opt
     return {
         "argument_specs": {
@@ -196,10 +222,37 @@ def main():
     short_desc, long_desc = ROLE_METADATA.get(
         role_name, (f"Role {role_name}", f"Role {role_name}.")
     )
+    outpath = role_path / "meta" / "argument_specs.yml"
+    existing = {}
+    if outpath.exists():
+        with open(outpath) as f:
+            existing = yaml.safe_load(f) or {}
+
     spec = build_argument_specs(role_name, entries, short_desc, long_desc)
+    if existing:
+        # Keep action entry points (and any hand-tuned metadata such as
+        # no_log/choices) while adding or refreshing the generated main
+        # options. This role currently has node-maintenance entry points in
+        # addition to main.
+        existing_argument_specs = existing.get("argument_specs") or {}
+        existing_main = existing_argument_specs.get("main") or {}
+        generated_main = spec["argument_specs"]["main"]
+        existing_options = existing_main.get("options") or {}
+        merged_options = {}
+        for entry in entries:
+            name = entry["name"]
+            generated_option = generated_main["options"][name]
+            option = existing_options.get(name, generated_option)
+            if not entry.get("has_default", entry["default"] is not None):
+                option = dict(option)
+                option.pop("default", None)
+                option["type"] = generated_option["type"]
+            merged_options[name] = option
+        existing_main["options"] = merged_options
+        existing_argument_specs["main"] = existing_main
+        spec["argument_specs"] = existing_argument_specs
 
     (role_path / "meta").mkdir(exist_ok=True)
-    outpath = role_path / "meta" / "argument_specs.yml"
     with open(outpath, "w") as f:
         f.write("---\n")
         yaml.dump(spec, f, sort_keys=False, default_flow_style=False, width=120)

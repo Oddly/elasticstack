@@ -32,7 +32,7 @@ graph TD
 
 ## Requirements
 
-- Minimum Ansible version: `2.18`
+- Minimum Ansible version: `2.20`
 - The `elasticsearch` role must have completed (Logstash needs ES for user/role creation and output)
 
 ## Default Variables
@@ -162,9 +162,9 @@ logstash_custom_pipeline: |
 ### Input Configuration
 
 ```yaml
-logstash_input_beats: true
+# logstash_input_beats: true
 logstash_input_beats_port: 5044
-logstash_input_beats_ssl: "{{ logstash_beats_tls | default(omit) }}"
+# logstash_input_beats_ssl: false
 # logstash_input_beats_client_auth: required
 # logstash_input_beats_timeout: 60s
 
@@ -176,17 +176,19 @@ logstash_extra_inputs: ""
 ```
 
 `logstash_input_beats`
-:   Enable the Beats input plugin, which listens for events from Filebeat, Metricbeat, Heartbeat, and other Beats agents. This is the primary ingest path for most Elastic Stack deployments.
+:   Enable the Beats input plugin, which listens for events from Filebeat, Metricbeat, Heartbeat, and other Beats agents. Leave it undefined for the effective default (`true`), or set it to `false` to disable the input. This is the primary ingest path for most Elastic Stack deployments.
 
 `logstash_input_beats_port`
 :   TCP port the Beats input binds to. All Beat agents in your fleet must target this port. If you also enable the Elastic Agent input, give it a different port to avoid conflicts.
 
 `logstash_input_beats_ssl`
-:   Enable TLS encryption on the Beats input. In full-stack mode (`elasticstack_full_stack: true`), this defaults to `true` automatically. Accepts the legacy variable name `logstash_beats_tls` for backwards compatibility. When enabled, the input requires certificate files in `logstash_certs_dir`.
+:   Enable TLS encryption on the Beats input. Leave it undefined in full-stack mode (`elasticstack_full_stack: true`) to inherit the stack security setting, or set it explicitly to override that behavior. Accepts the legacy variable name `logstash_beats_tls` for backwards compatibility. When enabled, the input requires certificate files in `logstash_certs_dir`.
 
 `logstash_input_beats_client_auth`
 :   Whether the Beats input requires clients to present a TLS certificate. Accepts `required` (clients must authenticate — the default), `optional` (certificates are validated if presented), or `none` (no client certificate required). Only relevant when `logstash_input_beats_ssl` is enabled.
 
+<!-- MkDocs tab content uses indentation that markdownlint classifies as code. -->
+<!-- markdownlint-disable MD046 -->
 === "9.x"
 
     Renders as `ssl_client_authentication => required` in the Beats input block.
@@ -196,7 +198,9 @@ logstash_extra_inputs: ""
     Renders as `ssl_verify_mode => force_peer` (hardcoded; the variable has no effect in 8.x).
 
 `logstash_input_beats_timeout`
-:   Idle timeout for Beats connections. Connections with no data for this duration are closed. Accepts a duration string like `60s` or `300s`. When undefined, the Beats input uses its built-in default. Set this lower if you have many idle Beat agents holding open connections.
+:   Idle timeout for Beats connections. Connections with no data for this duration are closed. Accepts a duration string ending in `s`, such as `60s` or `300s`; the role renders the value as the numeric seconds required by Logstash. When undefined, the Beats input uses its built-in default. Set this lower if you have many idle Beat agents holding open connections.
+
+<!-- markdownlint-enable MD046 -->
 
 `logstash_input_elastic_agent`
 :   Enable the Elastic Agent input plugin. Elastic Agent uses a different protocol than Beats, so this is a separate input. Disabled by default.
@@ -262,7 +266,7 @@ logstash_filter_files:
 ### Output Configuration
 
 ```yaml
-logstash_output_elasticsearch: true
+# logstash_output_elasticsearch: true
 logstash_elasticsearch_hosts: []
 logstash_elasticsearch_index: ""
 logstash_validate_after_inactivity: 300
@@ -273,7 +277,7 @@ logstash_extra_outputs: ""
 ```
 
 `logstash_output_elasticsearch`
-:   Enable the Elasticsearch output plugin. Disable this if Logstash writes to a different destination (Kafka, S3, etc.) and you are providing all outputs via `logstash_extra_outputs`.
+:   Enable the Elasticsearch output plugin. Leave it undefined for the effective default (`true`), or set it to `false` when Logstash writes to a different destination (Kafka, S3, etc.) through `logstash_extra_outputs`.
 
 `logstash_elasticsearch_hosts`
 :   Explicit list of Elasticsearch host addresses. When empty (the default), the role auto-discovers hosts from the inventory group defined by `elasticstack_elasticsearch_group_name` in full-stack mode, or falls back to `localhost` as a last resort. Each host is combined with `elasticstack_elasticsearch_http_port` (default `9200`) in the output config.
@@ -351,7 +355,7 @@ logstash_role_indicies_privileges:
 
 logstash_create_user: true
 logstash_user_name: logstash_writer
-logstash_user_password: password
+logstash_user_password: "{{ vault_logstash_user_password }}"
 logstash_user_email: ""
 logstash_user_fullname: "Internal Logstash User"
 ```
@@ -378,10 +382,10 @@ logstash_user_fullname: "Internal Logstash User"
 :   Username for the Logstash Elasticsearch user. This is written into the output section of the pipeline config.
 
 `logstash_user_password`
-:   Password for the Logstash Elasticsearch user. The role validates that this is at least 6 characters (Elasticsearch's minimum).
+:   Password for the Logstash Elasticsearch user. There is no default. The role requires a nonempty value of at least 6 characters when `logstash_create_user` is enabled and when the secured standard Elasticsearch output is enabled.
 
 !!! warning
-    The default password is `password`. Change this in any environment beyond local testing. Use Ansible Vault or an external secrets manager to avoid storing the password in plain text.
+    Store this value in Ansible Vault or retrieve it from a secret manager. For example, keep `vault_logstash_user_password` in an encrypted `group_vars` file and pass it as `logstash_user_password: "{{ vault_logstash_user_password }}"`. If the Elasticsearch user is managed elsewhere, set `logstash_create_user: false` and still provide the password when the secured standard output is enabled.
 
 `logstash_user_email`
 :   Optional email address attached to the Elasticsearch user as metadata. Has no functional effect.
@@ -407,12 +411,15 @@ logstash_cert_force_regenerate: false
 # logstash_tls_copy_certs: true   # set to false for hands-off rotation (certmonger, cert-manager)
 ```
 
+<!-- markdownlint-disable MD046 -->
 `logstash_cert_source`
 :   Controls where TLS certificates come from. Three modes are supported:
 
     - **`elasticsearch_ca`** (default) — fetches certificates from the Elasticsearch CA host. The role also creates the `logstash_writer` user and role in Elasticsearch. This is the standard mode for full-stack deployments.
     - **`standalone`** — generates a self-signed certificate for environments where Logstash runs independently. User/role creation still occurs.
     - **`external`** — uses certificate files you provide via `logstash_tls_certificate_file`, `logstash_tls_key_file`, and optionally `logstash_tls_ca_file`. The role copies them into place but does NOT create the ES user/role (assumes you manage that separately).
+
+<!-- markdownlint-enable MD046 -->
 
 `logstash_certs_dir`
 :   Directory on the Logstash host where TLS certificates, keys, and the CA bundle are stored. The role creates this directory and writes the PEM certificate, the unencrypted PKCS#8 PEM key, the P12 keystore for the Elasticsearch output, and the CA certificate here.
@@ -631,9 +638,11 @@ Where the key comes from depends on the mode:
 
 The Logstash input and output configuration templates use different SSL parameter names depending on the Elastic version:
 
+<!-- MkDocs tab content uses indentation that markdownlint classifies as code. -->
+<!-- markdownlint-disable MD046 -->
 === "9.x"
 
-    ```
+    ```text
     # Input (Beats / Elastic Agent)
     ssl_enabled => true
     ssl_certificate => "/etc/logstash/certs/<hostname>-server.crt"
@@ -650,7 +659,7 @@ The Logstash input and output configuration templates use different SSL paramete
 
 === "8.x"
 
-    ```
+    ```text
     # Input (Beats / Elastic Agent)
     ssl => true
     ssl_certificate => "/etc/logstash/certs/<hostname>-server.crt"
@@ -664,6 +673,8 @@ The Logstash input and output configuration templates use different SSL paramete
     keystore_password => "..."
     cacert => "/etc/logstash/certs/ca.crt"
     ```
+
+<!-- markdownlint-enable MD046 -->
 
 The template switches automatically based on `elasticstack_release | int >= 9`. With `logstash_cert_source: external` and `logstash_tls_copy_certs: false`, the `ssl_certificate`, `ssl_key`, and `ssl_certificate_authorities` values point at the paths you supplied rather than `logstash_certs_dir`.
 
@@ -681,7 +692,7 @@ The `logstash_cert_source` variable controls where TLS certificates come from:
 
 ### Password validation
 
-The role validates that `logstash_user_password` is at least 6 characters. Elasticsearch rejects shorter passwords, so the role fails early with a clear error rather than letting the API call fail cryptically.
+The role fails before package and configuration changes if a password is required but missing, blank, or shorter than 6 characters. The password is required when the role creates the Elasticsearch user and whenever the secured standard Elasticsearch output is enabled. Set `logstash_create_user: false` when an external system manages the user, and supply the same secret through Vault or a secret manager for the output configuration.
 
 ### Backwards compatibility
 

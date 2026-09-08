@@ -38,7 +38,7 @@ graph TD
 
 ## Requirements
 
-- Minimum Ansible version: `2.18`
+- Minimum Ansible version: `2.20`
 - The `repos` role must run first to configure package repositories
 
 ## Default Variables
@@ -103,7 +103,7 @@ These variables are all optional and undefined by default. When unset, the templ
 # elasticsearch_node_types: ["master", "data", "ingest"]  # undefined by default
 ```
 
-`elasticsearch_node_types` sets `node.roles` in `elasticsearch.yml`. When undefined, Elasticsearch assigns all roles to the node (the default for small clusters). Define this to create dedicated node types in larger deployments. The role validates that the number of master-eligible nodes is odd to prevent split-brain scenarios -- an even master count fails the play immediately.
+`elasticsearch_node_types` sets `node.roles` in `elasticsearch.yml`. When undefined, Elasticsearch assigns all roles to the node (the default for small clusters). Define this to create dedicated node types in larger deployments. During fresh cluster bootstrap, the role counts the master-eligible hosts in the current play and fails immediately when that count is even. The count is based on the inventory variables, so it remains consistent when the play uses Ansible's `free` strategy.
 
 Common configurations:
 
@@ -268,6 +268,57 @@ elasticsearch_validate_api_certs: false
 
 `elasticsearch_elastic_password` sets a user-defined password for the `elastic` superuser. When set, the role changes the auto-generated password to this value after initial security setup and uses it for all subsequent API calls. Leave empty to keep using the auto-generated password from the `initial_passwords` file. The `initial_passwords` file is preserved for other built-in users (kibana_system, beats_system, etc.).
 
+#### Declarative security objects
+
+The role manages custom users, roles, and role mappings through the
+Elasticsearch security API after the cluster is healthy. The API calls run
+once on `elasticstack_ca_host` with the `elastic` credential. The credential is
+read from `elasticstack_initial_passwords` unless
+`elasticsearch_elastic_password` supplies the persistent value.
+
+```yaml
+elasticsearch_security_roles:
+  - name: app_writer
+    cluster: [monitor]
+    indices:
+      - names: ["app-*"]
+        privileges: [read, write]
+
+elasticsearch_users:
+  - name: app_ingest
+    password: "{{ vault_app_ingest_password }}"
+    roles: [app_writer]
+
+elasticsearch_role_mappings:
+  - name: app_admins
+    roles: [app_writer]
+    rules:
+      field:
+        groups: "cn=app-admins,dc=example,dc=com"
+```
+
+These objects require an administrative account with `manage_security`.
+Mappings reference existing roles, so a role must be declared before a mapping
+that uses it. Custom user passwords are sent on creation and are not reset on
+later runs because the API does not return password material. Set
+`password_update: true` on a user for an intentional password rotation.
+
+Use `elasticsearch_builtin_passwords` for built-in users other than `elastic`:
+
+```yaml
+elasticsearch_builtin_passwords:
+  kibana_system: "{{ vault_kibana_system_password }}"
+  logstash_system: "{{ vault_logstash_system_password }}"
+  beats_system: "{{ vault_beats_system_password }}"
+```
+
+Built-in password entries are applied on each run because Elasticsearch cannot
+compare their current values. Keep all password variables in Ansible Vault or
+a secrets manager. On a fresh deployment, the role's generated built-in
+passwords are stored in `{{ elasticstack_initial_passwords }}` on
+`elasticstack_ca_host`; `elasticsearch_bootstrap_pw` is only the temporary
+bootstrap credential.
+
 `elasticsearch_security` is the main security toggle. When enabled, the role generates a certificate authority, creates per-node TLS certificates, configures transport and HTTP encryption, initializes the `elastic` superuser password, and enables RBAC. Elasticsearch 8.x and later require security -- the role fails the play if you try to disable it on 8.x+.
 
 `elasticsearch_http_security` controls TLS on the HTTP interface (port 9200) independently of transport encryption. Only relevant when `elasticsearch_security` is also `true`. Disabling HTTP security while keeping transport encryption is unusual but sometimes done behind a TLS-terminating reverse proxy.
@@ -374,6 +425,8 @@ elasticsearch_logging_audit: true
 
 `elasticsearch_logging_audit` enables the security audit log appender, writing to `<clustername>_audit.json`. Only meaningful when `elasticsearch_security` is also true. Records authentication events, access grants/denials, and security configuration changes. Required for compliance in many environments.
 
+<!-- MkDocs tab content uses indentation that markdownlint classifies as code. -->
+<!-- markdownlint-disable MD046 -->
 === "8.x"
 
     JSON logs use `ESJsonLayout` with `type_name` fields. Deprecation logs include `esmessagefields: x-opaque-id` for request correlation. Indexing slow log logger name is `index.indexing.slowlog`.
@@ -381,6 +434,8 @@ elasticsearch_logging_audit: true
 === "9.x"
 
     JSON logs use `ECSJsonLayout` with `dataset` fields (Elastic Common Schema). Deprecation logs add a `RateLimitingFilter` to prevent log flooding and a `HeaderWarningAppender` for HTTP response warnings. Indexing slow log logger name changed to `index.indexing.slowlog.index`.
+
+<!-- markdownlint-enable MD046 -->
 
 ### Custom Keystore Entries
 
@@ -506,7 +561,9 @@ elasticsearch_freshstart_security:
 
 ### Master node quorum
 
-The role validates that you have an odd number of master-eligible nodes. An even number makes split-brain possible. If you define `elasticsearch_node_types` and the resulting master count is even, the play fails with an error.
+During fresh cluster bootstrap, the role validates that you have an odd number of master-eligible hosts in the current play. An even number provides no additional failure tolerance and should be corrected before bootstrapping. If you define `elasticsearch_node_types` and the resulting count is even, the play fails with an error.
+
+The check is skipped when `elasticsearch_cluster_set_up: true` or when the local initialization marker already exists. That path is for adding a node to an existing cluster, where a limited play may contain only part of the cluster's established master quorum. In that case, validate the actual cluster membership separately and keep the existing cluster's master-eligible count odd.
 
 ### Heap auto-calculation
 
@@ -583,7 +640,7 @@ By default, Elasticsearch binds to `["_local_", "_site_"]` (localhost and the si
 
 ### Password file format
 
-The initial passwords file at `/usr/share/elasticsearch/initial_passwords` is generated by `elasticsearch-setup-passwords auto -b`. The role parses it with `grep "PASSWORD <username> " | awk '{print $4}'`. Other roles (Kibana, Logstash, Beats) delegate to the CA host to read their service passwords from this file.
+The initial passwords file at `/usr/share/elasticsearch/initial_passwords` is generated by `elasticsearch-setup-passwords auto -b`. The role parses it with `awk` using the username as a field match and fails if no password is found. Other roles (Kibana, Logstash, Beats) delegate to the CA host to read their service passwords from this file.
 
 ### ES 8+ security requirement
 

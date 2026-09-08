@@ -1,0 +1,66 @@
+---
+# Exercise Kibana's external PEM content branch. Elasticsearch security is
+# disabled here so the certificate under test is isolated to Kibana's web
+# listener and the test does not depend on two unrelated trust stores.
+- name: Generate test certificate material
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: Generate a test CA and server certificate
+      ansible.builtin.include_tasks: ../shared/generate_test_certs.yml
+
+- name: Read certificate material for Kibana content mode
+  hosts: kibana
+  tasks:
+    - name: Read the certificate, key, and CA
+      ansible.builtin.slurp:
+        src: "{{ item.path }}"
+      loop:
+        - { path: /tmp/test-certs/server.crt, name: certificate }
+        - { path: /tmp/test-certs/server.key, name: key }
+        - { path: /tmp/test-certs/ca.crt, name: ca }
+      register: _kibana_cert_content
+      loop_control:
+        label: "{{ item.name }}"
+
+- name: Deploy Elasticsearch and Kibana with inline certificate content
+  hosts: all
+  vars:
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    elasticstack_full_stack: true
+    elasticstack_security: false
+    elasticstack_no_log: false
+    elasticsearch_security: false
+    elasticsearch_heap: "1"
+    kibana_security: false
+    kibana_tls: true
+    kibana_cert_source: external
+    # Invalid paths prove the content branch takes precedence.
+    kibana_tls_certificate_file: /tmp/test-certs/missing-certificate.crt
+    kibana_tls_key_file: /tmp/test-certs/missing-key.key
+    kibana_tls_ca_file: /tmp/test-certs/missing-ca.crt
+    kibana_tls_certificate_content: "{{ hostvars[inventory_hostname]._kibana_cert_content.results[0].content | b64decode }}"
+    kibana_tls_key_content: "{{ hostvars[inventory_hostname]._kibana_cert_content.results[1].content | b64decode }}"
+    kibana_tls_ca_content: "{{ hostvars[inventory_hostname]._kibana_cert_content.results[2].content | b64decode }}"
+    kibana_tls_remote_src: false
+  tasks:
+    - name: Include Elastic repositories
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.repos
+
+    - name: Deploy Elasticsearch
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elasticsearch
+      when: "'elasticsearch' in group_names"
+
+    - name: CI — set lenient disk watermarks
+      ansible.builtin.include_tasks: ../shared/set_ci_watermarks.yml
+      when: "'elasticsearch' in group_names"
+
+    - name: CI — clean cache after Elasticsearch
+      ansible.builtin.include_tasks: ../shared/cleanup_cache.yml
+
+    - name: Deploy Kibana
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.kibana
+      when: "'kibana' in group_names"

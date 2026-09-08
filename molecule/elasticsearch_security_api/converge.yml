@@ -7,6 +7,8 @@
     elasticstack_full_stack: false
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticsearch_heap: "1"
+    security_api_admin_password: "TestElasticPassword123!"
+    elasticsearch_elastic_password: "{{ security_api_admin_password }}"
     elasticstack_no_log: false
   tasks:
     - name: Include Elastics repos role
@@ -55,22 +57,12 @@
     - name: CI — set lenient disk watermarks
       ansible.builtin.include_tasks: ../shared/set_ci_watermarks.yml
 
-    - name: Fetch Elastic password # noqa: risky-shell-pipe
-      ansible.builtin.shell: >
-        set -o pipefail;
-        grep "PASSWORD elastic" /usr/share/elasticsearch/initial_passwords |
-        awk '{ print $4 }'
-      args:
-        executable: /bin/bash
-      register: elasticstack_password
-      changed_when: false
-
     - name: Create elasticsearch role via REST API
       ansible.builtin.uri:
         url: https://localhost:9200/_security/role/new-role1
         method: PUT
         user: elastic
-        password: "{{ elasticstack_password.stdout }}"
+        password: "{{ security_api_admin_password }}"
         force_basic_auth: true
         validate_certs: false
         body_format: json
@@ -91,7 +83,7 @@
         url: https://localhost:9200/_security/user/new-user1
         method: PUT
         user: elastic
-        password: "{{ elasticstack_password.stdout }}"
+        password: "{{ security_api_admin_password }}"
         force_basic_auth: true
         validate_certs: false
         body_format: json

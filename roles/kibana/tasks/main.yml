@@ -25,7 +25,13 @@
 
 - name: Set Elasticsearch hosts if used with other roles
   ansible.builtin.set_fact:
-    kibana_elasticsearch_hosts: "{{ groups[elasticstack_elasticsearch_group_name] }}"
+    kibana_elasticsearch_hosts: >-
+      {{
+        [hostvars[groups[elasticstack_elasticsearch_group_name][0]].elasticsearch_api_host | default('localhost', true)]
+        if (groups[elasticstack_elasticsearch_group_name] | length == 1 and
+            groups[elasticstack_elasticsearch_group_name][0] == inventory_hostname)
+        else groups[elasticstack_elasticsearch_group_name]
+      }}
   when:
     - kibana_elasticsearch_hosts is undefined
     - groups[elasticstack_elasticsearch_group_name] is defined
@@ -106,8 +112,8 @@
     src: kibana.yml.j2
     dest: /etc/kibana/kibana.yml
     owner: root
-    group: root
-    mode: "0644"
+    group: kibana
+    mode: "0640"
     backup: "{{ kibana_config_backup }}"
   notify:
     - Restart Kibana
@@ -201,4 +207,3 @@
           Recent log output:
           {{ _kibana_wait_journal.stdout }}
       when: _kibana_wait_result.rc | default(0) != 2
-

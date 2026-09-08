@@ -7,6 +7,7 @@ on:
     paths:
       - 'roles/**'
       - 'tests/integration/**'
+      - 'tests/variable_coverage.yml'
       - 'tests/fakes/**'
       - '.github/workflows/test_contracts.yml'
   push:
@@ -41,13 +42,16 @@ jobs:
           python -m pip install --upgrade pip
           # Match the requirements-test.txt floor so contract tests exercise
           # the same ansible-core the molecule matrix does.
-          pip install 'ansible-core>=2.18,<2.19'
+          pip install 'ansible-core>=2.20,<2.21'
 
       - name: Install collection into ansible-galaxy path
         run: |
           mkdir -p "$HOME/.ansible/collections/ansible_collections/oddly"
           ln -s "$PWD" "$HOME/.ansible/collections/ansible_collections/oddly/elasticstack"
-          ansible-galaxy collection install community.general community.crypto ansible.posix
+          ansible-galaxy collection install \
+            community.general:12.3.0 \
+            community.crypto:3.1.1 \
+            ansible.posix:2.1.0
 
       - name: Run contract tests
         run: |

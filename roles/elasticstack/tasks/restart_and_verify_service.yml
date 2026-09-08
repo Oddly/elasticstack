@@ -11,7 +11,10 @@
   block:
     - name: "restart_and_verify_service | Reset {{ _service_name }} failed state before restart"  # noqa: name[template]
       ansible.builtin.command:
-        cmd: "systemctl reset-failed {{ _service_name }}.service"
+        argv:
+          - systemctl
+          - reset-failed
+          - "{{ _service_name }}.service"
       changed_when: false
       failed_when: false
 
@@ -32,7 +35,13 @@
   rescue:
     - name: "restart_and_verify_service | Get recent {{ _service_name }} journal output"  # noqa: name[template] var-naming[no-role-prefix]
       ansible.builtin.command:
-        cmd: "journalctl -u {{ _service_name }} --no-pager -n 50"
+        argv:
+          - journalctl
+          - -u
+          - "{{ _service_name }}"
+          - --no-pager
+          - -n
+          - "50"
       register: _service_journal
       changed_when: false
 

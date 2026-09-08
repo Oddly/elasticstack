@@ -97,7 +97,7 @@ When fixing a bug:
 
 Six roles — one meta-role plus five siblings that import it:
 
-```
+```text
 roles/
   elasticstack/   Meta-role. Runs once per host (idempotency fact
                   _elasticstack_role_imported). Owns cert generation via
@@ -142,8 +142,8 @@ Elasticsearch has two extension points worth calling out separately:
 ## Multi-OS
 
 PR-time matrix: `rockylinux10`, `debian13`. Scheduled matrix expands to
-`rockylinux9`, `ubuntu2204`, `ubuntu2404`, `ubuntu2604`, `debian12`,
-`debian13`. Both RHEL-family and Debian-family paths need coverage —
+`rockylinux9`, `ubuntu2204`, `ubuntu2404`, `ubuntu2604`, `debian13`.
+Both RHEL-family and Debian-family paths need coverage —
 per-OS variable files live at
 `{{ ansible_facts.os_family }}_{{ ansible_facts.distribution_major_version }}.yml`
 with a fallback to `{{ ansible_facts.os_family }}.yml`, loaded via

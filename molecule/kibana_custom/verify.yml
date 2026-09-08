@@ -65,6 +65,36 @@
             src: /etc/kibana/kibana.yml
           register: kibana_yml
 
+        - name: Check kibana.yml permissions
+          ansible.builtin.stat:
+            path: /etc/kibana/kibana.yml
+          register: kibana_config
+
+        - name: Assert kibana.yml is service-readable and private
+          ansible.builtin.assert:
+            that:
+              - kibana_config.stat.pw_name == 'root'
+              - kibana_config.stat.gr_name == 'kibana'
+              - kibana_config.stat.mode == '0640'
+              - "'elasticsearch.password:' not in (kibana_yml.content | b64decode)"
+            fail_msg: >-
+              kibana.yml must be root:kibana 0640 and must not contain the
+              Elasticsearch backend password; Kibana should read it from its
+              keystore.
+
+        - name: Verify Kibana backend password is in the keystore
+          ansible.builtin.command:
+            argv:
+              - /usr/share/kibana/bin/kibana-keystore
+              - show
+              - elasticsearch.password
+          environment:
+            KBN_PATH_CONF: /etc/kibana
+          register: kibana_backend_password
+          changed_when: false
+          no_log: true
+          failed_when: kibana_backend_password.rc != 0 or kibana_backend_password.stdout | trim | length == 0
+
         - name: Verify extra config is present
           ansible.builtin.assert:
             that:

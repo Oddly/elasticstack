@@ -1,24 +1,32 @@
-# Markdownlint config — narrow scope by intent.
+# Markdownlint config.
 #
-# We turn off the default rule set and re-enable only the rules that
-# CodeRabbit's CHILL profile flags on this repo. The goal is to catch
-# the same nits CodeRabbit catches, locally at commit time, without
-# generating a wall of false positives on the existing markdown that
-# was written without lint discipline.
-#
-# Add more rules here as the need is demonstrated, not preemptively.
+# We turn off the default rule set and re-enable rules that keep the maintained
+# Markdown structurally consistent without imposing a line-length policy.
 config:
   default: false
+  MD009: true    # no-trailing-spaces
+  MD012: true    # no-multiple-blanks
+  MD024: true    # no-duplicate-heading
+  MD025: true    # single-title
+  MD029:         # ol-prefix
+    style: one_or_ordered
+  MD036: true    # no-emphasis-as-heading
   MD040: true   # fenced-code-language: opening fences must specify a language
   MD046:        # code-block-style: prefer fenced over indented
     style: fenced
+  MD041: true    # first-line-heading
+  MD045: true    # no-alt-text
+  MD047: true    # single-trailing-newline
+  MD058: true    # blanks-around-tables
 
-# Narrow scope for the initial rollout: lint files this PR has touched
-# (the prompts directory). Expand to docs/, plugins/, tests/ in a follow-up
-# cleanup PR — running --all-files today reports 24 pre-existing findings
-# in unrelated files, which would block every commit if globbed in.
+# Lint tracked repository Markdown, including root documentation, the docs
+# site, plugin and role documentation, and CI documentation.
 globs:
-  - ".github/prompts/**/*.md"
+  - "*.md"
+  - "ci/**/*.md"
+  - "docs/**/*.md"
+  - "plugins/**/*.md"
+  - "roles/**/README.md"
 
 ignores:
   - ".venv/**"
@@ -26,3 +34,4 @@ ignores:
   - "node_modules/**"
   - ".ansible/**"
   - ".claude/**"
+  - ".superpowers/**"

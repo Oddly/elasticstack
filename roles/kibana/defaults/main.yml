@@ -38,6 +38,8 @@ kibana_manage_yaml: true
 # @end
 kibana_system_password: ""
 
+# @var kibana_elasticsearch_hosts:description: Elasticsearch hosts for Kibana. Undefined derives them from the configured inventory group; a colocated single-node deployment uses that host's Elasticsearch API endpoint
+# kibana_elasticsearch_hosts: ["es-1", "es-2"]
 # @var kibana_security:description: Enable security features (connect to Elasticsearch over HTTPS with authentication)
 kibana_security: true
 # @var kibana_tls:description: Enable TLS on the Kibana web interface itself (serve Kibana over HTTPS)
@@ -109,6 +111,8 @@ kibana_sniff_on_start: false
 #   Deprecated: removed in Elasticsearch/Kibana 9.x. Will be dropped in a future release.
 # @end
 kibana_sniff_on_connection_fault: false
+# @var kibana_sniff_interval:description: Interval in milliseconds for legacy Elasticsearch node sniffing on Kibana 8.x
+# kibana_sniff_interval: 30000
 
 # @var kibana_extra_config:description: >
 #   Dictionary of additional kibana.yml settings not covered by dedicated

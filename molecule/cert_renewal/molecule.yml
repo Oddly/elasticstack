@@ -7,17 +7,17 @@ dependency:
 driver:
   name: default
 platforms:
-  - name: "cert-renew-es1-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
+  - name: "cert-renew-es1-${MOLECULE_DISTRO:-debian13}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
     groups:
       - elasticsearch
       - logstash
-    distro: "${MOLECULE_DISTRO:-debian12}"
+    distro: "${MOLECULE_DISTRO:-debian13}"
     memory_mb: 4608
-  - name: "cert-renew-es2-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
+  - name: "cert-renew-es2-${MOLECULE_DISTRO:-debian13}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
     groups:
       - elasticsearch
       - kibana
-    distro: "${MOLECULE_DISTRO:-debian12}"
+    distro: "${MOLECULE_DISTRO:-debian13}"
     memory_mb: 6144
 provisioner:
   name: ansible

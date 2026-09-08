@@ -29,15 +29,14 @@ The oddly.elasticstack.cert_info module gathers information about pkcs12 certifi
 - 3.12
 
 ### Tested ansible-core versions
-- 2.18
-- 2.19
 - 2.20
+- 2.21
 
 ### Security measures
 - Only supported extensions with its available values will be returned. The available keys and values are applied in the code with the `SUPPORTED_EXTENSIONS` dictionary. The module will loop through it, and only if found, it will save it to the `results` variable.
 - The paramters `path` and `passphrase` are set to no_log in the Ansible Module object.
-- The objects `__private_key`, `__cert`, and `__additional_certs` are private and cannot be accessed globally.
-- The object variables `__path` and `__passphrase` is private and cannot be accesed globally.
+- The private key and additional certificates in a PKCS#12 bundle are not returned.
+- The object variables `__path` and `__passphrase` are private and cannot be accessed globally.
 
 ### Supported extensions and values
 Currently, the information of the following extensions and values will be returned (other extensions/values will be skipped):
@@ -59,9 +58,11 @@ Currently, the information of the following extensions and values will be return
 `path`:
 Absolute path to certificate. (**Default:** undefined, required)
 
-`password`:
-The password of the pkcs12 certificate. (**Default:** No default, optional)
+`passphrase`:
+The passphrase of the PKCS#12 certificate. (**Default:** No default, optional)
 
+`format`:
+The certificate encoding, either `p12` or `pem`. (**Default:** `p12`)
 
 ### Returns
 All keys and values that will be returned with the results variable of the module:
@@ -90,7 +91,7 @@ The serial number of the certificate as **str** which represents an integer.
 - `values`: The keys and their values of the extension as **str**. (See: Supported extensions)
 
 ### Example
-```
+```yaml
 - name: Test
   cert_info:
     path: /opt/es-ca/elasticsearch-ca.pkcs12
@@ -103,7 +104,7 @@ The serial number of the certificate as **str** which represents an integer.
 ```
 
 **Output**:
-```
+```text
 TASK [Debug] *******************************************************************
 ok: [localhost] => {
     "msg": {

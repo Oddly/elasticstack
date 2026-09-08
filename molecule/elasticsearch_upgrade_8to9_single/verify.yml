@@ -1,5 +1,7 @@
 ---
-# Verify single-node Elasticsearch 8.x to 9.x upgrade
+# Verify single-node Elasticsearch 8.x to 9.x upgrade. The initial 8.10.0
+# install proves that elasticstack_version is honored by a rollout before the
+# release-only upgrade to 9.x.
 
 - name: Verify ES 9.x upgrade
   hosts: all

@@ -5,10 +5,10 @@
     - name: Verify minimum Ansible version
       ansible.builtin.assert:
         that:
-          - ansible_version.full is version('2.18.0', '>=')
+          - ansible_version.full is version('2.20.0', '>=')
         fail_msg: >-
-          This collection requires ansible-core >= 2.18.0 (found {{ ansible_version.full }}).
-          Please upgrade: pip install 'ansible-core>=2.18'
+          This collection requires ansible-core >= 2.20.0 (found {{ ansible_version.full }}).
+          Please upgrade: pip install 'ansible-core>=2.20'
 
     - name: Validate elasticstack_release is set
       ansible.builtin.assert:

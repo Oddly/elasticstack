@@ -91,6 +91,7 @@ nav:
       - guide/index.md
       - Architecture: guide/architecture.md
       - Security: guide/security.md
+      - Testing and Coverage: guide/testing.md
       - TLS & Certificates: guide/tls.md
       - Upgrading: guide/upgrades.md
       - Performance Tuning: guide/performance.md

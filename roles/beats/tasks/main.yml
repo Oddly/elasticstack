@@ -67,4 +67,3 @@
 - name: Import Metricbeat tasks
   ansible.builtin.import_tasks: metricbeat.yml
   when: beats_metricbeat | bool
-

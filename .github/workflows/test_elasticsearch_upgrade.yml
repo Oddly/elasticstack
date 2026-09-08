@@ -41,7 +41,7 @@ jobs:
   upgrade_multi_node:
     needs: lint_elasticsearch
     runs-on: self-hosted
-    timeout-minutes: 60
+    timeout-minutes: 180
 
     env:
       COLLECTION_NAMESPACE: oddly
@@ -63,9 +63,10 @@ jobs:
 
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix:
         distro:
-          - debian12
+          - debian13
           - rockylinux9
         scenario:
           - elasticsearch_upgrade_8to9
@@ -75,9 +76,18 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install dependencies
-        run: uv pip install --system --break-system-packages --python /usr/bin/python3 -r requirements-test.txt
+        run: |
+          uv venv "$RUNNER_TEMP/venv" --python "$(command -v python3.12)"
+          source "$RUNNER_TEMP/venv/bin/activate"
+          uv pip install -r requirements-test.txt
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+
+      - name: Verify Ansible executable
+        run: |
+          command -v ansible-playbook
+          ansible-playbook --version | grep -Eq 'core 2\.20\.'
 
       - name: Set up collections path
         run: |
@@ -112,17 +122,20 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -t ed25519 ${{ secrets.INCUS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
+      - name: Compute gate deadline
+        id: gate
+        run: echo "deadline=$((120 * 60))" >> "$GITHUB_OUTPUT"
+
       - name: Acquire memory slot
         # Single-authority admission gate: MemTotal − reserve − committed
         # limits.memory − pending reservations, FIFO with bounded
-        # overtakes. Fails after its 45-min deadline instead of barging
-        # in — a starved job is an explicit retryable failure, not an
-        # OOM risk. create.yml converts the reservation into committed
-        # capacity right after the containers launch.
+        # overtakes. The 120-minute deadline leaves a 60-minute rollout
+        # window inside this job's 180-minute timeout.
         uses: Oddly/incus-memory-gate@a4be4db5ffc59c8ee77c8fd7ff589612eb16be61  # v1.0.2
         with:
           mode: acquire
           molecule-scenario: ${{ matrix.scenario }}
+          deadline-seconds: ${{ steps.gate.outputs.deadline }}
           incus-host: ${{ secrets.INCUS_HOST }}
           ssh-key: ${{ runner.temp }}/molecule_id_ed25519
 
@@ -185,7 +198,7 @@ jobs:
   upgrade_single_node:
     needs: lint_elasticsearch
     runs-on: self-hosted
-    timeout-minutes: 60
+    timeout-minutes: 180
 
     env:
       COLLECTION_NAMESPACE: oddly
@@ -207,9 +220,10 @@ jobs:
 
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix:
         distro:
-          - debian12
+          - debian13
           - rockylinux9
         scenario:
           - elasticsearch_upgrade_8to9_single
@@ -219,9 +233,18 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install dependencies
-        run: uv pip install --system --break-system-packages --python /usr/bin/python3 -r requirements-test.txt
+        run: |
+          uv venv "$RUNNER_TEMP/venv" --python "$(command -v python3.12)"
+          source "$RUNNER_TEMP/venv/bin/activate"
+          uv pip install -r requirements-test.txt
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+
+      - name: Verify Ansible executable
+        run: |
+          command -v ansible-playbook
+          ansible-playbook --version | grep -Eq 'core 2\.20\.'
 
       - name: Set up collections path
         run: |
@@ -256,17 +279,20 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -t ed25519 ${{ secrets.INCUS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
+      - name: Compute gate deadline
+        id: gate
+        run: echo "deadline=$((120 * 60))" >> "$GITHUB_OUTPUT"
+
       - name: Acquire memory slot
         # Single-authority admission gate: MemTotal − reserve − committed
         # limits.memory − pending reservations, FIFO with bounded
-        # overtakes. Fails after its 45-min deadline instead of barging
-        # in — a starved job is an explicit retryable failure, not an
-        # OOM risk. create.yml converts the reservation into committed
-        # capacity right after the containers launch.
+        # overtakes. The 120-minute deadline leaves a 60-minute rollout
+        # window inside this job's 180-minute timeout.
         uses: Oddly/incus-memory-gate@a4be4db5ffc59c8ee77c8fd7ff589612eb16be61  # v1.0.2
         with:
           mode: acquire
           molecule-scenario: ${{ matrix.scenario }}
+          deadline-seconds: ${{ steps.gate.outputs.deadline }}
           incus-host: ${{ secrets.INCUS_HOST }}
           ssh-key: ${{ runner.temp }}/molecule_id_ed25519
 

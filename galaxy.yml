@@ -26,9 +26,9 @@ tags:
   - filebeat
   - monitoring
 dependencies:
-  "community.crypto": "*"
-  "community.general": "*"
-  "ansible.posix": "*"
+  "community.crypto": ">=3.1.1,<4.0.0"
+  "community.general": ">=12.3.0,<13.0.0"
+  "ansible.posix": ">=2.1.0,<3.0.0"
 repository: https://github.com/Oddly/elasticstack
 documentation: https://github.com/Oddly/elasticstack/wiki
 homepage: https://github.com/Oddly/elasticstack
@@ -46,5 +46,6 @@ build_ignore:
   - .pre-commit-config.yaml
   - .yamllint
   - requirements-test.txt
+  - requirements-docs.txt
   - '*.tar.gz'
   - 'venv*'

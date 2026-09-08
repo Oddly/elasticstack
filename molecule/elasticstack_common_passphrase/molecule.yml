@@ -1,0 +1,33 @@
+---
+prerun: false
+dependency:
+  name: galaxy
+  options:
+    requirements-file: requirements.yml
+driver:
+  name: default
+platforms:
+  # Single node running ES + Kibana. Only need to exercise the
+  # elasticstack_cert_pass propagation path — keystore add + certutil
+  # both fire on this one host. 6 GB fits ES (2 GB heap) and Kibana
+  # comfortably.
+  - name: "eskb-passphrase-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
+    groups:
+      - elasticsearch
+      - kibana
+    distro: "${MOLECULE_DISTRO:-debian12}"
+    memory_mb: 6144
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_LOG_PATH: /var/log/ansible.log
+  connection_options:
+    ansible_connection: ssh
+    ansible_user: root
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+  inventory:
+    group_vars:
+      all:
+        ansible_python_interpreter: /usr/bin/python3
+verifier:
+  name: ansible

@@ -1,5 +1,5 @@
 ---
-# Deploy ES 8.x + Kibana with the four toggles nothing else exercises,
+# Deploy ES 8.x + Kibana with the legacy and custom settings nothing else exercises,
 # so the assertions in verify.yml prove the corresponding
 # roles/kibana/templates/kibana.yml.j2 and roles/kibana/tasks/main.yml
 # code paths actually render.
@@ -12,13 +12,16 @@
     elasticstack_full_stack: true
     elasticstack_no_log: false
     elasticsearch_heap: "1"
+    elasticstack_kibana_host: kibana-extras.example.test
+    kibana_elasticsearch_hosts: "{{ groups['elasticsearch'] }}"
 
-    # The four toggles under test:
+    # The legacy toggles and custom inputs under test:
     kibana_node_max_old_space_size: 2048
     # Kibana only accepts "http1" or "http2" for server.protocol; anything
     # else is rejected at config validation. We use http1 because http2
     # requires TLS on the server side and this scenario runs plain HTTP.
     kibana_server_protocol: "http1"
+    kibana_sniff_on_start: true
     kibana_sniff_on_connection_fault: true
     kibana_sniff_interval: 30000
 

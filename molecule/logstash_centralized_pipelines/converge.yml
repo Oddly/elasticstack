@@ -33,6 +33,7 @@
 
     # Log format
     logstash_log_format: json
+    logstash_global_ecs: v8
 
     # Monitoring
     logstash_monitoring_enabled: false

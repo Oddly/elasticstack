@@ -24,13 +24,19 @@
     - renew_es_cert
 
 - name: certs | ca_ensure | Create CA
-  ansible.builtin.command: >
-    /usr/share/elasticsearch/bin/elasticsearch-certutil ca
-    --ca-dn "{{ elasticstack_ca_name }}"
-    --days {{ elasticstack_ca_validity_period }}
-    --pass {{ elasticstack_ca_pass }}
-    --out {{ elasticstack_ca_dir }}/elastic-stack-ca.p12
-    --silent
+  ansible.builtin.command:
+    argv:
+      - /usr/share/elasticsearch/bin/elasticsearch-certutil
+      - ca
+      - --ca-dn
+      - "{{ elasticstack_ca_name }}"
+      - --days
+      - "{{ elasticstack_ca_validity_period }}"
+      - --pass
+      - "{{ elasticstack_ca_pass }}"
+      - --out
+      - "{{ elasticstack_ca_dir }}/elastic-stack-ca.p12"
+      - --silent
   args:
     creates: "{{ elasticstack_ca_dir }}/elastic-stack-ca.p12"
   no_log: "{{ elasticstack_no_log }}"

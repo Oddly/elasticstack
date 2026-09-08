@@ -1,0 +1,73 @@
+---
+# Exercise the Beats external certificate branch with files already present on
+# the managed node. Filebeat writes to a local file so this scenario isolates
+# certificate deployment and service startup from an Elasticsearch dependency.
+- name: Generate test certificates
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: Generate a test CA and server certificate
+      ansible.builtin.include_tasks: ../shared/generate_test_certs.yml
+
+- name: Deploy Beats with external certificates
+  hosts: all
+  vars:
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    elasticstack_full_stack: false
+    elasticstack_no_log: false
+    beats_security: false
+    beats_filebeat: true
+    beats_filebeat_output: file
+    beats_filebeat_output_file_path: /var/lib/filebeat/external-output
+    beats_cert_source: external
+    beats_tls_certificate_file: /tmp/test-certs/server.crt
+    beats_tls_key_file: /tmp/test-certs/server.key
+    beats_tls_ca_file: /tmp/test-certs/ca.crt
+    beats_tls_remote_src: true
+  tasks:
+    - name: Include Elastic repositories
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.repos
+
+    - name: Include Beats
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.beats
+
+- name: Read generated certificate material for the content-mode check
+  hosts: all
+  tasks:
+    - name: Read the certificate, key, and CA
+      ansible.builtin.slurp:
+        src: "{{ item.path }}"
+      loop:
+        - { path: /tmp/test-certs/server.crt, name: certificate }
+        - { path: /tmp/test-certs/server.key, name: key }
+        - { path: /tmp/test-certs/ca.crt, name: ca }
+      register: _beats_external_cert_content
+      loop_control:
+        label: "{{ item.name }}"
+
+- name: Deploy Beats with inline external certificate content
+  hosts: all
+  vars:
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    elasticstack_full_stack: false
+    elasticstack_no_log: false
+    beats_security: false
+    beats_filebeat: true
+    beats_filebeat_output: file
+    beats_filebeat_output_file_path: /var/lib/filebeat/external-output
+    beats_cert_source: external
+    # These paths must be ignored when content is supplied. Keeping them
+    # invalid makes the precedence contract fail loudly if it regresses.
+    beats_tls_certificate_file: /tmp/test-certs/missing-certificate.crt
+    beats_tls_key_file: /tmp/test-certs/missing-key.key
+    beats_tls_ca_file: /tmp/test-certs/missing-ca.crt
+    beats_tls_certificate_content: "{{ hostvars[inventory_hostname]._beats_external_cert_content.results[0].content | b64decode }}"
+    beats_tls_key_content: "{{ hostvars[inventory_hostname]._beats_external_cert_content.results[1].content | b64decode }}"
+    beats_tls_ca_content: "{{ hostvars[inventory_hostname]._beats_external_cert_content.results[2].content | b64decode }}"
+    beats_tls_remote_src: false
+  tasks:
+    - name: Re-apply Beats with inline certificate content
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.beats

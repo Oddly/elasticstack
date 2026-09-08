@@ -7,18 +7,18 @@ dependency:
 driver:
   name: default
 platforms:
-  - name: "beats-sec-es1-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
+  - name: "beats-sec-es1-${MOLECULE_DISTRO:-debian13}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
     groups:
       - elasticsearch
-    distro: "${MOLECULE_DISTRO:-debian12}"
+    distro: "${MOLECULE_DISTRO:-debian13}"
     # ES 9.x on debian13 OOMs with 4 GB once ingest pressure starts (the
     # new end-to-end Filebeat→ES check exercises that path). 6 GB clears
     # it. Bumping the ES host only; Filebeat node stays at 2 GB.
     memory_mb: 6144
-  - name: "beats-sec-fb1-${MOLECULE_DISTRO:-debian12}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
+  - name: "beats-sec-fb1-${MOLECULE_DISTRO:-debian13}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
     groups:
       - beats
-    distro: "${MOLECULE_DISTRO:-debian12}"
+    distro: "${MOLECULE_DISTRO:-debian13}"
     memory_mb: 2048
 provisioner:
   name: ansible

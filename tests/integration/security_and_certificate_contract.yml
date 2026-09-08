@@ -1,0 +1,257 @@
+---
+- name: Secret and certificate command contracts
+  hosts: localhost
+  gather_facts: true
+  vars:
+    elasticstack_ca_host: localhost
+    elasticstack_no_log: true
+  tasks:
+    - name: Create an isolated contract workspace
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: elasticstack-contract
+      register: _contract_tmp
+
+    - name: Set paths containing spaces
+      ansible.builtin.set_fact:
+        _contract_material_dir: "{{ _contract_tmp.path }}/certificate material"
+        _contract_password_file: "{{ _contract_tmp.path }}/initial passwords"
+        _contract_secret: "Key passphrase with spaces!"
+        _contract_p12_secret: "P12 passphrase with spaces!"
+
+    - name: Create certificate directory with spaces
+      ansible.builtin.file:
+        path: "{{ _contract_material_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Write an initial password file with a path containing spaces
+      ansible.builtin.copy:
+        dest: "{{ _contract_password_file }}"
+        content: |
+          PASSWORD elastic = generated-elastic-password
+          PASSWORD kibana_system = generated-kibana-password
+        mode: "0600"
+
+    - name: Fetch a password through the shared command task
+      ansible.builtin.include_tasks: ../../roles/elasticstack/tasks/fetch_password.yml
+      vars:
+        elasticstack_initial_passwords: "{{ _contract_password_file }}"
+        _password_user: kibana_system
+        _password_fact: _contract_password
+
+    - name: Assert password extraction preserves the exact value
+      ansible.builtin.assert:
+        that:
+          - _contract_password.stdout == "generated-kibana-password"
+          - not _contract_password.changed
+
+    - name: Expect an absent password entry to fail clearly
+      block:
+        - name: Fetch an absent password entry
+          ansible.builtin.include_tasks: ../../roles/elasticstack/tasks/fetch_password.yml
+          vars:
+            elasticstack_initial_passwords: "{{ _contract_password_file }}"
+            _password_user: missing_user
+            _password_fact: _missing_password
+      rescue:
+        - name: Record the expected missing-password failure
+          ansible.builtin.set_fact:
+            _missing_password_failed: true
+
+    - name: Assert an absent password cannot silently become an empty credential
+      ansible.builtin.assert:
+        that:
+          - _missing_password_failed | default(false) | bool
+
+    - name: Allow an externally managed user without a secured standard output
+      ansible.builtin.include_tasks: ../../roles/logstash/tasks/logstash-password-validation.yml
+      vars:
+        _logstash_security: true
+        elasticstack_full_stack: false
+        logstash_cert_source: external
+        logstash_create_user: false
+        logstash_output_elasticsearch: false
+        logstash_user_password: ""
+
+    - name: Accept a valid Logstash password for secured output
+      ansible.builtin.include_tasks: ../../roles/logstash/tasks/logstash-password-validation.yml
+      vars:
+        _logstash_security: true
+        elasticstack_full_stack: false
+        logstash_cert_source: external
+        logstash_create_user: false
+        logstash_output_elasticsearch: true
+        logstash_user_password: valid-logstash-password
+
+    - name: Expect Logstash password validation to reject an empty creator password
+      block:
+        - name: Include empty creator password validation
+          ansible.builtin.include_tasks: ../../roles/logstash/tasks/logstash-password-validation.yml
+          vars:
+            _logstash_security: true
+            elasticstack_full_stack: true
+            logstash_cert_source: elasticsearch_ca
+            logstash_create_user: true
+            logstash_output_elasticsearch: true
+            logstash_user_password: ""
+      rescue:
+        - name: Record empty creator password failure
+          ansible.builtin.set_fact:
+            _empty_logstash_password_failed: true
+
+    - name: Expect Logstash password validation to reject a short output password
+      block:
+        - name: Include short output password validation
+          ansible.builtin.include_tasks: ../../roles/logstash/tasks/logstash-password-validation.yml
+          vars:
+            _logstash_security: true
+            elasticstack_full_stack: false
+            logstash_cert_source: external
+            logstash_create_user: false
+            logstash_output_elasticsearch: true
+            logstash_user_password: short
+      rescue:
+        - name: Record short output password failure
+          ansible.builtin.set_fact:
+            _short_logstash_password_failed: true
+
+    - name: Assert Logstash password policy covers creation and secured output
+      ansible.builtin.assert:
+        that:
+          - _empty_logstash_password_failed | default(false) | bool
+          - _short_logstash_password_failed | default(false) | bool
+
+    - name: Generate an encrypted PEM certificate and key
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - req
+          - -x509
+          - -newkey
+          - rsa:2048
+          - -keyout
+          - "{{ _contract_material_dir }}/encrypted key.pem"
+          - -out
+          - "{{ _contract_material_dir }}/encrypted certificate.pem"
+          - -days
+          - "2"
+          - -passout
+          - stdin
+          - -subj
+          - /CN=localhost
+        stdin: "{{ _contract_secret }}"
+        stdin_add_newline: false
+      changed_when: true
+      no_log: true
+
+    - name: Validate encrypted PEM material through the shared validator
+      ansible.builtin.include_tasks: ../../roles/elasticstack/tasks/certs/cert_validate.yml
+      vars:
+        _validate_cert_path: "{{ _contract_material_dir }}/encrypted certificate.pem"
+        _validate_key_path: "{{ _contract_material_dir }}/encrypted key.pem"
+        _validate_pass: "{{ _contract_secret }}"
+        _validate_remote_src: false
+        _validate_service: "contract PEM"
+        _validate_format_fact: _contract_pem_format
+        _validate_key_fact: _contract_pem_key
+        _validate_ca_extracted_fact: _contract_pem_ca_extracted
+
+    - name: Assert encrypted PEM detection and key matching
+      ansible.builtin.assert:
+        that:
+          - _contract_pem_format == 'pem'
+          - _contract_pem_key == _contract_material_dir ~ '/encrypted key.pem'
+          - not _contract_pem_ca_extracted
+
+    - name: Create an unencrypted copy for PKCS12 packaging
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - rsa
+          - -in
+          - "{{ _contract_material_dir }}/encrypted key.pem"
+          - -passin
+          - stdin
+          - -out
+          - "{{ _contract_material_dir }}/plain key.pem"
+        stdin: "{{ _contract_secret }}"
+        stdin_add_newline: false
+      changed_when: true
+      no_log: true
+
+    - name: Package the certificate as PKCS12
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - pkcs12
+          - -export
+          - -in
+          - "{{ _contract_material_dir }}/encrypted certificate.pem"
+          - -inkey
+          - "{{ _contract_material_dir }}/plain key.pem"
+          - -out
+          - "{{ _contract_material_dir }}/certificate bundle.p12"
+          - -passout
+          - stdin
+          - -name
+          - contract
+        stdin: "{{ _contract_p12_secret }}"
+        stdin_add_newline: false
+      changed_when: true
+      no_log: true
+
+    - name: Validate PKCS12 material through the shared validator
+      ansible.builtin.include_tasks: ../../roles/elasticstack/tasks/certs/cert_validate.yml
+      vars:
+        _validate_cert_path: "{{ _contract_material_dir }}/certificate bundle.p12"
+        _validate_key_path: ""
+        _validate_pass: "{{ _contract_p12_secret }}"
+        _validate_remote_src: false
+        _validate_service: "contract PKCS12"
+        _validate_format_fact: _contract_p12_format
+        _validate_key_fact: _contract_p12_key
+        _validate_ca_extracted_fact: _contract_p12_ca_extracted
+
+    - name: Assert PKCS12 detection and password input
+      ansible.builtin.assert:
+        that:
+          - _contract_p12_format == 'p12'
+          - _contract_p12_key == ''
+          - not _contract_p12_ca_extracted
+
+    - name: Read the certificate for a two-certificate PEM bundle
+      ansible.builtin.slurp:
+        src: "{{ _contract_material_dir }}/encrypted certificate.pem"
+      register: _contract_cert_content
+
+    - name: Write a PEM bundle with a path containing spaces
+      ansible.builtin.copy:
+        dest: "{{ _contract_material_dir }}/certificate bundle.crt"
+        content: |-
+          {{ _contract_cert_content.content | b64decode }}
+          {{ _contract_cert_content.content | b64decode }}
+        mode: "0640"
+
+    - name: Validate PEM chain extraction through the shared validator
+      ansible.builtin.include_tasks: ../../roles/elasticstack/tasks/certs/cert_validate.yml
+      vars:
+        _validate_cert_path: "{{ _contract_material_dir }}/certificate bundle.crt"
+        _validate_key_path: "{{ _contract_material_dir }}/plain key.pem"
+        _validate_pass: ""
+        _validate_remote_src: false
+        _validate_service: "contract PEM bundle"
+        _validate_format_fact: _contract_bundle_format
+        _validate_key_fact: _contract_bundle_key
+        _validate_ca_extracted_fact: _contract_bundle_ca_extracted
+
+    - name: Assert the PEM bundle was detected as a CA chain
+      ansible.builtin.assert:
+        that:
+          - _contract_bundle_format == 'pem'
+          - _contract_bundle_ca_extracted | bool
+
+    - name: Remove the isolated contract workspace
+      ansible.builtin.file:
+        path: "{{ _contract_tmp.path }}"
+        state: absent

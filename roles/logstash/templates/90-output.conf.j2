@@ -21,16 +21,16 @@ output {
 {% if elasticstack_release | int >= 9 %}
     ssl_enabled => true
     ssl_keystore_path => "{{ logstash_certs_dir }}/keystore.pfx"
-    ssl_keystore_password => "{{ logstash_tls_key_passphrase }}"
+    ssl_keystore_password => {{ logstash_tls_key_passphrase | to_json }}
     ssl_certificate_authorities => ["{{ logstash_certs_dir }}/ca.crt"]
 {% else %}
     ssl => true
     keystore => "{{ logstash_certs_dir }}/keystore.pfx"
-    keystore_password => "{{ logstash_tls_key_passphrase }}"
+    keystore_password => {{ logstash_tls_key_passphrase | to_json }}
     cacert => "{{ logstash_certs_dir }}/ca.crt"
 {% endif %}
-    user => "{{ logstash_user_name }}"
-    password => "{{ logstash_user_password }}"
+    user => {{ logstash_user_name | to_json }}
+    password => {{ logstash_user_password | to_json }}
 {% endif %}
   }
 {% endif %}
