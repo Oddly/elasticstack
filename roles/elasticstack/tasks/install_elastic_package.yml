@@ -1,0 +1,56 @@
+# Shared installation pattern for Elastic service packages.
+#
+# Required variables:
+#   _package_name       - package name for an explicitly selected version
+#   _package_base_name  - unversioned package name used for latest installs
+#   _package_notify     - handler to notify when the package changes
+
+- name: "install_elastic_package | Install {{ _package_base_name }} RPM (full stack)"  # noqa: name[template]
+  ansible.builtin.package:
+    name: "{{ _package_name }}"
+    state: "{{ 'latest' if (elasticstack_version | default('') == 'latest') else 'present' }}"
+    enablerepo:
+      - "elastic-{{ elasticstack_release }}.x"
+  register: _elasticstack_package_install_rpm_full
+  until: _elasticstack_package_install_rpm_full is success
+  retries: 3
+  delay: 10
+  notify:
+    - "{{ _package_notify }}"
+  when:
+    - ansible_facts.os_family == "RedHat"
+    - elasticstack_full_stack | bool
+
+- name: "install_elastic_package | Install {{ _package_base_name }} RPM (standalone)"  # noqa: name[template]
+  ansible.builtin.package:
+    name: "{{ _package_name }}"
+    state: "{{ 'latest' if (elasticstack_version | default('') == 'latest') else 'present' }}"
+  register: _elasticstack_package_install_rpm
+  until: _elasticstack_package_install_rpm is success
+  retries: 3
+  delay: 10
+  notify:
+    - "{{ _package_notify }}"
+  when:
+    - ansible_facts.os_family == "RedHat"
+    - not elasticstack_full_stack | bool
+
+- name: "install_elastic_package | Install {{ _package_base_name }} Debian package"  # noqa: name[template]
+  ansible.builtin.package:
+    name: "{{ _package_name }}"
+    state: "{{ 'latest' if (elasticstack_version | default('') == 'latest') else 'present' }}"
+  register: _elasticstack_package_install_deb
+  until: _elasticstack_package_install_deb is success
+  retries: 3
+  delay: 10
+  notify:
+    - "{{ _package_notify }}"
+  when:
+    - ansible_facts.os_family == "Debian"
+
+- name: install_elastic_package | Record package change
+  ansible.builtin.set_fact:
+    _elasticstack_package_changed: >-
+      {{ (_elasticstack_package_install_rpm_full.changed | default(false)) or
+         (_elasticstack_package_install_rpm.changed | default(false)) or
+         (_elasticstack_package_install_deb.changed | default(false)) }}

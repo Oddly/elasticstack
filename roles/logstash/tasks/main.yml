@@ -99,48 +99,12 @@
   when:
     - ansible_facts.os_family == "Debian"
 
-- name: Install Logstash (RedHat - full stack)
-  ansible.builtin.package:
-    name: "{{ logstash_package }}"
-    state: "{{ 'latest' if (elasticstack_version | default('') == 'latest') else 'present' }}"
-    enablerepo:
-      - 'elastic-{{ elasticstack_release }}.x'
-  register: _logstash_install_rpm_full
-  until: _logstash_install_rpm_full is success
-  retries: 3
-  delay: 10
-  notify:
-    - Restart Logstash
-  when:
-    - ansible_facts.os_family == "RedHat"
-    - elasticstack_full_stack | default(false) | bool
-
-- name: Install Logstash (RedHat - standalone)
-  ansible.builtin.package:
-    name: "{{ logstash_package }}"
-    state: "{{ 'latest' if (elasticstack_version | default('') == 'latest') else 'present' }}"
-  register: _logstash_install_rpm
-  until: _logstash_install_rpm is success
-  retries: 3
-  delay: 10
-  notify:
-    - Restart Logstash
-  when:
-    - ansible_facts.os_family == "RedHat"
-    - not elasticstack_full_stack | default(false) | bool
-
-- name: Install Logstash (Debian)
-  ansible.builtin.package:
-    name: "{{ logstash_package }}"
-    state: "{{ 'latest' if (elasticstack_version | default('') == 'latest') else 'present' }}"
-  register: _logstash_install_deb
-  until: _logstash_install_deb is success
-  retries: 3
-  delay: 10
-  notify:
-    - Restart Logstash
-  when:
-    - ansible_facts.os_family == "Debian"
+- name: Install Logstash package
+  ansible.builtin.include_tasks: "{{ role_path }}/../elasticstack/tasks/install_elastic_package.yml"
+  vars:
+    _package_name: "{{ logstash_package }}"
+    _package_base_name: logstash
+    _package_notify: Restart Logstash
 
 - name: Import Logstash Security tasks
   ansible.builtin.import_tasks: logstash-security.yml

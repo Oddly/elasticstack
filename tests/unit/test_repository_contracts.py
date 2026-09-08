@@ -260,6 +260,37 @@ class TestRepositoryContracts(unittest.TestCase):
             self.assertNotIn("bookworm", debian["versions"])
             self.assertIn("trixie", debian["versions"])
 
+    def test_service_roles_share_elastic_package_installation(self):
+        shared = (
+            ROOT
+            / "roles"
+            / "elasticstack"
+            / "tasks"
+            / "install_elastic_package.yml"
+        ).read_text()
+        self.assertEqual(shared.count("ansible.builtin.package:"), 3)
+        self.assertIn("state: \"{{ 'latest' if", shared)
+        self.assertIn('enablerepo:', shared)
+        self.assertEqual(shared.count('notify:\n    - "{{ _package_notify }}"'), 3)
+
+        for role, package_var, package_base, handler in (
+            ("elasticsearch", "elasticsearch_package", "elasticsearch", "Restart Elasticsearch"),
+            ("kibana", "kibana_package", "kibana", "Restart Kibana"),
+            ("logstash", "logstash_package", "logstash", "Restart Logstash"),
+        ):
+            source = (ROOT / "roles" / role / "tasks" / "main.yml").read_text()
+            self.assertIn(
+                'ansible.builtin.include_tasks: "{{ role_path }}/../elasticstack/tasks/install_elastic_package.yml"',
+                source,
+            )
+            self.assertIn(f'_package_name: "{{{{ {package_var} }}}}"', source)
+            self.assertIn(f"_package_base_name: {package_base}", source)
+            self.assertIn(f"_package_notify: {handler}", source)
+
+        elasticsearch = (ROOT / "roles" / "elasticsearch" / "tasks" / "main.yml").read_text()
+        self.assertIn("_elasticstack_package_changed", elasticsearch)
+        self.assertNotIn("_elasticsearch_install_rpm_full", elasticsearch)
+
     def test_security_defaults_and_secret_annotations(self):
         elasticsearch = yaml.safe_load(
             (ROOT / "roles" / "elasticsearch" / "defaults" / "main.yml").read_text()
