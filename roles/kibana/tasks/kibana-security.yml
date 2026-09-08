@@ -440,6 +440,7 @@
   vars:
     _password_user: kibana_system
     _password_fact: kibana_password
+  when: kibana_security | bool
 
 # -- Change kibana_system password if user defined one --
 #

@@ -321,6 +321,22 @@ class TestRepositoryContracts(unittest.TestCase):
         ):
             self.assertIn(marker, source)
 
+    def test_external_certificate_only_modes_do_not_require_elasticsearch_passwords(self):
+        beats = (ROOT / "roles" / "beats" / "tasks" / "beats-security.yml").read_text()
+        kibana = (ROOT / "roles" / "kibana" / "tasks" / "kibana-security.yml").read_text()
+
+        beats_block = beats[
+            beats.index("- name: beats-security | Fetch Beats password") :
+            beats.index("# -- Certificate expiry warning --")
+        ]
+        kibana_block = kibana[
+            kibana.index("- name: kibana-security | Fetch Kibana password") :
+            kibana.index("# -- Change kibana_system password if user defined one --")
+        ]
+
+        self.assertIn("when: beats_security | bool", beats_block)
+        self.assertIn("when: kibana_security | bool", kibana_block)
+
     def test_kibana_generated_encryption_keys_use_argv_and_secure_files(self):
         source = (ROOT / "roles" / "kibana" / "tasks" / "kibana-security.yml").read_text()
         self.assertEqual(source.count("- openssl\n          - rand\n"), 2)
