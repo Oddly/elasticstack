@@ -368,6 +368,7 @@
   vars:
     _password_user: elastic
     _password_fact: beats_writer_password
+  when: beats_security | bool
 
 # -- Certificate expiry warning --
 - name: beats-security | Check Beats certificate expiry warning

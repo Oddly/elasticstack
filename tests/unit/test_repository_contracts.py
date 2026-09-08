@@ -103,7 +103,7 @@ class TestRepositoryContracts(unittest.TestCase):
         for requirement in (
             "ansible-core>=2.20,<2.21",
             "ansible-lint>=26.8,<27",
-            "molecule>=25.4,<26",
+            "molecule>=26.8.0,<27",
             "pytest>=8.3,<9",
             "passlib==1.7.4",
         ):
@@ -131,6 +131,29 @@ class TestRepositoryContracts(unittest.TestCase):
                 COLLECTION_CONSTRAINTS,
                 f"{path} must declare every collection dependency with its constraint",
             )
+
+    def test_incus_molecule_scenarios_have_lifecycle_playbooks(self):
+        excluded = {"default", "shared", "cert_info_module"}
+        scenarios = sorted(
+            path.parent
+            for path in (ROOT / "molecule").glob("*/molecule.yml")
+            if path.parent.name not in excluded
+        )
+
+        self.assertTrue(scenarios)
+        for scenario in scenarios:
+            for playbook in ("create.yml", "destroy.yml"):
+                path = scenario / playbook
+                self.assertTrue(
+                    path.is_file(),
+                    f"{scenario.name} must provide an executable {playbook}",
+                )
+            molecule = yaml.safe_load((scenario / "molecule.yml").read_text()) or {}
+            if len(molecule.get("platforms", [])) > 1:
+                self.assertTrue(
+                    (scenario / "prepare.yml").is_file(),
+                    f"{scenario.name} must prepare name resolution for multiple hosts",
+                )
 
     def test_ci_uses_python_312_for_ansible_220_dependencies(self):
         workflows = (
@@ -303,6 +326,37 @@ class TestRepositoryContracts(unittest.TestCase):
             "logstash_writer",
         ):
             self.assertIn(marker, source)
+
+    def test_external_certificate_only_modes_do_not_require_elasticsearch_passwords(self):
+        beats = (ROOT / "roles" / "beats" / "tasks" / "beats-security.yml").read_text()
+        kibana = (ROOT / "roles" / "kibana" / "tasks" / "kibana-security.yml").read_text()
+
+        beats_block = beats[
+            beats.index("- name: beats-security | Fetch Beats password") :
+            beats.index("# -- Certificate expiry warning --")
+        ]
+        kibana_block = kibana[
+            kibana.index("- name: kibana-security | Fetch Kibana password") :
+            kibana.index("# -- Change kibana_system password if user defined one --")
+        ]
+        key_block = kibana[
+            kibana.index("- name: kibana-security | Block for key generation") :
+            kibana.index("- name: kibana-security | Handle auto-generated Kibana certificate distribution")
+        ]
+
+        self.assertIn("when: beats_security | bool", beats_block)
+        self.assertIn("when: kibana_security | bool", kibana_block)
+        self.assertIn("when: kibana_security | bool", key_block)
+
+    def test_kibana_certificate_content_scenario_disables_backend_tls(self):
+        source = (ROOT / "molecule" / "kibana_cert_content" / "converge.yml").read_text()
+        self.assertIn("elasticsearch_security: false", source)
+        self.assertIn("elasticsearch_http_security: false", source)
+        self.assertNotIn(
+            "set_ci_watermarks.yml",
+            source,
+            "the unsecured backend cannot use the HTTPS/password-only watermark helper",
+        )
 
     def test_kibana_generated_encryption_keys_use_argv_and_secure_files(self):
         source = (ROOT / "roles" / "kibana" / "tasks" / "kibana-security.yml").read_text()
