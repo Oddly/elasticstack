@@ -316,6 +316,16 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("_kibana_generated_savedobjects_encryption_key.stdout", source)
         self.assertNotIn("openssl rand -base64 36 >", source)
 
+    def test_kibana_provided_encryption_keys_are_not_overwritten(self):
+        source = (ROOT / "roles" / "kibana" / "tasks" / "kibana-security.yml").read_text()
+        for marker in (
+            "_kibana_generated_encryption_key.changed | default(false) | bool",
+            "_kibana_generated_savedobjects_encryption_key.changed | default(false) | bool",
+        ):
+            self.assertIn(marker, source)
+        self.assertNotIn("_kibana_generated_encryption_key.skipped", source)
+        self.assertNotIn("_kibana_generated_savedobjects_encryption_key.skipped", source)
+
     def test_plugin_workflow_discovers_the_complete_unit_test_suite(self):
         source = (ROOT / ".github" / "workflows" / "test_plugins.yml").read_text()
         self.assertIn("pytest>=8.3,<9", source)

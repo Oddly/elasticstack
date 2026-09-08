@@ -324,7 +324,7 @@
         owner: root
         group: elasticsearch
         mode: "0600"
-      when: not (_kibana_generated_encryption_key.skipped | default(false))
+      when: _kibana_generated_encryption_key.changed | default(false) | bool
       check_mode: false
       no_log: true
 
@@ -365,7 +365,7 @@
         owner: root
         group: elasticsearch
         mode: "0600"
-      when: not (_kibana_generated_savedobjects_encryption_key.skipped | default(false))
+      when: _kibana_generated_savedobjects_encryption_key.changed | default(false) | bool
       check_mode: false
       no_log: true
 
