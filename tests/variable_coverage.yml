@@ -258,6 +258,29 @@ behaviors:
       - "item.stat.exists"
       - "item.stat.mode == \"0640\""
       - "_pfx_bad_check.rc != 0"
+  - name: logstash_security_user_and_role
+    role: logstash
+    variables:
+      - logstash_create_role
+      - logstash_role_name
+      - logstash_role_cluster_privileges
+      - logstash_role_indicies_names
+      - logstash_role_indicies_privileges
+      - logstash_create_user
+      - logstash_user_name
+      - logstash_user_password
+      - logstash_user_email
+      - logstash_user_fullname
+    scenario: logstash_elasticsearch
+    roles:
+      - oddly.elasticstack.repos
+      - oddly.elasticstack.elasticsearch
+      - oddly.elasticstack.logstash
+    expected:
+      - "_logstash_role_response.json[logstash_role_name].cluster == ['monitor', 'manage_ilm']"
+      - "_logstash_role_response.json[logstash_role_name].indices[0].names == ['molecule-logs-*']"
+      - "_logstash_user_response.json[logstash_user_name].email == 'molecule@example.test'"
+      - "_logstash_user_response.json[logstash_user_name].full_name == 'Molecule Logstash Writer'"
   - name: shared_certificate_passphrase
     role: elasticstack
     variables:

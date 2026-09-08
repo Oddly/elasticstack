@@ -5,6 +5,8 @@
     elasticstack_elasticsearch_http_port: 9200
     elasticstack_elasticsearch_group_name: elasticsearch
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    logstash_role_name: molecule_writer
+    logstash_user_name: molecule_writer
   tasks:
     - name: Set elasticsearch_ca variable
       ansible.builtin.set_fact:
@@ -36,6 +38,47 @@
       until: es_health.json.status in ["green", "yellow"]
       retries: 6
       delay: 10
+      when: "'elasticsearch' in group_names"
+
+    - name: Read the Logstash writer role from Elasticsearch
+      ansible.builtin.uri:
+        url: "https://localhost:{{ elasticstack_elasticsearch_http_port }}/_security/role/{{ logstash_role_name }}"
+        method: GET
+        force_basic_auth: true
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        return_content: true
+        status_code: 200
+        validate_certs: false
+      register: _logstash_role_response
+      when: "'elasticsearch' in group_names"
+
+    - name: Read the Logstash writer user from Elasticsearch
+      ansible.builtin.uri:
+        url: "https://localhost:{{ elasticstack_elasticsearch_http_port }}/_security/user/{{ logstash_user_name }}"
+        method: GET
+        force_basic_auth: true
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        return_content: true
+        status_code: 200
+        validate_certs: false
+      register: _logstash_user_response
+      when: "'elasticsearch' in group_names"
+
+    - name: Assert Logstash role and user metadata were created
+      ansible.builtin.assert:
+        that:
+          - _logstash_role_response.json[logstash_role_name].cluster == ['monitor', 'manage_ilm']
+          - _logstash_role_response.json[logstash_role_name].indices[0].names == ['molecule-logs-*']
+          - _logstash_role_response.json[logstash_role_name].indices[0].privileges == ['write', 'create_index']
+          - _logstash_user_response.json[logstash_user_name].roles == [logstash_role_name]
+          - _logstash_user_response.json[logstash_user_name].email == 'molecule@example.test'
+          - _logstash_user_response.json[logstash_user_name].full_name == 'Molecule Logstash Writer'
+        fail_msg: >-
+          Elasticsearch did not receive the configured Logstash role or user
+          metadata. Role: {{ _logstash_role_response.json | default({}) }}.
+          User: {{ _logstash_user_response.json | default({}) }}.
       when: "'elasticsearch' in group_names"
 
     - name: Check Logstash is running
