@@ -337,6 +337,30 @@ class TestRepositoryContracts(unittest.TestCase):
             ]
             self.assertNotIn("changed_when: false", generation_block)
 
+    def test_kibana_single_node_discovery_uses_local_api_endpoint(self):
+        source = (ROOT / "roles" / "kibana" / "tasks" / "main.yml").read_text()
+
+        # Incus gives a single container hostname a 127.0.1.1 entry, while
+        # Elasticsearch's default [_local_, _site_] binding listens on
+        # 127.0.0.1 and the container's site address. Use the configured API
+        # endpoint when Kibana and Elasticsearch share that one host.
+        self.assertIn(
+            "hostvars[groups[elasticstack_elasticsearch_group_name][0]].elasticsearch_api_host",
+            source,
+        )
+        self.assertIn(
+            "groups[elasticstack_elasticsearch_group_name] | length == 1",
+            source,
+        )
+        self.assertIn(
+            "groups[elasticstack_elasticsearch_group_name][0] == inventory_hostname",
+            source,
+        )
+        self.assertIn(
+            "else groups[elasticstack_elasticsearch_group_name]",
+            source,
+        )
+
     def test_plugin_workflow_discovers_the_complete_unit_test_suite(self):
         source = (ROOT / ".github" / "workflows" / "test_plugins.yml").read_text()
         self.assertIn("pytest>=8.3,<9", source)
