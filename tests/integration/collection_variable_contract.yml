@@ -227,6 +227,16 @@
       vars:
         elasticstack_release: 8
 
+    - name: Render colocated Kibana configuration
+      ansible.builtin.template:
+        src: ../../roles/kibana/templates/kibana.yml.j2
+        dest: "{{ _contract_tmp.path }}/kibana-colocated.yml"
+        mode: "0644"
+      vars:
+        elasticstack_release: 9
+        kibana_elasticsearch_hosts:
+          - localhost
+
     - name: Render Logstash settings configuration
       ansible.builtin.template:
         src: ../../roles/logstash/templates/logstash.yml.j2
@@ -263,6 +273,7 @@
         - "{{ _contract_tmp.path }}/10-input.conf"
         - "{{ _contract_tmp.path }}/50-filter.conf"
         - "{{ _contract_tmp.path }}/90-output.conf"
+        - "{{ _contract_tmp.path }}/kibana-colocated.yml"
       register: _rendered_configs
       loop_control:
         label: "{{ item | basename }}"
@@ -306,6 +317,9 @@
           - "'elasticsearch.sniffOnStart: true' in (_rendered_configs.results[3].content | b64decode)"
           - "'elasticsearch.sniffOnConnectionFault: true' in (_rendered_configs.results[3].content | b64decode)"
           - "'elasticsearch.sniffInterval: 30000' in (_rendered_configs.results[3].content | b64decode)"
+          - "(_rendered_configs.results[8].content | b64decode | from_yaml)['elasticsearch.hosts'] == ['https://localhost:19200']"
+          - "(_rendered_configs.results[8].content | b64decode | from_yaml)['elasticsearch.ssl.certificateAuthorities'] == '/etc/kibana/certs/ca.crt'"
+          - "(_rendered_configs.results[8].content | b64decode | from_yaml)['elasticsearch.ssl.verificationMode'] == 'certificate'"
 
     - name: Assert Logstash optional variables render
       ansible.builtin.assert:
