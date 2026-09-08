@@ -31,6 +31,10 @@
     elasticstack_security: false
     elasticstack_no_log: false
     elasticsearch_security: false
+    # Keep the backend plain HTTP as well. The scenario isolates Kibana's
+    # external web certificate and deliberately does not provision ES HTTP
+    # certificates.
+    elasticsearch_http_security: false
     elasticsearch_heap: "1"
     kibana_security: false
     kibana_tls: true

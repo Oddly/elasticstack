@@ -348,6 +348,11 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("when: kibana_security | bool", kibana_block)
         self.assertIn("when: kibana_security | bool", key_block)
 
+    def test_kibana_certificate_content_scenario_disables_backend_tls(self):
+        source = (ROOT / "molecule" / "kibana_cert_content" / "converge.yml").read_text()
+        self.assertIn("elasticsearch_security: false", source)
+        self.assertIn("elasticsearch_http_security: false", source)
+
     def test_kibana_generated_encryption_keys_use_argv_and_secure_files(self):
         source = (ROOT / "roles" / "kibana" / "tasks" / "kibana-security.yml").read_text()
         self.assertEqual(source.count("- openssl\n          - rand\n"), 2)
