@@ -303,6 +303,45 @@ behaviors:
       - "_log.stdout is search('voting_config_exclusions.*node_names=esA')"
       - "_log.stdout is search('200mb.*\"method\": \"PUT\".*/_cluster/settings')"
       - "_log.stdout is not search('_ml/set_upgrade_mode')"
+  - name: elasticsearch_security_management_lifecycle
+    role: elasticsearch
+    variables:
+      - elasticsearch_api_host
+      - elasticsearch_security
+      - elasticsearch_http_security
+      - elasticsearch_validate_api_certs
+      - elasticsearch_security_roles
+      - elasticsearch_users
+      - elasticsearch_builtin_passwords
+      - elasticsearch_role_mappings
+    contract: tests/integration/elasticsearch_security_management_contract.yml
+    roles:
+      - ../../roles/elasticsearch/tasks/elasticsearch-security-management.yml
+    expected:
+      - "_fake_security_api_log_result.stdout is search('path.*_security/role/app_writer')"
+      - "_fake_security_api_idempotence_log.stdout is not search('method.*PUT')"
+      - "_fake_security_api_rotation_log.stdout is search('password_set.*true')"
+      - "_fake_security_api_multi_host_log.stdout is not search('\\\"method\\\": \\\"PUT\\\"')"
+  - name: elasticsearch_rolling_restart_lifecycle
+    role: elasticsearch
+    variables:
+      - elasticsearch_security
+      - elasticsearch_http_protocol
+      - elasticsearch_validate_api_certs
+      - elasticsearch_config_restart_strategy
+      - elasticsearch_config_restart_flush
+      - elasticsearch_config_restart_wait_status
+      - elasticsearch_config_restart_health_retries
+      - elasticsearch_config_restart_health_delay
+      - elasticsearch_config_restart_node_retries
+      - elasticsearch_config_restart_node_delay
+    contract: tests/integration/rolling_restart_contract.yml
+    roles:
+      - ../../roles/elasticsearch/tasks/restart_and_verify_elasticsearch_rolling.yml
+    expected:
+      - "_fake_api_log.stdout is search('\"path\": \"/_flush\", \"port\": 19200')"
+      - "_fake_api_log.stdout is not search('\"path\": \"/_flush\"')"
+      - "ansible_failed_result.msg is search('elastic user password is unavailable')"
   - name: shared_certificate_passphrase
     role: elasticstack
     variables:
