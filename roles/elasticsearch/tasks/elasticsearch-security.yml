@@ -981,7 +981,7 @@
       when:
         - inventory_hostname == elasticstack_ca_host
         - elasticstack_release | int < 9
-        - _elasticsearch_setup_passwords_result is not skipped
+        - _elasticsearch_setup_passwords_result.changed | default(false) | bool
         - _elasticsearch_setup_passwords_result.rc | default(1) == 0
       no_log: "{{ elasticstack_no_log }}"
 

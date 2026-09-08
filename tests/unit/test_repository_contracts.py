@@ -240,6 +240,28 @@ class TestRepositoryContracts(unittest.TestCase):
             source,
         )
 
+    def test_es8_initial_passwords_are_persisted_only_after_setup_runs(self):
+        source = (
+            ROOT
+            / "roles"
+            / "elasticsearch"
+            / "tasks"
+            / "elasticsearch-security.yml"
+        ).read_text()
+        persist_block = source[
+            source.index("elasticsearch-security | Persist initial passwords (ES 8.x)") :
+            source.index("elasticsearch-security | Create initial passwords (ES 9.x)")
+        ]
+
+        self.assertIn(
+            "_elasticsearch_setup_passwords_result.changed | default(false) | bool",
+            persist_block,
+        )
+        self.assertNotIn(
+            "_elasticsearch_setup_passwords_result is not skipped",
+            persist_block,
+        )
+
     def test_elasticsearch_container_cache_cleanup_avoids_shell_globs(self):
         source = (
             ROOT
