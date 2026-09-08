@@ -21,7 +21,7 @@ beats_target_hosts:
   - localhost
 
 # @var beats_fields:description: Optional raw YAML field lines added to every Filebeat input
-# beats_fields: []
+beats_fields: []
 # @var beats_filebeat_output_file_path:description: Directory used by Filebeat's file output. Defaults to /tmp/filebeat-output when unset
 # beats_filebeat_output_file_path: /var/lib/filebeat/output
 

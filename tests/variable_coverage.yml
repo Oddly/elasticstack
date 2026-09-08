@@ -17,8 +17,6 @@ baselines:
 
 explicit:
   beats:
-    beats_fields:
-      - tests/integration/collection_variable_contract.yml
     beats_filebeat_output_file_path:
       - tests/integration/collection_variable_contract.yml
   elasticsearch:

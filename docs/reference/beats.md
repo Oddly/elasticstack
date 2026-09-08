@@ -96,10 +96,10 @@ beats_logging_permissions: "0644"
 ### Global Fields
 
 ```yaml
-# beats_fields is not set by default
+beats_fields: []
 ```
 
-`beats_fields` is an optional list of field lines injected into every Filebeat input (log, syslog TCP, syslog UDP). It is not defined in defaults -- define it in your inventory or playbook variables when you need fields applied globally across all inputs. Each item is rendered as a raw YAML line inside the `fields:` block.
+`beats_fields` is a list of field lines injected into every Filebeat input (log, syslog TCP, syslog UDP). It defaults to an empty list, so it has no effect until you add fields in your inventory or playbook variables. Each item is rendered as a raw YAML line inside the `fields:` block.
 
 ### Filebeat Configuration
 

@@ -11,9 +11,9 @@ filebeat.inputs:
 {% for path in beats_filebeat_log_inputs[input].paths %}
     - {{ path }}
 {% endfor %}
-{% if beats_fields is defined or beats_filebeat_log_inputs[input].fields is defined %}
+{% if beats_fields | default([], true) | length > 0 or beats_filebeat_log_inputs[input].fields is defined %}
   fields:
-{% if beats_fields is defined %}
+{% if beats_fields | default([], true) | length > 0 %}
 {% for field in beats_fields %}
     {{ field }}
 {% endfor %}
@@ -72,9 +72,9 @@ filebeat.inputs:
   ssl.key_passphrase: {{ beats_tls_key_passphrase }}
   ssl.verification_mode: full
 {% endif %}
-{% if beats_fields is defined or beats_filebeat_syslog_tcp_fields %}
+{% if beats_fields | default([], true) | length > 0 or beats_filebeat_syslog_tcp_fields %}
   fields:
-{% if beats_fields is defined %}
+{% if beats_fields | default([], true) | length > 0 %}
 {% for field in beats_fields %}
     {{ field }}
 {% endfor %}
@@ -90,9 +90,9 @@ filebeat.inputs:
   enabled: true
   max_message_size: 10MiB
   host: "0.0.0.0:{{ beats_filebeat_syslog_udp_port }}"
-{% if beats_fields is defined or beats_filebeat_syslog_udp_fields %}
+{% if beats_fields | default([], true) | length > 0 or beats_filebeat_syslog_udp_fields %}
   fields:
-{% if beats_fields is defined %}
+{% if beats_fields | default([], true) | length > 0 %}
 {% for field in beats_fields %}
     {{ field }}
 {% endfor %}

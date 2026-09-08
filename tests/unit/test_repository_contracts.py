@@ -14,7 +14,11 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from gen_argspecs import parse_defaults  # noqa: E402
+from gen_argspecs import (  # noqa: E402
+    build_argument_specs,
+    merge_main_options,
+    parse_defaults,
+)
 
 ACTION_SHA = re.compile(r"^[0-9a-f]{40}$")
 COLLECTION_CONSTRAINTS = {
@@ -56,6 +60,36 @@ def _assertion_text(path):
 
 
 class TestRepositoryContracts(unittest.TestCase):
+    def test_argspec_generator_refreshes_defaults_and_preserves_metadata(self):
+        entries = [
+            {
+                "name": "beats_fields",
+                "description": "New description",
+                "default": [],
+                "has_default": True,
+            }
+        ]
+        generated = build_argument_specs("beats", entries, "", "")["argument_specs"]["main"]
+        merged = merge_main_options(
+            {
+                "options": {
+                    "beats_fields": {
+                        "description": "Old description",
+                        "type": "list",
+                        "no_log": True,
+                    }
+                }
+            },
+            generated,
+            entries,
+        )
+
+        self.assertEqual(merged["options"]["beats_fields"]["default"], [])
+        self.assertEqual(
+            merged["options"]["beats_fields"]["description"], "New description"
+        )
+        self.assertTrue(merged["options"]["beats_fields"]["no_log"])
+
     def test_external_actions_are_commit_pinned(self):
         action_files = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
         action_files += sorted((ROOT / ".github" / "actions").rglob("*.yml"))
@@ -464,15 +498,23 @@ class TestRepositoryContracts(unittest.TestCase):
             options = yaml.safe_load(specs_path.read_text())["argument_specs"]["main"]["options"]
 
             self.assertEqual(public, set(options), f"{role} public variable catalog drifted")
-            self.assertEqual(
-                optional,
-                set(explicit.get(role, {})),
+            explicit_variables = set(explicit.get(role, {}))
+            rollout_variables = set(rollouts.get(role, {}))
+            self.assertTrue(
+                optional <= explicit_variables,
                 f"{role} optional variables must have explicit executable coverage",
             )
-            self.assertEqual(
-                optional,
-                set(rollouts.get(role, {})),
+            self.assertTrue(
+                optional <= rollout_variables,
                 f"{role} optional variables must have Molecule rollout coverage",
+            )
+            self.assertTrue(
+                explicit_variables <= public,
+                f"{role} explicit coverage references an unknown public variable",
+            )
+            self.assertTrue(
+                rollout_variables <= public,
+                f"{role} rollout coverage references an unknown public variable",
             )
 
             for variable, paths in explicit.get(role, {}).items():

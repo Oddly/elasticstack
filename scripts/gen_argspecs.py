@@ -210,6 +210,28 @@ ROLE_METADATA = {
 }
 
 
+def merge_main_options(existing_main, generated_main, entries):
+    """Refresh generated options while retaining hand-tuned metadata."""
+    merged_main = dict(existing_main)
+    existing_options = existing_main.get("options") or {}
+    merged_options = {}
+    for entry in entries:
+        name = entry["name"]
+        generated_option = generated_main["options"][name]
+        # Start with the hand-tuned option so metadata such as ``no_log`` and
+        # ``choices`` survives, then refresh the generated fields. In
+        # particular, this adds a newly declared empty default to an existing
+        # option that was previously optional.
+        option = dict(existing_options.get(name, {}))
+        option.update(generated_option)
+        if not entry.get("has_default", entry["default"] is not None):
+            option.pop("default", None)
+            option["type"] = generated_option["type"]
+        merged_options[name] = option
+    merged_main["options"] = merged_options
+    return merged_main
+
+
 def main():
     role_path = Path(sys.argv[1]).resolve()
     role_name = role_path.name
@@ -237,18 +259,7 @@ def main():
         existing_argument_specs = existing.get("argument_specs") or {}
         existing_main = existing_argument_specs.get("main") or {}
         generated_main = spec["argument_specs"]["main"]
-        existing_options = existing_main.get("options") or {}
-        merged_options = {}
-        for entry in entries:
-            name = entry["name"]
-            generated_option = generated_main["options"][name]
-            option = existing_options.get(name, generated_option)
-            if not entry.get("has_default", entry["default"] is not None):
-                option = dict(option)
-                option.pop("default", None)
-                option["type"] = generated_option["type"]
-            merged_options[name] = option
-        existing_main["options"] = merged_options
+        existing_main = merge_main_options(existing_main, generated_main, entries)
         existing_argument_specs["main"] = existing_main
         spec["argument_specs"] = existing_argument_specs
 
