@@ -325,6 +325,17 @@ class TestRepositoryContracts(unittest.TestCase):
             self.assertIn(marker, source)
         self.assertNotIn("_kibana_generated_encryption_key.skipped", source)
         self.assertNotIn("_kibana_generated_savedobjects_encryption_key.skipped", source)
+        for task_name, next_task_name in (
+            ("kibana-security | Generate encryption key", "kibana-security | Persist generated encryption key"),
+            (
+                "kibana-security | Generate saved objects encryption key",
+                "kibana-security | Persist generated saved objects encryption key",
+            ),
+        ):
+            generation_block = source[
+                source.index(task_name) : source.index(next_task_name)
+            ]
+            self.assertNotIn("changed_when: false", generation_block)
 
     def test_plugin_workflow_discovers_the_complete_unit_test_suite(self):
         source = (ROOT / ".github" / "workflows" / "test_plugins.yml").read_text()

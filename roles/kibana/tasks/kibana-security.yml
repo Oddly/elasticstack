@@ -313,7 +313,6 @@
       args:
         creates: "{{ elasticstack_ca_dir }}/encryption_key"
       register: _kibana_generated_encryption_key
-      changed_when: false
       check_mode: false
       no_log: true
 
@@ -354,7 +353,6 @@
       args:
         creates: "{{ elasticstack_ca_dir }}/savedobjects_encryption_key"
       register: _kibana_generated_savedobjects_encryption_key
-      changed_when: false
       check_mode: false
       no_log: true
 
