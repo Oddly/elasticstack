@@ -1,15 +1,23 @@
 # Markdownlint config.
 #
-# We turn off the default rule set and re-enable only the rules that
-# CodeRabbit's CHILL profile flags on this repo. The rule set stays small
-# while the file scope covers the Markdown maintained by this repository.
-#
-# Add more rules when the existing Markdown has been brought into compliance.
+# We turn off the default rule set and re-enable rules that keep the maintained
+# Markdown structurally consistent without imposing a line-length policy.
 config:
   default: false
+  MD009: true    # no-trailing-spaces
+  MD012: true    # no-multiple-blanks
+  MD024: true    # no-duplicate-heading
+  MD025: true    # single-title
+  MD029:         # ol-prefix
+    style: one_or_ordered
+  MD036: true    # no-emphasis-as-heading
   MD040: true   # fenced-code-language: opening fences must specify a language
   MD046:        # code-block-style: prefer fenced over indented
     style: fenced
+  MD041: true    # first-line-heading
+  MD045: true    # no-alt-text
+  MD047: true    # single-trailing-newline
+  MD058: true    # blanks-around-tables
 
 # Lint tracked repository Markdown, including root documentation, the docs
 # site, plugin and role documentation, and CI documentation.

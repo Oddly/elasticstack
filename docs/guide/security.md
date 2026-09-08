@@ -27,6 +27,34 @@ On subsequent runs, the role detects the existing security setup and skips initi
 built-in user. Its password has no safe default and must be supplied through
 `logstash_user_password` when Logstash creates it.
 
+## Default and generated credentials
+
+These placeholder values are published defaults for development and test
+deployments. They are known strings, not secrets, and must be replaced before
+the collection manages a production environment:
+
+| Variable | Default | Protects |
+|----------|---------|----------|
+| `elasticstack_ca_pass` | `PleaseChangeMe` | Generated CA private key |
+| `elasticsearch_bootstrap_pw` | `PleaseChangeMe` | Temporary Elasticsearch bootstrap state |
+| `elasticsearch_tls_key_passphrase` | `PleaseChangeMeIndividually` | Elasticsearch node private keys |
+| `kibana_tls_key_passphrase` | `PleaseChangeMe` | Kibana TLS private key |
+| `logstash_tls_key_passphrase` | `LogstashChangeMe` | Logstash TLS keystore |
+| `beats_tls_key_passphrase` | `BeatsChangeMe` | Beats private key |
+
+`elasticsearch_elastic_password`, `kibana_system_password`, and
+`logstash_user_password` are empty by default. An empty value does not create
+an empty login: the first two use generated or explicitly rotated credentials,
+while `logstash_user_password` must be supplied when the collection creates
+`logstash_writer` or configures a secured standard output.
+
+For production, put the CA and bootstrap values in Ansible Vault or a secrets
+manager, set `elasticstack_cert_pass` to a vaulted shared TLS passphrase (or
+set each service passphrase separately), and provide explicit service account
+passwords when a stable login is required. Keep `elasticstack_no_log: true` and
+protect the `elasticstack_initial_passwords` file; it contains generated
+credentials for built-in users until you rotate them deliberately.
+
 ## Custom passwords
 
 ### Setting the `kibana_system` password

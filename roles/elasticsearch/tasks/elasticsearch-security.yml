@@ -515,8 +515,31 @@
             - renew_es_cert
       vars:
         _cert_name: "{{ hostvars[item].inventory_hostname_short }}"
-        _cert_ip: "{{ hostvars[item].ansible_host | default(hostvars[item].inventory_hostname) }}"
-        _cert_dns: "{{ hostvars[item].inventory_hostname_short }},{{ hostvars[item].inventory_hostname }}"
+        # The local password utilities connect to the configured API host.
+        # Include that host and loopback in the generated certificate SANs so
+        # the CLI endpoint has the same identity as the service endpoint.
+        _cert_ip: >-
+          {{ [
+               hostvars[item].ansible_host | default(''),
+               '127.0.0.1',
+               hostvars[item].elasticsearch_api_host | default('localhost', true)
+             ]
+             | reject('equalto', '')
+             | select('match', '^[0-9A-Fa-f:.]+$')
+             | unique
+             | join(',') }}
+        _cert_dns: >-
+          {{ [
+               hostvars[item].inventory_hostname_short,
+               hostvars[item].inventory_hostname,
+               'localhost',
+               hostvars[item].ansible_host | default(''),
+               hostvars[item].elasticsearch_api_host | default('localhost', true)
+             ]
+             | reject('equalto', '')
+             | reject('match', '^[0-9A-Fa-f:.]+$')
+             | unique
+             | join(',') }}
         _cert_out: "{{ elasticstack_ca_dir }}/{{ hostvars[item].inventory_hostname_short }}.p12"
         _cert_pass: "{{ (hostvars[item].elasticsearch_tls_key_passphrase is defined) | ternary(hostvars[item].elasticsearch_tls_key_passphrase, elasticsearch_tls_key_passphrase) }}"
         _cert_validity: "{{ elasticsearch_cert_validity_period }}"
@@ -708,6 +731,8 @@
               - elastic
               - -b
               - -s
+              - --url
+              - "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}"
           register: _elasticsearch_elastic_reset_pw
           changed_when: true
           no_log: "{{ elasticstack_no_log }}"
@@ -853,10 +878,22 @@
     - name: elasticsearch-security | Work around low resources on CI/CD nodes
       when: ansible_facts.virtualization_type in ["container", "docker", "lxc"]
       block:
-        - name: elasticsearch-security | Remove cache
-          ansible.builtin.shell:
-            cmd: rm -rf /var/cache/*
-            executable: /bin/bash
+        - name: elasticsearch-security | Find cache entries
+          ansible.builtin.find:
+            paths: /var/cache
+            file_type: any
+            hidden: true
+            recurse: false
+          register: _elasticsearch_cache_entries
+          changed_when: false
+
+        - name: elasticsearch-security | Remove cache entries
+          ansible.builtin.file:
+            path: "{{ item.path }}"
+            state: absent
+          loop: "{{ _elasticsearch_cache_entries.files }}"
+          loop_control:
+            label: "{{ item.path }}"
           changed_when: false
 
         - name: elasticsearch-security | Set lenient disk watermarks for CI containers
@@ -916,13 +953,14 @@
     # ES 8.x: elasticsearch-setup-passwords creates all built-in user passwords
     # ES 9.x: setup-passwords is removed; use elasticsearch-reset-password per user
     - name: elasticsearch-security | Create initial passwords (ES 8.x)
-      ansible.builtin.shell: >
-        set -o pipefail;
-        /usr/share/elasticsearch/bin/elasticsearch-setup-passwords auto -b >
-        {{ (elasticstack_initial_passwords ~ '.tmp') | quote }} &&
-        mv {{ (elasticstack_initial_passwords ~ '.tmp') | quote }} {{ elasticstack_initial_passwords | quote }}
+      ansible.builtin.command:
+        argv:
+          - /usr/share/elasticsearch/bin/elasticsearch-setup-passwords
+          - auto
+          - -b
+          - --url
+          - "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}"
       args:
-        executable: /bin/bash
         creates: "{{ elasticstack_initial_passwords }}"
       register: _elasticsearch_setup_passwords_result
       until: _elasticsearch_setup_passwords_result.rc | default(1) == 0
@@ -931,6 +969,20 @@
       when:
         - inventory_hostname == elasticstack_ca_host
         - elasticstack_release | int < 9
+      no_log: "{{ elasticstack_no_log }}"
+
+    - name: elasticsearch-security | Persist initial passwords (ES 8.x)
+      ansible.builtin.copy:
+        dest: "{{ elasticstack_initial_passwords }}"
+        content: "{{ _elasticsearch_setup_passwords_result.stdout }}"
+        owner: root
+        group: root
+        mode: "0600"
+      when:
+        - inventory_hostname == elasticstack_ca_host
+        - elasticstack_release | int < 9
+        - _elasticsearch_setup_passwords_result is not skipped
+        - _elasticsearch_setup_passwords_result.rc | default(1) == 0
       no_log: "{{ elasticstack_no_log }}"
 
     - name: elasticsearch-security | Create initial passwords (ES 9.x)
@@ -951,6 +1003,8 @@
               - "{{ item }}"
               - -b
               - -s
+              - --url
+              - "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}"
           loop:
             - elastic
             - kibana_system

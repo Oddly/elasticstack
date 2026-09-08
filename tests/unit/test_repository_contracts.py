@@ -121,18 +121,16 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertEqual(galaxy["dependencies"], COLLECTION_CONSTRAINTS)
 
         for path in sorted((ROOT / "molecule").glob("*/requirements.yml")):
-            # This is a local, untracked scenario used while developing the
-            # shared-passphrase test; check-ci-coverage deliberately ignores
-            # scenarios that are not in Git.
-            if path.parent.name == "elasticstack_common_passphrase":
-                continue
             document = yaml.safe_load(path.read_text()) or {}
-            for collection in document.get("collections", []):
-                self.assertEqual(
-                    collection.get("version"),
-                    COLLECTION_CONSTRAINTS[collection["name"]],
-                    f"{path} leaves {collection['name']} unresolved",
-                )
+            actual = {
+                collection["name"]: collection.get("version")
+                for collection in document.get("collections", [])
+            }
+            self.assertEqual(
+                actual,
+                COLLECTION_CONSTRAINTS,
+                f"{path} must declare every collection dependency with its constraint",
+            )
 
     def test_ci_uses_python_312_for_ansible_220_dependencies(self):
         workflows = (
@@ -215,11 +213,101 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertTrue(options["elasticsearch_users"]["no_log"])
         self.assertTrue(options["elasticsearch_builtin_passwords"]["no_log"])
 
+    def test_elasticsearch_security_bootstrap_uses_a_certificate_validated_endpoint(self):
+        source = (
+            ROOT
+            / "roles"
+            / "elasticsearch"
+            / "tasks"
+            / "elasticsearch-security.yml"
+        ).read_text()
+
+        # The local password utilities perform their own TLS hostname
+        # verification, so they must use the same endpoint that the role
+        # configures and the generated node certificate identifies.
+        self.assertGreaterEqual(source.count("--url"), 3)
+        self.assertIn(
+            "hostvars[item].elasticsearch_api_host | default('localhost', true)",
+            source,
+        )
+        self.assertIn("'127.0.0.1'", source)
+        self.assertIn(
+            "ansible.builtin.copy:\n        dest: \"{{ elasticstack_initial_passwords }}\"",
+            source,
+        )
+        self.assertNotIn(
+            "elasticsearch-setup-passwords auto -b >",
+            source,
+        )
+
+    def test_elasticsearch_container_cache_cleanup_avoids_shell_globs(self):
+        source = (
+            ROOT
+            / "roles"
+            / "elasticsearch"
+            / "tasks"
+            / "elasticsearch-security.yml"
+        ).read_text()
+
+        self.assertIn("ansible.builtin.find:\n            paths: /var/cache", source)
+        self.assertIn("file_type: any", source)
+        self.assertIn("recurse: false", source)
+        self.assertIn(
+            'ansible.builtin.file:\n            path: "{{ item.path }}"\n            state: absent',
+            source,
+        )
+        self.assertNotIn("rm -rf /var/cache/*", source)
+
+    def test_security_documentation_covers_known_credential_defaults(self):
+        source = (ROOT / "docs" / "guide" / "security.md").read_text()
+        documented = {
+            "elasticstack_ca_pass": "PleaseChangeMe",
+            "elasticsearch_bootstrap_pw": "PleaseChangeMe",
+            "elasticsearch_tls_key_passphrase": "PleaseChangeMeIndividually",
+            "kibana_tls_key_passphrase": "PleaseChangeMe",
+            "logstash_tls_key_passphrase": "LogstashChangeMe",
+            "beats_tls_key_passphrase": "BeatsChangeMe",
+        }
+        for variable, value in documented.items():
+            self.assertIn(
+                f"| `{variable}` | `{value}` |",
+                source,
+                f"security guide is missing the known default for {variable}",
+            )
+        for marker in (
+            "known strings, not secrets",
+            "Ansible Vault",
+            "elasticstack_initial_passwords",
+            "logstash_writer",
+        ):
+            self.assertIn(marker, source)
+
+    def test_kibana_generated_encryption_keys_use_argv_and_secure_files(self):
+        source = (ROOT / "roles" / "kibana" / "tasks" / "kibana-security.yml").read_text()
+        self.assertEqual(source.count("- openssl\n          - rand\n"), 2)
+        self.assertEqual(source.count("Persist generated"), 2)
+        self.assertGreaterEqual(
+            source.count('group: elasticsearch\n        mode: "0600"'),
+            4,
+        )
+        self.assertIn("_kibana_generated_encryption_key.stdout", source)
+        self.assertIn("_kibana_generated_savedobjects_encryption_key.stdout", source)
+        self.assertNotIn("openssl rand -base64 36 >", source)
+
+    def test_plugin_workflow_discovers_the_complete_unit_test_suite(self):
+        source = (ROOT / ".github" / "workflows" / "test_plugins.yml").read_text()
+        self.assertIn("pytest>=8.3,<9", source)
+        self.assertIn("python -m pytest -q tests/unit", source)
+        self.assertNotIn("python tests/unit/plugins/modules/test_cert_info.py", source)
+        self.assertNotIn("python tests/unit/plugins/module_utils/test_certs.py", source)
+        self.assertNotIn("python tests/unit/test_repository_contracts.py", source)
+
     def test_public_variables_have_argument_specs_and_executable_coverage(self):
         coverage = yaml.safe_load((ROOT / "tests" / "variable_coverage.yml").read_text())
         baselines = coverage["baselines"]
         explicit = coverage["explicit"]
         rollouts = coverage["rollouts"]
+        behaviors = coverage["behaviors"]
         workflow_sources = "\n".join(
             path.read_text() for path in (ROOT / ".github" / "workflows").glob("*.yml")
         )
@@ -325,6 +413,51 @@ class TestRepositoryContracts(unittest.TestCase):
                         f"{scenario} verify.yml does not assert {variable}: {expected}",
                     )
 
+        for behavior in behaviors:
+            role = behavior["role"]
+            defaults_path = ROOT / "roles" / role / "defaults" / "main.yml"
+            public = {entry["name"] for entry in parse_defaults(defaults_path)}
+            scenario = behavior["scenario"]
+            converge = ROOT / "molecule" / scenario / "converge.yml"
+            verify = ROOT / "molecule" / scenario / "verify.yml"
+
+            self.assertTrue(
+                set(behavior["variables"]).issubset(public),
+                f"{behavior['name']} references a variable outside {role}'s public catalog",
+            )
+            self.assertTrue(converge.exists(), f"Missing behavior converge: {converge}")
+            self.assertTrue(verify.exists(), f"Missing behavior verify: {verify}")
+            self.assertIn(
+                scenario,
+                workflow_sources,
+                f"{scenario} behavior is not referenced by a CI workflow",
+            )
+
+            converge_source = converge.read_text()
+            for variable in behavior["variables"]:
+                assignment = re.compile(
+                    rf"(?m)^(?!\s*#)\s*{re.escape(variable)}\s*:"
+                )
+                self.assertRegex(
+                    converge_source,
+                    assignment,
+                    f"{scenario} does not assign behavior variable {variable}",
+                )
+            for role_reference in behavior["roles"]:
+                self.assertIn(
+                    role_reference,
+                    converge_source,
+                    f"{scenario} does not execute {role_reference}",
+                )
+
+            verify_source = _assertion_text(verify)
+            for expected in behavior["expected"]:
+                self.assertIn(
+                    expected,
+                    verify_source,
+                    f"{scenario} verify.yml does not assert behavior: {expected}",
+                )
+
     def test_markdownlint_scope_enforces_the_new_rules(self):
         config = yaml.safe_load((ROOT / ".markdownlint-cli2.yaml").read_text())
         self.assertEqual(config["config"]["MD040"], True)
@@ -352,7 +485,14 @@ class TestRepositoryContracts(unittest.TestCase):
             script = repo / "scripts" / "check-ci-coverage.sh"
             script.write_text((ROOT / "scripts" / "check-ci-coverage.sh").read_text())
             script.chmod(script.stat().st_mode | stat.S_IXUSR)
-            (workflows / "test_unit.yml").write_text("scenario with spaces\n")
+            (workflows / "test_unit.yml").write_text(
+                "jobs:\n"
+                "  molecule:\n"
+                "    strategy:\n"
+                "      matrix:\n"
+                "        scenario:\n"
+                "          - \"scenario with spaces\"\n"
+            )
             (repo / "molecule" / "scenario with spaces" / "molecule.yml").write_text(
                 "---\n"
             )
@@ -388,7 +528,11 @@ class TestRepositoryContracts(unittest.TestCase):
             script.chmod(script.stat().st_mode | stat.S_IXUSR)
             (repo / "molecule" / "orphan" / "molecule.yml").write_text("---\n")
             (repo / "molecule" / "missing-verify" / "molecule.yml").write_text("---\n")
-            (workflows / "test_unit.yml").write_text("missing-verify\n")
+            (workflows / "test_unit.yml").write_text(
+                "# orphan is mentioned in a comment only\n"
+                "with:\n"
+                "  scenarios: '[\"missing-verify\"]'\n"
+            )
 
             _run(["git", "init", "-q"], repo)
             _run(["git", "add", ".github", "molecule", "scripts"], repo)

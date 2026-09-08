@@ -64,7 +64,6 @@ The passphrase of the PKCS#12 certificate. (**Default:** No default, optional)
 `format`:
 The certificate encoding, either `p12` or `pem`. (**Default:** `p12`)
 
-
 ### Returns
 All keys and values that will be returned with the results variable of the module:
 

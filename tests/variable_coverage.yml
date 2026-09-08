@@ -8,6 +8,7 @@ baselines:
   elasticsearch:
     - molecule/elasticsearch_default/converge.yml
   elasticstack:
+    - molecule/elasticstack_common_passphrase/converge.yml
     - molecule/elasticstack_default/converge.yml
   kibana:
     - molecule/kibana_default/converge.yml
@@ -108,6 +109,23 @@ explicit:
       - tests/integration/collection_variable_contract.yml
     logstash_xpack_management_pipeline_id:
       - tests/integration/collection_variable_contract.yml
+
+# Defaulted variables that change how multiple roles interact need a rollout
+# of the behavior they control. They are kept separate from `explicit` because
+# their normal default path is already covered by a baseline scenario.
+behaviors:
+  - name: shared_certificate_passphrase
+    role: elasticstack
+    variables:
+      - elasticstack_cert_pass
+    scenario: elasticstack_common_passphrase
+    roles:
+      - oddly.elasticstack.repos
+      - oddly.elasticstack.elasticsearch
+      - oddly.elasticstack.kibana
+    expected:
+      - "_http_keystore_pass.stdout == _expected_passphrase"
+      - "_transport_keystore_pass.stdout == _expected_passphrase"
 
 # The same optional variables must also be exercised by a Molecule scenario
 # that installs and starts the affected service. `expected` values are checked

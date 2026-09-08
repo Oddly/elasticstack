@@ -132,7 +132,7 @@ jobs:
         run: |
           uv venv "$RUNNER_TEMP/venv" --python "$(command -v python3.12)"
           source "$RUNNER_TEMP/venv/bin/activate"
-          uv pip install 'ansible-core>=2.20,<2.21' 'cryptography>=41,<47'
+          uv pip install 'ansible-core>=2.20,<2.21' 'cryptography>=41,<47' 'pytest>=8.3,<9'
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
@@ -150,24 +150,13 @@ jobs:
           mkdir -p $ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE
           cp -a "$GITHUB_WORKSPACE" $ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
 
-      - name: Test `cert_info` module
+      - name: Run unit test suite
         run: |
           export PYTHONPATH="$ANSIBLE_COLLECTIONS_PATH${PYTHONPATH:+:$PYTHONPATH}"
-          python tests/unit/plugins/modules/test_cert_info.py
+          python -m pytest -q tests/unit
         env:
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
-
-      - name: Test `certs` module util
-        run: |
-          export PYTHONPATH="$ANSIBLE_COLLECTIONS_PATH${PYTHONPATH:+:$PYTHONPATH}"
-          python tests/unit/plugins/module_utils/test_certs.py
-        env:
-          PY_COLORS: '1'
-          ANSIBLE_FORCE_COLOR: '1'
-
-      - name: Test repository contracts
-        run: python tests/unit/test_repository_contracts.py
 
   python:
     needs: pycodestyle

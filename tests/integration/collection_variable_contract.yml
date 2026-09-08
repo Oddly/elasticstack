@@ -1,0 +1,352 @@
+---
+# Render every optional configuration branch that does not have a runtime
+# default. These contracts run without installing a service, so they are
+# quick enough to run on every pull request and catch template drift before a
+# full Molecule deployment is needed.
+- name: Collection variable template contract
+  hosts: localhost
+  gather_facts: false
+  vars:
+    ansible_managed: Ansible managed
+    elasticstack_full_stack: true
+    elasticstack_release: 9
+    elasticstack_version: "9.2.0"
+    elasticstack_elasticsearch_group_name: all
+    elasticstack_logstash_group_name: all
+    elasticstack_kibana_group_name: all
+    elasticstack_elasticsearch_http_port: 19200
+    elasticstack_kibana_port: 15601
+    elasticstack_beats_port: 15044
+    elasticstack_temperature: warm
+    elasticstack_kibana_host: kibana.example.test
+
+    # Elasticsearch template inputs
+    elasticsearch_nodename: contract-es
+    elasticsearch_datapath: /var/lib/elasticsearch
+    elasticsearch_logpath: /var/log/elasticsearch
+    elasticsearch_clustername: contract-cluster
+    elasticsearch_cluster_set_up: true
+    elasticsearch_network_host:
+      - 10.20.0.10
+      - _site_
+    elasticsearch_http_publish_host: 10.20.0.20
+    elasticsearch_http_publish_port: 19200
+    elasticsearch_transport_port: 19300
+    elasticsearch_node_types:
+      - master
+      - data_hot
+      - ingest
+    elasticsearch_seed_hosts:
+      - 10.20.0.10
+      - 10.20.0.11
+    elasticsearch_ml_enabled: true
+    elasticsearch_security: true
+    elasticsearch_security_enrollment: true
+    elasticsearch_http_security: true
+    elasticsearch_ssl_verification_mode: certificate
+    elasticsearch_cert_source: external
+    elasticsearch_memory_lock: true
+    elasticsearch_fs_repo:
+      - /srv/snapshots
+    _elasticsearch_transport_cert_format: pem
+    _elasticsearch_http_cert_format: pem
+    _elasticsearch_external_has_ca: true
+
+    # Beats template inputs
+    beats_security: false
+    beats_target_hosts:
+      - beats-target.example.test
+    beats_fields:
+      - "global_source: contract"
+    beats_logging: file
+    beats_logpath: /var/log/beats-contract
+    beats_loglevel: debug
+    beats_logging_keepfiles: 12
+    beats_logging_permissions: "0640"
+    beats_filebeat: true
+    beats_filebeat_log_input: true
+    beats_filebeat_log_inputs:
+      messages:
+        name: messages
+        paths:
+          - /var/log/messages
+        fields:
+          input_kind: messages
+        multiline:
+          type: pattern
+          pattern: '^BEGIN'
+          negate: false
+          match: after
+    beats_filebeat_output: file
+    beats_filebeat_output_file_path: /var/lib/filebeat/contract-output
+    beats_filebeat_elastic_monitoring: true
+    beats_filebeat_loadbalance: true
+    beats_filebeat_mysql_slowlog_input: false
+    beats_filebeat_modules: []
+    beats_filebeat_syslog_udp: true
+    beats_filebeat_syslog_udp_port: 5514
+    beats_filebeat_syslog_udp_fields:
+      transport: udp
+    beats_filebeat_syslog_tcp: true
+    beats_filebeat_syslog_tcp_port: 5515
+    beats_filebeat_syslog_tcp_ssl: true
+    beats_filebeat_syslog_tcp_fields:
+      transport: tcp
+    beats_tls_cacert: /etc/beats/certs/ca.crt
+    beats_tls_cert: /etc/beats/certs/contract.crt
+    beats_tls_key: /etc/beats/certs/contract.key
+    beats_tls_key_passphrase: contract-passphrase
+    beats_filebeat_journald: true
+    beats_filebeat_journald_inputs:
+      system:
+        id: system-journal
+        include_matches:
+          - _SYSTEMD_UNIT=example.service
+    beats_filebeat_docker: true
+    beats_filebeat_docker_ids: contract-container
+    beats_filebeat_extra_inputs:
+      - type: httpjson
+        enabled: true
+        id: contract-httpjson
+        request.url: https://example.test/events
+    beats_queue_type: disk
+    beats_queue_disk_path: /var/lib/filebeat/contract-queue
+    beats_queue_disk_max_size: 512MB
+
+    # Kibana template inputs
+    kibana_public_base_url: http://kibana.example.test:15601
+    kibana_elasticsearch_hosts:
+      - es-contract-a
+      - es-contract-b
+    kibana_security: true
+    kibana_tls: false
+    kibana_server_protocol: http1
+    kibana_sniff_on_start: true
+    kibana_sniff_on_connection_fault: true
+    kibana_sniff_interval: 30000
+    kibana_extra_config:
+      logging.root.level: warn
+
+    # Logstash template inputs
+    logstash_security: false
+    logstash_config_path_data: /var/lib/logstash-contract
+    logstash_config_path_logs: /var/log/logstash-contract
+    logstash_config_autoreload: true
+    logstash_config_autoreload_interval: 7s
+    logstash_http_host: 127.0.0.1
+    logstash_http_port: 9610
+    logstash_global_ecs: v8
+    logstash_pipeline_unsafe_shutdown: true
+    logstash_pipeline_buffer_type: heap
+    logstash_dead_letter_queue_enable: true
+    logstash_dead_letter_queue_retain_age: 14d
+    logstash_log_format: json
+    logstash_monitoring_enabled: true
+    logstash_xpack_management: true
+    logstash_xpack_management_elasticsearch_username: contract-manager
+    logstash_xpack_management_elasticsearch_password: contract-manager-password
+    logstash_xpack_management_elasticsearch_hosts:
+      - https://es-contract-a:19200
+    logstash_xpack_management_pipeline_id:
+      - contract-pipeline
+    logstash_input_beats: true
+    logstash_input_beats_port: 5504
+    logstash_input_beats_ssl: true
+    logstash_input_beats_client_auth: optional
+    logstash_input_beats_timeout: 45s
+    logstash_input_elastic_agent: true
+    logstash_input_elastic_agent_port: 5505
+    logstash_input_elastic_agent_ssl: false
+    logstash_extra_inputs: |-
+      http {
+        port => 8080
+      }
+    logstash_elasticsearch_hosts:
+      - es-contract-a
+      - es-contract-b
+    _logstash_es_hosts: "{{ logstash_elasticsearch_hosts }}"
+    logstash_output_elasticsearch: true
+    logstash_elasticsearch_index: contract-%{+YYYY.MM.dd}
+    logstash_validate_after_inactivity: 120
+    logstash_sniffing: true
+    logstash_sniffing_delay: 8
+    logstash_sniffing_path: /_nodes/http
+    _logstash_security: false
+    _logstash_input_cert_path: /etc/logstash/certs/contract.crt
+    _logstash_input_key_path: /etc/logstash/certs/contract.key
+    _logstash_ca_cert_path: /etc/logstash/certs/ca.crt
+    logstash_extra_outputs: |-
+      stdout { codec => rubydebug }
+    logstash_filters: |-
+      mutate { add_field => { "contract" => "true" } }
+    logstash_ident: true
+    logstash_ident_field_name: "[contract][instance]"
+    logstash_pipeline_identifier: true
+    logstash_pipeline_identifier_field_name: "[contract][pipeline]"
+
+  tasks:
+    - name: Create contract workspace
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: collection-variable-contract
+      register: _contract_tmp
+
+    - name: Include Elasticsearch template vars
+      ansible.builtin.include_vars: ../../roles/elasticsearch/vars/main.yml
+
+    - name: Render Elasticsearch configuration
+      ansible.builtin.template:
+        src: ../../roles/elasticsearch/templates/elasticsearch.yml.j2
+        dest: "{{ _contract_tmp.path }}/elasticsearch.yml"
+        mode: "0644"
+
+    - name: Render Beats file output configuration
+      ansible.builtin.template:
+        src: ../../roles/beats/templates/filebeat.yml.j2
+        dest: "{{ _contract_tmp.path }}/filebeat.yml"
+        mode: "0644"
+
+    - name: Render Beats Elasticsearch output configuration
+      ansible.builtin.template:
+        src: ../../roles/beats/templates/filebeat.yml.j2
+        dest: "{{ _contract_tmp.path }}/filebeat-elasticsearch.yml"
+        mode: "0644"
+      vars:
+        elasticstack_full_stack: false
+        beats_filebeat_output: elasticsearch
+
+    - name: Resolve Kibana URL from the shared public host
+      ansible.builtin.set_fact:
+        kibana_public_base_url: "http://{{ elasticstack_kibana_host }}:{{ elasticstack_kibana_port }}"
+
+    - name: Render Kibana configuration
+      ansible.builtin.template:
+        src: ../../roles/kibana/templates/kibana.yml.j2
+        dest: "{{ _contract_tmp.path }}/kibana.yml"
+        mode: "0644"
+      vars:
+        elasticstack_release: 8
+
+    - name: Render Logstash settings configuration
+      ansible.builtin.template:
+        src: ../../roles/logstash/templates/logstash.yml.j2
+        dest: "{{ _contract_tmp.path }}/logstash.yml"
+        mode: "0644"
+
+    - name: Render Logstash input configuration
+      ansible.builtin.template:
+        src: ../../roles/logstash/templates/10-input.conf.j2
+        dest: "{{ _contract_tmp.path }}/10-input.conf"
+        mode: "0644"
+
+    - name: Render Logstash filter configuration
+      ansible.builtin.template:
+        src: ../../roles/logstash/templates/50-filter.conf.j2
+        dest: "{{ _contract_tmp.path }}/50-filter.conf"
+        mode: "0644"
+
+    - name: Render Logstash output configuration
+      ansible.builtin.template:
+        src: ../../roles/logstash/templates/90-output.conf.j2
+        dest: "{{ _contract_tmp.path }}/90-output.conf"
+        mode: "0644"
+
+    - name: Read rendered configurations
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - "{{ _contract_tmp.path }}/elasticsearch.yml"
+        - "{{ _contract_tmp.path }}/filebeat.yml"
+        - "{{ _contract_tmp.path }}/filebeat-elasticsearch.yml"
+        - "{{ _contract_tmp.path }}/kibana.yml"
+        - "{{ _contract_tmp.path }}/logstash.yml"
+        - "{{ _contract_tmp.path }}/10-input.conf"
+        - "{{ _contract_tmp.path }}/50-filter.conf"
+        - "{{ _contract_tmp.path }}/90-output.conf"
+      register: _rendered_configs
+      loop_control:
+        label: "{{ item | basename }}"
+
+    - name: Assert Elasticsearch optional variables render
+      ansible.builtin.assert:
+        that:
+          - "'network.host: [\"10.20.0.10\", \"_site_\"]' in (_rendered_configs.results[0].content | b64decode)"
+          - "'http.publish_host: \"10.20.0.20\"' in (_rendered_configs.results[0].content | b64decode)"
+          - "'http.publish_port: 19200' in (_rendered_configs.results[0].content | b64decode)"
+          - "'transport.port: \"19300\"' in (_rendered_configs.results[0].content | b64decode)"
+          - "'node.name: \"contract-es\"' in (_rendered_configs.results[0].content | b64decode)"
+          - "'node.roles: [\"master\", \"data_hot\", \"ingest\"]' in (_rendered_configs.results[0].content | b64decode)"
+          - "'discovery.seed_hosts: [\"10.20.0.10\", \"10.20.0.11\"]' in (_rendered_configs.results[0].content | b64decode)"
+          - "'node.attr.temp: \"warm\"' in (_rendered_configs.results[0].content | b64decode)"
+          - "'xpack.security.enrollment.enabled: true' in (_rendered_configs.results[0].content | b64decode)"
+
+    - name: Assert Beats optional variables render
+      ansible.builtin.assert:
+        that:
+          - "'global_source: contract' in (_rendered_configs.results[1].content | b64decode)"
+          - "'path: /var/lib/filebeat/contract-output' in (_rendered_configs.results[1].content | b64decode)"
+          - "'host: \"0.0.0.0:5514\"' in (_rendered_configs.results[1].content | b64decode)"
+          - "'host: \"0.0.0.0:5515\"' in (_rendered_configs.results[1].content | b64decode)"
+          - "'ssl.enabled: true' in (_rendered_configs.results[1].content | b64decode)"
+          - "'system-journal' in (_rendered_configs.results[1].content | b64decode)"
+          - "'_SYSTEMD_UNIT=example.service' in (_rendered_configs.results[1].content | b64decode)"
+          - "'contract-container' in (_rendered_configs.results[1].content | b64decode)"
+          - "'contract-httpjson' in (_rendered_configs.results[1].content | b64decode)"
+          - "'queue.disk:' in (_rendered_configs.results[1].content | b64decode)"
+          - "'path: /var/lib/filebeat/contract-queue' in (_rendered_configs.results[1].content | b64decode)"
+          - "'http://beats-target.example.test:19200' in (_rendered_configs.results[2].content | b64decode)"
+
+    - name: Assert Kibana optional variables render
+      ansible.builtin.assert:
+        that:
+          - "'server.publicBaseUrl: \"http://kibana.example.test:15601\"' in (_rendered_configs.results[3].content | b64decode)"
+          - "'server.protocol: \"http1\"' in (_rendered_configs.results[3].content | b64decode)"
+          - "'elasticsearch.hosts:' in (_rendered_configs.results[3].content | b64decode)"
+          - "'es-contract-a:19200' in (_rendered_configs.results[3].content | b64decode)"
+          - "'elasticsearch.sniffOnStart: true' in (_rendered_configs.results[3].content | b64decode)"
+          - "'elasticsearch.sniffOnConnectionFault: true' in (_rendered_configs.results[3].content | b64decode)"
+          - "'elasticsearch.sniffInterval: 30000' in (_rendered_configs.results[3].content | b64decode)"
+
+    - name: Assert Logstash optional variables render
+      ansible.builtin.assert:
+        that:
+          - "'path.data: /var/lib/logstash-contract' in (_rendered_configs.results[4].content | b64decode)"
+          - "'config.reload.interval: 7s' in (_rendered_configs.results[4].content | b64decode)"
+          - "'api.http.port: 9610' in (_rendered_configs.results[4].content | b64decode)"
+          - "'pipeline.ecs_compatibility: v8' in (_rendered_configs.results[4].content | b64decode)"
+          - "'pipeline.unsafe_shutdown: true' in (_rendered_configs.results[4].content | b64decode)"
+          - "'dead_letter_queue.retain.age: 14d' in (_rendered_configs.results[4].content | b64decode)"
+          - "'log.format: json' in (_rendered_configs.results[4].content | b64decode)"
+          - "'xpack.monitoring.enabled: true' in (_rendered_configs.results[4].content | b64decode)"
+          - "'xpack.management.pipeline.id: [\"contract-pipeline\"]' in (_rendered_configs.results[4].content | b64decode)"
+          - "'contract-manager-password' in (_rendered_configs.results[4].content | b64decode)"
+          - "'ssl_client_authentication => optional' in (_rendered_configs.results[5].content | b64decode)"
+          - "'client_inactivity_timeout => 45' in (_rendered_configs.results[5].content | b64decode)"
+          - "'http {' in (_rendered_configs.results[5].content | b64decode)"
+          - "'[contract][instance]' in (_rendered_configs.results[6].content | b64decode)"
+          - "'[contract][pipeline]' in (_rendered_configs.results[6].content | b64decode)"
+          - "'es-contract-a:19200' in (_rendered_configs.results[7].content | b64decode)"
+          - "'index => \"contract-%{+YYYY.MM.dd}\"' in (_rendered_configs.results[7].content | b64decode)"
+          - "'sniffing_delay => 8' in (_rendered_configs.results[7].content | b64decode)"
+          - "'sniffing_path => \"/_nodes/http\"' in (_rendered_configs.results[7].content | b64decode)"
+
+- name: Logstash compatibility variable contract
+  hosts: localhost
+  gather_facts: false
+  vars:
+    elasticstack_security: true
+    logstash_security: false
+    logstash_beats_tls: true
+    logstash_beats_input: false
+    logstash_elasticsearch_output: false
+  tasks:
+    - name: Normalize deprecated Logstash variables
+      ansible.builtin.include_tasks: ../../roles/logstash/tasks/logstash-compatibility.yml
+
+    - name: Assert security override and deprecated aliases are honored
+      ansible.builtin.assert:
+        that:
+          - not _logstash_security | bool
+          - logstash_input_beats_ssl | bool
+          - not logstash_input_beats | bool
+          - not logstash_output_elasticsearch | bool

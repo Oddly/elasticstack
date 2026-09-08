@@ -1,0 +1,479 @@
+---
+- name: Start fake Elasticsearch security API
+  hosts: localhost
+  gather_facts: false
+  vars:
+    _fake_security_api_pid: /tmp/elasticstack-security-api.pid
+    _fake_security_api_log: /tmp/elasticstack-security-api.jsonl
+  tasks:
+    - name: Stop previous fake API if present
+      ansible.builtin.shell: |
+        set -o pipefail
+        if [ -f "{{ _fake_security_api_pid }}" ]; then
+          kill "$(cat "{{ _fake_security_api_pid }}")" 2>/dev/null || true
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Reset fake API log
+      ansible.builtin.copy:
+        dest: "{{ _fake_security_api_log }}"
+        content: ""
+        mode: "0644"
+
+    - name: Start fake API server
+      ansible.builtin.shell: |
+        set -o pipefail
+        nohup python3 {{ playbook_dir }}/../fakes/fake_es_security_api.py \
+          --port 19300 \
+          --log "{{ _fake_security_api_log }}" \
+          >/tmp/elasticstack-security-api.out 2>&1 &
+        echo $!
+      args:
+        executable: /bin/bash
+      register: _fake_security_api
+      changed_when: true
+
+    - name: Store fake API PID
+      ansible.builtin.copy:
+        dest: "{{ _fake_security_api_pid }}"
+        content: "{{ _fake_security_api.stdout }}"
+        mode: "0644"
+
+    - name: Wait for fake API
+      ansible.builtin.uri:
+        url: http://127.0.0.1:19300/
+        method: GET
+      register: _fake_security_api_health
+      until: _fake_security_api_health.status | default(0) == 200
+      retries: 10
+      delay: 1
+
+- name: Apply declarative Elasticsearch security objects
+  hosts: localhost
+  gather_facts: false
+  vars:
+    elasticstack_ca_host: localhost
+    elasticstack_elasticsearch_http_port: 19300
+    elasticstack_no_log: true
+    elasticstack_password:
+      stdout: admin-password
+    elasticsearch_api_host: 127.0.0.1
+    elasticsearch_builtin_passwords:
+      kibana_system: kibana-system-password
+    elasticsearch_http_security: false
+    elasticsearch_security: true
+    elasticsearch_validate_api_certs: false
+    elasticsearch_role_mappings:
+      - name: app_admins
+        roles: [app_writer]
+        rules:
+          field:
+            groups: cn=app-admins,dc=example,dc=com
+    elasticsearch_security_roles:
+      - name: app_writer
+        cluster: [monitor]
+        indices:
+          - names: [app-*]
+            privileges: [read, write]
+        metadata:
+          owner: platform
+    elasticsearch_users:
+      - name: app_ingest
+        password: app-ingest-password
+        roles: [app_writer]
+        full_name: Application ingest user
+        metadata:
+          owner: platform
+      - name: app_hash
+        password_hash: '$2b$12$abcdefghijklmnopqrstuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu'
+        roles: [app_writer]
+  tasks:
+    - name: Include security object manager
+      ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/elasticsearch-security-management.yml
+
+- name: Verify declarative security objects and secret handling
+  hosts: localhost
+  gather_facts: false
+  vars:
+    _fake_security_api_log: /tmp/elasticstack-security-api.jsonl
+  tasks:
+    - name: Read fake API log
+      ansible.builtin.command:
+        cmd: cat "{{ _fake_security_api_log }}"
+      register: _fake_security_api_log_result
+      changed_when: false
+
+    - name: Assert roles, users, built-in passwords, and mappings were applied
+      ansible.builtin.assert:
+        that:
+          - "_fake_security_api_log_result.stdout is search('path.*_security/role/app_writer')"
+          - "_fake_security_api_log_result.stdout is search('path.*_security/user/app_ingest')"
+          - "_fake_security_api_log_result.stdout is search('path.*_security/user/app_hash')"
+          - "_fake_security_api_log_result.stdout is search('path.*_security/user/kibana_system/_password')"
+          - "_fake_security_api_log_result.stdout is search('path.*_security/role_mapping/app_admins')"
+          - "_fake_security_api_log_result.stdout is search('full_name.*Application ingest user')"
+          - "_fake_security_api_log_result.stdout is search('password_set.*true')"
+          - _fake_security_api_log_result.stdout is not search('app-ingest-password')
+          - _fake_security_api_log_result.stdout is not search('kibana-system-password')
+        fail_msg: |
+          Security object API calls were not recorded as expected:
+          {{ _fake_security_api_log_result.stdout }}
+
+    - name: Reset fake API log before idempotence check
+      ansible.builtin.copy:
+        dest: "{{ _fake_security_api_log }}"
+        content: ""
+        mode: "0644"
+
+- name: Reconcile unchanged security objects without resetting passwords
+  hosts: localhost
+  gather_facts: false
+  vars:
+    elasticstack_ca_host: localhost
+    elasticstack_elasticsearch_http_port: 19300
+    elasticstack_no_log: true
+    elasticstack_password:
+      stdout: admin-password
+    elasticsearch_api_host: 127.0.0.1
+    elasticsearch_builtin_passwords: {}
+    elasticsearch_http_security: false
+    elasticsearch_security: true
+    elasticsearch_validate_api_certs: false
+    elasticsearch_role_mappings:
+      - name: app_admins
+        roles: [app_writer]
+        rules:
+          field:
+            groups: cn=app-admins,dc=example,dc=com
+    elasticsearch_security_roles:
+      - name: app_writer
+        cluster: [monitor]
+        indices:
+          - names: [app-*]
+            privileges: [read, write]
+        metadata:
+          owner: platform
+    elasticsearch_users:
+      - name: app_ingest
+        password: app-ingest-password
+        roles: [app_writer]
+        full_name: Application ingest user
+        metadata:
+          owner: platform
+  tasks:
+    - name: Include security object manager
+      ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/elasticsearch-security-management.yml
+
+    - name: Read fake API log
+      ansible.builtin.command:
+        cmd: cat /tmp/elasticstack-security-api.jsonl
+      register: _fake_security_api_idempotence_log
+      changed_when: false
+
+    - name: Assert unchanged objects caused no writes
+      ansible.builtin.assert:
+        that:
+          - "_fake_security_api_idempotence_log.stdout is not search('method.*PUT')"
+          - "_fake_security_api_idempotence_log.stdout is search('method.*GET')"
+        fail_msg: |
+          Unchanged security objects were written again:
+          {{ _fake_security_api_idempotence_log.stdout }}
+
+- name: Rotate a custom user password explicitly
+  hosts: localhost
+  gather_facts: false
+  vars:
+    elasticstack_ca_host: localhost
+    elasticstack_elasticsearch_http_port: 19300
+    elasticstack_no_log: true
+    elasticstack_password:
+      stdout: admin-password
+    elasticsearch_api_host: 127.0.0.1
+    elasticsearch_builtin_passwords: {}
+    elasticsearch_http_security: false
+    elasticsearch_security: true
+    elasticsearch_validate_api_certs: false
+    elasticsearch_users:
+      - name: app_ingest
+        password: rotated-app-ingest-password
+        password_update: true
+        roles: [app_writer]
+  tasks:
+    - name: Reset fake API log before password rotation
+      ansible.builtin.copy:
+        dest: /tmp/elasticstack-security-api.jsonl
+        content: ""
+        mode: "0644"
+
+    - name: Include security object manager
+      ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/elasticsearch-security-management.yml
+
+    - name: Read fake API log
+      ansible.builtin.command:
+        cmd: cat /tmp/elasticstack-security-api.jsonl
+      register: _fake_security_api_rotation_log
+      changed_when: false
+
+    - name: Assert explicit password rotation was applied without logging the secret
+      ansible.builtin.assert:
+        that:
+          - "_fake_security_api_rotation_log.stdout is search('path.*_security/user/app_ingest')"
+          - "_fake_security_api_rotation_log.stdout is search('password_set.*true')"
+          - _fake_security_api_rotation_log.stdout is not search('rotated-app-ingest-password')
+
+- name: Update public security fields without rotating passwords
+  hosts: localhost
+  gather_facts: false
+  vars:
+    elasticstack_ca_host: localhost
+    elasticstack_elasticsearch_http_port: 19300
+    elasticstack_no_log: true
+    elasticstack_password:
+      stdout: admin-password
+    elasticsearch_api_host: 127.0.0.1
+    elasticsearch_builtin_passwords: {}
+    elasticsearch_http_security: false
+    elasticsearch_security: true
+    elasticsearch_validate_api_certs: false
+    elasticsearch_role_mappings:
+      - name: app_admins
+        roles: [app_writer, superuser]
+        enabled: false
+        rules:
+          field:
+            groups: cn=app-admins,dc=example,dc=com
+    elasticsearch_security_roles:
+      - name: app_writer
+        cluster: [monitor, manage]
+        indices:
+          - names: [app-*]
+            privileges: [read, write]
+        metadata:
+          owner: platform
+    elasticsearch_users:
+      - name: app_ingest
+        roles: [app_writer]
+        full_name: Updated application ingest user
+        metadata:
+          owner: platform
+  tasks:
+    - name: Reset fake API log before public field update
+      ansible.builtin.copy:
+        dest: /tmp/elasticstack-security-api.jsonl
+        content: ""
+        mode: "0644"
+
+    - name: Include security object manager for public field update
+      ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/elasticsearch-security-management.yml
+
+    - name: Read fake API log after public field update
+      ansible.builtin.command:
+        cmd: cat /tmp/elasticstack-security-api.jsonl
+      register: _fake_security_api_public_update_log
+      changed_when: false
+
+    - name: Assert public updates write metadata without the supplied password
+      ansible.builtin.assert:
+        that:
+          - "_fake_security_api_public_update_log.stdout is search('path.*_security/role/app_writer')"
+          - "_fake_security_api_public_update_log.stdout is search('path.*_security/user/app_ingest')"
+          - "_fake_security_api_public_update_log.stdout is search('path.*_security/role_mapping/app_admins')"
+          - "_fake_security_api_public_update_log.stdout is search('Updated application ingest user')"
+          - _fake_security_api_public_update_log.stdout is not search('password_set')
+
+- name: Reconcile security objects from multiple play hosts
+  hosts: security_nodes
+  gather_facts: false
+  vars:
+    elasticstack_ca_host: localhost
+    elasticstack_elasticsearch_http_port: 19300
+    elasticstack_no_log: true
+    elasticstack_password:
+      stdout: admin-password
+    elasticsearch_api_host: 127.0.0.1
+    elasticsearch_builtin_passwords: {}
+    elasticsearch_http_security: false
+    elasticsearch_security: true
+    elasticsearch_validate_api_certs: false
+    elasticsearch_users:
+      - name: app_ingest
+        roles: [app_writer]
+        full_name: Updated application ingest user
+        metadata:
+          owner: platform
+    elasticsearch_role_mappings:
+      - name: app_admins
+        roles: [app_writer, superuser]
+        enabled: false
+        rules:
+          field:
+            groups: cn=app-admins,dc=example,dc=com
+    elasticsearch_security_roles:
+      - name: app_writer
+        cluster: [monitor, manage]
+        indices:
+          - names: [app-*]
+            privileges: [read, write]
+  tasks:
+    - name: Reset fake API log once before the multi-host check  # noqa: run-once[task]
+      ansible.builtin.copy:
+        dest: /tmp/elasticstack-security-api.jsonl
+        content: ""
+        mode: "0644"
+      run_once: true
+
+    - name: Include security object manager once for the cluster  # noqa: run-once[task]
+      ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/elasticsearch-security-management.yml
+      run_once: true
+
+- name: Verify multi-host security management is run once
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Read the multi-host API log
+      ansible.builtin.command:
+        cmd: cat /tmp/elasticstack-security-api.jsonl
+      register: _fake_security_api_multi_host_log
+      changed_when: false
+
+    - name: Assert one reconciliation was sent for each object
+      ansible.builtin.assert:
+        that:
+          - "_fake_security_api_multi_host_log.stdout | regex_findall('\\\"method\\\": \\\"GET\\\"') | length == 3"
+          - "_fake_security_api_multi_host_log.stdout is not search('\\\"method\\\": \\\"PUT\\\"')"
+
+- name: Require an administrative credential for configured objects
+  hosts: localhost
+  gather_facts: false
+  vars:
+    elasticstack_ca_host: localhost
+    elasticstack_elasticsearch_http_port: 19300
+    elasticstack_no_log: true
+    elasticstack_password:
+      stdout: ""
+    elasticsearch_api_host: 127.0.0.1
+    elasticsearch_http_security: false
+    elasticsearch_security: true
+    elasticsearch_validate_api_certs: false
+    elasticsearch_security_roles:
+      - name: needs_admin
+        cluster: [monitor]
+  tasks:
+    - name: Reject configured objects without the elastic password
+      block:
+        - name: Include security manager without credentials
+          ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/elasticsearch-security-management.yml
+      rescue:
+        - name: Record missing administrative credential failure
+          ansible.builtin.set_fact:
+            _missing_admin_password_failed: true
+
+    - name: Assert missing administrative credentials fail before API access
+      ansible.builtin.assert:
+        that:
+          - _missing_admin_password_failed | default(false) | bool
+
+- name: Reject invalid declarative security definitions
+  hosts: localhost
+  gather_facts: false
+  vars:
+    elasticstack_ca_host: localhost
+    elasticstack_elasticsearch_http_port: 19300
+    elasticstack_no_log: true
+    elasticstack_password:
+      stdout: admin-password
+    elasticsearch_api_host: 127.0.0.1
+    elasticsearch_http_security: false
+    elasticsearch_security: true
+    elasticsearch_validate_api_certs: false
+  tasks:
+    - name: Reject a new user without a password
+      block:
+        - name: Include invalid user definition
+          ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/elasticsearch-security-user.yml
+          vars:
+            _elasticsearch_security_user:
+              name: new_user_without_password
+            _elasticsearch_security_api_url: http://127.0.0.1:19300
+            _elasticsearch_security_api_password: admin-password
+            _elasticsearch_security_builtin_users:
+              - elastic
+      rescue:
+        - name: Record missing user password failure
+          ansible.builtin.set_fact:
+            _missing_user_password_failed: true
+
+    - name: Reject unknown built-in users
+      block:
+        - name: Include invalid built-in definition
+          ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/elasticsearch-security-builtins.yml
+          vars:
+            _elasticsearch_security_builtin:
+              key: unknown_builtin
+              value: valid-password
+            _elasticsearch_security_api_url: http://127.0.0.1:19300
+            _elasticsearch_security_api_password: admin-password
+      rescue:
+        - name: Record unknown built-in failure
+          ansible.builtin.set_fact:
+            _unknown_builtin_failed: true
+
+    - name: Reject users with both password forms
+      block:
+        - name: Include user with conflicting password forms
+          ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/elasticsearch-security-user.yml
+          vars:
+            _elasticsearch_security_user:
+              name: invalid_user
+              password: valid-password
+              password_hash: valid-hash
+            _elasticsearch_security_api_url: http://127.0.0.1:19300
+            _elasticsearch_security_api_password: admin-password
+            _elasticsearch_security_builtin_users:
+              - elastic
+      rescue:
+        - name: Record conflicting password forms failure
+          ansible.builtin.set_fact:
+            _both_password_forms_failed: true
+
+    - name: Reject role mappings without rules
+      block:
+        - name: Include role mapping without rules
+          ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/elasticsearch-security-role-mapping.yml
+          vars:
+            _elasticsearch_security_role_mapping:
+              name: invalid_mapping
+              roles: [app_writer]
+            _elasticsearch_security_api_url: http://127.0.0.1:19300
+            _elasticsearch_security_api_password: admin-password
+      rescue:
+        - name: Record missing role mapping rules failure
+          ansible.builtin.set_fact:
+            _missing_mapping_rules_failed: true
+
+    - name: Assert invalid security definitions fail before API writes
+      ansible.builtin.assert:
+        that:
+          - _missing_user_password_failed | default(false) | bool
+          - _unknown_builtin_failed | default(false) | bool
+          - _both_password_forms_failed | default(false) | bool
+          - _missing_mapping_rules_failed | default(false) | bool
+
+- name: Stop fake Elasticsearch security API
+  hosts: localhost
+  gather_facts: false
+  vars:
+    _fake_security_api_pid: /tmp/elasticstack-security-api.pid
+  tasks:
+    - name: Kill fake API
+      ansible.builtin.shell: |
+        set -o pipefail
+        if [ -f "{{ _fake_security_api_pid }}" ]; then
+          kill "$(cat "{{ _fake_security_api_pid }}")" 2>/dev/null || true
+          rm -f "{{ _fake_security_api_pid }}"
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false

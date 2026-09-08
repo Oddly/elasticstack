@@ -1,0 +1,53 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  vars:
+    _expected_passphrase: "SharedPassphrase123!"
+  tasks:
+    - name: Read shared passphrase back from Elasticsearch keystore
+      ansible.builtin.command: >-
+        /usr/share/elasticsearch/bin/elasticsearch-keystore
+        show xpack.security.http.ssl.keystore.secure_password
+      register: _http_keystore_pass
+      changed_when: false
+      no_log: true
+
+    - name: The elasticstack_cert_pass value landed in the ES keystore
+      ansible.builtin.assert:
+        that:
+          # The whole point of the scenario. If the propagation gate
+          # regresses to `is defined` and the wrapping default becomes
+          # empty, the value here will be blank, not our sentinel.
+          - _http_keystore_pass.stdout == _expected_passphrase
+        fail_msg: >-
+          Expected the HTTP SSL keystore secure_password to hold the
+          value of elasticstack_cert_pass, but it did not. If the
+          keystore is empty, the elasticsearch role's propagation
+          gate has regressed to `is defined` and swallowed the value.
+
+    - name: Read transport keystore passphrase back
+      ansible.builtin.command: >-
+        /usr/share/elasticsearch/bin/elasticsearch-keystore
+        show xpack.security.transport.ssl.keystore.secure_password
+      register: _transport_keystore_pass
+      changed_when: false
+      no_log: true
+
+    - name: The elasticstack_cert_pass value landed on the transport keystore too
+      ansible.builtin.assert:
+        that:
+          - _transport_keystore_pass.stdout == _expected_passphrase
+        fail_msg: >-
+          Same regression as above, transport side. The propagation
+          gate needs a non-empty check, not `is defined`.
+
+    - name: Confirm Kibana came up (implies its own cert path did not blank)
+      ansible.builtin.uri:
+        url: "https://localhost:5601/api/status"
+        validate_certs: false
+        status_code: [200, 302, 401]
+      register: _kibana_status
+      until: _kibana_status.status | default(0) in [200, 302, 401]
+      retries: 30
+      delay: 10

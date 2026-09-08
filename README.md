@@ -1,3 +1,5 @@
+# oddly.elasticstack
+
 <div align="center">
   <img src="docs/assets/elastic-logo.svg" alt="Elastic Stack" width="120">
   <p><strong>oddly.elasticstack</strong></p>
