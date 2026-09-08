@@ -279,7 +279,7 @@
   vars:
     _package_name: "{{ elasticsearch_package }}"
     _package_base_name: elasticsearch
-    _package_notify: Restart Elasticsearch
+    _package_notify: []
 
 # If a normal package install (not the rolling upgrade path) changed the
 # package, we need a rolling restart to avoid bringing all nodes down at

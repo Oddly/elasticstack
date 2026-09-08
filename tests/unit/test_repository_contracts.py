@@ -271,21 +271,27 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertEqual(shared.count("ansible.builtin.package:"), 3)
         self.assertIn("state: \"{{ 'latest' if", shared)
         self.assertIn('enablerepo:', shared)
-        self.assertEqual(shared.count('notify:\n    - "{{ _package_notify }}"'), 3)
+        self.assertEqual(shared.count('notify: "{{ _package_notify | default([]) }}"'), 3)
 
-        for role, package_var, package_base, handler in (
-            ("elasticsearch", "elasticsearch_package", "elasticsearch", "Restart Elasticsearch"),
-            ("kibana", "kibana_package", "kibana", "Restart Kibana"),
-            ("logstash", "logstash_package", "logstash", "Restart Logstash"),
+        for role, package_var, package_base, package_notify in (
+            ("elasticsearch", "elasticsearch_package", "elasticsearch", "[]"),
+            ("kibana", "kibana_package", "kibana", "- Restart Kibana"),
+            ("logstash", "logstash_package", "logstash", "- Restart Logstash"),
         ):
             source = (ROOT / "roles" / role / "tasks" / "main.yml").read_text()
-            self.assertIn(
-                'ansible.builtin.include_tasks: "{{ role_path }}/../elasticstack/tasks/install_elastic_package.yml"',
+            include_block = re.search(
+                rf"(?ms)^- name: Install {package_base.capitalize()} package\n.*?(?=^- name:|\Z)",
                 source,
             )
-            self.assertIn(f'_package_name: "{{{{ {package_var} }}}}"', source)
-            self.assertIn(f"_package_base_name: {package_base}", source)
-            self.assertIn(f"_package_notify: {handler}", source)
+            self.assertIsNotNone(include_block, f"{role} does not include the shared installer")
+            include_source = include_block.group(0)
+            self.assertIn(
+                'ansible.builtin.include_tasks: "{{ role_path }}/../elasticstack/tasks/install_elastic_package.yml"',
+                include_source,
+            )
+            self.assertIn(f'_package_name: "{{{{ {package_var} }}}}"', include_source)
+            self.assertIn(f"_package_base_name: {package_base}", include_source)
+            self.assertIn(package_notify, include_source)
 
         elasticsearch = (ROOT / "roles" / "elasticsearch" / "tasks" / "main.yml").read_text()
         self.assertIn("_elasticstack_package_changed", elasticsearch)

@@ -59,7 +59,8 @@
   vars:
     _package_name: "{{ kibana_package }}"
     _package_base_name: kibana
-    _package_notify: Restart Kibana
+    _package_notify:
+      - Restart Kibana
 
 - name: Import security related tasks
   ansible.builtin.import_tasks: kibana-security.yml

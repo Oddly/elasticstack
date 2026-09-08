@@ -104,7 +104,8 @@
   vars:
     _package_name: "{{ logstash_package }}"
     _package_base_name: logstash
-    _package_notify: Restart Logstash
+    _package_notify:
+      - Restart Logstash
 
 - name: Import Logstash Security tasks
   ansible.builtin.import_tasks: logstash-security.yml

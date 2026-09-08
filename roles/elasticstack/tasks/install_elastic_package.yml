@@ -3,7 +3,7 @@
 # Required variables:
 #   _package_name       - package name for an explicitly selected version
 #   _package_base_name  - unversioned package name used for latest installs
-#   _package_notify     - handler to notify when the package changes
+#   _package_notify     - list of handlers to notify when the package changes
 
 - name: "install_elastic_package | Install {{ _package_base_name }} RPM (full stack)"  # noqa: name[template]
   ansible.builtin.package:
@@ -15,8 +15,7 @@
   until: _elasticstack_package_install_rpm_full is success
   retries: 3
   delay: 10
-  notify:
-    - "{{ _package_notify }}"
+  notify: "{{ _package_notify | default([]) }}"
   when:
     - ansible_facts.os_family == "RedHat"
     - elasticstack_full_stack | bool
@@ -29,8 +28,7 @@
   until: _elasticstack_package_install_rpm is success
   retries: 3
   delay: 10
-  notify:
-    - "{{ _package_notify }}"
+  notify: "{{ _package_notify | default([]) }}"
   when:
     - ansible_facts.os_family == "RedHat"
     - not elasticstack_full_stack | bool
@@ -43,8 +41,7 @@
   until: _elasticstack_package_install_deb is success
   retries: 3
   delay: 10
-  notify:
-    - "{{ _package_notify }}"
+  notify: "{{ _package_notify | default([]) }}"
   when:
     - ansible_facts.os_family == "Debian"
 
