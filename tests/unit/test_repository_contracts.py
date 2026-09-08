@@ -352,6 +352,11 @@ class TestRepositoryContracts(unittest.TestCase):
         source = (ROOT / "molecule" / "kibana_cert_content" / "converge.yml").read_text()
         self.assertIn("elasticsearch_security: false", source)
         self.assertIn("elasticsearch_http_security: false", source)
+        self.assertNotIn(
+            "set_ci_watermarks.yml",
+            source,
+            "the unsecured backend cannot use the HTTPS/password-only watermark helper",
+        )
 
     def test_kibana_generated_encryption_keys_use_argv_and_secure_files(self):
         source = (ROOT / "roles" / "kibana" / "tasks" / "kibana-security.yml").read_text()

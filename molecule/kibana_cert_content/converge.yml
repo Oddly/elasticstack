@@ -57,10 +57,6 @@
         name: oddly.elasticstack.elasticsearch
       when: "'elasticsearch' in group_names"
 
-    - name: CI — set lenient disk watermarks
-      ansible.builtin.include_tasks: ../shared/set_ci_watermarks.yml
-      when: "'elasticsearch' in group_names"
-
     - name: CI — clean cache after Elasticsearch
       ansible.builtin.include_tasks: ../shared/cleanup_cache.yml
 
