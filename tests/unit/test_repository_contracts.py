@@ -103,7 +103,7 @@ class TestRepositoryContracts(unittest.TestCase):
         for requirement in (
             "ansible-core>=2.20,<2.21",
             "ansible-lint>=26.8,<27",
-            "molecule>=25.4,<26",
+            "molecule>=26.8.0,<27",
             "pytest>=8.3,<9",
             "passlib==1.7.4",
         ):
