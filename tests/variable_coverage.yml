@@ -132,6 +132,110 @@ behaviors:
     expected:
       - "_beats_cert_stat.results | selectattr('stat.exists') | list | length == 3"
       - "_beats_cert_hashes.stdout_lines | select('match', '^(\\\\S+) \\\\1$') | list | length == 3"
+  - name: elasticsearch_external_certificate_files
+    role: elasticsearch
+    variables:
+      - elasticsearch_cert_source
+      - elasticsearch_transport_tls_certificate
+      - elasticsearch_transport_tls_key
+      - elasticsearch_http_tls_certificate
+      - elasticsearch_http_tls_key
+      - elasticsearch_tls_ca_certificate
+      - elasticsearch_tls_remote_src
+      - elasticsearch_ssl_verification_mode
+    scenario: elasticsearch_custom_certs
+    roles:
+      - oddly.elasticstack.repos
+      - oddly.elasticstack.elasticsearch
+    expected:
+      - "'CN = Test CA' in es_http_cert_issuer.stdout or 'CN=Test CA' in es_http_cert_issuer.stdout"
+      - "'transport.ssl.certificate_authorities' in _es_config"
+  - name: elasticsearch_external_certificate_content
+    role: elasticsearch
+    variables:
+      - elasticsearch_cert_source
+      - elasticsearch_transport_tls_certificate_content
+      - elasticsearch_transport_tls_key_content
+      - elasticsearch_http_tls_certificate_content
+      - elasticsearch_http_tls_key_content
+      - elasticsearch_tls_ca_certificate_content
+      - elasticsearch_ssl_verification_mode
+    scenario: elasticsearch_cert_content
+    roles:
+      - oddly.elasticstack.repos
+      - oddly.elasticstack.elasticsearch
+    expected:
+      - "(_cert_hashes.stdout_lines | length) == 3"
+      - "p12_files.files | length == 0"
+      - "'xpack.security.transport.ssl.verification_mode: certificate' in (_es_yml.content | b64decode)"
+  - name: elasticsearch_external_certificate_fallback
+    role: elasticsearch
+    variables:
+      - elasticsearch_cert_source
+      - elasticsearch_transport_tls_certificate
+      - elasticsearch_tls_remote_src
+      - elasticsearch_ssl_verification_mode
+    scenario: elasticsearch_custom_certs_minimal
+    roles:
+      - oddly.elasticstack.repos
+      - oddly.elasticstack.elasticsearch
+    expected:
+      - "transport_key_stat.stat.exists"
+      - "http_cert_stat.stat.exists"
+      - "'count=1 ' in _ca_extract.stdout"
+  - name: kibana_external_certificate_files
+    role: kibana
+    variables:
+      - kibana_cert_source
+      - kibana_tls
+      - kibana_tls_certificate_file
+      - kibana_tls_key_file
+      - kibana_tls_remote_src
+      - kibana_extra_config
+    scenario: kibana_custom_certs
+    roles:
+      - oddly.elasticstack.repos
+      - oddly.elasticstack.elasticsearch
+      - oddly.elasticstack.kibana
+    expected:
+      - "'certificateAuthorities' not in (kibana_yml.content | b64decode)"
+      - "'server.ssl.enabled: true' in (kibana_yml.content | b64decode)"
+      - "'server.ssl.certificate:' in (kibana_yml.content | b64decode)"
+  - name: logstash_external_certificate_files
+    role: logstash
+    variables:
+      - logstash_cert_source
+      - logstash_tls_certificate_file
+      - logstash_tls_key_file
+      - logstash_tls_ca_file
+      - logstash_tls_remote_src
+      - logstash_input_beats
+      - logstash_input_beats_ssl
+      - logstash_input_beats_client_auth
+      - logstash_input_beats_timeout
+    scenario: logstash_external_certs
+    roles:
+      - oddly.elasticstack.repos
+      - oddly.elasticstack.logstash
+    expected:
+      - "server_cert.stat.exists"
+      - "ca_cert.stat.exists"
+      - "_server_key_header.stdout == '-----BEGIN PRIVATE KEY-----'"
+  - name: logstash_standalone_certificates
+    role: logstash
+    variables:
+      - logstash_cert_source
+      - logstash_tls_key_passphrase
+      - logstash_input_beats
+      - logstash_input_beats_ssl
+    scenario: logstash_standalone_certs
+    roles:
+      - oddly.elasticstack.repos
+      - oddly.elasticstack.logstash
+    expected:
+      - "item.stat.exists"
+      - "item.stat.mode == \"0640\""
+      - "_pfx_bad_check.rc != 0"
   - name: shared_certificate_passphrase
     role: elasticstack
     variables:
