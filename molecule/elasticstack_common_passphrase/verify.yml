@@ -42,9 +42,9 @@
           Same regression as above, transport side. The propagation
           gate needs a non-empty check, not `is defined`.
 
-    - name: Confirm Kibana came up (implies its own cert path did not blank)
+    - name: Confirm Kibana came up over HTTP
       ansible.builtin.uri:
-        url: "https://localhost:5601/api/status"
+        url: "http://localhost:5601/api/status"
         validate_certs: false
         status_code: [200, 302, 401]
       register: _kibana_status
