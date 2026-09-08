@@ -132,6 +132,23 @@ class TestRepositoryContracts(unittest.TestCase):
                 f"{path} must declare every collection dependency with its constraint",
             )
 
+    def test_incus_molecule_scenarios_have_lifecycle_playbooks(self):
+        excluded = {"default", "shared", "cert_info_module"}
+        scenarios = sorted(
+            path.parent
+            for path in (ROOT / "molecule").glob("*/molecule.yml")
+            if path.parent.name not in excluded
+        )
+
+        self.assertTrue(scenarios)
+        for scenario in scenarios:
+            for playbook in ("create.yml", "destroy.yml"):
+                path = scenario / playbook
+                self.assertTrue(
+                    path.is_file(),
+                    f"{scenario.name} must provide an executable {playbook}",
+                )
+
     def test_ci_uses_python_312_for_ansible_220_dependencies(self):
         workflows = (
             ROOT / ".github" / "workflows" / "test_linting.yml",
