@@ -7,15 +7,15 @@ dependency:
 driver:
   name: default
 platforms:
-  - name: "kb-content-es-\${MOLECULE_DISTRO:-debian13}-r\${ELASTIC_RELEASE:-9}\${MOLECULE_RUN_SUFFIX}"
+  - name: "kb-content-es-${MOLECULE_DISTRO:-debian13}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
     groups:
       - elasticsearch
-    distro: "\${MOLECULE_DISTRO:-debian13}"
+    distro: "${MOLECULE_DISTRO:-debian13}"
     memory_mb: 4096
-  - name: "kb-content-kb-\${MOLECULE_DISTRO:-debian13}-r\${ELASTIC_RELEASE:-9}\${MOLECULE_RUN_SUFFIX}"
+  - name: "kb-content-kb-${MOLECULE_DISTRO:-debian13}-r${ELASTIC_RELEASE:-9}${MOLECULE_RUN_SUFFIX}"
     groups:
       - kibana
-    distro: "\${MOLECULE_DISTRO:-debian13}"
+    distro: "${MOLECULE_DISTRO:-debian13}"
     memory_mb: 3072
 provisioner:
   name: ansible
