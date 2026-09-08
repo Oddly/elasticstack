@@ -10,4 +10,4 @@ passlib==1.7.4
 # The client version should match the target ES server version
 # For testing with ES 9.x, install: pip install 'elasticsearch>=9,<10'
 # For testing with ES 8.x, install: pip install 'elasticsearch>=8,<9'
-elasticsearch>=8,<10
+elasticsearch>=9.5.0,<10
