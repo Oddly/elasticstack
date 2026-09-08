@@ -417,45 +417,66 @@ class TestRepositoryContracts(unittest.TestCase):
             role = behavior["role"]
             defaults_path = ROOT / "roles" / role / "defaults" / "main.yml"
             public = {entry["name"] for entry in parse_defaults(defaults_path)}
-            scenario = behavior["scenario"]
-            converge = ROOT / "molecule" / scenario / "converge.yml"
-            verify = ROOT / "molecule" / scenario / "verify.yml"
+            scenario = behavior.get("scenario")
+            contract = behavior.get("contract")
+            self.assertEqual(
+                bool(scenario) ^ bool(contract),
+                True,
+                f"{behavior['name']} must name exactly one scenario or contract",
+            )
+
+            if scenario:
+                converge = ROOT / "molecule" / scenario / "converge.yml"
+                verify = ROOT / "molecule" / scenario / "verify.yml"
+                coverage_source = converge.read_text()
+                assertion_source = _assertion_text(verify)
+                self.assertTrue(converge.exists(), f"Missing behavior converge: {converge}")
+                self.assertTrue(verify.exists(), f"Missing behavior verify: {verify}")
+                self.assertIn(
+                    scenario,
+                    workflow_sources,
+                    f"{scenario} behavior is not referenced by a CI workflow",
+                )
+            else:
+                contract_path = ROOT / contract
+                coverage_source = contract_path.read_text()
+                assertion_source = _assertion_text(contract_path)
+                self.assertTrue(
+                    contract_path.exists(),
+                    f"Missing behavior contract: {contract_path}",
+                )
+                self.assertIn(
+                    "for pb in *_contract.yml",
+                    workflow_sources,
+                    "integration behavior contracts must run in Test Contracts",
+                )
 
             self.assertTrue(
                 set(behavior["variables"]).issubset(public),
                 f"{behavior['name']} references a variable outside {role}'s public catalog",
             )
-            self.assertTrue(converge.exists(), f"Missing behavior converge: {converge}")
-            self.assertTrue(verify.exists(), f"Missing behavior verify: {verify}")
-            self.assertIn(
-                scenario,
-                workflow_sources,
-                f"{scenario} behavior is not referenced by a CI workflow",
-            )
 
-            converge_source = converge.read_text()
             for variable in behavior["variables"]:
                 assignment = re.compile(
                     rf"(?m)^(?!\s*#)\s*{re.escape(variable)}\s*:"
                 )
                 self.assertRegex(
-                    converge_source,
+                    coverage_source,
                     assignment,
-                    f"{scenario} does not assign behavior variable {variable}",
+                    f"{behavior['name']} does not assign behavior variable {variable}",
                 )
             for role_reference in behavior["roles"]:
                 self.assertIn(
                     role_reference,
-                    converge_source,
+                    coverage_source,
                     f"{scenario} does not execute {role_reference}",
                 )
 
-            verify_source = _assertion_text(verify)
             for expected in behavior["expected"]:
                 self.assertIn(
                     expected,
-                    verify_source,
-                    f"{scenario} verify.yml does not assert behavior: {expected}",
+                    assertion_source,
+                    f"{behavior['name']} does not assert behavior: {expected}",
                 )
 
     def test_markdownlint_scope_enforces_the_new_rules(self):

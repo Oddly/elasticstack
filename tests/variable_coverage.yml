@@ -281,6 +281,28 @@ behaviors:
       - "_logstash_role_response.json[logstash_role_name].indices[0].names == ['molecule-logs-*']"
       - "_logstash_user_response.json[logstash_user_name].email == 'molecule@example.test'"
       - "_logstash_user_response.json[logstash_user_name].full_name == 'Molecule Logstash Writer'"
+  - name: elasticsearch_node_maintenance_lifecycle
+    role: elasticsearch
+    variables:
+      - elasticsearch_api_host
+      - elasticsearch_http_protocol
+      - elasticsearch_validate_api_certs
+      - elasticsearch_ml_enabled
+      - elasticsearch_nodename
+      - elasticsearch_maintenance_wait_status
+      - elasticsearch_maintenance_health_retries
+      - elasticsearch_maintenance_health_delay
+      - elasticsearch_maintenance_wait_health
+      - elasticsearch_maintenance_require_green
+      - elasticsearch_drain_cluster_settings
+      - elasticsearch_cluster_settings
+    contract: tests/integration/node_maintenance_contract.yml
+    roles:
+      - oddly.elasticstack.elasticsearch
+    expected:
+      - "_log.stdout is search('voting_config_exclusions.*node_names=esA')"
+      - "_log.stdout is search('200mb.*\"method\": \"PUT\".*/_cluster/settings')"
+      - "_log.stdout is not search('_ml/set_upgrade_mode')"
   - name: shared_certificate_passphrase
     role: elasticstack
     variables:
