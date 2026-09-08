@@ -339,9 +339,14 @@ class TestRepositoryContracts(unittest.TestCase):
             kibana.index("- name: kibana-security | Fetch Kibana password") :
             kibana.index("# -- Change kibana_system password if user defined one --")
         ]
+        key_block = kibana[
+            kibana.index("- name: kibana-security | Block for key generation") :
+            kibana.index("- name: kibana-security | Handle auto-generated Kibana certificate distribution")
+        ]
 
         self.assertIn("when: beats_security | bool", beats_block)
         self.assertIn("when: kibana_security | bool", kibana_block)
+        self.assertIn("when: kibana_security | bool", key_block)
 
     def test_kibana_generated_encryption_keys_use_argv_and_secure_files(self):
         source = (ROOT / "roles" / "kibana" / "tasks" / "kibana-security.yml").read_text()

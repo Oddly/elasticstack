@@ -251,6 +251,7 @@
 - name: kibana-security | Block for key generation
   delegate_to: "{{ elasticstack_ca_host }}"
   run_once: true
+  when: kibana_security | bool
   tags:
     - certificates
     - renew_ca
