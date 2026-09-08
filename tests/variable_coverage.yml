@@ -201,6 +201,28 @@ behaviors:
       - "'certificateAuthorities' not in (kibana_yml.content | b64decode)"
       - "'server.ssl.enabled: true' in (kibana_yml.content | b64decode)"
       - "'server.ssl.certificate:' in (kibana_yml.content | b64decode)"
+  - name: kibana_external_certificate_content
+    role: kibana
+    variables:
+      - kibana_cert_source
+      - kibana_tls
+      - kibana_tls_certificate_file
+      - kibana_tls_key_file
+      - kibana_tls_ca_file
+      - kibana_tls_certificate_content
+      - kibana_tls_key_content
+      - kibana_tls_ca_content
+      - kibana_tls_remote_src
+      - kibana_security
+    scenario: kibana_cert_content
+    roles:
+      - oddly.elasticstack.repos
+      - oddly.elasticstack.elasticsearch
+      - oddly.elasticstack.kibana
+    expected:
+      - "_kibana_cert_stat.results | selectattr('stat.exists') | list | length == 3"
+      - "_kibana_cert_hashes.stdout_lines | select('match', '^(\\\\S+) \\\\1$') | list | length == 3"
+      - "'server.ssl.keystore.path' not in (_kibana_yml.content | b64decode)"
   - name: logstash_external_certificate_files
     role: logstash
     variables:
