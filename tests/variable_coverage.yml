@@ -121,6 +121,9 @@ behaviors:
       - beats_tls_certificate_file
       - beats_tls_key_file
       - beats_tls_ca_file
+      - beats_tls_certificate_content
+      - beats_tls_key_content
+      - beats_tls_ca_content
       - beats_tls_remote_src
     scenario: beats_external_certs
     roles:
