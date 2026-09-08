@@ -36,7 +36,7 @@ argument_specs:
         type: str
         default: ''
       kibana_elasticsearch_hosts:
-        description: Elasticsearch hosts for Kibana. Undefined derives them from the configured inventory group
+        description: Elasticsearch hosts for Kibana. Undefined derives them from the configured inventory group; a colocated single-node deployment uses that host's Elasticsearch API endpoint
         type: list
       kibana_security:
         description: Enable security features (connect to Elasticsearch over HTTPS with authentication)

@@ -59,7 +59,7 @@ kibana_sniff_on_connection_fault: false
 `kibana_elasticsearch_hosts` is the list of Elasticsearch hosts that Kibana connects to. You rarely need to set this explicitly. The role resolves it through a three-level fallback:
 
 1. If `kibana_elasticsearch_hosts` is set in your inventory, that value is used as-is.
-2. Otherwise, if the `elasticstack_elasticsearch_group_name` inventory group exists, the role builds the host list from that group's members.
+2. Otherwise, if the `elasticstack_elasticsearch_group_name` inventory group exists, the role builds the host list from that group's members. When Kibana and a single Elasticsearch node share a host, it uses that node's `elasticsearch_api_host` instead, which is usually `localhost`.
 3. If neither is available, the role falls back to `["localhost"]`.
 
 !!! tip
