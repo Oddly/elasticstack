@@ -114,6 +114,21 @@ explicit:
 # of the behavior they control. They are kept separate from `explicit` because
 # their normal default path is already covered by a baseline scenario.
 behaviors:
+  - name: beats_external_certificates
+    role: beats
+    variables:
+      - beats_cert_source
+      - beats_tls_certificate_file
+      - beats_tls_key_file
+      - beats_tls_ca_file
+      - beats_tls_remote_src
+    scenario: beats_external_certs
+    roles:
+      - oddly.elasticstack.repos
+      - oddly.elasticstack.beats
+    expected:
+      - "_beats_cert_stat.results | selectattr('stat.exists') | list | length == 3"
+      - "_beats_cert_hashes.stdout_lines | select('match', '^(\\\\S+) \\\\1$') | list | length == 3"
   - name: shared_certificate_passphrase
     role: elasticstack
     variables:
