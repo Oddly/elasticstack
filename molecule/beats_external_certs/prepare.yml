@@ -1,0 +1,8 @@
+---
+- name: Prepare
+  hosts: all
+  vars:
+    distro_cache_url: "{{ lookup('env', 'DISTRO_CACHE_URL') }}"
+  tasks:
+    - name: Common prepare tasks
+      ansible.builtin.include_tasks: ../shared/prepare_common.yml

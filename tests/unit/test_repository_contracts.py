@@ -148,6 +148,12 @@ class TestRepositoryContracts(unittest.TestCase):
                     path.is_file(),
                     f"{scenario.name} must provide an executable {playbook}",
                 )
+            molecule = yaml.safe_load((scenario / "molecule.yml").read_text()) or {}
+            if len(molecule.get("platforms", [])) > 1:
+                self.assertTrue(
+                    (scenario / "prepare.yml").is_file(),
+                    f"{scenario.name} must prepare name resolution for multiple hosts",
+                )
 
     def test_ci_uses_python_312_for_ansible_220_dependencies(self):
         workflows = (
