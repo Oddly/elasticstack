@@ -190,6 +190,16 @@
           - "'output.logstash' in (auditbeat_yml.content | b64decode)"
         fail_msg: "Auditbeat output was not configured for Logstash"
 
+    - name: Check disabled beat services are not running
+      ansible.builtin.service_facts:
+
+    - name: Assert disabled Metricbeat and Auditbeat remain stopped
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.services.get('metricbeat.service', {}).get('state', 'stopped') != 'running'
+          - ansible_facts.services.get('auditbeat.service', {}).get('state', 'stopped') != 'running'
+        fail_msg: "A beat service configured with enable: false is running"
+
     # --- Issue #4: Configurable logging keepfiles and permissions ---
 
     - name: Check beats log directory exists

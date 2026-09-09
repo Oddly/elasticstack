@@ -8,6 +8,7 @@
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticstack_full_stack: true
     elasticstack_no_log: false
+    beats_security: true
     elasticsearch_heap: "1"
     # Filebeat with ES output (uses TLS automatically in full_stack)
     beats_filebeat: true

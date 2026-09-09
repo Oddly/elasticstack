@@ -679,7 +679,6 @@ class TestRepositoryContracts(unittest.TestCase):
                 converge = ROOT / "molecule" / scenario / "converge.yml"
                 verify = ROOT / "molecule" / scenario / "verify.yml"
                 coverage_source = converge.read_text()
-                assertion_source = _assertion_text(verify)
                 self.assertTrue(converge.exists(), f"Missing behavior converge: {converge}")
                 self.assertTrue(verify.exists(), f"Missing behavior verify: {verify}")
                 self.assertIn(
@@ -687,6 +686,14 @@ class TestRepositoryContracts(unittest.TestCase):
                     workflow_sources,
                     f"{scenario} behavior is not referenced by a CI workflow",
                 )
+                assertions_path = ROOT / behavior.get(
+                    "assertions_file", f"molecule/{scenario}/verify.yml"
+                )
+                self.assertTrue(
+                    assertions_path.exists(),
+                    f"Missing behavior assertions file: {assertions_path}",
+                )
+                assertion_source = _assertion_text(assertions_path)
             else:
                 contract_path = ROOT / contract
                 coverage_source = contract_path.read_text()

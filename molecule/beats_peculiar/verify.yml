@@ -21,6 +21,18 @@
         - beats_filebeat_version.stdout.find('8.4.1') == -1
         - elasticstack_release == 8
 
+    - name: Read Filebeat configuration
+      ansible.builtin.slurp:
+        src: /etc/filebeat/filebeat.yml
+      register: filebeat_yml
+
+    - name: Verify MySQL slow log input is configured
+      ansible.builtin.assert:
+        that:
+          - "'id: mysql-slowlog' in (filebeat_yml.content | b64decode)"
+          - "'/var/log/mysql/*-slow.log' in (filebeat_yml.content | b64decode)"
+        fail_msg: "MySQL slow log input is missing from filebeat.yml"
+
     - name: Ensure field is set correctly
       ansible.builtin.lineinfile:
         dest: /etc/filebeat/filebeat.yml
