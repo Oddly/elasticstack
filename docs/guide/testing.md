@@ -50,7 +50,8 @@ that interact. The scenarios below are the durable anchors for that work.
 | Logstash | pipeline lifecycle, beats and Elastic Agent inputs, TLS modes, Elasticsearch outputs, authentication and roles, queues, dead-letter queues, monitoring, and config syntax | `logstash_default`, `logstash_advanced`, `logstash_elasticsearch`, `logstash_external_certs`, `logstash_ssl`, and `logstash_standalone_certs` |
 | Beats | Filebeat, Auditbeat, and Metricbeat lifecycle, inputs, queues, outputs, load balancing, TLS modes, and module setup | `beats_default`, `beats_advanced`, `beats_peculiar`, `beats_security`, plus render contracts |
 
-The matrix deliberately gives certificate source, content, and fallback paths
+The matrix deliberately gives certificate source, content, fallback, and
+certificate-key mismatch paths
 their own assertions. Those paths need both file or content equality checks and
 service-level probes because a certificate can be copied successfully while
 the daemon still rejects its format or trust chain.

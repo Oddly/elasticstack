@@ -164,6 +164,40 @@
           - _contract_pem_key == _contract_material_dir ~ '/encrypted key.pem'
           - not _contract_pem_ca_extracted
 
+    - name: Generate an unrelated PEM key for the mismatch check
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - genrsa
+          - -out
+          - "{{ _contract_material_dir }}/mismatched key.pem"
+          - "2048"
+      changed_when: true
+      no_log: true
+
+    - name: Expect the certificate validator to reject a mismatched PEM key
+      block:
+        - name: Validate certificate with an unrelated private key
+          ansible.builtin.include_tasks: ../../roles/elasticstack/tasks/certs/cert_validate.yml
+          vars:
+            _validate_cert_path: "{{ _contract_material_dir }}/encrypted certificate.pem"
+            _validate_key_path: "{{ _contract_material_dir }}/mismatched key.pem"
+            _validate_pass: ""
+            _validate_remote_src: false
+            _validate_service: "contract mismatched PEM"
+            _validate_format_fact: _contract_mismatch_format
+            _validate_key_fact: _contract_mismatch_key
+            _validate_ca_extracted_fact: _contract_mismatch_ca_extracted
+      rescue:
+        - name: Record the expected certificate-key mismatch failure
+          ansible.builtin.set_fact:
+            _contract_mismatch_failed: true
+
+    - name: Assert mismatched certificate material cannot pass validation
+      ansible.builtin.assert:
+        that:
+          - _contract_mismatch_failed | default(false) | bool
+
     - name: Create an unencrypted copy for PKCS12 packaging
       ansible.builtin.command:
         argv:
