@@ -36,6 +36,8 @@
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticstack_no_log: false
     elasticstack_elasticsearch_group_name: elasticsearchXYZ
+    elasticsearch_logrotate_enabled: false
+    elasticsearch_logsdb: false
   tasks:
     - name: Reset shared role import guard for re-run
       ansible.builtin.set_fact:
