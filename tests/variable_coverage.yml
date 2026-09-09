@@ -457,6 +457,9 @@ behaviors:
     role: elasticsearch
     variables:
       - elasticsearch_elastic_password
+      - elasticsearch_security_roles
+      - elasticsearch_users
+      - elasticsearch_role_mappings
     scenario: elasticsearch_security_api
     roles:
       - oddly.elasticstack.repos
@@ -464,6 +467,9 @@ behaviors:
     expected:
       - "role_create.json.role.created | default(false)"
       - "user_create.json.created | default(false)"
+      - "managed_role.json['molecule-managed-role'].metadata.owner == 'molecule'"
+      - "managed_user.json['molecule-managed-user'].full_name == 'Molecule managed user'"
+      - "managed_mapping.json['molecule-managed-mapping'].roles == ['molecule-managed-role']"
   - name: elasticsearch_keystore_runtime
     role: elasticsearch
     variables:
