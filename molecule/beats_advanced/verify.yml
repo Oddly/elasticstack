@@ -19,6 +19,10 @@
         src: /etc/filebeat/filebeat.yml
       register: filebeat_yml
 
+    - name: Parse filebeat.yml
+      ansible.builtin.set_fact:
+        filebeat_config: "{{ filebeat_yml.content | b64decode | from_yaml }}"
+
     - name: Verify syslog UDP input is configured
       ansible.builtin.assert:
         that:
@@ -85,6 +89,20 @@
           - "'output.file' in (filebeat_yml.content | b64decode)"
           - "'path: /var/lib/filebeat/test-output' in (filebeat_yml.content | b64decode)"
         fail_msg: "File output or its configured path is missing in filebeat.yml"
+
+    - name: Verify Docker input is configured for the selected container
+      ansible.builtin.assert:
+        that:
+          - "'id: docker-containers' in (filebeat_yml.content | b64decode)"
+          - "'/var/lib/docker/containers/advanced-container/*.log' in (filebeat_yml.content | b64decode)"
+          - "'add_docker_metadata' in (filebeat_yml.content | b64decode)"
+        fail_msg: "Docker input or its container selection is missing in filebeat.yml"
+
+    - name: Verify Filebeat monitoring is enabled
+      ansible.builtin.assert:
+        that:
+          - filebeat_config.monitoring.enabled | bool
+        fail_msg: "Filebeat monitoring is not enabled in filebeat.yml"
 
     # --- Filebeat syslog ports ---
 
@@ -217,3 +235,17 @@
       check_mode: true
       register: _queue_size
       failed_when: _queue_size.changed
+
+    - name: Verify filebeat disk queue path
+      ansible.builtin.lineinfile:
+        dest: /etc/filebeat/filebeat.yml
+        line: "  path: /var/lib/filebeat/test-queue"
+      check_mode: true
+      register: _queue_path
+      failed_when: _queue_path.changed
+
+    - name: Assert filebeat disk queue path is rendered
+      ansible.builtin.assert:
+        that:
+          - "'path: /var/lib/filebeat/test-queue' in (filebeat_yml.content | b64decode)"
+        fail_msg: "Filebeat disk queue path is missing from filebeat.yml"

@@ -367,6 +367,22 @@ rollouts:
       scenario: beats_advanced
       expected:
         - "/var/lib/filebeat/test-output"
+    beats_filebeat_elastic_monitoring:
+      scenario: beats_advanced
+      expected:
+        - "filebeat_config.monitoring.enabled | bool"
+    beats_filebeat_docker:
+      scenario: beats_advanced
+      expected:
+        - "'id: docker-containers' in (filebeat_yml.content | b64decode)"
+    beats_filebeat_docker_ids:
+      scenario: beats_advanced
+      expected:
+        - "'/var/lib/docker/containers/advanced-container/*.log' in (filebeat_yml.content | b64decode)"
+    beats_queue_disk_path:
+      scenario: beats_advanced
+      expected:
+        - "'path: /var/lib/filebeat/test-queue' in (filebeat_yml.content | b64decode)"
   elasticsearch:
     elasticsearch_security_enrollment:
       scenario: elasticsearch_custom
