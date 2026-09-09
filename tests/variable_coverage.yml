@@ -494,6 +494,19 @@ behaviors:
       - oddly.elasticstack.kibana
     expected:
       - "_es_cert_fp_before.stdout != _es_cert_fp_after.stdout"
+  - name: elasticsearch_upgrade_health_budget
+    role: elasticsearch
+    variables:
+      - elasticsearch_upgrade_health_retries
+      - elasticsearch_upgrade_health_delay
+    scenario: elasticsearch_upgrade_8to9
+    assignment_file: molecule/elasticsearch_upgrade_8to9/molecule.yml
+    roles:
+      - oddly.elasticstack.repos
+      - oddly.elasticstack.elasticsearch
+    expected:
+      - "elasticsearch_upgrade_health_retries | int == 20"
+      - "elasticsearch_upgrade_health_delay | int == 15"
   - name: elasticsearch_certificate_renewal
     role: elasticsearch
     variables:

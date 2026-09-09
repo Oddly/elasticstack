@@ -675,11 +675,14 @@ class TestRepositoryContracts(unittest.TestCase):
             )
             assigned_by_rollout = {
                 variable
-                for converge in (ROOT / "molecule").glob("*/converge.yml")
+                for rollout_file in (
+                    list((ROOT / "molecule").glob("*/converge.yml"))
+                    + list((ROOT / "molecule").glob("*/molecule.yml"))
+                )
                 for variable in public
                 if re.search(
                     rf"(?m)^(?!\s*#)\s*{re.escape(variable)}\s*:",
-                    converge.read_text(),
+                    rollout_file.read_text(),
                 )
             }
             self.assertTrue(
@@ -703,14 +706,22 @@ class TestRepositoryContracts(unittest.TestCase):
             if scenario:
                 converge = ROOT / "molecule" / scenario / "converge.yml"
                 verify = ROOT / "molecule" / scenario / "verify.yml"
-                coverage_source = converge.read_text()
                 self.assertTrue(converge.exists(), f"Missing behavior converge: {converge}")
                 self.assertTrue(verify.exists(), f"Missing behavior verify: {verify}")
+                execution_source = converge.read_text()
                 self.assertIn(
                     scenario,
                     workflow_sources,
                     f"{scenario} behavior is not referenced by a CI workflow",
                 )
+                assignment_path = ROOT / behavior.get(
+                    "assignment_file", f"molecule/{scenario}/converge.yml"
+                )
+                self.assertTrue(
+                    assignment_path.exists(),
+                    f"Missing behavior assignment file: {assignment_path}",
+                )
+                coverage_source = assignment_path.read_text()
                 assertions_path = ROOT / behavior.get(
                     "assertions_file", f"molecule/{scenario}/verify.yml"
                 )
@@ -722,6 +733,7 @@ class TestRepositoryContracts(unittest.TestCase):
             else:
                 contract_path = ROOT / contract
                 coverage_source = contract_path.read_text()
+                execution_source = coverage_source
                 assertion_source = _assertion_text(contract_path)
                 self.assertTrue(
                     contract_path.exists(),
@@ -750,7 +762,7 @@ class TestRepositoryContracts(unittest.TestCase):
             for role_reference in behavior["roles"]:
                 self.assertIn(
                     role_reference,
-                    coverage_source,
+                    execution_source,
                     f"{scenario} does not execute {role_reference}",
                 )
 
