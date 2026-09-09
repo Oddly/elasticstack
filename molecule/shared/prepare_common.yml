@@ -10,7 +10,7 @@
 - name: Populate /etc/hosts with molecule instances
   ansible.builtin.lineinfile:
     path: /etc/hosts
-    regexp: ".*{{ item }}$"
+    regexp: "^.*\\s{{ item | regex_escape }}$"
     line: "{{ hostvars[item]['ansible_host'] }} {{ item }}"
   loop: "{{ groups['all'] }}"
   when: groups['all'] | length > 1

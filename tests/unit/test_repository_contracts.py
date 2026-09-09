@@ -219,6 +219,16 @@ class TestRepositoryContracts(unittest.TestCase):
         common = (ROOT / "molecule" / "shared" / "prepare_common.yml").read_text()
         self.assertIn("Populate /etc/hosts with molecule instances", common)
         self.assertIn("hostvars[item]['ansible_host']", common)
+        common_tasks = yaml.safe_load(common)
+        hosts_task = next(
+            task
+            for task in common_tasks
+            if task.get("name") == "Populate /etc/hosts with molecule instances"
+        )
+        self.assertEqual(
+            hosts_task["ansible.builtin.lineinfile"]["regexp"],
+            r"^.*\s{{ item | regex_escape }}$",
+        )
 
         prepare_files = sorted((ROOT / "molecule").glob("*/prepare.yml"))
         self.assertTrue(prepare_files)
