@@ -83,7 +83,7 @@ jobs:
 
       - name: Create venv and install ansible-core
         run: |
-          uv venv "$RUNNER_TEMP/venv" --python ${{ steps.pyver.outputs.python }}
+          uv venv "$RUNNER_TEMP/venv" --python "${{ steps.pyver.outputs.python }}"
           source "$RUNNER_TEMP/venv/bin/activate"
           uv pip install ansible-core~=${{ matrix.ansible_core }}.0
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
@@ -92,20 +92,23 @@ jobs:
 
       - name: Set up collections path
         run: |
-          echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections" >> "$GITHUB_ENV"
-          echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule" >> "$GITHUB_ENV"
-          echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp" >> "$GITHUB_ENV"
-          echo "MOLECULE_RUN_SUFFIX=-${GITHUB_RUN_ID: -6}" >> "$GITHUB_ENV"
+          {
+            echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections"
+            echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule"
+            echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp"
+            echo "MOLECULE_RUN_SUFFIX=-${GITHUB_RUN_ID: -6}"
+          } >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/ssh-cp"
 
       - name: Install collection
         run: |
-          mkdir -p $ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE
-          cp -a "$GITHUB_WORKSPACE" $ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+          collection_path="$ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME"
+          mkdir -p "$(dirname "$collection_path")"
+          cp -a "$GITHUB_WORKSPACE" "$collection_path"
 
       - name: Run ansible-test sanity
         run: |
-          cd $ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+          cd "$ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME"
           ansible-test sanity --python 3.12 --color yes \
             --skip-test validate-modules \
             plugins/
@@ -139,16 +142,19 @@ jobs:
 
       - name: Set up collections path
         run: |
-          echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections" >> "$GITHUB_ENV"
-          echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule" >> "$GITHUB_ENV"
-          echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp" >> "$GITHUB_ENV"
-          echo "MOLECULE_RUN_SUFFIX=-${GITHUB_RUN_ID: -6}" >> "$GITHUB_ENV"
+          {
+            echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections"
+            echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule"
+            echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp"
+            echo "MOLECULE_RUN_SUFFIX=-${GITHUB_RUN_ID: -6}"
+          } >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/ssh-cp"
 
       - name: Install collection
         run: |
-          mkdir -p $ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE
-          cp -a "$GITHUB_WORKSPACE" $ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+          collection_path="$ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME"
+          mkdir -p "$(dirname "$collection_path")"
+          cp -a "$GITHUB_WORKSPACE" "$collection_path"
 
       - name: Run unit test suite
         run: |
@@ -182,16 +188,19 @@ jobs:
 
       - name: Set up collections path
         run: |
-          echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections" >> "$GITHUB_ENV"
-          echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule" >> "$GITHUB_ENV"
-          echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp" >> "$GITHUB_ENV"
-          echo "MOLECULE_RUN_SUFFIX=-${GITHUB_RUN_ID: -6}" >> "$GITHUB_ENV"
+          {
+            echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections"
+            echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule"
+            echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp"
+            echo "MOLECULE_RUN_SUFFIX=-${GITHUB_RUN_ID: -6}"
+          } >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/ssh-cp"
 
       - name: Install collection
         run: |
-          mkdir -p $ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE
-          cp -a "$GITHUB_WORKSPACE" $ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+          collection_path="$ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME"
+          mkdir -p "$(dirname "$collection_path")"
+          cp -a "$GITHUB_WORKSPACE" "$collection_path"
 
       - name: Test with ansible-playbook
         run: |
@@ -222,32 +231,35 @@ jobs:
         id: pyver
         run: |
           PYTHON=/usr/bin/python3
-          if [[ "${{ matrix.ansible_core_version }}" == 2.2* ]] && command -v python3.12 &>/dev/null; then
+          if command -v python3.12 &>/dev/null; then
             PYTHON=$(command -v python3.12)
           fi
           echo "python=$PYTHON" >> "$GITHUB_OUTPUT"
 
       - name: Create venv and install dependencies
         run: |
-          uv venv "$RUNNER_TEMP/venv" --python ${{ steps.pyver.outputs.python }}
+          uv venv "$RUNNER_TEMP/venv" --python "${{ steps.pyver.outputs.python }}"
           source "$RUNNER_TEMP/venv/bin/activate"
-          uv pip install ansible-core==${{ matrix.ansible_core_version }}
+          uv pip install "ansible-core==${{ matrix.ansible_core_version }}"
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
 
       - name: Set up collections path
         run: |
-          echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections" >> "$GITHUB_ENV"
-          echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule" >> "$GITHUB_ENV"
-          echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp" >> "$GITHUB_ENV"
-          echo "MOLECULE_RUN_SUFFIX=-${GITHUB_RUN_ID: -6}" >> "$GITHUB_ENV"
+          {
+            echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections"
+            echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule"
+            echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp"
+            echo "MOLECULE_RUN_SUFFIX=-${GITHUB_RUN_ID: -6}"
+          } >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/ssh-cp"
 
       - name: Install collection
         run: |
-          mkdir -p $ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE
-          cp -a "$GITHUB_WORKSPACE" $ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+          collection_path="$ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME"
+          mkdir -p "$(dirname "$collection_path")"
+          cp -a "$GITHUB_WORKSPACE" "$collection_path"
 
       - name: Test with ansible-playbook
         run: |
@@ -286,16 +298,19 @@ jobs:
 
       - name: Set up collections path
         run: |
-          echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections" >> "$GITHUB_ENV"
-          echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule" >> "$GITHUB_ENV"
-          echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp" >> "$GITHUB_ENV"
-          echo "MOLECULE_RUN_SUFFIX=-${GITHUB_RUN_ID: -6}" >> "$GITHUB_ENV"
+          {
+            echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections"
+            echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule"
+            echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp"
+            echo "MOLECULE_RUN_SUFFIX=-${GITHUB_RUN_ID: -6}"
+          } >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/ssh-cp"
 
       - name: Install collection
         run: |
-          mkdir -p $ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE
-          cp -a "$GITHUB_WORKSPACE" $ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+          collection_path="$ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME"
+          mkdir -p "$(dirname "$collection_path")"
+          cp -a "$GITHUB_WORKSPACE" "$collection_path"
 
       - name: Test with ansible-playbook
         run: |

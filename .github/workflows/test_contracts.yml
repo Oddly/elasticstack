@@ -65,7 +65,7 @@ jobs:
             if [ -f "$inv" ]; then
               args=(-i "$inv")
             else
-              args=(-i localhost,)
+              args=(-i 'localhost,')
             fi
             echo "::group::${pb}"
             if ! ansible-playbook "${args[@]}" -c local "$pb"; then

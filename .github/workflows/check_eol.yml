@@ -29,8 +29,7 @@ jobs:
             local version="$2"
             local label="$3"
             local response
-            response=$(curl -sf "${API}/${product}/${version}.json")
-            if [ $? -ne 0 ]; then
+            if ! response=$(curl -sf "${API}/${product}/${version}.json"); then
               echo "WARNING: Could not fetch EOL data for ${label}"
               return
             fi
@@ -83,9 +82,11 @@ jobs:
           echo ""
           if [ -n "$issues" ]; then
             echo "::warning::EOL dependencies detected"
-            echo "ISSUES<<EOF" >> "$GITHUB_ENV"
-            echo -e "$issues" >> "$GITHUB_ENV"
-            echo "EOF" >> "$GITHUB_ENV"
+            {
+              echo "ISSUES<<EOF"
+              printf '%b\n' "$issues"
+              echo "EOF"
+            } >> "$GITHUB_ENV"
             echo "HAS_ISSUES=true" >> "$GITHUB_ENV"
           else
             echo "All dependencies are within support window."

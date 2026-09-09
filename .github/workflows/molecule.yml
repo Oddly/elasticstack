@@ -86,18 +86,21 @@ jobs:
 
       - name: Set up collections path
         run: |
-          echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections" >> "$GITHUB_ENV"
-          echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule" >> "$GITHUB_ENV"
-          echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp" >> "$GITHUB_ENV"
-          echo "MOLECULE_RUN_SUFFIX=-${GITHUB_RUN_ID: -6}" >> "$GITHUB_ENV"
+          {
+            echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections"
+            echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule"
+            echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp"
+            echo "MOLECULE_RUN_SUFFIX=-${GITHUB_RUN_ID: -6}"
+          } >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/ssh-cp"
 
       - name: Install collection
         env:
           CACHE_HOST: ${{ secrets.INCUS_HOST }}
         run: |
-          mkdir -p $ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE
-          cp -a "$GITHUB_WORKSPACE" $ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME
+          collection_path="$ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME"
+          mkdir -p "$(dirname "$collection_path")"
+          cp -a "$GITHUB_WORKSPACE" "$collection_path"
           if [ -n "$CACHE_HOST" ]; then
             ansible-galaxy collection install \
               "http://${CACHE_HOST}:8082/collections/community-general-12.3.0.tar.gz" \
