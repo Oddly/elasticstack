@@ -30,6 +30,11 @@ A variable is considered covered when the test assigns it, executes the role
 or task that consumes it, and asserts an observable result. A converge-only
 assignment does not count as coverage.
 
+Defaulted feature controls that share a rollout are recorded as named behavior
+groups in `tests/variable_coverage.yml`. The repository contract requires every
+grouped variable to be assigned by the scenario and requires each listed
+observable marker to appear in its `verify.yml` assertions.
+
 ## Collection-specific matrix
 
 The matrix grows by risk and by branch, with pairwise combinations for settings

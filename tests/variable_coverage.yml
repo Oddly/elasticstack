@@ -352,6 +352,192 @@ behaviors:
     expected:
       - "_http_keystore_pass.stdout == _expected_passphrase"
       - "_transport_keystore_pass.stdout == _expected_passphrase"
+  - name: beats_advanced_runtime
+    role: beats
+    variables:
+      - beats_filebeat
+      - beats_fields
+      - beats_logging
+      - beats_logpath
+      - beats_loglevel
+      - beats_logging_keepfiles
+      - beats_logging_permissions
+      - beats_filebeat_elastic_monitoring
+      - beats_filebeat_output
+      - beats_filebeat_output_file_path
+      - beats_filebeat_syslog_udp
+      - beats_filebeat_syslog_udp_port
+      - beats_filebeat_syslog_udp_fields
+      - beats_filebeat_syslog_tcp
+      - beats_filebeat_syslog_tcp_port
+      - beats_filebeat_syslog_tcp_fields
+      - beats_filebeat_log_input
+      - beats_filebeat_log_inputs
+      - beats_filebeat_journald
+      - beats_filebeat_journald_inputs
+      - beats_filebeat_docker
+      - beats_filebeat_docker_ids
+      - beats_queue_type
+      - beats_queue_disk_path
+      - beats_queue_disk_max_size
+      - beats_filebeat_extra_inputs
+      - beats_metricbeat
+      - beats_metricbeat_output
+      - beats_metricbeat_modules
+      - beats_auditbeat
+      - beats_auditbeat_output
+    scenario: beats_advanced
+    roles:
+      - oddly.elasticstack.repos
+      - oddly.elasticstack.beats
+    expected:
+      - "'deployment: beats-advanced' in (filebeat_yml.content | b64decode)"
+      - "filebeat_config.monitoring.enabled | bool"
+      - "'source_protocol: tcp' in (filebeat_yml.content | b64decode)"
+      - "'source_protocol: udp' in (filebeat_yml.content | b64decode)"
+      - "'id: everything' in (filebeat_yml.content | b64decode)"
+      - "'/var/log/messages' in (filebeat_yml.content | b64decode)"
+      - "'id: docker-containers' in (filebeat_yml.content | b64decode)"
+      - "'path: /var/lib/filebeat/test-queue' in (filebeat_yml.content | b64decode)"
+      - "'extra-test' in (filebeat_yml.content | b64decode)"
+      - "'metricbeat.config.modules' in (metricbeat_yml.content | b64decode)"
+      - "'output.logstash' in (auditbeat_yml.content | b64decode)"
+  - name: elasticsearch_custom_runtime
+    role: elasticsearch
+    variables:
+      - elasticsearch_ml_enabled
+      - elasticsearch_config_backup
+      - elasticsearch_manage_logging
+      - elasticsearch_security_enrollment
+      - elasticsearch_datapath
+      - elasticsearch_create_datapath
+      - elasticsearch_logpath
+      - elasticsearch_create_logpath
+      - elasticsearch_heap
+      - elasticsearch_pamlimits
+      - elasticsearch_clustername
+      - elasticsearch_network_host
+      - elasticsearch_http_publish_host
+      - elasticsearch_http_publish_port
+      - elasticsearch_transport_port
+      - elasticsearch_nodename
+      - elasticsearch_node_types
+      - elasticsearch_seed_hosts
+      - elasticsearch_jvm_custom_parameters
+      - elasticsearch_heap_dump_path
+      - elasticsearch_fs_repo
+      - elasticsearch_extra_config
+      - elasticsearch_memory_lock
+      - elasticsearch_cluster_set_up
+    scenario: elasticsearch_custom
+    roles:
+      - oddly.elasticstack.repos
+      - oddly.elasticstack.elasticsearch
+    expected:
+      - "health.json.cluster_name == \"custom-test-cluster\""
+      - "'network.host: [\"0.0.0.0\"]' in es_yml.content | b64decode"
+      - "initial_passwords.stat.exists"
+      - "datadir.stat.exists"
+      - "logfiles.files | length > 0"
+      - "jvm_custom.content | b64decode"
+      - "heap_content.content | b64decode"
+      - "backups.files | length > 0"
+      - "pam_content.content | b64decode"
+      - "memlock_override.stat.exists"
+      - "jvm_paths.content | b64decode"
+  - name: kibana_legacy_runtime
+    role: kibana
+    variables:
+      - kibana_node_max_old_space_size
+      - kibana_elasticsearch_hosts
+      - kibana_server_protocol
+      - kibana_sniff_on_start
+      - kibana_sniff_on_connection_fault
+      - kibana_sniff_interval
+    scenario: kibana_extras
+    roles:
+      - oddly.elasticstack.repos
+      - oddly.elasticstack.elasticsearch
+      - oddly.elasticstack.kibana
+    expected:
+      - "'server.protocol: \"http1\"' in (kibana_yml.content | b64decode)"
+      - "groups['elasticsearch'][0] in (kibana_yml.content | b64decode)"
+      - "'elasticsearch.sniffOnStart: true' in (kibana_yml.content | b64decode)"
+      - "'elasticsearch.sniffOnConnectionFault: true' in (kibana_yml.content | b64decode)"
+      - "'elasticsearch.sniffInterval: 30000' in (kibana_yml.content | b64decode)"
+      - "'--max-old-space-size=2048' in (kibana_node_opts.content | b64decode)"
+  - name: logstash_advanced_runtime
+    role: logstash
+    variables:
+      - logstash_beats_input
+      - logstash_beats_tls
+      - logstash_elasticsearch_output
+      - logstash_pipeline_unsafe_shutdown
+      - logstash_heap
+      - logstash_config_backup
+      - logstash_manage_logging
+      - logstash_queue_type
+      - logstash_queue_max_bytes
+      - logstash_config_autoreload
+      - logstash_config_autoreload_interval
+      - logstash_ident
+      - logstash_ident_field_name
+      - logstash_pipeline_identifier
+      - logstash_pipeline_identifier_field_name
+      - logstash_extra_inputs
+      - logstash_filters
+      - logstash_filter_files
+      - logstash_extra_outputs
+      - logstash_plugins
+    scenario: logstash_advanced
+    roles:
+      - oddly.elasticstack.repos
+      - oddly.elasticstack.logstash
+    expected:
+      - "'beats {' in (input_content.content | b64decode)"
+      - "'ssl_enabled' not in (input_content.content | b64decode)"
+      - "custom_filter.stat.exists"
+      - "'grok {' in (filter_content.content | b64decode)"
+      - "'[logstash][instance]' in (filter_content.content | b64decode)"
+      - "'elasticsearch {' not in (output_content.content | b64decode)"
+      - "'config.reload.interval: 7s' in (logstash_yml.content | b64decode)"
+      - "yml_backups.files | length > 0"
+      - "'queue.type: persisted' in (pipelines_yml.content | b64decode)"
+      - "'logstash-filter-translate' in plugin_list.stdout"
+  - name: logstash_centralized_runtime
+    role: logstash
+    variables:
+      - logstash_manage_pipelines
+      - logstash_no_pipelines
+      - logstash_http_host
+      - logstash_http_port
+      - logstash_dead_letter_queue_enable
+      - logstash_dead_letter_queue_retain_age
+      - logstash_log_format
+      - logstash_global_ecs
+      - logstash_monitoring_enabled
+      - logstash_xpack_management
+      - logstash_xpack_management_elasticsearch_username
+      - logstash_xpack_management_elasticsearch_password
+      - logstash_xpack_management_elasticsearch_hosts
+      - logstash_xpack_management_pipeline_id
+      - logstash_extra_config
+    scenario: logstash_centralized_pipelines
+    roles:
+      - oddly.elasticstack.repos
+      - oddly.elasticstack.logstash
+    expected:
+      - "'xpack.management.enabled: true' in logstash_config"
+      - "'xpack.management.elasticsearch.username: \"logstash_internal\"' in logstash_config"
+      - "'dead_letter_queue.enable: true' in logstash_config"
+      - "'dead_letter_queue.retain.age: 7d' in logstash_config"
+      - "'log.format: json' in logstash_config"
+      - "'pipeline.ecs_compatibility: v8' in logstash_config"
+      - "'monitoring.enabled: false' in logstash_config"
+      - "'api.http.host: 127.0.0.1' in logstash_config"
+      - "'api.http.port: 9600' in logstash_config"
+      - "'queue.checkpoint.writes' in logstash_config"
+      - "not pipeline_dir.stat.exists"
 
 # The same optional variables must also be exercised by a Molecule scenario
 # that installs and starts the affected service. `expected` values are checked

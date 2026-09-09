@@ -68,7 +68,14 @@
       ansible.builtin.assert:
         that:
           - "'journald' in (filebeat_yml.content | b64decode)"
+          - "'id: everything' in (filebeat_yml.content | b64decode)"
         fail_msg: "Journald input not found in filebeat.yml"
+
+    - name: Verify log input path is configured
+      ansible.builtin.assert:
+        that:
+          - "'/var/log/messages' in (filebeat_yml.content | b64decode)"
+        fail_msg: "Configured log input path is missing from filebeat.yml"
 
     - name: Verify log level is debug
       ansible.builtin.assert:
@@ -171,6 +178,17 @@
       check_mode: true
       register: auditbeat_pkg
       failed_when: auditbeat_pkg.changed
+
+    - name: Read auditbeat.yml
+      ansible.builtin.slurp:
+        src: /etc/auditbeat/auditbeat.yml
+      register: auditbeat_yml
+
+    - name: Verify Auditbeat output is configured
+      ansible.builtin.assert:
+        that:
+          - "'output.logstash' in (auditbeat_yml.content | b64decode)"
+        fail_msg: "Auditbeat output was not configured for Logstash"
 
     # --- Issue #4: Configurable logging keepfiles and permissions ---
 

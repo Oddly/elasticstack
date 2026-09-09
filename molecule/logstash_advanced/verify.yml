@@ -191,6 +191,12 @@
       ansible.builtin.debug:
         msg: "Found {{ yml_backups.files | length }} logstash.yml backup(s)"
 
+    - name: Assert config backup was created
+      ansible.builtin.assert:
+        that:
+          - yml_backups.files | length > 0
+        fail_msg: "No logstash.yml backup found despite logstash_config_backup: true"
+
     # --- Logging configuration verification ---
 
     - name: Check log4j2.properties exists (managed logging)
@@ -211,6 +217,12 @@
       register: plugin_list
       changed_when: false
       failed_when: "'logstash-filter-translate' not in plugin_list.stdout"
+
+    - name: Assert translate plugin is installed
+      ansible.builtin.assert:
+        that:
+          - "'logstash-filter-translate' in plugin_list.stdout"
+        fail_msg: "Configured Logstash translate plugin is not installed"
 
     # --- Port check ---
 
