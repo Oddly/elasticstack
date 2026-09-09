@@ -94,6 +94,103 @@
       run_once: true
       when: elasticstack_release | int >= 9
 
+    - name: Create a logs data-stream template for the LogsDB check  # noqa: run-once[task]
+      ansible.builtin.uri:
+        url: "https://localhost:9200/_index_template/molecule-logsdb-template"
+        method: PUT
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        force_basic_auth: true
+        validate_certs: false
+        body_format: json
+        body:
+          index_patterns:
+            - logs-molecule-*
+          priority: 1000
+          data_stream: {}
+          template:
+            mappings:
+              properties:
+                "@timestamp":
+                  type: date
+        status_code: [200]
+      register: _logsdb_template
+      run_once: true
+      when: elasticstack_release | int >= 9
+
+    - name: Index a document into a logs data stream  # noqa: run-once[task]
+      ansible.builtin.uri:
+        url: "https://localhost:9200/logs-molecule-default/_doc?refresh=wait_for"
+        method: POST
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        force_basic_auth: true
+        validate_certs: false
+        body_format: json
+        body:
+          "@timestamp": "2026-09-09T00:00:00Z"
+          message: LogsDB runtime verification
+        status_code: [200, 201]
+      register: _logsdb_document
+      run_once: true
+      when: elasticstack_release | int >= 9
+
+    - name: Read the created logs data stream  # noqa: run-once[task]
+      ansible.builtin.uri:
+        url: "https://localhost:9200/_data_stream/logs-molecule-default"
+        method: GET
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        force_basic_auth: true
+        validate_certs: false
+        return_content: true
+        status_code: [200]
+      register: _logsdb_data_stream
+      run_once: true
+      when: elasticstack_release | int >= 9
+
+    - name: Assert the document created a backing index for the logs stream  # noqa: run-once[task]
+      ansible.builtin.assert:
+        that:
+          - _logsdb_data_stream.json.data_streams | length == 1
+          - _logsdb_data_stream.json.data_streams[0].name == 'logs-molecule-default'
+          - _logsdb_data_stream.json.data_streams[0].indices | length >= 1
+        fail_msg: >-
+          LogsDB data stream was not created as expected:
+          {{ _logsdb_data_stream.json | default({}) }}
+      run_once: true
+      when: elasticstack_release | int >= 9
+
+    - name: Record the LogsDB data stream backing index  # noqa: run-once[task]
+      ansible.builtin.set_fact:
+        _logsdb_backing_index: "{{ _logsdb_data_stream.json.data_streams[0].indices[0].index_name }}"
+      run_once: true
+      when: elasticstack_release | int >= 9
+
+    - name: Read the LogsDB backing index mode  # noqa: run-once[task]
+      ansible.builtin.uri:
+        url: "https://localhost:9200/{{ _logsdb_backing_index }}/_settings/index.mode?flat_settings=true"
+        method: GET
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        force_basic_auth: true
+        validate_certs: false
+        return_content: true
+        status_code: [200]
+      register: _logsdb_backing_settings
+      run_once: true
+      when: elasticstack_release | int >= 9
+
+    - name: Assert the real logs data stream uses LogsDB mode  # noqa: run-once[task]
+      ansible.builtin.assert:
+        that:
+          - _logsdb_backing_settings.json[_logsdb_backing_index].settings['index.mode'] == 'logsdb'
+        fail_msg: >-
+          The logs data stream backing index did not use LogsDB mode:
+          {{ _logsdb_backing_settings.json | default({}) }}
+      run_once: true
+      when: elasticstack_release | int >= 9
+
     # OS tuning checks — skipped in containers where sysctl is restricted
     - name: Verify vm.max_map_count  # noqa: run-once[task]
       ansible.builtin.command: sysctl -n vm.max_map_count
