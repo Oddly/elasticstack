@@ -384,6 +384,13 @@ behaviors:
     variables:
       - beats_security
       - beats_filebeat_elastic_monitoring
+      - beats_ca_dir
+      - beats_tls_cacert
+      - beats_tls_cert
+      - beats_tls_key
+      - beats_tls_key_passphrase
+      - beats_ssl_verification_mode
+      - beats_filebeat_syslog_tcp_ssl
     scenario: beats_security
     roles:
       - oddly.elasticstack.repos
@@ -392,8 +399,22 @@ behaviors:
     expected:
       - "'certificate_authorities' in (filebeat_yml.content | b64decode)"
       - "'output.elasticsearch' in (filebeat_yml.content | b64decode)"
+      - "'ssl.verification_mode: full' in (filebeat_yml.content | b64decode)"
+      - "'ssl.key_passphrase: BeatsSecurityPassword!' in (filebeat_yml.content | b64decode)"
       - "filebeat_config.monitoring.enabled | bool"
       - "(_filebeat_search.json.hits.total.value | default(0) | int) > 0"
+  - name: beats_standalone_target_and_loadbalance
+    role: beats
+    variables:
+      - beats_target_hosts
+      - beats_filebeat_loadbalance
+    scenario: beats_default
+    roles:
+      - oddly.elasticstack.repos
+      - oddly.elasticstack.beats
+    expected:
+      - "'localhost:5044' in (filebeat_yml.content | b64decode)"
+      - "'loadbalance: false' in (filebeat_yml.content | b64decode)"
   - name: beats_certificate_renewal
     role: beats
     variables:

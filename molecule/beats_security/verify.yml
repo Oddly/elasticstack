@@ -95,6 +95,11 @@
               - "'ssl' in (filebeat_yml.content | b64decode)"
               - "'certificate_authorities' in (filebeat_yml.content | b64decode)"
               - "'output.elasticsearch' in (filebeat_yml.content | b64decode)"
+              - "'ssl.verification_mode: full' in (filebeat_yml.content | b64decode)"
+              - "'ssl.enabled: true' in (filebeat_yml.content | b64decode)"
+              - "'ssl.certificate: /etc/beats/certs/' in (filebeat_yml.content | b64decode)"
+              - "'ssl.key: /etc/beats/certs/' in (filebeat_yml.content | b64decode)"
+              - "'ssl.key_passphrase: BeatsSecurityPassword!' in (filebeat_yml.content | b64decode)"
             fail_msg: "SSL configuration not found in filebeat.yml"
 
         # End-to-end ingest test: emit a uniquely-tagged line via syslog on
