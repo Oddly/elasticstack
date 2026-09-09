@@ -796,6 +796,16 @@ behaviors:
       - oddly.elasticstack.elasticsearch
     expected:
       - "not _es_logrotate.stat.exists"
+  - name: elasticsearch_logsdb_disabled_runtime
+    role: elasticsearch
+    variables:
+      - elasticsearch_logsdb
+    scenario: elasticsearch_no-security
+    roles:
+      - oddly.elasticstack.repos
+      - oddly.elasticstack.elasticsearch
+    expected:
+      - "'cluster.logsdb.enabled' not in (_logsdb_settings.json.persistent | default({}))"
   - name: logstash_advanced_runtime
     role: logstash
     variables:
