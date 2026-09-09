@@ -536,6 +536,34 @@ class TestRepositoryContracts(unittest.TestCase):
             source,
         )
 
+    def test_kibana_readiness_commands_are_safe_on_dash(self):
+        """The readiness probes must not silently fall back to /bin/sh."""
+        for relative_path in (
+            "roles/kibana/tasks/main.yml",
+            "roles/kibana/tasks/restart_and_verify_kibana.yml",
+        ):
+            document = yaml.safe_load((ROOT / relative_path).read_text()) or []
+            readiness_tasks = []
+
+            def visit(node):
+                if isinstance(node, dict):
+                    shell = node.get("ansible.builtin.shell")
+                    command = shell.get("cmd", "") if isinstance(shell, dict) else ""
+                    if "HTTP_CODE" in command and "api/status" in command:
+                        readiness_tasks.append(shell)
+                    for value in node.values():
+                        visit(value)
+                elif isinstance(node, list):
+                    for item in node:
+                        visit(item)
+
+            visit(document)
+            self.assertEqual(len(readiness_tasks), 1, relative_path)
+            shell = readiness_tasks[0]
+            self.assertEqual(shell.get("executable"), "/bin/bash", relative_path)
+            self.assertIn("set -o pipefail", shell["cmd"], relative_path)
+            self.assertIn("systemctl is-active", shell["cmd"], relative_path)
+
     def test_plugin_workflow_discovers_the_complete_unit_test_suite(self):
         source = (ROOT / ".github" / "workflows" / "test_plugins.yml").read_text()
         self.assertIn("pytest>=8.3,<9", source)
