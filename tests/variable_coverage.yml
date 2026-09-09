@@ -413,8 +413,8 @@ behaviors:
       - oddly.elasticstack.repos
       - oddly.elasticstack.beats
     expected:
-      - "'localhost:5044' in (filebeat_yml.content | b64decode)"
-      - "'loadbalance: false' in (filebeat_yml.content | b64decode)"
+      - "'localhost:5044' in (filebeat_yml.content | b64decode | from_yaml)['output.logstash']['hosts']"
+      - "((filebeat_yml.content | b64decode | from_yaml)['output.logstash']['loadbalance'] | bool) == false"
   - name: beats_certificate_renewal
     role: beats
     variables:
