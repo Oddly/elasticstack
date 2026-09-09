@@ -119,6 +119,30 @@
               - kb_cert_after.stat.exists
             fail_msg: "Kibana certificate missing after renewal"
 
+    # --- Beats verification ---
+
+    - name: Run Beats checks
+      when: "'beats' in group_names"
+      block:
+        - name: Check Filebeat is running
+          ansible.builtin.service:
+            name: filebeat
+            state: started
+          check_mode: true
+          register: filebeat_service
+          failed_when: filebeat_service.changed
+
+        - name: Verify Beats certificate exists after renewal
+          ansible.builtin.stat:
+            path: "/etc/beats/certs/{{ ansible_facts.hostname }}-beats.crt"
+          register: beats_cert_after
+
+        - name: Assert Beats certificate exists
+          ansible.builtin.assert:
+            that:
+              - beats_cert_after.stat.exists
+            fail_msg: "Beats certificate missing after renewal"
+
     - name: Summary
       ansible.builtin.debug:
         msg: |
@@ -128,5 +152,6 @@
           ES cluster: {{ result.json.status | default('N/A') }}
           Logstash port 5044: OK
           Kibana status: {{ kibana_status.json.status.overall.level | default('N/A') }}
+          Beats Filebeat: {{ 'OK' if filebeat_service is defined else 'N/A' }}
           ==========================================
       when: "inventory_hostname == groups['all'][0]"

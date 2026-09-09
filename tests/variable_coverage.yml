@@ -394,6 +394,20 @@ behaviors:
       - "'output.elasticsearch' in (filebeat_yml.content | b64decode)"
       - "filebeat_config.monitoring.enabled | bool"
       - "(_filebeat_search.json.hits.total.value | default(0) | int) > 0"
+  - name: beats_certificate_renewal
+    role: beats
+    variables:
+      - beats_tls_key_passphrase
+      - beats_cert_validity_period
+      - beats_cert_expiration_buffer
+      - beats_cert_will_expire_soon
+    scenario: cert_renewal
+    assertions_file: molecule/cert_renewal/converge.yml
+    roles:
+      - oddly.elasticstack.repos
+      - oddly.elasticstack.beats
+    expected:
+      - "_beats_cert_fp_before.stdout != _beats_cert_fp_after.stdout"
   - name: beats_full_stack_modules
     role: beats
     variables:
