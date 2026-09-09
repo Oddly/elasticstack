@@ -102,11 +102,11 @@
       run_once: true
       when: ansible_facts.virtualization_type | default('') not in ['docker', 'container', 'containerd', 'lxc', 'podman']
 
-    - name: Assert vm.max_map_count is 262144  # noqa: run-once[task]
+    - name: Assert vm.max_map_count is 1048576  # noqa: run-once[task]
       ansible.builtin.assert:
         that:
-          - _max_map_count.stdout | int == 262144
-        fail_msg: "vm.max_map_count is {{ _max_map_count.stdout }}, expected 262144"
+          - _max_map_count.stdout | int == 1048576
+        fail_msg: "vm.max_map_count is {{ _max_map_count.stdout }}, expected 1048576"
       run_once: true
       when: _max_map_count is not skipped
 
