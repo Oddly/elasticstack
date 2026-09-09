@@ -43,10 +43,10 @@ that interact. The scenarios below are the durable anchors for that work.
 | Area | Required behavior paths | Existing or planned executable anchor |
 | --- | --- | --- |
 | Shared collection and repositories | CA creation and reuse, passphrase handling, certificate renewal, repository release and mirror settings | `elasticstack_default`, `elasticstack_common_passphrase`, `cert_renewal`, and repository contracts |
-| Elasticsearch installation | package and service lifecycle, YAML and logging controls, JVM and OS tuning, data and log paths | `elasticsearch_default`, `elasticsearch_no-security`, `elasticsearch_diagnostics`, and template contracts |
-| Elasticsearch cluster operations | node role calculation, quorum validation, cluster settings, maintenance, rolling restart, and upgrade sequencing | `elasticsearch_roles_calculation`, node-maintenance and rolling-restart contracts, and the 8-to-9 upgrade scenarios |
-| Elasticsearch security | generated and external TLS, PEM and PKCS12 files, inline content, bundled CA extraction, built-in and custom users, roles, mappings, idempotence, and password rotation | certificate Molecule scenarios, `security_and_certificate_contract.yml`, and `elasticsearch_security_management_contract.yml` |
-| Kibana | backend protocol and host discovery, generated and external TLS, PEM and PKCS12 handling, encryption keys, readiness, and extra configuration | `kibana_default`, `kibana_extras`, `kibana_custom_certs`, and the Kibana rollout matrix |
+| Elasticsearch installation | package and service lifecycle, YAML and logging controls, JVM and OS tuning, data and log paths, and logrotate syntax | `elasticsearch_default`, `elasticsearch_no-security`, `elasticsearch_custom`, `elasticsearch_diagnostics`, and template contracts |
+| Elasticsearch cluster operations | node role calculation, quorum validation, cluster settings, LogsDB data-stream behavior, maintenance, rolling restart, and upgrade sequencing | `elasticsearch_roles_calculation`, `elasticsearch_default`, node-maintenance and rolling-restart contracts, and the 8-to-9 upgrade scenarios |
+| Elasticsearch security | generated and external TLS, PEM and PKCS12 files, inline content, bundled CA extraction, built-in and custom users, roles, mappings, idempotence, and password rotation | certificate Molecule scenarios, `security_and_certificate_contract.yml`, `elasticsearch_security_management_contract.yml`, and the real-ES `elasticsearch_security_api` scenario |
+| Kibana | backend protocol and host discovery, generated and external TLS, PEM and PKCS12 handling, encryption keys, readiness, and extra configuration | `kibana_default`, `es_kibana`, `kibana_extras`, `kibana_custom_certs`, `cert_renewal`, and the Kibana rollout matrix |
 | Logstash | pipeline lifecycle, beats and Elastic Agent inputs, TLS modes, Elasticsearch outputs, authentication and roles, queues, dead-letter queues, monitoring, and config syntax | `logstash_default`, `logstash_advanced`, `logstash_elasticsearch`, `logstash_external_certs`, `logstash_ssl`, and `logstash_standalone_certs` |
 | Beats | Filebeat, Auditbeat, and Metricbeat lifecycle, inputs, queues, outputs, load balancing, TLS modes, and module setup | `beats_default`, `beats_advanced`, `beats_peculiar`, `beats_security`, plus render contracts |
 
@@ -55,6 +55,17 @@ their own assertions. Those paths need both file or content equality checks and
 service-level probes because a certificate can be copied successfully while
 the daemon still rejects its format or trust chain.
 
+The higher-risk checks are deliberately split between levels. The real-ES
+security scenario reconciles a role, user, and role mapping through the
+collection with a custom `elastic` password, then reads those objects back and
+authenticates as the managed user. The Elasticsearch default scenario creates
+a `logs-*` data stream and checks the backing index's `logsdb` mode. The custom
+Elasticsearch scenario runs logrotate's parser against the rendered policy and
+checks that a custom `elasticsearch_logpath` is used. Kibana's rollout probes
+require `status.overall.level: available` where an Elasticsearch backend is
+present, including the HTTPS certificate-renewal path; a repository contract
+also protects both readiness commands from falling back to `/bin/sh`.
+
 ## CI responsibilities
 
 Every committed Molecule scenario must have a `verify.yml` and be referenced by
@@ -62,6 +73,11 @@ an active workflow. Pull requests run the fast unit, contract, lint, and
 role-specific paths. The `ci:run` label starts the Incus-backed rollout matrix,
 including converge, verify, and idempotence checks. Scheduled runs widen the
 operating-system and Elastic release matrix.
+
+The EOL workflow is scheduled or manually dispatched because its data source is
+external. Its classification and GitHub environment-file output are tested
+deterministically in `tests/unit/test_check_eol.py`; the scheduled workflow
+exercises the live API fetch and issue update path.
 
 The full-stack gate is required before merge when shared roles, full-stack
 scenarios, or their workflows change. A failed rollout is investigated at the
