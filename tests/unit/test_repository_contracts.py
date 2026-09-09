@@ -663,6 +663,31 @@ class TestRepositoryContracts(unittest.TestCase):
                         f"{scenario} verify.yml does not assert {variable}: {expected}",
                     )
 
+            recorded_variables = (
+                set(explicit.get(role, {}))
+                | set(rollouts.get(role, {}))
+                | {
+                    variable
+                    for behavior in behaviors
+                    if behavior["role"] == role
+                    for variable in behavior["variables"]
+                }
+            )
+            assigned_by_rollout = {
+                variable
+                for converge in (ROOT / "molecule").glob("*/converge.yml")
+                for variable in public
+                if re.search(
+                    rf"(?m)^(?!\s*#)\s*{re.escape(variable)}\s*:",
+                    converge.read_text(),
+                )
+            }
+            self.assertTrue(
+                assigned_by_rollout <= recorded_variables,
+                f"{role} rollout assignments missing from variable coverage ledger: "
+                f"{sorted(assigned_by_rollout - recorded_variables)}",
+            )
+
         for behavior in behaviors:
             role = behavior["role"]
             defaults_path = ROOT / "roles" / role / "defaults" / "main.yml"
