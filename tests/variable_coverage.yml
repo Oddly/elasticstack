@@ -779,6 +779,8 @@ behaviors:
       - oddly.elasticstack.repos
       - oddly.elasticstack.elasticsearch
     expected:
+      - "'/var/log/elasticsearch-custom/*.log' in (_es_logrotate_content.content | b64decode)"
+      - "'/var/log/elasticsearch-custom/*.json' in (_es_logrotate_content.content | b64decode)"
       - "'weekly' in (_es_logrotate_content.content | b64decode)"
       - "'rotate 8' in (_es_logrotate_content.content | b64decode)"
       - "'size 25M' in (_es_logrotate_content.content | b64decode)"

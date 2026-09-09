@@ -144,12 +144,24 @@
     - name: Assert custom Elasticsearch logrotate policy is rendered
       ansible.builtin.assert:
         that:
+          - "'/var/log/elasticsearch-custom/*.log' in (_es_logrotate_content.content | b64decode)"
+          - "'/var/log/elasticsearch-custom/*.json' in (_es_logrotate_content.content | b64decode)"
           - "'weekly' in (_es_logrotate_content.content | b64decode)"
           - "'rotate 8' in (_es_logrotate_content.content | b64decode)"
           - "'size 25M' in (_es_logrotate_content.content | b64decode)"
           - "'maxage 90' in (_es_logrotate_content.content | b64decode)"
           - "'copytruncate' in (_es_logrotate_content.content | b64decode)"
         fail_msg: "Custom Elasticsearch logrotate policy is incomplete"
+
+    - name: Validate custom Elasticsearch logrotate policy syntax
+      ansible.builtin.command:
+        argv:
+          - logrotate
+          - --debug
+          - --state
+          - /tmp/molecule-elasticsearch-logrotate.state
+          - /etc/logrotate.d/elasticsearch
+      changed_when: false
 
     # ── JVM settings ──────────────────────────────────────────────
 
