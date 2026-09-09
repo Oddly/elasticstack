@@ -38,7 +38,6 @@
     # Filebeat output to file (no ES/Logstash)
     beats_filebeat_output: file
     beats_filebeat_output_file_path: /var/lib/filebeat/test-output
-    beats_filebeat_elastic_monitoring: true
     beats_filebeat_docker: true
     beats_filebeat_docker_ids: advanced-container
     # Metricbeat (install + configure only, no ES/Logstash available)

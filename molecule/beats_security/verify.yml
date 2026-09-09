@@ -79,6 +79,16 @@
             src: /etc/filebeat/filebeat.yml
           register: filebeat_yml
 
+        - name: Parse filebeat.yml
+          ansible.builtin.set_fact:
+            filebeat_config: "{{ filebeat_yml.content | b64decode | from_yaml }}"
+
+        - name: Verify Filebeat monitoring is enabled
+          ansible.builtin.assert:
+            that:
+              - filebeat_config.monitoring.enabled | bool
+            fail_msg: "Filebeat monitoring is not enabled in filebeat.yml"
+
         - name: Verify SSL configuration in filebeat
           ansible.builtin.assert:
             that:

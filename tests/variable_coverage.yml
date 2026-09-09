@@ -383,6 +383,7 @@ behaviors:
     role: beats
     variables:
       - beats_security
+      - beats_filebeat_elastic_monitoring
     scenario: beats_security
     roles:
       - oddly.elasticstack.repos
@@ -391,6 +392,7 @@ behaviors:
     expected:
       - "'certificate_authorities' in (filebeat_yml.content | b64decode)"
       - "'output.elasticsearch' in (filebeat_yml.content | b64decode)"
+      - "filebeat_config.monitoring.enabled | bool"
       - "(_filebeat_search.json.hits.total.value | default(0) | int) > 0"
   - name: beats_full_stack_modules
     role: beats
@@ -621,7 +623,6 @@ behaviors:
       - beats_loglevel
       - beats_logging_keepfiles
       - beats_logging_permissions
-      - beats_filebeat_elastic_monitoring
       - beats_filebeat_output
       - beats_filebeat_output_file_path
       - beats_filebeat_syslog_udp
@@ -651,7 +652,6 @@ behaviors:
       - oddly.elasticstack.beats
     expected:
       - "'deployment: beats-advanced' in (filebeat_yml.content | b64decode)"
-      - "filebeat_config.monitoring.enabled | bool"
       - "'source_protocol: tcp' in (filebeat_yml.content | b64decode)"
       - "'source_protocol: udp' in (filebeat_yml.content | b64decode)"
       - "'id: everything' in (filebeat_yml.content | b64decode)"
@@ -813,7 +813,7 @@ rollouts:
       expected:
         - "/var/lib/filebeat/test-output"
     beats_filebeat_elastic_monitoring:
-      scenario: beats_advanced
+      scenario: beats_security
       expected:
         - "filebeat_config.monitoring.enabled | bool"
     beats_filebeat_docker:

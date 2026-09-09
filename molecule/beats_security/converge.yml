@@ -13,6 +13,7 @@
     # Filebeat with ES output (uses TLS automatically in full_stack)
     beats_filebeat: true
     beats_filebeat_output: elasticsearch
+    beats_filebeat_elastic_monitoring: true
     beats_filebeat_log_input: true
     beats_filebeat_log_inputs:
       messages:
