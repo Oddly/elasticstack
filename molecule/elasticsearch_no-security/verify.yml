@@ -17,6 +17,17 @@
           - "'xpack.security.enabled: false' in (_es_config.content | b64decode)"
         fail_msg: "xpack.security.enabled: false not found in elasticsearch.yml"
 
+    - name: Check disabled Elasticsearch logrotate policy is absent
+      ansible.builtin.stat:
+        path: /etc/logrotate.d/elasticsearch
+      register: _es_logrotate
+
+    - name: Assert disabled Elasticsearch logrotate policy is removed
+      ansible.builtin.assert:
+        that:
+          - not _es_logrotate.stat.exists
+        fail_msg: "logrotate policy remains despite elasticsearch_logrotate_enabled: false"
+
     - name: Verify cluster health (no-security, plain HTTP)
       ansible.builtin.include_tasks: ../shared/verify_es_health.yml
       vars:

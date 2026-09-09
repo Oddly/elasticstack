@@ -61,6 +61,12 @@
     elasticsearch_memory_lock: true
     # Managed logging (verify log4j2.properties is deployed)
     elasticsearch_manage_logging: true
+    # Logrotate policy (separate from log4j2 rotation)
+    elasticsearch_logrotate_enabled: true
+    elasticsearch_logrotate_frequency: weekly
+    elasticsearch_logrotate_rotate: 8
+    elasticsearch_logrotate_size: 25M
+    elasticsearch_logrotate_maxage: 90
   tasks:
     - name: Include Elastic repos
       ansible.builtin.include_role:

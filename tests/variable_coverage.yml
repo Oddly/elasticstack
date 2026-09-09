@@ -725,6 +725,34 @@ behaviors:
       - "'elasticsearch.sniffOnConnectionFault: true' in (kibana_yml.content | b64decode)"
       - "'elasticsearch.sniffInterval: 30000' in (kibana_yml.content | b64decode)"
       - "'--max-old-space-size=2048' in (kibana_node_opts.content | b64decode)"
+  - name: elasticsearch_logrotate_runtime
+    role: elasticsearch
+    variables:
+      - elasticsearch_logrotate_enabled
+      - elasticsearch_logrotate_frequency
+      - elasticsearch_logrotate_rotate
+      - elasticsearch_logrotate_size
+      - elasticsearch_logrotate_maxage
+    scenario: elasticsearch_custom
+    roles:
+      - oddly.elasticstack.repos
+      - oddly.elasticstack.elasticsearch
+    expected:
+      - "'weekly' in (_es_logrotate_content.content | b64decode)"
+      - "'rotate 8' in (_es_logrotate_content.content | b64decode)"
+      - "'size 25M' in (_es_logrotate_content.content | b64decode)"
+      - "'maxage 90' in (_es_logrotate_content.content | b64decode)"
+      - "'copytruncate' in (_es_logrotate_content.content | b64decode)"
+  - name: elasticsearch_logrotate_disabled_runtime
+    role: elasticsearch
+    variables:
+      - elasticsearch_logrotate_enabled
+    scenario: elasticsearch_no-security
+    roles:
+      - oddly.elasticstack.repos
+      - oddly.elasticstack.elasticsearch
+    expected:
+      - "not _es_logrotate.stat.exists"
   - name: logstash_advanced_runtime
     role: logstash
     variables:

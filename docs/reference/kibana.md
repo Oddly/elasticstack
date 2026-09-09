@@ -46,6 +46,14 @@ kibana_config_backup: false
 
 `kibana_config_backup` creates a timestamped backup of `kibana.yml` before overwriting it. Useful for tracking configuration drift.
 
+### Public URL
+
+```yaml
+kibana_public_base_url: "https://kibana.example.com"
+```
+
+`kibana_public_base_url` sets `server.publicBaseUrl`, which Kibana uses when it generates absolute links for sharing, reporting, and other browser-facing features. Its default is built from `elasticstack_kibana_host`, `elasticstack_kibana_port`, and `kibana_tls`. Set it to the reverse proxy or load balancer URL when that is different from the host's own address.
+
 ### Elasticsearch Connection
 
 ```yaml
@@ -54,6 +62,7 @@ kibana_security: true
 kibana_system_password: ""
 kibana_sniff_on_start: false
 kibana_sniff_on_connection_fault: false
+# kibana_sniff_interval: 30000
 ```
 
 `kibana_elasticsearch_hosts` is the list of Elasticsearch hosts that Kibana connects to. You rarely need to set this explicitly. The role resolves it through a three-level fallback:
@@ -69,7 +78,7 @@ kibana_sniff_on_connection_fault: false
 
 `kibana_system_password` lets you set a specific password for the `kibana_system` Elasticsearch user. When empty (the default), Kibana uses the auto-generated password from the initial security setup. When set, the role changes the password via the Elasticsearch `/_security/user/kibana_system/_password` API on every run and uses the new value for Kibana's connection to Elasticsearch. This is useful when you need a known password for external monitoring, when you rotate credentials on a schedule, or when multiple Kibana instances need a consistent password that isn't tied to the initial setup file.
 
-`kibana_sniff_on_start` and `kibana_sniff_on_connection_fault` control Elasticsearch node discovery. When enabled, Kibana queries the ES cluster for the full list of nodes at startup or when a connection drops. These settings only apply to Elastic Stack versions prior to 9.x (Kibana 9.x removed sniffing support).
+`kibana_sniff_on_start` and `kibana_sniff_on_connection_fault` control Elasticsearch node discovery. When enabled, Kibana queries the ES cluster for the full list of nodes at startup or when a connection drops. `kibana_sniff_interval` sets the interval in milliseconds for those legacy requests. These settings only apply to Elastic Stack versions prior to 9.x (Kibana 9.x removed sniffing support).
 
 ### TLS for the Kibana Web Interface
 
@@ -111,11 +120,15 @@ kibana_node_max_old_space_size: ""
 
 ```yaml
 kibana_keystore_password: ""
+kibana_security_encryptionkey: ""
+kibana_encryptedsavedobjects_encryptionkey: ""
 ```
 
 `kibana_keystore_password` sets the password for encrypting the Kibana keystore file (`/etc/kibana/kibana.keystore`). When empty (the default), the keystore is created without encryption, matching Kibana's out-of-the-box behavior. When set, the password file is written to `/etc/kibana/.keystore_password` and a systemd override injects the `KBN_KEYSTORE_PASSPHRASE_FILE` environment variable.
 
 The keystore holds sensitive values that the role manages automatically: `elasticsearch.password`, `server.ssl.keystore.password`, `xpack.security.encryptionKey`, and `xpack.encryptedSavedObjects.encryptionKey`.
+
+`kibana_security_encryptionkey` and `kibana_encryptedsavedobjects_encryptionkey` let you provide stable values for the two Kibana encryption keys. When set, the role stores them on the CA host before importing them into Kibana's keystore. Define them from Ansible Vault or a secrets manager when migrating or running multiple Kibana instances; leaving them empty generates and preserves keys on the first run.
 
 ### Certificate Source
 
@@ -224,7 +237,7 @@ kibana_extra_config: |
 
 ### Public base URL
 
-The template sets `server.publicBaseUrl` automatically from `elasticstack_kibana_host` (falling back to `ansible_facts.fqdn`) and `elasticstack_kibana_port` (default `5601`). The protocol is derived from `kibana_tls`. Override `elasticstack_kibana_host` in your inventory if the FQDN is not the correct public-facing hostname (for example, when behind a load balancer).
+When `kibana_public_base_url` is left at its computed default, the template builds `server.publicBaseUrl` from `elasticstack_kibana_host` (falling back to `ansible_facts.fqdn`) and `elasticstack_kibana_port` (default `5601`). The protocol is derived from `kibana_tls`. Set `kibana_public_base_url` directly when the public URL is provided by a reverse proxy or load balancer.
 
 ### Readiness wait
 

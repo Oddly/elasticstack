@@ -773,6 +773,25 @@ class TestRepositoryContracts(unittest.TestCase):
                     f"{behavior['name']} does not assert behavior: {expected}",
                 )
 
+    def test_public_variables_are_documented(self):
+        documentation = "\n".join(
+            path.read_text() for path in (ROOT / "docs").rglob("*.md")
+        )
+        for role in ("beats", "elasticsearch", "elasticstack", "kibana", "logstash"):
+            readme = ROOT / "roles" / role / "README.md"
+            if readme.exists():
+                documentation += "\n" + readme.read_text()
+            missing = [
+                entry["name"]
+                for entry in parse_defaults(ROOT / "roles" / role / "defaults/main.yml")
+                if entry["name"] not in documentation
+            ]
+            self.assertEqual(
+                missing,
+                [],
+                f"{role} public variables missing documentation: {missing}",
+            )
+
     def test_markdownlint_scope_enforces_the_new_rules(self):
         config = yaml.safe_load((ROOT / ".markdownlint-cli2.yaml").read_text())
         self.assertEqual(config["config"]["MD040"], True)

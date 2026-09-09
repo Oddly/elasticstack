@@ -136,6 +136,21 @@
           - logfiles.files | length > 0
         fail_msg: "No log files found in /var/log/elasticsearch-custom"
 
+    - name: Read custom Elasticsearch logrotate policy
+      ansible.builtin.slurp:
+        src: /etc/logrotate.d/elasticsearch
+      register: _es_logrotate_content
+
+    - name: Assert custom Elasticsearch logrotate policy is rendered
+      ansible.builtin.assert:
+        that:
+          - "'weekly' in (_es_logrotate_content.content | b64decode)"
+          - "'rotate 8' in (_es_logrotate_content.content | b64decode)"
+          - "'size 25M' in (_es_logrotate_content.content | b64decode)"
+          - "'maxage 90' in (_es_logrotate_content.content | b64decode)"
+          - "'copytruncate' in (_es_logrotate_content.content | b64decode)"
+        fail_msg: "Custom Elasticsearch logrotate policy is incomplete"
+
     # ── JVM settings ──────────────────────────────────────────────
 
     - name: Verify JVM custom parameters
