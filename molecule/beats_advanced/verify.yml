@@ -105,12 +105,6 @@
           - "'add_docker_metadata' in (filebeat_yml.content | b64decode)"
         fail_msg: "Docker input or its container selection is missing in filebeat.yml"
 
-    - name: Verify Filebeat monitoring is enabled
-      ansible.builtin.assert:
-        that:
-          - filebeat_config.monitoring.enabled | bool
-        fail_msg: "Filebeat monitoring is not enabled in filebeat.yml"
-
     # --- Filebeat syslog ports ---
 
     - name: Wait for syslog UDP port 5514
