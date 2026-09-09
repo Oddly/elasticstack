@@ -1,7 +1,12 @@
 ---
 - name: packages | Bootstrap python3-apt for Ansible apt module
-  ansible.builtin.raw: apt-get install -y python3-apt
+  ansible.builtin.raw: >-
+    apt-get -o DPkg::Lock::Timeout=120 install -y python3-apt
+  register: _elasticstack_python3_apt_install
   changed_when: false
+  until: _elasticstack_python3_apt_install is success
+  retries: 3
+  delay: 10
   when:
     - ansible_facts.os_family == 'Debian'
     - ansible_facts.pkg_mgr == 'apt'
@@ -10,7 +15,11 @@
   ansible.builtin.apt:
     update_cache: true
     cache_valid_time: 600
+  register: _elasticstack_apt_cache_update
   changed_when: false
+  until: _elasticstack_apt_cache_update is success
+  retries: 3
+  delay: 10
   when: ansible_facts.os_family == 'Debian'
 
 - name: packages | Install packages for security tasks

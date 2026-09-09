@@ -297,6 +297,36 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("_elasticstack_package_changed", elasticsearch)
         self.assertNotIn("_elasticsearch_install_rpm_full", elasticsearch)
 
+    def test_debian_package_bootstrap_retries_apt_lock_contention(self):
+        tasks = yaml.safe_load(
+            (ROOT / "roles" / "elasticstack" / "tasks" / "packages.yml").read_text()
+        )
+        bootstrap = next(
+            task
+            for task in tasks
+            if task.get("name") == "packages | Bootstrap python3-apt for Ansible apt module"
+        )
+        self.assertEqual(
+            bootstrap["ansible.builtin.raw"],
+            "apt-get -o DPkg::Lock::Timeout=120 install -y python3-apt",
+        )
+        self.assertEqual(bootstrap["register"], "_elasticstack_python3_apt_install")
+        self.assertEqual(
+            bootstrap["until"], "_elasticstack_python3_apt_install is success"
+        )
+        self.assertEqual(bootstrap["retries"], 3)
+        self.assertEqual(bootstrap["delay"], 10)
+
+        apt_update = next(
+            task for task in tasks if task.get("name") == "packages | Update apt cache."
+        )
+        self.assertEqual(apt_update["register"], "_elasticstack_apt_cache_update")
+        self.assertEqual(
+            apt_update["until"], "_elasticstack_apt_cache_update is success"
+        )
+        self.assertEqual(apt_update["retries"], 3)
+        self.assertEqual(apt_update["delay"], 10)
+
     def test_security_defaults_and_secret_annotations(self):
         elasticsearch = yaml.safe_load(
             (ROOT / "roles" / "elasticsearch" / "defaults" / "main.yml").read_text()
