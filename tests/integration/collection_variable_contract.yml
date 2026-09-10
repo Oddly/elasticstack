@@ -464,3 +464,37 @@
           - logstash_input_beats_ssl | bool
           - not logstash_input_beats | bool
           - not logstash_output_elasticsearch | bool
+
+    - name: Resolve Logstash role permissions through the legacy aliases
+      ansible.builtin.include_tasks:
+        file: ../../roles/logstash/tasks/logstash-role-permissions.yml
+      vars:
+        logstash_role_indicies_names:
+          - "legacy-logs-*"
+        logstash_role_indicies_privileges:
+          - write
+
+    - name: Assert legacy Logstash role permission aliases are used as fallback
+      ansible.builtin.assert:
+        that:
+          - _logstash_role_indices_names == ['legacy-logs-*']
+          - _logstash_role_indices_privileges == ['write']
+
+    - name: Resolve Logstash role permissions with preferred names set
+      ansible.builtin.include_tasks:
+        file: ../../roles/logstash/tasks/logstash-role-permissions.yml
+      vars:
+        logstash_role_indicies_names:
+          - "legacy-logs-*"
+        logstash_role_indicies_privileges:
+          - write
+        logstash_role_indices_names:
+          - "preferred-logs-*"
+        logstash_role_indices_privileges:
+          - create_index
+
+    - name: Assert preferred Logstash role permission names take precedence
+      ansible.builtin.assert:
+        that:
+          - _logstash_role_indices_names == ['preferred-logs-*']
+          - _logstash_role_indices_privileges == ['create_index']

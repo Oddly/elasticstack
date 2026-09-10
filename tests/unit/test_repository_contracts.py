@@ -804,10 +804,15 @@ class TestRepositoryContracts(unittest.TestCase):
             self.assertIn(variable, defaults)
             self.assertIn(variable, specs)
 
-        self.assertIn("logstash_role_indices_names is defined", security)
-        self.assertIn("logstash_role_indices_privileges is defined", security)
-        self.assertIn("else logstash_role_indicies_names", security)
-        self.assertIn("else logstash_role_indicies_privileges", security)
+        self.assertIn("logstash-role-permissions.yml", security)
+        permissions = (
+            ROOT / "roles" / "logstash" / "tasks" / "logstash-role-permissions.yml"
+        ).read_text()
+        self.assertIn("else logstash_role_indicies_names", permissions)
+        self.assertIn("else logstash_role_indicies_privileges", permissions)
+        contract = (ROOT / "tests" / "integration" / "collection_variable_contract.yml").read_text()
+        self.assertIn("legacy-logs-*", contract)
+        self.assertIn("preferred-logs-*", contract)
 
     def test_plugin_workflow_discovers_the_complete_unit_test_suite(self):
         source = (ROOT / ".github" / "workflows" / "test_plugins.yml").read_text()
