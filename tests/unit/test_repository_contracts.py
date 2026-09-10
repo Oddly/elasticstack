@@ -138,7 +138,7 @@ class TestRepositoryContracts(unittest.TestCase):
             "ansible-core>=2.20,<2.21",
             "ansible-lint>=26.8,<27",
             "molecule>=26.8.0,<27",
-            "pytest>=8.3,<9",
+            "pytest>=9.1.1,<10",
             "passlib==1.7.4",
         ):
             self.assertRegex(requirements, rf"(?m)^{re.escape(requirement)}$")
@@ -616,7 +616,7 @@ class TestRepositoryContracts(unittest.TestCase):
 
     def test_plugin_workflow_discovers_the_complete_unit_test_suite(self):
         source = (ROOT / ".github" / "workflows" / "test_plugins.yml").read_text()
-        self.assertIn("pytest>=8.3,<9", source)
+        self.assertIn("pytest>=9.1.1,<10", source)
         self.assertIn("python -m pytest -q tests/unit", source)
         self.assertNotIn("python tests/unit/plugins/modules/test_cert_info.py", source)
         self.assertNotIn("python tests/unit/plugins/module_utils/test_certs.py", source)
