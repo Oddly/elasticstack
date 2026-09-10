@@ -50,6 +50,18 @@
     beats_auditbeat: true
     beats_auditbeat_enable: false
     beats_auditbeat_output: logstash
+    beats_auditbeat_modules:
+      - module: auditd
+        audit_rule_files:
+          - '${path.config}/audit.rules.d/*.conf'
+      - module: file_integrity
+        paths:
+          - /var/log/auditbeat
+        recursive: false
+      - module: system
+        datasets:
+          - package
+        period: 5m
     # Logging (non-default keepfiles and permissions)
     beats_logging: file
     beats_logpath: /var/log/beats

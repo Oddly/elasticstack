@@ -182,6 +182,10 @@
       ansible.builtin.assert:
         that:
           - "'output.logstash' in (auditbeat_yml.content | b64decode)"
+          - "'audit.rules.d/*.conf' in (auditbeat_yml.content | b64decode)"
+          - "'/var/log/auditbeat' in (auditbeat_yml.content | b64decode)"
+          - "'recursive: false' in (auditbeat_yml.content | b64decode)"
+          - "'period: 5m' in (auditbeat_yml.content | b64decode)"
         fail_msg: "Auditbeat output was not configured for Logstash"
 
     - name: Check disabled beat services are not running
