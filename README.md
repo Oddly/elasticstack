@@ -5,7 +5,7 @@
   <p><strong>oddly.elasticstack</strong></p>
   <p>
     Deploy and manage the Elastic Stack with Ansible.<br>
-    Elasticsearch, Kibana, Logstash, and Beats — from repos to rolling upgrades.
+    Elasticsearch, Kibana, Logstash, Beats, and Elastic Agent — from repos to rolling upgrades.
   </p>
   <p>
     <a href="https://github.com/Oddly/elasticstack/actions/workflows/test_full_stack.yml"><img src="https://github.com/Oddly/elasticstack/actions/workflows/test_full_stack.yml/badge.svg" alt="Full Stack Tests"></a>
@@ -45,6 +45,7 @@ Forked from [NETWAYS/ansible-collection-elasticstack](https://github.com/NETWAYS
 - **Security initialization** — bootstrap passwords, keystore management, user/role creation
 - **Multi-node orchestration** — roles discover each other through inventory groups
 - **Beats collection** — Filebeat (log, syslog TCP/UDP, journald, Docker), Metricbeat, Auditbeat
+- **Elastic Agent** — standalone policies, Fleet enrollment, Fleet Server setup, and Beats migration
 
 ## Quickstart
 
@@ -80,9 +81,10 @@ all:
     - oddly.elasticstack.kibana
     - oddly.elasticstack.logstash
     - oddly.elasticstack.beats
+    - oddly.elasticstack.elastic_agent
 ```
 
-Roles run in order. Each one uses inventory group names to find the other services. After the run, initial passwords are in `/usr/share/elasticsearch/initial_passwords` on the first ES host.
+Roles run in order. Each one uses inventory group names to find the other services. After the run, initial passwords are in `/usr/share/elasticsearch/initial_passwords` on the first ES host. Elastic Agent is opt-in because standalone policies and Fleet enrollment require deployment-specific inputs.
 
 See the **[getting started guide](https://oddly.github.io/elasticstack/getting-started/)** for single-node setups, disabling security, package mirrors, and more.
 
@@ -95,6 +97,7 @@ See the **[getting started guide](https://oddly.github.io/elasticstack/getting-s
 | [`kibana`](https://oddly.github.io/elasticstack/roles/kibana/) | Web UI, Elasticsearch connection, optional HTTPS frontend |
 | [`logstash`](https://oddly.github.io/elasticstack/roles/logstash/) | Pipeline management, queue config, ES user/role creation |
 | [`beats`](https://oddly.github.io/elasticstack/roles/beats/) | Filebeat, Metricbeat, Auditbeat with syslog, journald, Docker inputs |
+| [`elastic_agent`](https://oddly.github.io/elasticstack/roles/elastic_agent/) | Standalone Elastic Agent, Fleet enrollment, Fleet Server, and Beats migration |
 | [`elasticstack`](https://oddly.github.io/elasticstack/roles/elasticstack/) | Shared defaults inherited by all roles (ports, groups, CA, repos) |
 
 ## Supported platforms

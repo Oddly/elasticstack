@@ -1,0 +1,75 @@
+---
+- name: enroll | Build Elastic Agent enrollment command
+  ansible.builtin.set_fact:
+    _elastic_agent_enroll_argv: >-
+      {{ [elastic_agent_binary_path, 'enroll', '--non-interactive', '--force', '--url', elastic_agent_fleet_server_url]
+         + (['--enrollment-token', elastic_agent_enrollment_token]
+            if elastic_agent_mode == 'fleet' else [])
+         + (['--fleet-server-es', elastic_agent_fleet_server_es,
+             '--fleet-server-service-token', elastic_agent_fleet_server_service_token,
+             '--fleet-server-policy', elastic_agent_fleet_server_policy]
+            if elastic_agent_mode == 'fleet_server' else [])
+         + (['--certificate-authorities', elastic_agent_fleet_server_ca_path]
+            if elastic_agent_fleet_server_ca_source != 'none' else [])
+         + (['--fleet-server-es-ca', elastic_agent_fleet_server_es_ca_path]
+            if elastic_agent_mode == 'fleet_server' and
+               (elastic_agent_fleet_server_es_ca_file | length > 0 or
+                elastic_agent_fleet_server_es_ca_content | length > 0) else [])
+         + (['--fleet-server-cert', elastic_agent_fleet_server_cert_path]
+            if elastic_agent_mode == 'fleet_server' and
+               (elastic_agent_fleet_server_cert_file | length > 0 or
+                elastic_agent_fleet_server_cert_content | length > 0) else [])
+         + (['--fleet-server-cert-key', elastic_agent_fleet_server_cert_key_path]
+            if elastic_agent_mode == 'fleet_server' and
+               (elastic_agent_fleet_server_cert_key_file | length > 0 or
+                elastic_agent_fleet_server_cert_key_content | length > 0) else [])
+         + (['--fleet-server-host', elastic_agent_fleet_server_host]
+            if elastic_agent_mode == 'fleet_server' and
+               elastic_agent_fleet_server_host | length > 0 else [])
+         + (['--fleet-server-port', elastic_agent_fleet_server_port | string]
+            if elastic_agent_mode == 'fleet_server' else [])
+         + (['--insecure'] if elastic_agent_fleet_server_insecure | bool else []) }}
+  no_log: true
+
+- name: enroll | Calculate desired enrollment fingerprint
+  ansible.builtin.set_fact:
+    _elastic_agent_enrollment_fingerprint: "{{ (_elastic_agent_enroll_argv | join('|')) | hash('sha256') }}"
+  no_log: true
+
+- name: enroll | Check enrollment state marker
+  ansible.builtin.stat:
+    path: "{{ elastic_agent_enrollment_state_file }}"
+  register: _elastic_agent_enrollment_state
+
+- name: enroll | Read enrollment state marker
+  ansible.builtin.slurp:
+    src: "{{ elastic_agent_enrollment_state_file }}"
+  register: _elastic_agent_enrollment_marker
+  when: _elastic_agent_enrollment_state.stat.exists
+  no_log: true
+
+- name: enroll | Decide whether Elastic Agent enrollment is required
+  ansible.builtin.set_fact:
+    _elastic_agent_enrollment_required: >-
+      {{ not _elastic_agent_enrollment_state.stat.exists or
+         ((_elastic_agent_enrollment_marker.content | default('') | b64decode | trim) !=
+          _elastic_agent_enrollment_fingerprint) }}
+  no_log: true
+
+- name: enroll | Enroll Elastic Agent in Fleet
+  ansible.builtin.command:
+    argv: "{{ _elastic_agent_enroll_argv }}"
+  register: _elastic_agent_enrollment_result
+  changed_when: true
+  when: _elastic_agent_enrollment_required | bool
+  no_log: true
+
+- name: enroll | Persist enrollment state without storing credentials
+  ansible.builtin.copy:
+    content: "{{ _elastic_agent_enrollment_fingerprint }}\n"
+    dest: "{{ elastic_agent_enrollment_state_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  when: _elastic_agent_enrollment_required | bool
+  no_log: true

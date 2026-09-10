@@ -1,6 +1,6 @@
 # oddly.elasticstack
 
-An Ansible collection for deploying and managing the Elastic Stack — Elasticsearch, Kibana, Logstash, and Beats — on Debian, Ubuntu, and RHEL/Rocky Linux.
+An Ansible collection for deploying and managing the Elastic Stack — Elasticsearch, Kibana, Logstash, Beats, and Elastic Agent — on Debian, Ubuntu, and RHEL/Rocky Linux.
 
 ```yaml
 # Install

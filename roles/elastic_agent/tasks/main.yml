@@ -1,0 +1,155 @@
+---
+- name: Include global role
+  ansible.builtin.import_role:
+    name: oddly.elasticstack.elasticstack
+  when:
+    - elastic_agent_manage | bool
+    - not hostvars[inventory_hostname]._elasticstack_role_imported | default(false)
+
+- name: Resolve Fleet Server Elasticsearch URL from inventory
+  ansible.builtin.set_fact:
+    elastic_agent_fleet_server_es: >-
+      {{ ('https' if elasticstack_security | bool else 'http') ~ '://' ~
+         (hostvars[groups[elasticstack_elasticsearch_group_name][0]].elasticsearch_api_host |
+          default(groups[elasticstack_elasticsearch_group_name][0])) ~ ':' ~
+         (elasticstack_elasticsearch_http_port | string) }}
+  when:
+    - elastic_agent_manage | bool
+    - elastic_agent_mode == 'fleet_server'
+    - elastic_agent_fleet_server_es | default('') | length == 0
+    - groups[elasticstack_elasticsearch_group_name] is defined
+    - groups[elasticstack_elasticsearch_group_name] | length > 0
+
+- name: Validate Elastic Agent configuration
+  ansible.builtin.assert:
+    that:
+      - elastic_agent_mode in ['standalone', 'fleet', 'fleet_server']
+      - elastic_agent_package_flavor in ['basic', 'servers']
+      - (elastic_agent_mode != 'standalone') or (elastic_agent_standalone_config | length > 0)
+      - (elastic_agent_mode != 'fleet') or (elastic_agent_fleet_server_url | length > 0 and elastic_agent_enrollment_token | length > 0)
+      - (elastic_agent_mode != 'fleet_server') or
+        (elastic_agent_fleet_server_url | length > 0 and
+         elastic_agent_fleet_server_es | length > 0 and
+         elastic_agent_fleet_server_service_token | length > 0 and
+         elastic_agent_fleet_server_policy | length > 0)
+      - (elastic_agent_mode != 'fleet_server') or elastic_agent_package_flavor == 'servers'
+      - elastic_agent_fleet_server_ca_source in ['none', 'elasticsearch_ca', 'external']
+      - elastic_agent_fleet_server_ca_source != 'external' or
+        (elastic_agent_fleet_server_ca_file | length > 0 or elastic_agent_fleet_server_ca_content | length > 0)
+      - (elastic_agent_fleet_server_cert_content | length == 0) or
+        (elastic_agent_fleet_server_cert_key_content | length > 0 or elastic_agent_fleet_server_cert_key_file | length > 0)
+      - (elastic_agent_fleet_server_cert_key_content | length == 0) or
+        (elastic_agent_fleet_server_cert_content | length > 0 or elastic_agent_fleet_server_cert_file | length > 0)
+      - (elastic_agent_fleet_server_cert_file | length == 0) or
+        (elastic_agent_fleet_server_cert_content | length == 0)
+      - (elastic_agent_fleet_server_cert_key_file | length == 0) or
+        (elastic_agent_fleet_server_cert_key_content | length == 0)
+    fail_msg: >-
+      Elastic Agent configuration is invalid. Set a valid mode and provide a
+      complete standalone policy, Fleet enrollment details, or Fleet Server
+      details as required by elastic_agent_mode.
+  when: elastic_agent_manage | bool
+  no_log: true
+
+- name: Construct exact Elastic Agent package name
+  ansible.builtin.set_fact:
+    elastic_agent_package: >-
+      {{ 'elastic-agent' +
+         ((elasticstack_versionseparator + elasticstack_version | string)
+          if (elasticstack_version is defined and elasticstack_version | length > 0 and
+              elasticstack_version != 'latest') else '') | replace(' ', '') }}
+  when: elastic_agent_manage | bool
+
+- name: Install Elastic Agent package
+  ansible.builtin.include_tasks: "{{ role_path }}/../elasticstack/tasks/install_elastic_package.yml"
+  vars:
+    _package_name: "{{ elastic_agent_package }}"
+    _package_base_name: elastic-agent
+    _package_environment:
+      ELASTIC_AGENT_FLAVOR: "{{ elastic_agent_package_flavor }}"
+    _package_notify:
+      - Restart Elastic Agent
+  when: elastic_agent_manage | bool
+
+- name: Ensure Elastic Agent configuration directory exists
+  ansible.builtin.file:
+    path: "{{ elastic_agent_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  when: elastic_agent_manage | bool
+
+- name: Stop Beats services for Elastic Agent migration
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop:
+    - filebeat
+    - metricbeat
+    - auditbeat
+  loop_control:
+    label: "{{ item }}"
+  failed_when: false
+  when:
+    - elastic_agent_manage | bool
+    - elastic_agent_migrate_from_beats | bool
+    - not ansible_check_mode
+
+- name: Ensure Elastic Agent enrollment state directory exists
+  ansible.builtin.file:
+    path: "{{ elastic_agent_enrollment_state_file | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  when:
+    - elastic_agent_manage | bool
+    - elastic_agent_mode in ['fleet', 'fleet_server']
+
+- name: Configure standalone Elastic Agent policy
+  ansible.builtin.include_tasks: configure-standalone.yml
+  when:
+    - elastic_agent_manage | bool
+    - elastic_agent_mode == 'standalone'
+
+- name: Configure Elastic Agent Fleet TLS material
+  ansible.builtin.include_tasks: configure-fleet-tls.yml
+  when:
+    - elastic_agent_manage | bool
+    - elastic_agent_mode in ['fleet', 'fleet_server']
+
+- name: Enroll Elastic Agent in Fleet
+  ansible.builtin.include_tasks: enroll.yml
+  when:
+    - elastic_agent_manage | bool
+    - elastic_agent_mode in ['fleet', 'fleet_server']
+
+- name: Manage Elastic Agent service
+  ansible.builtin.service:
+    name: elastic-agent
+    state: "{{ 'started' if elastic_agent_enable | bool else 'stopped' }}"
+    enabled: "{{ elastic_agent_enable | bool }}"
+  when:
+    - elastic_agent_manage | bool
+    - not ansible_check_mode
+
+- name: Flush Elastic Agent handlers before verification
+  ansible.builtin.meta: flush_handlers
+  when:
+    - elastic_agent_manage | bool
+    - elastic_agent_enable | bool
+    - not ansible_check_mode
+
+- name: Verify Elastic Agent service is running
+  ansible.builtin.systemd:
+    name: elastic-agent
+  register: _elastic_agent_service_state
+  until: _elastic_agent_service_state.status.ActiveState == 'active'
+  retries: 5
+  delay: 3
+  when:
+    - elastic_agent_manage | bool
+    - elastic_agent_enable | bool
+    - not ansible_check_mode

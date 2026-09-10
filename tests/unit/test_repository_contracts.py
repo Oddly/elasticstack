@@ -395,14 +395,15 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn('enablerepo:', shared)
         self.assertEqual(shared.count('notify: "{{ _package_notify | default([]) }}"'), 3)
 
-        for role, package_var, package_base, package_notify in (
-            ("elasticsearch", "elasticsearch_package", "elasticsearch", "[]"),
-            ("kibana", "kibana_package", "kibana", "- Restart Kibana"),
-            ("logstash", "logstash_package", "logstash", "- Restart Logstash"),
+        for role, package_var, package_base, package_notify, task_name in (
+            ("elasticsearch", "elasticsearch_package", "elasticsearch", "[]", "Install Elasticsearch package"),
+            ("kibana", "kibana_package", "kibana", "- Restart Kibana", "Install Kibana package"),
+            ("logstash", "logstash_package", "logstash", "- Restart Logstash", "Install Logstash package"),
+            ("elastic_agent", "elastic_agent_package", "elastic-agent", "- Restart Elastic Agent", "Install Elastic Agent package"),
         ):
             source = (ROOT / "roles" / role / "tasks" / "main.yml").read_text()
             include_block = re.search(
-                rf"(?ms)^- name: Install {package_base.capitalize()} package\n.*?(?=^- name:|\Z)",
+                rf"(?ms)^- name: {re.escape(task_name)}\n.*?(?=^- name:|\Z)",
                 source,
             )
             self.assertIsNotNone(include_block, f"{role} does not include the shared installer")
@@ -982,6 +983,7 @@ class TestRepositoryContracts(unittest.TestCase):
             "roles/kibana/tasks/restart_and_verify_kibana.yml": "kibana",
             "roles/logstash/tasks/restart_and_verify_logstash.yml": "logstash",
             "roles/beats/tasks/restart_and_verify_beat.yml": "{{ _beat_service_name }}",
+            "roles/elastic_agent/tasks/restart_and_verify_elastic_agent.yml": "elastic-agent",
         }
 
         for relative_path, service_name in expected.items():
@@ -1001,6 +1003,50 @@ class TestRepositoryContracts(unittest.TestCase):
                 relative_path,
             )
             self.assertEqual(includes[0].get("vars", {}).get("_service_name"), service_name)
+
+    def test_elastic_agent_role_uses_safe_mode_and_enrollment_contracts(self):
+        defaults = yaml.safe_load(
+            (ROOT / "roles" / "elastic_agent" / "defaults" / "main.yml").read_text()
+        )
+        specs = yaml.safe_load(
+            (ROOT / "roles" / "elastic_agent" / "meta" / "argument_specs.yml").read_text()
+        )["argument_specs"]["main"]["options"]
+        main = (ROOT / "roles" / "elastic_agent" / "tasks" / "main.yml").read_text()
+        enroll = (ROOT / "roles" / "elastic_agent" / "tasks" / "enroll.yml").read_text()
+        template = (ROOT / "roles" / "elastic_agent" / "templates" / "elastic-agent.yml.j2").read_text()
+
+        self.assertEqual(defaults["elastic_agent_manage"], False)
+        self.assertEqual(defaults["elastic_agent_mode"], "standalone")
+        self.assertEqual(
+            defaults["elastic_agent_enrollment_state_file"],
+            "{{ elastic_agent_config_dir }}/.enrollment.sha256",
+        )
+        self.assertEqual(specs["elastic_agent_mode"]["choices"], ["standalone", "fleet", "fleet_server"])
+        self.assertEqual(specs["elastic_agent_package_flavor"]["choices"], ["basic", "servers"])
+        for secret in (
+            "elastic_agent_standalone_config",
+            "elastic_agent_enrollment_token",
+            "elastic_agent_fleet_server_ca_content",
+            "elastic_agent_fleet_server_service_token",
+            "elastic_agent_fleet_server_cert_content",
+            "elastic_agent_fleet_server_cert_key_content",
+            "elastic_agent_fleet_server_es_ca_content",
+        ):
+            self.assertTrue(specs[secret]["no_log"], secret)
+
+        self.assertIn("_package_environment", main)
+        self.assertIn("ELASTIC_AGENT_FLAVOR", main)
+        self.assertLess(
+            main.index("Validate Elastic Agent configuration"),
+            main.index("Install Elastic Agent package"),
+        )
+        self.assertNotIn("ansible.builtin.shell", "\n".join(
+            path.read_text() for path in (ROOT / "roles" / "elastic_agent" / "tasks").glob("*.yml")
+        ))
+        self.assertIn("argv: \"{{ _elastic_agent_enroll_argv }}\"", enroll)
+        self.assertIn("hash('sha256')", enroll)
+        self.assertIn("Persist enrollment state without storing credentials", enroll)
+        self.assertIn("to_nice_yaml", template)
 
     def test_beats_templates_share_common_setup_fragment(self):
         template_paths = (
@@ -1607,7 +1653,7 @@ class TestRepositoryContracts(unittest.TestCase):
         documentation = "\n".join(
             path.read_text() for path in (ROOT / "docs").rglob("*.md")
         )
-        for role in ("beats", "elasticsearch", "elasticstack", "kibana", "logstash"):
+        for role in ("beats", "elasticsearch", "elasticstack", "elastic_agent", "kibana", "logstash"):
             readme = ROOT / "roles" / role / "README.md"
             if readme.exists():
                 documentation += "\n" + readme.read_text()

@@ -14,7 +14,7 @@ The Elasticsearch role supports zero-downtime rolling upgrades from Elastic 8.x 
     - Starts Elasticsearch with the new version
     - Waits for the node to rejoin and the cluster to reach green
     - Re-enables shard allocation
-3. Kibana, Logstash, and Beats are upgraded after Elasticsearch
+3. Kibana, Logstash, Beats, and Elastic Agent are upgraded after Elasticsearch
 
 ### Running an upgrade
 
@@ -28,7 +28,7 @@ elasticstack_release: 9   # was 8
 ansible-playbook -i inventory.yml playbook.yml
 ```
 
-The role handles the upgrade order automatically. Elasticsearch nodes are upgraded first, then Kibana, Logstash, and Beats.
+The role handles the upgrade order automatically. Elasticsearch nodes are upgraded first, then Kibana, Logstash, Beats, and Elastic Agent.
 
 ### Upgrade path requirement
 
@@ -54,7 +54,7 @@ elasticsearch_unsafe_upgrade_restart: true
 
 ### Upgrading other components
 
-Kibana, Logstash, and Beats are simpler — they don't need rolling restarts. The roles detect the version mismatch, upgrade the package, and restart the service. Run them after all Elasticsearch nodes are upgraded.
+Kibana, Logstash, Beats, and Elastic Agent are simpler — they don't need rolling restarts. The roles detect the version mismatch, upgrade the package, and restart the service. Run them after all Elasticsearch nodes are upgraded. Package-based Elastic Agent upgrades are controlled by `elasticstack_version`; Fleet-managed binary upgrades require the Fleet-supported installation method.
 
 ### Rollback
 

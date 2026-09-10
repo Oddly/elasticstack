@@ -1,0 +1,15 @@
+---
+- name: configure-standalone | Write Elastic Agent policy
+  ansible.builtin.template:
+    src: elastic-agent.yml.j2
+    dest: "{{ elastic_agent_config_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+    backup: "{{ elastic_agent_config_backup }}"
+  notify:
+    - Restart Elastic Agent
+  no_log: true
+  tags:
+    - configuration
+    - elastic_agent_configuration
