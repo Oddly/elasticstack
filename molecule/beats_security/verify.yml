@@ -16,7 +16,7 @@
     - name: Check cluster health
       ansible.builtin.include_tasks: ../shared/verify_es_health.yml
       vars:
-        _verify_when: "'elasticsearch' in group_names"
+        _verify_when: "{{ 'elasticsearch' in group_names }}"
 
     - name: Run Beats TLS checks
       when: "'beats' in group_names"

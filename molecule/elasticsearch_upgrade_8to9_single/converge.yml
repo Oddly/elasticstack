@@ -56,17 +56,11 @@
         _verify_initial_passwords_path: "{{ elasticstack_initial_passwords }}"
 
     - name: Wait for ES to be ready
-      ansible.builtin.uri:
-        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health
-        method: GET
-        force_basic_auth: true
-        user: elastic
-        password: "{{ elastic_pass.stdout }}"
-        validate_certs: false
-      register: health
-      retries: 30
-      delay: 10
-      until: health.status == 200
+      ansible.builtin.include_tasks: ../shared/verify_es_health.yml
+      vars:
+        _verify_es_statuses: [green, yellow]
+        _verify_es_retries: 30
+        _verify_es_delay: 10
 
     - name: Check ES version
       ansible.builtin.uri:
@@ -163,17 +157,11 @@
         state: restarted
 
     - name: Wait for ES to be ready after 8.x upgrade
-      ansible.builtin.uri:
-        url: https://localhost:9200/_cluster/health
-        method: GET
-        force_basic_auth: true
-        user: elastic
-        password: "{{ elastic_pass.stdout }}"
-        validate_certs: false
-      register: health
-      retries: 30
-      delay: 10
-      until: health.status == 200
+      ansible.builtin.include_tasks: ../shared/verify_es_health.yml
+      vars:
+        _verify_es_statuses: [green, yellow]
+        _verify_es_retries: 30
+        _verify_es_delay: 10
 
     - name: Confirm test index survived the 8.x→8.x upgrade
       ansible.builtin.uri:

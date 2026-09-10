@@ -8,11 +8,17 @@
 #   _verify_es_scheme: 'http' or 'https' (default: https)
 #   _verify_es_port: HTTP port (default: 9200)
 #   _verify_es_status: expected status — 'green' or 'yellow' (default: green)
+#   _verify_es_statuses: allowed status list (overrides _verify_es_status)
+#   _verify_es_health_query: query string including '?' (default: empty)
+#   _verify_es_retries: readiness retries (default: 6)
+#   _verify_es_delay: seconds between readiness retries (default: 10)
 #   _verify_run_once: run once across hosts (default: false)
 #   _verify_when: additional when condition (default: true)
 - name: Elasticsearch health check
+  vars:
+    _health_statuses: "{{ _verify_es_statuses | default([_verify_es_status | default('green')]) }}"
   ansible.builtin.uri:
-    url: "{{ _verify_es_scheme | default('https') }}://localhost:{{ _verify_es_port | default(elasticstack_elasticsearch_http_port | default(9200)) }}/_cluster/health"
+    url: "{{ _verify_es_scheme | default('https') }}://localhost:{{ _verify_es_port | default(elasticstack_elasticsearch_http_port | default(9200)) }}/_cluster/health{{ _verify_es_health_query | default('') }}"
     method: GET
     force_basic_auth: "{{ (_verify_es_scheme | default('https')) == 'https' }}"
     user: "{{ 'elastic' if (_verify_es_scheme | default('https')) == 'https' else omit }}"
@@ -21,15 +27,17 @@
     status_code: 200
     validate_certs: false
   register: health
-  until: health.json.status | default('red') in ['green', 'yellow']
-  retries: 6
-  delay: 10
+  until: health.json.status | default('red') in _health_statuses
+  retries: "{{ _verify_es_retries | default(6) }}"
+  delay: "{{ _verify_es_delay | default(10) }}"
   run_once: "{{ _verify_run_once | default(false) }}"  # noqa: run-once[task]
   when: _verify_when | default(true) | bool
 
-- name: Assert cluster is {{ _verify_es_status | default('green') }}
+- name: Assert cluster status is allowed
+  vars:
+    _health_statuses: "{{ _verify_es_statuses | default([_verify_es_status | default('green')]) }}"
   ansible.builtin.assert:
-    that: health.json.status == "{{ _verify_es_status | default('green') }}"
-    fail_msg: "Cluster health is {{ health.json.status }}, expected {{ _verify_es_status | default('green') }}"
+    that: health.json.status in _health_statuses
+    fail_msg: "Cluster health is {{ health.json.status }}, expected one of {{ _health_statuses }}"
   run_once: "{{ _verify_run_once | default(false) }}"  # noqa: run-once[task]
   when: _verify_when | default(true) | bool

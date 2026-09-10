@@ -18,26 +18,18 @@
     # --- Elasticsearch verification ---
 
     - name: Elasticsearch health check
-      ansible.builtin.uri:
-        url: "https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health?wait_for_status=yellow&timeout=30s"
-        method: GET
-        force_basic_auth: true
-        user: elastic
-        password: "{{ elastic_pass.stdout }}"
-        return_content: true
-        status_code: 200
-        validate_certs: false
-      register: result
-      until: result.json.status | default('red') in ['green', 'yellow']
-      retries: 12
-      delay: 10
-      when: "'elasticsearch' in group_names"
+      ansible.builtin.include_tasks: ../shared/verify_es_health.yml
+      vars:
+        _verify_es_health_query: "?wait_for_status=yellow&timeout=30s"
+        _verify_es_statuses: [green, yellow]
+        _verify_es_retries: 12
+        _verify_when: "{{ 'elasticsearch' in group_names }}"
 
     - name: Verify cluster has 2 nodes
       ansible.builtin.assert:
         that:
-          - result.json.number_of_nodes == 2
-        fail_msg: "Expected 2 nodes, got {{ result.json.number_of_nodes }}"
+          - health.json.number_of_nodes == 2
+        fail_msg: "Expected 2 nodes, got {{ health.json.number_of_nodes }}"
       when:
         - "'elasticsearch' in group_names"
         - "inventory_hostname == groups['elasticsearch'][0]"
@@ -127,7 +119,7 @@
           ==========================================
           CERTIFICATE RENEWAL TEST COMPLETE
           ==========================================
-          ES cluster: {{ result.json.status | default('N/A') }}
+          ES cluster: {{ health.json.status | default('N/A') }}
           Logstash port 5044: OK
           Kibana status: {{ kibana_status.json.status.overall.level | default('N/A') }}
           Beats Filebeat: {{ 'OK' if filebeat_service is defined else 'N/A' }}

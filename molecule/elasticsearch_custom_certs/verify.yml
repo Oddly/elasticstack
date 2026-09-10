@@ -6,24 +6,10 @@
       ansible.builtin.include_tasks: ../shared/verify_fetch_password.yml
 
     - name: Check cluster health
-      ansible.builtin.uri:
-        url: "https://localhost:9200/_cluster/health"
-        method: GET
-        force_basic_auth: true
-        user: elastic
-        password: "{{ elastic_pass.stdout }}"
-        return_content: true
-        status_code: 200
-        validate_certs: false
-      register: health
-      run_once: true  # noqa: run-once[task]
-
-    - name: Verify cluster is green or yellow
-      ansible.builtin.assert:
-        that:
-          - health.json.status in ["green", "yellow"]
-        fail_msg: "Cluster status is {{ health.json.status }}"
-      run_once: true  # noqa: run-once[task]
+      ansible.builtin.include_tasks: ../shared/verify_es_health.yml
+      vars:
+        _verify_es_statuses: [green, yellow]
+        _verify_run_once: true
 
     # The previous "is the substring 'http' in the subject" heuristic only
     # discriminated because the converge contrived a CN of "<hostname>-http".

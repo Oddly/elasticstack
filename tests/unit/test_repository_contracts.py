@@ -940,6 +940,56 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("no_log: true", old_password_guard)
         self.assertNotIn('grep "PASSWORD elastic "', old_password_guard)
 
+    def test_molecule_reuses_shared_elasticsearch_health_checks(self):
+        shared = (ROOT / "molecule" / "shared" / "verify_es_health.yml").read_text()
+        self.assertIn("_verify_es_statuses", shared)
+        self.assertIn("_verify_es_health_query", shared)
+        self.assertIn("_verify_es_retries", shared)
+        self.assertIn("_verify_es_delay", shared)
+        self.assertIn("in _health_statuses", shared)
+
+        scenarios = (
+            "cert_renewal",
+            "elasticsearch_cert_content",
+            "elasticsearch_custom_certs",
+            "elasticsearch_custom_certs_minimal",
+            "elasticsearch_diagnostics",
+            "elasticstack_default",
+            "es_kibana",
+            "kibana_custom",
+            "kibana_custom_certs",
+            "logstash_elasticsearch",
+        )
+        for scenario in scenarios:
+            source = (ROOT / "molecule" / scenario / "verify.yml").read_text()
+            self.assertIn(
+                "include_tasks: ../shared/verify_es_health.yml",
+                source,
+                scenario,
+            )
+
+        for scenario in scenarios:
+            source = (ROOT / "molecule" / scenario / "verify.yml").read_text()
+            self.assertNotIn(
+                "_cluster/health",
+                source,
+                f"{scenario} must use the shared Elasticsearch health check",
+            )
+
+        for relative_path in (
+            "molecule/elasticsearch_upgrade_8to9/converge.yml",
+            "molecule/elasticsearch_upgrade_8to9/verify.yml",
+            "molecule/elasticsearch_upgrade_8to9_single/converge.yml",
+            "molecule/elasticsearch_upgrade_8to9_single/verify.yml",
+        ):
+            source = (ROOT / relative_path).read_text()
+            self.assertIn(
+                "include_tasks: ../shared/verify_es_health.yml",
+                source,
+                relative_path,
+            )
+            self.assertNotIn("_cluster/health", source, relative_path)
+
     def test_plugin_workflow_discovers_the_complete_unit_test_suite(self):
         source = (ROOT / ".github" / "workflows" / "test_plugins.yml").read_text()
         self.assertIn("pytest>=9.1.1,<10", source)
