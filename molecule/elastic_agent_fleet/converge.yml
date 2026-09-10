@@ -54,6 +54,10 @@
           )
           Path("/tmp/elastic-agent-contract-path").write_text(sys.argv[0] + "\n")
           Path(target).write_text("\n".join(arguments) + "\n")
+          if "--enrollment-token" in arguments:
+              token = arguments[arguments.index("--enrollment-token") + 1]
+              with Path("/tmp/elastic-agent-contract-invocations").open("a") as audit:
+                  audit.write(token + "\n")
 
     - name: Check Beat migration fixture state
       ansible.builtin.stat:
@@ -126,6 +130,10 @@
             -----END CERTIFICATE-----
 
     - name: Include Elastic Agent
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elastic_agent
+
+    - name: Reapply Elastic Agent to exercise enrollment marker idempotency
       ansible.builtin.include_role:
         name: oddly.elasticstack.elastic_agent
 

@@ -32,6 +32,11 @@
         src: /var/lib/elastic-agent-no-ca/.enrollment.sha256
       register: enrollment_marker
 
+    - name: Read enrollment command invocation audit
+      ansible.builtin.slurp:
+        src: /tmp/elastic-agent-contract-invocations
+      register: enrollment_invocations
+
     - name: Check Fleet Server CA destination
       ansible.builtin.stat:
         path: /var/lib/elastic-agent-fleet-server-certs/fleet-server-ca.crt
@@ -145,6 +150,9 @@
           - "'/usr/local/bin/elastic-agent-contract' in (contract_path.content | b64decode)"
           - "'--enrollment-token' in (enrollment_argv.content | b64decode)"
           - "'contract-enrollment-token' in (enrollment_argv.content | b64decode)"
+          - >-
+            (enrollment_invocations.content | b64decode).splitlines()
+            | select('equalto', 'contract-enrollment-token') | list | length == 1
           - "'--certificate-authorities' in (enrollment_argv.content | b64decode)"
           - "'--insecure' in (enrollment_argv.content | b64decode)"
           - fleet_ca.stat.exists
