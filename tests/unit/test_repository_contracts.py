@@ -216,16 +216,29 @@ class TestRepositoryContracts(unittest.TestCase):
             )
 
     def test_test_dependency_changes_trigger_dependency_sensitive_ci(self):
-        for relative_path in (
-            ".github/workflows/test_contracts.yml",
-            ".github/workflows/test_full_stack.yml",
-        ):
-            source = (ROOT / relative_path).read_text()
-            self.assertIn(
-                "requirements-test.txt",
-                source,
-                f"{relative_path} must test changes to test dependencies",
-            )
+        contracts_path = ROOT / ".github" / "workflows" / "test_contracts.yml"
+        contracts = yaml.safe_load(contracts_path.read_text()) or {}
+        workflow_on = contracts.get("on", contracts.get(True, {}))
+        contract_paths = workflow_on["pull_request"]["paths"]
+        self.assertIn(
+            "requirements-test.txt",
+            contract_paths,
+            f"{contracts_path} must test changes to test dependencies",
+        )
+
+        full_stack_path = ROOT / ".github" / "workflows" / "test_full_stack.yml"
+        full_stack = yaml.safe_load(full_stack_path.read_text()) or {}
+        filter_step = next(
+            step
+            for step in full_stack["jobs"]["changes"]["steps"]
+            if step.get("id") == "filter"
+        )
+        path_filters = yaml.safe_load(filter_step["with"]["filters"]) or {}
+        self.assertIn(
+            "requirements-test.txt",
+            path_filters["should_test"],
+            f"{full_stack_path} must test changes to test dependencies",
+        )
 
     def test_molecule_prepare_files_use_shared_name_resolution(self):
         common = (ROOT / "molecule" / "shared" / "prepare_common.yml").read_text()
