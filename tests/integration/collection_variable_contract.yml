@@ -353,6 +353,10 @@
       loop_control:
         label: "{{ item | basename }}"
 
+    - name: Parse rendered Auditbeat configuration
+      ansible.builtin.set_fact:
+        _auditbeat_config: "{{ _rendered_configs.results[12].content | b64decode | from_yaml }}"
+
     - name: Assert Elasticsearch optional variables render
       ansible.builtin.assert:
         that:
@@ -433,10 +437,12 @@
     - name: Assert Auditbeat module variables render
       ansible.builtin.assert:
         that:
-          - "'file_integrity' in (_rendered_configs.results[12].content | b64decode)"
-          - "'/var/log/auditbeat' in (_rendered_configs.results[12].content | b64decode)"
-          - "'recursive: false' in (_rendered_configs.results[12].content | b64decode)"
-          - "'period: 5m' in (_rendered_configs.results[12].content | b64decode)"
+          - _auditbeat_config['auditbeat.modules'][0].module == 'file_integrity'
+          - _auditbeat_config['auditbeat.modules'][0].paths == ['/var/log/auditbeat']
+          - not _auditbeat_config['auditbeat.modules'][0].recursive | bool
+          - _auditbeat_config['auditbeat.modules'][1].module == 'system'
+          - _auditbeat_config['auditbeat.modules'][1].datasets == ['process']
+          - _auditbeat_config['auditbeat.modules'][1].period == '5m'
 
 - name: Logstash compatibility variable contract
   hosts: localhost

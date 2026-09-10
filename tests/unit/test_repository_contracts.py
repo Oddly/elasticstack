@@ -745,7 +745,12 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("beats_auditbeat_modules | to_nice_yaml", template)
         self.assertNotIn("/usr/bin", template)
         documentation = (ROOT / "docs" / "reference" / "beats.md").read_text()
-        self.assertIn("replaces the entire default list", documentation)
+        self.assertIn("audit_rule_files:", documentation)
+        self.assertIn("state.period: 12h", documentation)
+        verify = (ROOT / "molecule" / "beats_advanced" / "verify.yml").read_text()
+        self.assertIn("auditbeat", verify)
+        self.assertIn("- test", verify)
+        self.assertIn("- config", verify)
 
     def test_plugin_workflow_discovers_the_complete_unit_test_suite(self):
         source = (ROOT / ".github" / "workflows" / "test_plugins.yml").read_text()

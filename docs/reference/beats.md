@@ -324,14 +324,11 @@ beats_auditbeat_modules:
 
 Example (this replaces the complete default module list):
 
-!!! warning
-    `beats_auditbeat_modules` replaces the entire default list. Include the
-    `auditd` and `system` entries yourself when you want to customize one
-    module while retaining the other default collectors. The example below is
-    intentionally a minimal custom policy.
-
 ```yaml
 beats_auditbeat_modules:
+  - module: auditd
+    audit_rule_files:
+      - ${path.config}/audit.rules.d/*.conf
   - module: file_integrity
     paths:
       - /etc
@@ -339,9 +336,19 @@ beats_auditbeat_modules:
     recursive: true
   - module: system
     datasets:
+      - package
+    period: 2m
+  - module: system
+    datasets:
+      - host
+      - login
       - process
       - socket
-    period: 30s
+      - user
+    state.period: 12h
+    user.detect_password_changes: true
+    login.wtmp_file_pattern: /var/log/wtmp*
+    login.btmp_file_pattern: /var/log/btmp*
 ```
 
 ### Metricbeat Configuration

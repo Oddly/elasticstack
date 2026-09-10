@@ -188,6 +188,16 @@
           - "'period: 5m' in (auditbeat_yml.content | b64decode)"
         fail_msg: "Auditbeat output was not configured for Logstash"
 
+    - name: Validate rendered Auditbeat configuration
+      ansible.builtin.command:
+        argv:
+          - auditbeat
+          - test
+          - config
+          - -c
+          - /etc/auditbeat/auditbeat.yml
+      changed_when: false
+
     - name: Check disabled beat services are not running
       ansible.builtin.service_facts:
 
