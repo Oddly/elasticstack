@@ -744,6 +744,8 @@ class TestRepositoryContracts(unittest.TestCase):
         )
         self.assertIn("beats_auditbeat_modules | to_nice_yaml", template)
         self.assertNotIn("/usr/bin", template)
+        documentation = (ROOT / "docs" / "reference" / "beats.md").read_text()
+        self.assertIn("replaces the entire default list", documentation)
 
     def test_plugin_workflow_discovers_the_complete_unit_test_suite(self):
         source = (ROOT / ".github" / "workflows" / "test_plugins.yml").read_text()

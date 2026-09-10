@@ -322,7 +322,13 @@ beats_auditbeat_modules:
 
 `beats_auditbeat_modules` is a list of module configuration dictionaries rendered under `auditbeat.modules`. The default includes auditd, file integrity, and two system datasets. Override the list to change audit rule files, monitored paths, datasets, intervals, or any other Auditbeat module setting.
 
-Example:
+Example (this replaces the complete default module list):
+
+!!! warning
+    `beats_auditbeat_modules` replaces the entire default list. Include the
+    `auditd` and `system` entries yourself when you want to customize one
+    module while retaining the other default collectors. The example below is
+    intentionally a minimal custom policy.
 
 ```yaml
 beats_auditbeat_modules:
