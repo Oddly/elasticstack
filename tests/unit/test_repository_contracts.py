@@ -117,6 +117,18 @@ class TestRepositoryContracts(unittest.TestCase):
                 f"{path}:{line_number} should retain the upstream version comment",
             )
 
+    def test_kics_scan_is_independent_of_docker_and_checksum_pinned(self):
+        source = (ROOT / ".github" / "workflows" / "kics.yml").read_text()
+        self.assertNotIn("docker run", source)
+        self.assertIn("kics_${KICS_VERSION}_linux_amd64.tar.gz", source)
+        self.assertIn(
+            "8a5aa375ccfdc0ddd1114eddf1f9638ad7f6122e98d12a592207509dbe6d81f8",
+            source,
+        )
+        self.assertIn("sha256sum --check --strict", source)
+        self.assertIn('"$RUNNER_TEMP/kics/kics" scan', source)
+        self.assertIn("persist-credentials: false", source)
+
     def test_ci_run_label_consumer_uses_available_api_client(self):
         path = ROOT / ".github" / "workflows" / "consume_ci_run_label.yml"
         source = path.read_text()
@@ -129,14 +141,13 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("labels/ci%3Arun", source)
         self.assertNotIn("gh pr edit", source)
 
-    def test_container_images_are_digest_pinned(self):
+    def test_container_images_are_digest_pinned_when_used(self):
         images = []
         for path in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
             for line in path.read_text().splitlines():
                 if "docker run" in line or "checkmarx/kics:" in line:
                     images.extend(re.findall(r"([\w.-]+/[\w.-]+:[^\s\\]+)", line))
 
-        self.assertTrue(images)
         for image in images:
             self.assertRegex(
                 image,
