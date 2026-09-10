@@ -4,5 +4,5 @@
 ansible-core>=2.20,<2.21
 ansible-lint>=26.8,<27
 molecule>=26.8.0,<27
-pytest>=8.3,<9
+pytest>=9.1.1,<10
 passlib==1.7.4
