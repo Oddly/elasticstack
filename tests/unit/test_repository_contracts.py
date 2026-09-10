@@ -148,6 +148,12 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("labels/ci%3Arun", source)
         self.assertNotIn("gh pr edit", source)
 
+    def test_eol_workflow_runs_monitor_and_consumes_issue_signal(self):
+        source = (ROOT / ".github" / "workflows" / "check_eol.yml").read_text()
+        self.assertIn("python3 scripts/check_eol.py", source)
+        self.assertIn('--github-env "$GITHUB_ENV"', source)
+        self.assertIn("if: env.HAS_ISSUES == 'true'", source)
+
     def test_container_images_are_digest_pinned_when_used(self):
         images = []
         for path in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
