@@ -882,6 +882,64 @@ class TestRepositoryContracts(unittest.TestCase):
                 f"{scenario} must use the shared OpenSSL fixture",
             )
 
+    def test_molecule_password_checks_use_shared_safe_fetch(self):
+        shared = (ROOT / "molecule" / "shared" / "verify_fetch_password.yml").read_text()
+        self.assertIn("ansible.builtin.command:", shared)
+        self.assertIn("- awk", shared)
+        self.assertIn("$1 == \"PASSWORD\" && $2 == user", shared)
+        self.assertIn("_verify_initial_passwords_path", shared)
+        self.assertIn("failed_when:", shared)
+        self.assertIn("no_log:", shared)
+
+        watermarks = (ROOT / "molecule" / "shared" / "set_ci_watermarks.yml").read_text()
+        self.assertIn("ansible.builtin.command:", watermarks)
+        self.assertIn("check_mode: false", watermarks)
+        self.assertIn("$1 == \"PASSWORD\" && $2 == \"elastic\"", watermarks)
+        self.assertIn("failed_when:", watermarks)
+
+        for scenario in (
+            "cert_renewal",
+            "elasticsearch_cert_content",
+            "elasticsearch_custom_certs",
+            "elasticsearch_custom_certs_minimal",
+            "elasticsearch_diagnostics",
+            "elasticsearch_upgrade_8to9",
+            "elasticsearch_upgrade_8to9_single",
+            "elasticstack_default",
+            "es_kibana",
+            "kibana_custom",
+            "kibana_custom_certs",
+            "logstash_elasticsearch",
+        ):
+            source = (ROOT / "molecule" / scenario / "verify.yml").read_text()
+            self.assertIn(
+                "include_tasks: ../shared/verify_fetch_password.yml",
+                source,
+                scenario,
+            )
+            self.assertNotIn(
+                'grep "PASSWORD elastic "',
+                source,
+                f"{scenario} must use the shared password reader",
+            )
+
+        for scenario in ("elasticsearch_upgrade_8to9", "elasticsearch_upgrade_8to9_single"):
+            source = (ROOT / "molecule" / scenario / "verify.yml").read_text()
+            self.assertIn("_verify_initial_passwords_path:", source, scenario)
+
+            converge = (ROOT / "molecule" / scenario / "converge.yml").read_text()
+            self.assertIn(
+                "include_tasks: ../shared/verify_fetch_password.yml",
+                converge,
+                f"{scenario} converge",
+            )
+            self.assertIn("_verify_initial_passwords_path:", converge, scenario)
+
+        old_password_guard = (ROOT / "molecule" / "elasticsearch_default" / "verify.yml").read_text()
+        self.assertIn("ansible.builtin.command:", old_password_guard)
+        self.assertIn("no_log: true", old_password_guard)
+        self.assertNotIn('grep "PASSWORD elastic "', old_password_guard)
+
     def test_plugin_workflow_discovers_the_complete_unit_test_suite(self):
         source = (ROOT / ".github" / "workflows" / "test_plugins.yml").read_text()
         self.assertIn("pytest>=9.1.1,<10", source)

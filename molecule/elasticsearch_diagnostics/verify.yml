@@ -12,14 +12,7 @@
         fail_msg: "Elasticsearch is not running after config restore"
 
     - name: Fetch Elastic password
-      ansible.builtin.shell: |
-        set -o pipefail
-        grep "PASSWORD elastic " /usr/share/elasticsearch/initial_passwords |
-        awk {' print $4 '}
-      args:
-        executable: /bin/bash
-      register: elastic_pass
-      changed_when: false
+      ansible.builtin.include_tasks: ../shared/verify_fetch_password.yml
 
     - name: Verify Elasticsearch API is responsive
       ansible.builtin.uri:

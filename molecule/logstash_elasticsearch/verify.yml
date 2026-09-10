@@ -14,15 +14,9 @@
       when: elasticsearch_ca is undefined
 
     - name: Fetch Elastic password
-      ansible.builtin.shell: |
-        set -o pipefail
-        grep "PASSWORD elastic " /usr/share/elasticsearch/initial_passwords |
-        awk {' print $4 '}
-      args:
-        executable: /bin/bash
-      register: elastic_pass
-      changed_when: false
-      delegate_to: "{{ elasticsearch_ca }}"
+      ansible.builtin.include_tasks: ../shared/verify_fetch_password.yml
+      vars:
+        _verify_delegate_to: "{{ elasticsearch_ca }}"
 
     - name: Elasticsearch health check
       ansible.builtin.uri:

@@ -33,14 +33,9 @@
     elasticstack_initial_passwords: /usr/share/elasticsearch/initial_passwords
   tasks:
     - name: Fetch Elastic password
-      ansible.builtin.shell: |
-        set -o pipefail
-        grep "PASSWORD elastic " {{ elasticstack_initial_passwords }} |
-        awk {' print $4 '}
-      args:
-        executable: /bin/bash
-      register: elastic_pass
-      changed_when: false
+      ansible.builtin.include_tasks: ../shared/verify_fetch_password.yml
+      vars:
+        _verify_initial_passwords_path: "{{ elasticstack_initial_passwords }}"
 
     - name: Wait for ES cluster to be healthy
       ansible.builtin.uri:
