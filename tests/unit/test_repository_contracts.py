@@ -117,6 +117,18 @@ class TestRepositoryContracts(unittest.TestCase):
                 f"{path}:{line_number} should retain the upstream version comment",
             )
 
+    def test_ci_run_label_consumer_uses_available_api_client(self):
+        path = ROOT / ".github" / "workflows" / "consume_ci_run_label.yml"
+        source = path.read_text()
+
+        self.assertIn("set -euo pipefail", source)
+        self.assertIn("curl", source)
+        self.assertIn("--fail-with-body", source)
+        self.assertIn("GITHUB_API_URL", source)
+        self.assertIn("GITHUB_TOKEN", source)
+        self.assertIn("labels/ci%3Arun", source)
+        self.assertNotIn("gh pr edit", source)
+
     def test_container_images_are_digest_pinned(self):
         images = []
         for path in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
