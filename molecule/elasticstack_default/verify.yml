@@ -139,25 +139,10 @@
             port: 5601
             timeout: 120
 
-        - name: Connect to Kibana
-          ansible.builtin.uri:
-            url: "http://{{ ansible_facts.hostname }}:5601/api/status"
-            method: GET
-            force_basic_auth: true
-            user: elastic
-            password: "{{ elastic_pass.stdout }}"
-            return_content: true
-            status_code: [200, 503]
-          register: kibana_status
-          retries: 30
-          delay: 10
-          until: (kibana_status.json.status.overall.level | default('')) == 'available'
-
-        - name: Verify Kibana is available
-          ansible.builtin.assert:
-            that:
-              - kibana_status.json.status.overall.level == 'available'
-            fail_msg: "Kibana status: {{ kibana_status.json.status.overall.level | default('unknown') }}"
+        - name: Check Kibana availability
+          ansible.builtin.include_tasks: ../shared/verify_kibana_available.yml
+          vars:
+            _verify_kibana_url: "http://{{ ansible_facts.hostname }}:5601/api/status"
 
         - name: Read kibana.yml
           ansible.builtin.slurp:

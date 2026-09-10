@@ -39,8 +39,15 @@ def _run(command, cwd):
     )
 
 
-def _assertion_text(path):
-    """Return the expressions under every Ansible assert task's ``that`` key."""
+def _assertion_text(path, seen=None):
+    """Return assert expressions from a playbook and its static task includes."""
+    path = path.resolve()
+    if seen is None:
+        seen = set()
+    if path in seen:
+        return ""
+    seen.add(path)
+
     document = yaml.safe_load(path.read_text()) or {}
     expressions = []
 
@@ -50,6 +57,11 @@ def _assertion_text(path):
                 if key == "that":
                     values = value if isinstance(value, list) else [value]
                     expressions.extend(str(item) for item in values)
+                if key in {"include_tasks", "ansible.builtin.include_tasks"}:
+                    if isinstance(value, str) and "{{" not in value:
+                        included = (path.parent / value).resolve()
+                        if included.is_file():
+                            expressions.append(_assertion_text(included, seen))
                 visit(value)
         elif isinstance(node, list):
             for item in node:
@@ -787,6 +799,59 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("auditbeat", verify)
         self.assertIn("- test", verify)
         self.assertIn("- config", verify)
+
+    def test_molecule_reuses_shared_service_and_readiness_checks(self):
+        kibana_shared = (
+            ROOT / "molecule" / "shared" / "verify_kibana_available.yml"
+        ).read_text()
+        self.assertIn("ansible.builtin.uri:", kibana_shared)
+        self.assertIn("register: kibana_status", kibana_shared)
+        self.assertIn("overall.level", kibana_shared)
+
+        for scenario in (
+            "cert_renewal",
+            "elasticstack_default",
+            "es_kibana",
+            "kibana_custom",
+            "kibana_custom_certs",
+        ):
+            source = (ROOT / "molecule" / scenario / "verify.yml").read_text()
+            self.assertIn(
+                "include_tasks: ../shared/verify_kibana_available.yml",
+                source,
+                scenario,
+            )
+
+        logstash_shared = (
+            ROOT / "molecule" / "shared" / "verify_logstash_port.yml"
+        ).read_text()
+        self.assertIn("ansible.builtin.wait_for:", logstash_shared)
+        self.assertIn("register: logstash_port_check", logstash_shared)
+        self.assertIn("Get installed Logstash version", logstash_shared)
+        self.assertIn("--config.test_and_exit", logstash_shared)
+
+        for scenario in (
+            "logstash_advanced",
+            "logstash_external_certs",
+            "logstash_ssl",
+            "logstash_standalone_certs",
+        ):
+            source = (ROOT / "molecule" / scenario / "verify.yml").read_text()
+            self.assertIn(
+                "include_tasks: ../shared/verify_logstash_service.yml",
+                source,
+                scenario,
+            )
+            self.assertIn(
+                "include_tasks: ../shared/verify_logstash_port.yml",
+                source,
+                scenario,
+            )
+            self.assertNotIn(
+                "Get installed Logstash version",
+                source,
+                f"{scenario} must use the shared Logstash version check",
+            )
 
     def test_plugin_workflow_discovers_the_complete_unit_test_suite(self):
         source = (ROOT / ".github" / "workflows" / "test_plugins.yml").read_text()

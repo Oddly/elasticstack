@@ -1,0 +1,11 @@
+---
+# Confirm that Logstash is already running during Molecule verification.
+# Check mode makes this an assertion: a stopped service would report a change
+# instead of being started as a side effect of verification.
+- name: Check Logstash service is running
+  ansible.builtin.service:
+    name: logstash
+    state: started
+  check_mode: true
+  register: logstash_service
+  failed_when: logstash_service.changed

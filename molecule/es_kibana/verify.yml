@@ -64,26 +64,8 @@
           cluster has initialized.
       when: "'elasticsearch' in group_names"
 
-    - name: Connect to Kibana
-      ansible.builtin.uri:
-        url: "http://localhost:5601/api/status"
-        method: GET
-        force_basic_auth: true
-        user: elastic
-        password: "{{ elastic_pass.stdout }}"
-        return_content: true
-        status_code: [200, 503]
-      register: kibana_status
-      retries: 30
-      delay: 10
-      until: (kibana_status.json.status.overall.level | default('')) == 'available'
-      when: "'kibana' in group_names"
-
-    - name: Verify Kibana is available
-      ansible.builtin.assert:
-        that:
-          - kibana_status.json.status.overall.level == 'available'
-        fail_msg: "Kibana status: {{ kibana_status.json.status.overall.level | default('unknown') }}"
+    - name: Check Kibana availability
+      ansible.builtin.include_tasks: ../shared/verify_kibana_available.yml
       when: "'kibana' in group_names"
 
     # -- Custom keystore entries --
