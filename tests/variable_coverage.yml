@@ -65,6 +65,10 @@ explicit:
       - tests/integration/collection_variable_contract.yml
     logstash_http_port:
       - tests/integration/collection_variable_contract.yml
+    logstash_role_indices_names:
+      - molecule/logstash_elasticsearch/converge.yml
+    logstash_role_indices_privileges:
+      - molecule/logstash_elasticsearch/converge.yml
     logstash_input_beats_client_auth:
       - tests/integration/collection_variable_contract.yml
     logstash_input_beats_timeout:
@@ -264,8 +268,8 @@ behaviors:
       - logstash_create_role
       - logstash_role_name
       - logstash_role_cluster_privileges
-      - logstash_role_indicies_names
-      - logstash_role_indicies_privileges
+      - logstash_role_indices_names
+      - logstash_role_indices_privileges
       - logstash_create_user
       - logstash_user_name
       - logstash_user_password
@@ -979,6 +983,14 @@ rollouts:
       expected:
         - "elasticsearch.sniffInterval: 30000"
   logstash:
+    logstash_role_indices_names:
+      scenario: logstash_elasticsearch
+      expected:
+        - "_logstash_role_response.json[logstash_role_name].indices[0].names == ['molecule-logs-*']"
+    logstash_role_indices_privileges:
+      scenario: logstash_elasticsearch
+      expected:
+        - "_logstash_role_response.json[logstash_role_name].indices[0].privileges == ['write', 'create_index']"
     logstash_security:
       scenario: logstash_elasticsearch
       expected:

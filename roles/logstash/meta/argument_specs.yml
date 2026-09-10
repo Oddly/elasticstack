@@ -181,26 +181,32 @@ argument_specs:
         description: Cluster-level privileges granted to the Logstash writer role
         type: list
         default:
-        - manage_index_templates
-        - monitor
-        - manage_ilm
+          - manage_index_templates
+          - monitor
+          - manage_ilm
+      logstash_role_indices_names:
+        description: Preferred spelling for the index patterns the Logstash writer role is allowed to write to. Overrides logstash_role_indicies_names when set
+        type: list
       logstash_role_indicies_names:
-        description: Index patterns the Logstash writer role is allowed to write to
+        description: Deprecated misspelled alias for logstash_role_indices_names. Index patterns the Logstash writer role is allowed to write to
         type: list
         default:
-        - ecs-logstash*
-        - logstash*
-        - logs*
+          - ecs-logstash*
+          - logstash*
+          - logs*
+      logstash_role_indices_privileges:
+        description: Preferred spelling for the index-level privileges granted to the Logstash writer role. Overrides logstash_role_indicies_privileges when set
+        type: list
       logstash_role_indicies_privileges:
-        description: Index-level privileges granted to the Logstash writer role
+        description: Deprecated misspelled alias for logstash_role_indices_privileges. Index-level privileges granted to the Logstash writer role
         type: list
         default:
-        - write
-        - create
-        - delete
-        - create_index
-        - manage
-        - manage_ilm
+          - write
+          - create
+          - delete
+          - create_index
+          - manage
+          - manage_ilm
       logstash_create_user:
         description: Create an Elasticsearch user for Logstash
         type: bool

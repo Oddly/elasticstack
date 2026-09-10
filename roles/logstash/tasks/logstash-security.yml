@@ -500,8 +500,14 @@
         body:
           cluster: "{{ logstash_role_cluster_privileges }}"
           indices:
-            - names: "{{ logstash_role_indicies_names }}"
-              privileges: "{{ logstash_role_indicies_privileges }}"
+            - names: >-
+                {{ logstash_role_indices_names
+                   if logstash_role_indices_names is defined
+                   else logstash_role_indicies_names }}
+              privileges: >-
+                {{ logstash_role_indices_privileges
+                   if logstash_role_indices_privileges is defined
+                   else logstash_role_indicies_privileges }}
         status_code: [200]
       register: _logstash_role_result
       changed_when: _logstash_role_result.json.role.created | default(false)
