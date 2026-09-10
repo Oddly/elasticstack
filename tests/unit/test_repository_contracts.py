@@ -614,6 +614,32 @@ class TestRepositoryContracts(unittest.TestCase):
             self.assertIn("set -o pipefail", shell["cmd"], relative_path)
             self.assertIn("systemctl is-active", shell["cmd"], relative_path)
 
+    def test_service_restart_wrappers_use_shared_lifecycle_tasks(self):
+        expected = {
+            "roles/elasticsearch/tasks/restart_and_verify_elasticsearch.yml": "elasticsearch",
+            "roles/kibana/tasks/restart_and_verify_kibana.yml": "kibana",
+            "roles/logstash/tasks/restart_and_verify_logstash.yml": "logstash",
+            "roles/beats/tasks/restart_and_verify_beat.yml": "{{ _beat_service_name }}",
+        }
+
+        for relative_path, service_name in expected.items():
+            document = yaml.safe_load((ROOT / relative_path).read_text()) or []
+            includes = [
+                task
+                for task in document
+                if isinstance(task, dict) and "ansible.builtin.include_tasks" in task
+            ]
+            self.assertTrue(includes, relative_path)
+
+            include = includes[0]["ansible.builtin.include_tasks"]
+            include_file = include.get("file") if isinstance(include, dict) else include
+            self.assertEqual(
+                include_file,
+                "{{ role_path }}/../elasticstack/tasks/restart_and_verify_service.yml",
+                relative_path,
+            )
+            self.assertEqual(includes[0].get("vars", {}).get("_service_name"), service_name)
+
     def test_plugin_workflow_discovers_the_complete_unit_test_suite(self):
         source = (ROOT / ".github" / "workflows" / "test_plugins.yml").read_text()
         self.assertIn("pytest>=9.1.1,<10", source)
