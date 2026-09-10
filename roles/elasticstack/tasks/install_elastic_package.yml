@@ -11,6 +11,7 @@
     state: "{{ 'latest' if (elasticstack_version | default('') == 'latest') else 'present' }}"
     enablerepo:
       - "elastic-{{ elasticstack_release }}.x"
+  environment: "{{ _package_environment | default({}) }}"
   register: _elasticstack_package_install_rpm_full
   until: _elasticstack_package_install_rpm_full is success
   retries: 3
@@ -24,6 +25,7 @@
   ansible.builtin.package:
     name: "{{ _package_name }}"
     state: "{{ 'latest' if (elasticstack_version | default('') == 'latest') else 'present' }}"
+  environment: "{{ _package_environment | default({}) }}"
   register: _elasticstack_package_install_rpm
   until: _elasticstack_package_install_rpm is success
   retries: 3
@@ -37,6 +39,7 @@
   ansible.builtin.package:
     name: "{{ _package_name }}"
     state: "{{ 'latest' if (elasticstack_version | default('') == 'latest') else 'present' }}"
+  environment: "{{ _package_environment | default({}) }}"
   register: _elasticstack_package_install_deb
   until: _elasticstack_package_install_deb is success
   retries: 3

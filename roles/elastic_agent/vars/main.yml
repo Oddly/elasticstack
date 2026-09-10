@@ -1,0 +1,5 @@
+---
+elastic_agent_fleet_server_ca_path: "{{ elastic_agent_certificate_dir }}/fleet-server-ca.crt"
+elastic_agent_fleet_server_cert_path: "{{ elastic_agent_certificate_dir }}/fleet-server.crt"
+elastic_agent_fleet_server_cert_key_path: "{{ elastic_agent_certificate_dir }}/fleet-server.key"
+elastic_agent_fleet_server_es_ca_path: "{{ elastic_agent_certificate_dir }}/elasticsearch-ca.crt"

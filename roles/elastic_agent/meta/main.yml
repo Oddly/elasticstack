@@ -1,0 +1,27 @@
+---
+galaxy_info:
+  role_name: elastic_agent
+  namespace: oddly
+  author: Oddly
+  description: Install and manage Elastic Agent in standalone, Fleet, or Fleet Server mode
+  license: GPL-3.0-or-later
+  min_ansible_version: "2.20"
+  platforms:
+    - name: EL
+      versions:
+        - "9"
+        - "10"
+    - name: Debian
+      versions:
+        - trixie
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+        - resolute
+  galaxy_tags:
+    - elastic
+    - elasticagent
+    - fleet
+    - monitoring
+dependencies: []

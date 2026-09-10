@@ -1,0 +1,85 @@
+---
+# @meta description: >
+# Ansible role for installing and managing Elastic Agent on Linux. Supports
+# standalone policies, Fleet enrollment, and self-managed Fleet Server setup
+# on Elastic Stack 8.x and 9.x.
+# @end
+
+# === Lifecycle ===
+
+# @var elastic_agent_manage:description: Install and configure Elastic Agent. Leave false when the role is included only for shared playbook composition
+elastic_agent_manage: false
+# @var elastic_agent_enable:description: Enable and start the Elastic Agent systemd service
+elastic_agent_enable: true
+# @var elastic_agent_mode:description: Operating mode. Use standalone for a local policy, fleet to enroll in an existing Fleet Server, or fleet_server to run Fleet Server on this host
+elastic_agent_mode: standalone
+# @var elastic_agent_package_flavor:description: Elastic Agent package flavor. The servers flavor includes Fleet Server and the server-side components required for a Fleet Server installation
+elastic_agent_package_flavor: basic
+# @var elastic_agent_config_backup:description: Create a backup before replacing the standalone Elastic Agent policy
+elastic_agent_config_backup: false
+# @var elastic_agent_migrate_from_beats:description: Stop and disable Filebeat, Metricbeat, and Auditbeat services before starting Elastic Agent
+elastic_agent_migrate_from_beats: false
+
+# === Package layout ===
+
+# @var elastic_agent_binary_path:description: Path to the Elastic Agent command installed by the package
+elastic_agent_binary_path: /usr/bin/elastic-agent
+# @var elastic_agent_config_dir:description: Directory containing the package-managed Elastic Agent configuration
+elastic_agent_config_dir: /etc/elastic-agent
+# @var elastic_agent_config_file:description: Path to the standalone Elastic Agent policy file
+elastic_agent_config_file: "{{ elastic_agent_config_dir }}/elastic-agent.yml"
+# @var elastic_agent_certificate_dir:description: Directory where Fleet Server CA, certificate, and private key files are stored
+elastic_agent_certificate_dir: "{{ elastic_agent_config_dir }}/certs"
+# @var elastic_agent_enrollment_state_file:description: Path to the enrollment fingerprint file that records the desired Fleet command without storing credentials
+elastic_agent_enrollment_state_file: "{{ elastic_agent_config_dir }}/.enrollment.sha256"
+
+# === Standalone policy ===
+
+# @var elastic_agent_standalone_config:description: Complete standalone elastic-agent.yml policy. It must contain a default output and at least one input; values may include credentials and should come from Ansible Vault or a secrets manager
+elastic_agent_standalone_config: {}
+
+# === Fleet enrollment ===
+
+# @var elastic_agent_fleet_server_url:description: Fleet Server URL used for agent enrollment, for example https://fleet.example.test:8220
+elastic_agent_fleet_server_url: ""
+# @var elastic_agent_enrollment_token:description: Fleet enrollment token for the agent policy. Keep it in Ansible Vault or a secrets manager
+elastic_agent_enrollment_token: ""
+# @var elastic_agent_fleet_server_insecure:description: Disable TLS certificate verification when connecting to Fleet Server. Use only for temporary development deployments
+elastic_agent_fleet_server_insecure: false
+# @var elastic_agent_fleet_server_ca_source:description: Source for the CA used to verify Fleet Server. Use none for a publicly trusted CA, elasticsearch_ca to reuse the collection CA, or external for a supplied CA file/content
+elastic_agent_fleet_server_ca_source: none
+# @var elastic_agent_fleet_server_ca_file:description: Path to an external Fleet Server CA certificate on the controller or managed host
+elastic_agent_fleet_server_ca_file: ""
+# @var elastic_agent_fleet_server_ca_content:description: Inline PEM content for the external Fleet Server CA certificate
+elastic_agent_fleet_server_ca_content: ""
+# @var elastic_agent_fleet_server_ca_remote_src:description: Read the external Fleet Server CA from the managed host instead of the Ansible controller
+elastic_agent_fleet_server_ca_remote_src: false
+
+# === Fleet Server ===
+
+# @var elastic_agent_fleet_server_es:description: Elasticsearch URL used by a self-managed Fleet Server
+elastic_agent_fleet_server_es: ""
+# @var elastic_agent_fleet_server_service_token:description: Elasticsearch service token used by a self-managed Fleet Server. Keep it in Ansible Vault or a secrets manager
+elastic_agent_fleet_server_service_token: ""
+# @var elastic_agent_fleet_server_policy:description: Fleet Server agent policy ID used by a self-managed Fleet Server
+elastic_agent_fleet_server_policy: ""
+# @var elastic_agent_fleet_server_host:description: Fleet Server bind or advertised host passed to the Elastic Agent Fleet Server process
+elastic_agent_fleet_server_host: ""
+# @var elastic_agent_fleet_server_port:description: Fleet Server HTTP port
+elastic_agent_fleet_server_port: 8220
+# @var elastic_agent_fleet_server_cert_file:description: Path to the Fleet Server certificate on the controller or managed host
+elastic_agent_fleet_server_cert_file: ""
+# @var elastic_agent_fleet_server_cert_content:description: Inline PEM content for the Fleet Server certificate
+elastic_agent_fleet_server_cert_content: ""
+# @var elastic_agent_fleet_server_cert_key_file:description: Path to the Fleet Server private key on the controller or managed host
+elastic_agent_fleet_server_cert_key_file: ""
+# @var elastic_agent_fleet_server_cert_key_content:description: Inline PEM content for the Fleet Server private key
+elastic_agent_fleet_server_cert_key_content: ""
+# @var elastic_agent_fleet_server_cert_remote_src:description: Read Fleet Server certificate and key files from the managed host instead of the Ansible controller
+elastic_agent_fleet_server_cert_remote_src: false
+# @var elastic_agent_fleet_server_es_ca_file:description: Path to the CA used by Fleet Server to verify Elasticsearch on the controller or managed host
+elastic_agent_fleet_server_es_ca_file: ""
+# @var elastic_agent_fleet_server_es_ca_content:description: Inline PEM content for the Elasticsearch CA used by Fleet Server
+elastic_agent_fleet_server_es_ca_content: ""
+# @var elastic_agent_fleet_server_es_ca_remote_src:description: Read the Fleet Server Elasticsearch CA from the managed host instead of the Ansible controller
+elastic_agent_fleet_server_es_ca_remote_src: false

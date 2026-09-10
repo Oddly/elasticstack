@@ -1,0 +1,55 @@
+---
+- name: Verify standalone Elastic Agent deployment
+  hosts: all
+  tasks:
+    - name: Check Elastic Agent service is running
+      ansible.builtin.service:
+        name: elastic-agent
+        state: started
+      check_mode: true
+      register: elastic_agent_service
+      failed_when: elastic_agent_service.changed
+
+    - name: Read standalone Elastic Agent policy
+      ansible.builtin.slurp:
+        src: /etc/elastic-agent/elastic-agent.yml
+      register: elastic_agent_config
+
+    - name: Check standalone policy file
+      ansible.builtin.stat:
+        path: /etc/elastic-agent/elastic-agent.yml
+      register: config_stat
+
+    - name: Find standalone policy backups
+      ansible.builtin.find:
+        paths: /etc/elastic-agent
+        patterns: elastic-agent.yml.*
+        file_type: file
+      register: config_backups
+
+    - name: Check management-disabled directory was not created
+      ansible.builtin.stat:
+        path: /var/lib/elastic-agent-unmanaged
+      register: unmanaged_agent_dir
+
+    - name: Check Elastic Agent version command
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/elastic-agent
+          - version
+      register: elastic_agent_version
+      changed_when: false
+
+    - name: Assert standalone policy and service
+      ansible.builtin.assert:
+        that:
+          - elastic_agent_service.changed == false
+          - config_stat.stat.exists
+          - config_stat.stat.mode == '0600'
+          - config_backups.files | length > 0
+          - not unmanaged_agent_dir.stat.exists
+          - elastic_agent_version.rc == 0
+          - "(elastic_agent_config.content | b64decode | from_yaml)['outputs']['default']['type'] == 'logstash'"
+          - "'127.0.0.1:5044' in (elastic_agent_config.content | b64decode)"
+          - "'contract-system-metrics' in (elastic_agent_config.content | b64decode)"
+          - "'agent.logging.to_stderr: true' in (elastic_agent_config.content | b64decode)"

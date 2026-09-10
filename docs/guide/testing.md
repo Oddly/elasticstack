@@ -49,6 +49,7 @@ that interact. The scenarios below are the durable anchors for that work.
 | Kibana | backend protocol and host discovery, generated and external TLS, PEM and PKCS12 handling, encryption keys, readiness, and extra configuration | `kibana_default`, `es_kibana`, `kibana_extras`, `kibana_custom_certs`, `cert_renewal`, and the Kibana rollout matrix |
 | Logstash | pipeline lifecycle, beats and Elastic Agent inputs, TLS modes, Elasticsearch outputs, authentication and roles, queues, dead-letter queues, monitoring, and config syntax | `logstash_default`, `logstash_advanced`, `logstash_elasticsearch`, `logstash_external_certs`, `logstash_ssl`, and `logstash_standalone_certs` |
 | Beats | Filebeat, Auditbeat, and Metricbeat lifecycle, inputs, queues, outputs, load balancing, TLS modes, and module setup | `beats_default`, `beats_advanced`, `beats_peculiar`, `beats_security`, plus render contracts |
+| Elastic Agent | package installation on Elastic 8 and 9, standalone policy rendering and backups, opt-in management, Fleet enrollment, Fleet Server flags and package flavor, certificate content/file/collection-CA paths, enrollment idempotence, secret-free state, and Beats migration | `elastic_agent_default` and `elastic_agent_fleet` on Rocky Linux and Debian, plus repository and variable-coverage contracts |
 
 The matrix deliberately gives certificate source, content, fallback, and
 certificate-key mismatch paths

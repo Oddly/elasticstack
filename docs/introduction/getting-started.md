@@ -106,9 +106,15 @@ elasticstack_security: true
     - oddly.elasticstack.kibana
     - oddly.elasticstack.logstash
     - oddly.elasticstack.beats
+    - oddly.elasticstack.elastic_agent
 ```
 
 Each role only acts on hosts in its matching group. Elasticsearch nodes form a cluster, Kibana connects to ES, Logstash creates its writer user in ES and opens port 5044 for Beats, and Beats ships logs to Logstash. TLS certificates are automatically generated and distributed.
+
+Elastic Agent is opt-in. Set `elastic_agent_manage: true` on hosts where you
+want a standalone Agent, a Fleet-enrolled Agent, or a Fleet Server, then provide
+the corresponding policy or enrollment inputs described in the [Elastic Agent
+reference](../reference/elastic_agent.md).
 
 ## Disabling security
 

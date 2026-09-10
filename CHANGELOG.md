@@ -29,6 +29,8 @@ First release of the `oddly.elasticstack` collection, forked from
   where the renewal tool rotates the files and restarts Logstash out of band.
 - Beats Filebeat `filestream` input type for 9.x (replacing deprecated `log`).
 - Logstash `elastic_agent` input plugin support.
+- Elastic Agent role with standalone policies, Fleet enrollment, Fleet Server
+  setup, TLS material handling, and migration from Beats.
 - Elasticsearch `cluster_settings` for runtime cluster configuration via API.
 - Persistent cluster settings are applied before certificate-triggered rolling
   restarts on initialized Elasticsearch clusters.
