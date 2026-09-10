@@ -1,0 +1,43 @@
+---
+
+- name: Initialize configured Elasticsearch discovery seed hosts
+  ansible.builtin.set_fact:
+    _elasticsearch_discovery_seed_hosts: "{{ elasticsearch_seed_hosts }}"
+  when: elasticsearch_seed_hosts is defined
+
+- name: Initialize automatic Elasticsearch discovery seed hosts
+  ansible.builtin.set_fact:
+    _elasticsearch_discovery_seed_hosts: []
+  when:
+    - elasticsearch_seed_hosts is not defined
+    - groups[elasticstack_elasticsearch_group_name] | length > 1
+
+- name: Add automatic Elasticsearch discovery seed hosts
+  ansible.builtin.set_fact:
+    _elasticsearch_discovery_seed_hosts: >-
+      {{ _elasticsearch_discovery_seed_hosts +
+         [hostvars[item].ansible_host | default(hostvars[item].inventory_hostname)] }}
+  loop: "{{ groups[elasticstack_elasticsearch_group_name] | default([]) }}"
+  when:
+    - elasticsearch_seed_hosts is not defined
+    - groups[elasticstack_elasticsearch_group_name] | length > 1
+
+- name: Initialize Elasticsearch cluster bootstrap master nodes
+  ansible.builtin.set_fact:
+    _elasticsearch_initial_master_nodes: []
+  when:
+    - not elasticsearch_cluster_set_up | bool
+    - groups[elasticstack_elasticsearch_group_name] | length > 1
+
+- name: Add Elasticsearch cluster bootstrap master nodes
+  ansible.builtin.set_fact:
+    _elasticsearch_initial_master_nodes: >-
+      {{ _elasticsearch_initial_master_nodes +
+         [hostvars[item].elasticsearch_nodename] }}
+  loop: >-
+    {{ (groups['elasticsearch_role_master'] | default([]))
+       if elasticsearch_node_types is defined
+       else (groups[elasticstack_elasticsearch_group_name] | default([])) }}
+  when:
+    - not elasticsearch_cluster_set_up | bool
+    - groups[elasticstack_elasticsearch_group_name] | length > 1
