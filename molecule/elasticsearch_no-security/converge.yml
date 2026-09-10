@@ -13,12 +13,10 @@
     elasticsearch_logrotate_enabled: false
     elasticsearch_logsdb: false
   tasks:
-    - name: Include Elastics repos role
-      ansible.builtin.include_role:
-        name: oddly.elasticstack.repos
-    - name: Include Elasticsearch
-      ansible.builtin.include_role:
-        name: oddly.elasticstack.elasticsearch
+    - name: Deploy Elasticsearch fixture
+      ansible.builtin.include_tasks: ../shared/converge_elasticsearch.yml
+      vars:
+        _converge_set_watermarks: false
 
 # Coverage for the `not ansible_check_mode` guards #154 added to the
 # `Start Elasticsearch` and `Handle cluster setup without security`

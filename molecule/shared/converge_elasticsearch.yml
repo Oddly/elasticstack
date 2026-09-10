@@ -1,0 +1,26 @@
+---
+# Deploy the Elasticsearch portion of a Molecule scenario.
+#
+# Optional variables:
+#   _converge_cleanup_cache: clean package caches after installation
+#                          (default: false)
+#   _converge_set_watermarks: apply lenient CI disk watermarks
+#                             (default: true)
+#
+# Callers that use a mixed service inventory should put this include behind
+# their existing Elasticsearch host condition.
+- name: Include Elastic repositories
+  ansible.builtin.include_role:
+    name: oddly.elasticstack.repos
+
+- name: Include Elasticsearch
+  ansible.builtin.include_role:
+    name: oddly.elasticstack.elasticsearch
+
+- name: CI — clean cache after Elasticsearch
+  ansible.builtin.include_tasks: cleanup_cache.yml
+  when: _converge_cleanup_cache | default(false) | bool
+
+- name: CI — set lenient disk watermarks
+  ansible.builtin.include_tasks: set_ci_watermarks.yml
+  when: _converge_set_watermarks | default(true) | bool

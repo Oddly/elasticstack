@@ -7,16 +7,8 @@
     elasticsearch_heap: "1"
     elasticstack_no_log: false
   tasks:
-    - name: Include Elastic repos role
-      ansible.builtin.include_role:
-        name: oddly.elasticstack.repos
-
-    - name: Include Elasticsearch role
-      ansible.builtin.include_role:
-        name: oddly.elasticstack.elasticsearch
-
-    - name: CI — set lenient disk watermarks
-      ansible.builtin.include_tasks: ../shared/set_ci_watermarks.yml
+    - name: Deploy Elasticsearch fixture
+      ansible.builtin.include_tasks: ../shared/converge_elasticsearch.yml
 
 - name: Test startup failure diagnostics
   hosts: all

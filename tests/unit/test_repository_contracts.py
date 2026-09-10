@@ -21,6 +21,9 @@ from gen_argspecs import (  # noqa: E402
 )
 
 ACTION_SHA = re.compile(r"^[0-9a-f]{40}$")
+STATIC_TASK_INCLUDE = re.compile(
+    r"(?m)^\s*(?:ansible\.builtin\.)?include_tasks:\s*['\"]?([^'\"\s#]+)"
+)
 COLLECTION_CONSTRAINTS = {
     "community.general": ">=12.3.0,<13.0.0",
     "community.crypto": ">=3.1.1,<4.0.0",
@@ -69,6 +72,24 @@ def _assertion_text(path, seen=None):
 
     visit(document)
     return "\n".join(expressions)
+
+
+def _source_with_static_includes(path, seen=None):
+    """Return a playbook source plus the task files it statically includes."""
+    path = path.resolve()
+    if seen is None:
+        seen = set()
+    if path in seen or not path.is_file():
+        return ""
+    seen.add(path)
+
+    source = path.read_text()
+    for include in STATIC_TASK_INCLUDE.findall(source):
+        if "{{" in include:
+            continue
+        included = (path.parent / include).resolve()
+        source += _source_with_static_includes(included, seen)
+    return source
 
 
 class TestRepositoryContracts(unittest.TestCase):
@@ -990,6 +1011,35 @@ class TestRepositoryContracts(unittest.TestCase):
             )
             self.assertNotIn("_cluster/health", source, relative_path)
 
+    def test_molecule_reuses_shared_elasticsearch_converge_sequence(self):
+        shared = (ROOT / "molecule" / "shared" / "converge_elasticsearch.yml").read_text()
+        self.assertIn("oddly.elasticstack.repos", shared)
+        self.assertIn("oddly.elasticstack.elasticsearch", shared)
+        self.assertIn("cleanup_cache.yml", shared)
+        self.assertIn("set_ci_watermarks.yml", shared)
+        self.assertIn("_converge_cleanup_cache", shared)
+        self.assertIn("_converge_set_watermarks", shared)
+
+        scenarios = (
+            "elasticsearch_cert_content",
+            "elasticsearch_custom",
+            "elasticsearch_custom_certs",
+            "elasticsearch_custom_certs_minimal",
+            "elasticsearch_default",
+            "elasticsearch_diagnostics",
+            "elasticsearch_no-security",
+            "elasticsearch_roles_calculation",
+            "elasticsearch_upgrade_8to9",
+            "elasticsearch_upgrade_8to9_single",
+        )
+        for scenario in scenarios:
+            source = (ROOT / "molecule" / scenario / "converge.yml").read_text()
+            self.assertIn(
+                "include_tasks: ../shared/converge_elasticsearch.yml",
+                source,
+                scenario,
+            )
+
     def test_plugin_workflow_discovers_the_complete_unit_test_suite(self):
         source = (ROOT / ".github" / "workflows" / "test_plugins.yml").read_text()
         self.assertIn("pytest>=9.1.1,<10", source)
@@ -1056,6 +1106,7 @@ class TestRepositoryContracts(unittest.TestCase):
                 path = ROOT / relative_path
                 self.assertTrue(path.exists(), f"Missing baseline scenario: {relative_path}")
                 source = path.read_text()
+                execution_source = _source_with_static_includes(path)
                 scenario = path.parent.name
                 self.assertTrue(
                     (path.parent / "verify.yml").exists(),
@@ -1069,7 +1120,7 @@ class TestRepositoryContracts(unittest.TestCase):
                 if role != "elasticstack":
                     self.assertIn(
                         f"oddly.elasticstack.{role}",
-                        source,
+                        execution_source,
                         f"{relative_path} does not execute the {role} role",
                     )
 
@@ -1087,7 +1138,7 @@ class TestRepositoryContracts(unittest.TestCase):
                 if role != "elasticstack":
                     self.assertIn(
                         f"oddly.elasticstack.{role}",
-                        converge.read_text(),
+                        _source_with_static_includes(converge),
                         f"{scenario} rollout does not execute the {role} role",
                     )
                 assignment = re.compile(
@@ -1162,7 +1213,7 @@ class TestRepositoryContracts(unittest.TestCase):
                 verify = ROOT / "molecule" / scenario / "verify.yml"
                 self.assertTrue(converge.exists(), f"Missing behavior converge: {converge}")
                 self.assertTrue(verify.exists(), f"Missing behavior verify: {verify}")
-                execution_source = converge.read_text()
+                execution_source = _source_with_static_includes(converge)
                 self.assertIn(
                     scenario,
                     workflow_sources,

@@ -12,14 +12,8 @@
     elasticsearch_check_calculation: true
     elasticstack_no_log: false
   tasks:
-    - name: Include Elastics repos role
-      ansible.builtin.include_role:
-        name: oddly.elasticstack.repos
-    - name: Include Elasticsearch
-      ansible.builtin.include_role:
-        name: oddly.elasticstack.elasticsearch
-    - name: CI — set lenient disk watermarks
-      ansible.builtin.include_tasks: ../shared/set_ci_watermarks.yml
+    - name: Deploy primary Elasticsearch fixture
+      ansible.builtin.include_tasks: ../shared/converge_elasticsearch.yml
 
 # Second cluster, same run. The dynamic role group from the first play must
 # not affect the second cluster's template or quorum calculation. The
@@ -36,11 +30,5 @@
     elasticsearch_check_calculation: true
     elasticstack_no_log: false
   tasks:
-    - name: Include Elastics repos role
-      ansible.builtin.include_role:
-        name: oddly.elasticstack.repos
-    - name: Include Elasticsearch
-      ansible.builtin.include_role:
-        name: oddly.elasticstack.elasticsearch
-    - name: CI — set lenient disk watermarks
-      ansible.builtin.include_tasks: ../shared/set_ci_watermarks.yml
+    - name: Deploy monitoring Elasticsearch fixture
+      ansible.builtin.include_tasks: ../shared/converge_elasticsearch.yml

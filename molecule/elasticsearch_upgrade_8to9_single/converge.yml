@@ -34,15 +34,8 @@
     - name: Generate test certificates
       ansible.builtin.include_tasks: ../shared/generate_test_certs.yml
 
-    - name: Include Elastic repos role (8.x)
-      ansible.builtin.include_role:
-        name: oddly.elasticstack.repos
-
-    - name: Include Elasticsearch role (8.10.0)
-      ansible.builtin.include_role:
-        name: oddly.elasticstack.elasticsearch
-    - name: CI — set lenient disk watermarks
-      ansible.builtin.include_tasks: ../shared/set_ci_watermarks.yml
+    - name: Deploy Elasticsearch 8.10.0 fixture
+      ansible.builtin.include_tasks: ../shared/converge_elasticsearch.yml
 
 - name: Verify ES 8.10.0 is running and index test data
   hosts: all
