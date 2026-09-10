@@ -20,7 +20,7 @@ elasticsearch.sniffInterval: {{ kibana_sniff_interval }}
 elasticsearch.hosts: [{% for host in kibana_elasticsearch_hosts %}"https://{{ host }}:{{ elasticstack_elasticsearch_http_port }}"{% if not loop.last %},{% endif %}{% endfor %}]
 elasticsearch.username: "kibana_system"
 {% if _kibana_has_ca | default(true) | bool %}
-elasticsearch.ssl.certificateAuthorities: "/etc/kibana/certs/ca.crt"
+elasticsearch.ssl.certificateAuthorities: "{{ kibana_certs_dir }}/ca.crt"
 {% endif %}
 {% if "localhost" in kibana_elasticsearch_hosts %}
 elasticsearch.ssl.verificationMode: certificate
@@ -33,12 +33,12 @@ elasticsearch.hosts: [{% for host in kibana_elasticsearch_hosts %}"http://{{ hos
 {% if kibana_tls | bool %}
 server.ssl.enabled: true
 {% if kibana_cert_source == 'external' and _kibana_cert_format | default('pem') == 'pem' %}
-server.ssl.certificate: "/etc/kibana/certs/{{ inventory_hostname }}-kibana.crt"
-server.ssl.key: "/etc/kibana/certs/{{ inventory_hostname }}-kibana.key"
+server.ssl.certificate: "{{ kibana_certs_dir }}/{{ inventory_hostname }}-kibana.crt"
+server.ssl.key: "{{ kibana_certs_dir }}/{{ inventory_hostname }}-kibana.key"
 {% elif kibana_cert_source == 'external' and _kibana_cert_format | default('pem') == 'p12' %}
-server.ssl.keystore.path: "/etc/kibana/certs/{{ inventory_hostname }}-kibana.p12"
+server.ssl.keystore.path: "{{ kibana_certs_dir }}/{{ inventory_hostname }}-kibana.p12"
 {% else %}
-server.ssl.keystore.path: "/etc/kibana/certs/{{ inventory_hostname }}-kibana.p12"
+server.ssl.keystore.path: "{{ kibana_certs_dir }}/{{ inventory_hostname }}-kibana.p12"
 {% endif %}
 {% endif %}
 

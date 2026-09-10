@@ -377,6 +377,51 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("_elasticstack_package_changed", elasticsearch)
         self.assertNotIn("_elasticsearch_install_rpm_full", elasticsearch)
 
+    def test_elasticsearch_and_kibana_certificate_directories_are_configurable(self):
+        for role, variable, default, hardcoded, files in (
+            (
+                "elasticsearch",
+                "elasticsearch_certs_dir",
+                "/etc/elasticsearch/certs",
+                "/etc/elasticsearch/certs",
+                (
+                    "tasks/main.yml",
+                    "tasks/elasticsearch-security.yml",
+                    "templates/elasticsearch.yml.j2",
+                ),
+            ),
+            (
+                "kibana",
+                "kibana_certs_dir",
+                "/etc/kibana/certs",
+                "/etc/kibana/certs",
+                ("tasks/kibana-security.yml", "templates/kibana.yml.j2"),
+            ),
+        ):
+            defaults = (ROOT / "roles" / role / "defaults" / "main.yml").read_text()
+            self.assertRegex(
+                defaults,
+                rf"(?m)^{re.escape(variable)}:\s+{re.escape(default)}$",
+            )
+            specs = yaml.safe_load(
+                (ROOT / "roles" / role / "meta" / "argument_specs.yml").read_text()
+            )
+            option = specs["argument_specs"]["main"]["options"][variable]
+            self.assertEqual(option["type"], "str")
+            self.assertEqual(option["default"], default)
+            for relative_path in files:
+                source = (ROOT / "roles" / role / relative_path).read_text()
+                self.assertNotIn(
+                    hardcoded,
+                    source,
+                    f"{relative_path} still hardcodes the cert directory",
+                )
+                self.assertIn(
+                    f"{{{{ {variable} }}}}",
+                    source,
+                    f"{relative_path} does not use {variable}",
+                )
+
     def test_debian_package_bootstrap_retries_apt_lock_contention(self):
         tasks = yaml.safe_load(
             (ROOT / "roles" / "elasticstack" / "tasks" / "packages.yml").read_text()

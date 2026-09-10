@@ -4,6 +4,7 @@
   vars:
     elasticstack_elasticsearch_http_port: 9200
     elasticstack_elasticsearch_group_name: elasticsearch
+    kibana_certs_dir: /etc/kibana/custom-certs
   tasks:
     - name: Set elasticsearch_ca variable
       ansible.builtin.set_fact:
@@ -86,6 +87,7 @@
         - name: Verify server.ssl.certificate and server.ssl.key paths are rendered
           ansible.builtin.assert:
             that:
+              - kibana_certs_dir == '/etc/kibana/custom-certs'
               - "'server.ssl.certificate:' in (kibana_yml.content | b64decode)"
               - "'server.ssl.key:' in (kibana_yml.content | b64decode)"
               - "'keystore.path' not in (kibana_yml.content | b64decode)"

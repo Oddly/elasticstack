@@ -151,6 +151,7 @@ kibana_tls_key_file: ""
 kibana_tls_certificate_passphrase: ""
 kibana_tls_ca_file: ""
 kibana_tls_remote_src: false
+kibana_certs_dir: /etc/kibana/certs
 ```
 
 `kibana_tls_certificate_file` is the path to a TLS certificate in PEM (`.crt`/`.pem`) or PKCS12 (`.p12`/`.pfx`) format. The format is auto-detected by probing the file content with `openssl` (not from the file extension).
@@ -162,6 +163,8 @@ kibana_tls_remote_src: false
 `kibana_tls_ca_file` is the path to the CA certificate. If your PEM certificate file contains a full chain (multiple PEM blocks), the CA is auto-extracted and this can be left empty.
 
 `kibana_tls_remote_src` controls where the role looks for the certificate files. When `false` (the default), files are on the Ansible controller and get copied to the managed node. When `true`, files are expected to already exist on the managed node.
+
+`kibana_certs_dir` is the directory on the managed node where the role stores TLS certificates. It defaults to `/etc/kibana/certs`; set it when your Kibana package or filesystem layout uses another location. The generated `kibana.yml` uses this directory for its CA and web TLS paths.
 
 ### Inline PEM Content
 

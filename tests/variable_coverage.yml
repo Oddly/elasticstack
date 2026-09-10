@@ -915,6 +915,10 @@ rollouts:
       expected:
         - "'path: /var/lib/filebeat/test-queue' in (filebeat_yml.content | b64decode)"
   elasticsearch:
+    elasticsearch_certs_dir:
+      scenario: elasticsearch_custom_certs
+      expected:
+        - "elasticsearch_certs_dir == '/etc/elasticsearch/custom-certs'"
     elasticsearch_security_enrollment:
       scenario: elasticsearch_custom
       expected:
@@ -966,6 +970,10 @@ rollouts:
       expected:
         - "node.attr.temp:"
   kibana:
+    kibana_certs_dir:
+      scenario: kibana_custom_certs
+      expected:
+        - "kibana_certs_dir == '/etc/kibana/custom-certs'"
     kibana_elasticsearch_hosts:
       scenario: kibana_extras
       expected:

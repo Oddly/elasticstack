@@ -57,39 +57,39 @@ xpack.security.transport.ssl.enabled: true
 xpack.security.transport.ssl.verification_mode: {{ elasticsearch_ssl_verification_mode }}
 {% if elasticsearch_cert_source == 'external' %}
 {%   if _elasticsearch_transport_cert_format | default('pem') == 'pem' %}
-xpack.security.transport.ssl.certificate: certs/{{ inventory_hostname }}-transport.crt
-xpack.security.transport.ssl.key: certs/{{ inventory_hostname }}-transport.key
+xpack.security.transport.ssl.certificate: {{ elasticsearch_certs_dir }}/{{ inventory_hostname }}-transport.crt
+xpack.security.transport.ssl.key: {{ elasticsearch_certs_dir }}/{{ inventory_hostname }}-transport.key
 {%     if _elasticsearch_external_has_ca | default(false) | bool %}
-xpack.security.transport.ssl.certificate_authorities: ["certs/ca.crt"]
+xpack.security.transport.ssl.certificate_authorities: ["{{ elasticsearch_certs_dir }}/ca.crt"]
 {%     endif %}
 {%   else %}
-xpack.security.transport.ssl.keystore.path: certs/{{ inventory_hostname }}-transport.p12
-xpack.security.transport.ssl.truststore.path: certs/{{ inventory_hostname }}-transport.p12
+xpack.security.transport.ssl.keystore.path: {{ elasticsearch_certs_dir }}/{{ inventory_hostname }}-transport.p12
+xpack.security.transport.ssl.truststore.path: {{ elasticsearch_certs_dir }}/{{ inventory_hostname }}-transport.p12
 {%   endif %}
 {% else %}
-xpack.security.transport.ssl.keystore.path: certs/{{ inventory_hostname_short }}.p12
-xpack.security.transport.ssl.truststore.path: certs/{{ inventory_hostname_short }}.p12
+xpack.security.transport.ssl.keystore.path: {{ elasticsearch_certs_dir }}/{{ inventory_hostname_short }}.p12
+xpack.security.transport.ssl.truststore.path: {{ elasticsearch_certs_dir }}/{{ inventory_hostname_short }}.p12
 {% endif %}
 {% if elasticsearch_http_security | bool %}
 xpack.security.http.ssl.enabled: true
 {% if elasticsearch_cert_source == 'external' %}
 {%   if _elasticsearch_http_cert_format | default('pem') == 'pem' %}
-xpack.security.http.ssl.certificate: certs/{{ inventory_hostname }}-http.crt
-xpack.security.http.ssl.key: certs/{{ inventory_hostname }}-http.key
+xpack.security.http.ssl.certificate: {{ elasticsearch_certs_dir }}/{{ inventory_hostname }}-http.crt
+xpack.security.http.ssl.key: {{ elasticsearch_certs_dir }}/{{ inventory_hostname }}-http.key
 {%     if _elasticsearch_external_has_ca | default(false) | bool %}
-xpack.security.http.ssl.certificate_authorities: ["certs/ca.crt"]
+xpack.security.http.ssl.certificate_authorities: ["{{ elasticsearch_certs_dir }}/ca.crt"]
 {%     endif %}
 {%   else %}
-xpack.security.http.ssl.keystore.path: certs/{{ inventory_hostname }}-http.p12
-xpack.security.http.ssl.truststore.path: certs/{{ inventory_hostname }}-http.p12
+xpack.security.http.ssl.keystore.path: {{ elasticsearch_certs_dir }}/{{ inventory_hostname }}-http.p12
+xpack.security.http.ssl.truststore.path: {{ elasticsearch_certs_dir }}/{{ inventory_hostname }}-http.p12
 {%   endif %}
 {% else %}
 {% if elasticsearch_http_ssl_keystore_path | default('', true) | length > 0 %}
 xpack.security.http.ssl.keystore.path: {{ elasticsearch_http_ssl_keystore_path }}
 {% else %}
-xpack.security.http.ssl.keystore.path: certs/{{ inventory_hostname_short }}.p12
+xpack.security.http.ssl.keystore.path: {{ elasticsearch_certs_dir }}/{{ inventory_hostname_short }}.p12
 {% endif %}
-xpack.security.http.ssl.truststore.path: certs/{{ inventory_hostname_short }}.p12
+xpack.security.http.ssl.truststore.path: {{ elasticsearch_certs_dir }}/{{ inventory_hostname_short }}.p12
 {% endif %}
 {% endif %}
 {% endif %}

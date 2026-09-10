@@ -305,6 +305,10 @@ argument_specs:
           uses user-provided files
         type: str
         default: elasticsearch_ca
+      elasticsearch_certs_dir:
+        description: Directory on the Elasticsearch host where TLS certificates are stored
+        type: str
+        default: /etc/elasticsearch/certs
       elasticsearch_transport_tls_certificate:
         description: "Transport layer (port 9300) certificate. Accepts PEM (.crt/.pem) or PKCS12 (.p12/.pfx) \u2014 format\
           \ auto-detected"
