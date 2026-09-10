@@ -17,6 +17,9 @@ logstash_heap: ""
 
 # === Service Management ===
 
+# These compatibility and inheritance controls intentionally remain undefined.
+# Their undefined state distinguishes inherited defaults from explicit false
+# values and lets deprecated aliases override them.
 # @var logstash_security:description: Override the inherited stack security setting for Logstash. Undefined follows elasticstack_security
 # logstash_security: true
 # @var logstash_enable:description: Whether to enable and start the Logstash service
@@ -33,15 +36,15 @@ logstash_manage_logging: false
 # @var logstash_config_autoreload:description: Automatically reload pipeline configuration when files change
 logstash_config_autoreload: true
 # @var logstash_config_autoreload_interval:description: How often Logstash checks for pipeline config changes when autoreload is enabled
-# logstash_config_autoreload_interval: 3s
+logstash_config_autoreload_interval: 3s
 # @var logstash_config_path_data:description: Filesystem path for Logstash persistent data (queue, dead letter queue)
 logstash_config_path_data: /var/lib/logstash
 # @var logstash_config_path_logs:description: Filesystem path for Logstash log files
 logstash_config_path_logs: /var/log/logstash
-# @var logstash_http_host:description: Bind address for the Logstash monitoring API. Only written to logstash.yml when defined
-# logstash_http_host: "127.0.0.1"
-# @var logstash_http_port:description: Port range for the Logstash monitoring API. Only written to logstash.yml when defined
-# logstash_http_port: 9600-9700
+# @var logstash_http_host:description: Bind address for the Logstash monitoring API
+logstash_http_host: "127.0.0.1"
+# @var logstash_http_port:description: Port range for the Logstash monitoring API
+logstash_http_port: 9600-9700
 
 # @var logstash_pipeline_buffer_type:description: >
 #   Pipeline buffer type ('direct' or 'heap'). Logstash 9.x changed the default
@@ -72,7 +75,7 @@ logstash_input_beats_port: 5044
 # @var logstash_input_beats_client_auth:description: Client TLS authentication mode for the Beats input (required | optional | none)
 # logstash_input_beats_client_auth: required
 # @var logstash_input_beats_timeout:description: Idle timeout for Beats input connections. Connections idle longer than this are closed
-# logstash_input_beats_timeout: 60s
+logstash_input_beats_timeout: 60s
 # @var logstash_beats_tls:description: Deprecated alias for logstash_input_beats_ssl
 # logstash_beats_tls: true
 # @var logstash_beats_input:description: Deprecated alias for logstash_input_beats
@@ -126,9 +129,9 @@ logstash_validate_after_inactivity: 300
 # @var logstash_sniffing:description: Enable Elasticsearch node sniffing to discover all cluster members
 logstash_sniffing: false
 # @var logstash_sniffing_delay:description: Seconds between ES sniffing requests when sniffing is enabled
-# logstash_sniffing_delay: 5
+logstash_sniffing_delay: 5
 # @var logstash_sniffing_path:description: ES API path used for node sniffing
-# logstash_sniffing_path: "/_nodes/http"
+logstash_sniffing_path: "/_nodes/http"
 # @var logstash_elasticsearch_output:description: Deprecated alias for logstash_output_elasticsearch
 # logstash_elasticsearch_output: true
 
@@ -242,14 +245,16 @@ logstash_tls_key_passphrase: LogstashChangeMe
 # === Dead Letter Queue ===
 
 # @var logstash_dead_letter_queue_enable:description: Enable the dead letter queue for failed events
-# logstash_dead_letter_queue_enable: false
+logstash_dead_letter_queue_enable: false
 # @var logstash_dead_letter_queue_retain_age:description: Retention period for dead letter queue entries
-# logstash_dead_letter_queue_retain_age: 7d
+logstash_dead_letter_queue_retain_age: 7d
 
 # === Log Format ===
 
 # @var logstash_log_format:description: Log output format ('plain' or 'json')
-# logstash_log_format: plain
+logstash_log_format: plain
+# The ECS and monitoring controls stay undefined so the package defaults apply
+# unless an operator opts into an explicit compatibility or monitoring mode.
 # @var logstash_global_ecs:description: Global pipeline ECS compatibility mode ('disabled', 'v1', or 'v8')
 # logstash_global_ecs: disabled
 

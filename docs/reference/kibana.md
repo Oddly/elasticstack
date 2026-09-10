@@ -205,11 +205,11 @@ This variable is not defined in the role defaults (so it is undefined by default
 ### Internal Variables
 
 ```yaml
-kibana_freshstart:
+_kibana_freshstart:
   changed: false
 ```
 
-`kibana_freshstart` tracks whether the current run is a fresh installation. The role registers this from the "Start Kibana" task. Do not set it manually. It gates the restart handler: on a first run the service starts naturally, so a handler restart would be redundant.
+`_kibana_freshstart` tracks whether the current run is a fresh installation. The role registers this from the "Start Kibana" task. Do not set it manually. It gates the restart handler: on a first run the service starts naturally, so a handler restart would be redundant.
 
 ## Operational Notes
 

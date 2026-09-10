@@ -570,16 +570,16 @@ elasticsearch_upgrade_health_delay: 30
 These are used internally by the role. Do not set them in your inventory.
 
 ```yaml
-elasticsearch_freshstart:
+_elasticsearch_freshstart:
   changed: false
 
-elasticsearch_freshstart_security:
+_elasticsearch_freshstart_security:
   changed: false
 ```
 
-`elasticsearch_freshstart` tracks whether this run performed a fresh installation (the Elasticsearch package was just installed for the first time). The handler uses this to suppress redundant restarts after initial install.
+`_elasticsearch_freshstart` tracks whether this run performed a fresh installation (the Elasticsearch package was just installed for the first time). The handler uses this to suppress redundant restarts after initial install.
 
-`elasticsearch_freshstart_security` tracks whether security was just initialized on this run. Same purpose as above -- prevents a handler restart when the security setup task already started the service.
+`_elasticsearch_freshstart_security` tracks whether security was just initialized on this run. Same purpose as above -- prevents a handler restart when the security setup task already started the service.
 
 ## Operational notes
 

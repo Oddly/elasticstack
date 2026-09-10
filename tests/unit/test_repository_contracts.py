@@ -492,6 +492,130 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertTrue(options["elasticsearch_users"]["no_log"])
         self.assertTrue(options["elasticsearch_builtin_passwords"]["no_log"])
 
+    def test_variable_defaults_are_explicit_and_internal_sentinels_are_private(self):
+        shared_defaults = yaml.safe_load(
+            (ROOT / "roles" / "elasticstack" / "defaults" / "main.yml").read_text()
+        )
+        self.assertEqual(shared_defaults["elasticstack_version"], "")
+        self.assertEqual(shared_defaults["elasticstack_cert_pass"], "")
+
+        for role, expected in {
+            "elasticsearch": {
+                "elasticsearch_extra_config": {},
+                "elasticsearch_fs_repo": [],
+            },
+            "kibana": {"kibana_extra_config": {}},
+            "beats": {"beats_fields": [], "beats_filebeat_modules": []},
+            "logstash": {
+                "logstash_pipeline_unsafe_shutdown": False,
+                "logstash_skip_root_check": False,
+            },
+        }.items():
+            defaults = yaml.safe_load(
+                (ROOT / "roles" / role / "defaults" / "main.yml").read_text()
+            )
+            for variable, value in expected.items():
+                self.assertEqual(defaults[variable], value)
+
+        for path, dead_variable in (
+            (ROOT / "roles" / "kibana" / "defaults" / "main.yml", "kibana_tls_cert"),
+            (ROOT / "roles" / "kibana" / "defaults" / "main.yml", "kibana_tls_key"),
+        ):
+            self.assertNotRegex(
+                path.read_text(),
+                rf"(?m)^\s*{re.escape(dead_variable)}\s*:",
+            )
+        role_sources = "\n".join(
+            path.read_text()
+            for path in (ROOT / "roles").rglob("*.yml")
+        )
+        self.assertNotIn("elasticstack_globals_set", role_sources)
+
+        logstash_defaults = yaml.safe_load(
+            (ROOT / "roles" / "logstash" / "defaults" / "main.yml").read_text()
+        )
+        self.assertEqual(
+            {
+                name: logstash_defaults[name]
+                for name in (
+                    "logstash_config_autoreload_interval",
+                    "logstash_http_host",
+                    "logstash_http_port",
+                    "logstash_input_beats_timeout",
+                    "logstash_sniffing_delay",
+                    "logstash_sniffing_path",
+                    "logstash_dead_letter_queue_enable",
+                    "logstash_dead_letter_queue_retain_age",
+                    "logstash_log_format",
+                )
+            },
+            {
+                "logstash_config_autoreload_interval": "3s",
+                "logstash_http_host": "127.0.0.1",
+                "logstash_http_port": "9600-9700",
+                "logstash_input_beats_timeout": "60s",
+                "logstash_sniffing_delay": 5,
+                "logstash_sniffing_path": "/_nodes/http",
+                "logstash_dead_letter_queue_enable": False,
+                "logstash_dead_letter_queue_retain_age": "7d",
+                "logstash_log_format": "plain",
+            },
+        )
+
+        for role, sentinels in {
+            "elasticsearch": ("_elasticsearch_freshstart", "_elasticsearch_freshstart_security"),
+            "kibana": ("_kibana_freshstart",),
+            "logstash": ("_logstash_freshstart",),
+        }.items():
+            public = {entry["name"] for entry in parse_defaults(ROOT / "roles" / role / "defaults/main.yml")}
+            private_vars = yaml.safe_load((ROOT / "roles" / role / "vars/main.yml").read_text()) or {}
+            for sentinel in sentinels:
+                self.assertNotIn(sentinel.lstrip("_"), public)
+                self.assertEqual(private_vars[sentinel], {"changed": False})
+
+        upgrade_detection = (
+            ROOT / "roles" / "elasticsearch" / "tasks" / "elasticsearch-upgrade-detection.yml"
+        ).read_text()
+        self.assertIn(
+            "elasticstack_version | default('') | string | length > 0",
+            upgrade_detection,
+        )
+        for variable in (
+            "logstash_security",
+            "logstash_input_beats",
+            "logstash_input_beats_ssl",
+            "logstash_output_elasticsearch",
+            "logstash_elasticsearch_output",
+            "logstash_monitoring_enabled",
+            "logstash_global_ecs",
+        ):
+            entry = next(
+                entry
+                for entry in parse_defaults(ROOT / "roles" / "logstash" / "defaults/main.yml")
+                if entry["name"] == variable
+            )
+            self.assertFalse(entry["has_default"], variable)
+
+    def test_stack_security_scenarios_exercise_inherited_false(self):
+        scenarios = {
+            "molecule/elasticsearch_no-security/converge.yml": "elasticsearch_security",
+            "molecule/kibana_cert_content/converge.yml": "kibana_security",
+            "molecule/logstash_default/converge.yml": "logstash_security",
+        }
+        for relative_path, role_variable in scenarios.items():
+            source = (ROOT / relative_path).read_text()
+            self.assertIn("elasticstack_security: false", source)
+            self.assertNotRegex(
+                source,
+                rf"(?m)^\s*{re.escape(role_variable)}\s*:\s*false\s*$",
+            )
+
+        for role in ("elasticsearch", "kibana"):
+            source = (ROOT / "roles" / role / "tasks" / "main.yml").read_text()
+            self.assertIn("elasticstack_security | bool", source)
+        logstash = (ROOT / "roles" / "logstash" / "tasks" / "logstash-compatibility.yml").read_text()
+        self.assertIn("elasticstack_security | default(false)", logstash)
+
     def test_elasticsearch_security_bootstrap_uses_a_certificate_validated_endpoint(self):
         source = (
             ROOT
@@ -606,7 +730,9 @@ class TestRepositoryContracts(unittest.TestCase):
 
     def test_kibana_certificate_content_scenario_disables_backend_tls(self):
         source = (ROOT / "molecule" / "kibana_cert_content" / "converge.yml").read_text()
-        self.assertIn("elasticsearch_security: false", source)
+        self.assertIn("elasticstack_security: false", source)
+        self.assertNotIn("elasticsearch_security: false", source)
+        self.assertNotIn("kibana_security: false", source)
         self.assertIn("elasticsearch_http_security: false", source)
         self.assertNotIn(
             "set_ci_watermarks.yml",
