@@ -828,6 +828,18 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("ansible.builtin.uri:", kibana_shared)
         self.assertIn("register: kibana_status", kibana_shared)
         self.assertIn("overall.level", kibana_shared)
+        self.assertIn("_kibana_is_https", kibana_shared)
+        self.assertIn("_kibana_use_auth", kibana_shared)
+        self.assertIn("else omit", kibana_shared)
+        self.assertIn("_verify_kibana_validate_certs | default(true)", kibana_shared)
+
+        for scenario in ("cert_renewal", "kibana_custom_certs"):
+            source = (ROOT / "molecule" / scenario / "verify.yml").read_text()
+            self.assertIn(
+                "_verify_kibana_validate_certs: false",
+                source,
+                f"{scenario} uses a self-signed Kibana certificate",
+            )
 
         for scenario in (
             "cert_renewal",
@@ -842,6 +854,13 @@ class TestRepositoryContracts(unittest.TestCase):
                 source,
                 scenario,
             )
+
+        logstash_service_shared = (
+            ROOT / "molecule" / "shared" / "verify_logstash_service.yml"
+        ).read_text()
+        self.assertIn("register: logstash_service", logstash_service_shared)
+        self.assertIn("logstash_service.failed", logstash_service_shared)
+        self.assertIn("logstash_service.changed", logstash_service_shared)
 
         logstash_shared = (
             ROOT / "molecule" / "shared" / "verify_logstash_port.yml"
@@ -926,6 +945,7 @@ class TestRepositoryContracts(unittest.TestCase):
             "elasticsearch_diagnostics",
             "elasticsearch_upgrade_8to9",
             "elasticsearch_upgrade_8to9_single",
+            "beats_security",
             "elasticstack_default",
             "es_kibana",
             "kibana_custom",
@@ -975,6 +995,7 @@ class TestRepositoryContracts(unittest.TestCase):
             "elasticsearch_custom_certs",
             "elasticsearch_custom_certs_minimal",
             "elasticsearch_diagnostics",
+            "beats_security",
             "elasticstack_default",
             "es_kibana",
             "kibana_custom",

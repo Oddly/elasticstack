@@ -5,19 +5,27 @@
 #   _verify_kibana_url: status endpoint (default: local HTTP endpoint)
 #   _verify_kibana_retries: number of status checks (default: 30)
 #   _verify_kibana_delay: seconds between checks (default: 10)
-#   _verify_kibana_validate_certs: validate HTTPS certificates (default: false)
+#   _verify_kibana_validate_certs: validate HTTPS certificates (default: true)
 #   _verify_kibana_status_codes: accepted transient/ready HTTP statuses
 #   _verify_kibana_user: HTTP basic-auth user (default: elastic)
+#   _verify_kibana_auth: use basic auth when the endpoint is HTTPS (default: true)
 - name: Connect to Kibana
+  vars:
+    _kibana_url: "{{ _verify_kibana_url | default('http://localhost:5601/api/status') }}"
+    _kibana_is_https: "{{ _kibana_url is match('^https://') }}"
+    # Never attach credentials to a plain HTTP request. Kibana's status endpoint
+    # is intentionally checked without authentication in the default HTTP mode.
+    _kibana_use_auth: >-
+      {{ (_verify_kibana_auth | default(true) | bool) and (_kibana_is_https | bool) }}
   ansible.builtin.uri:
-    url: "{{ _verify_kibana_url | default('http://localhost:5601/api/status') }}"
+    url: "{{ _kibana_url }}"
     method: GET
-    force_basic_auth: true
-    user: "{{ _verify_kibana_user | default('elastic') }}"
-    password: "{{ elastic_pass.stdout }}"
+    force_basic_auth: "{{ _kibana_use_auth | bool }}"
+    user: "{{ _verify_kibana_user | default('elastic') if (_kibana_use_auth | bool) else omit }}"
+    password: "{{ elastic_pass.stdout if (_kibana_use_auth | bool) else omit }}"
     return_content: true
     status_code: "{{ _verify_kibana_status_codes | default([200, 503]) }}"
-    validate_certs: "{{ _verify_kibana_validate_certs | default(false) | bool }}"
+    validate_certs: "{{ _verify_kibana_validate_certs | default(true) | bool }}"
   register: kibana_status
   retries: "{{ _verify_kibana_retries | default(30) }}"
   delay: "{{ _verify_kibana_delay | default(10) }}"

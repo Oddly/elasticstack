@@ -30,6 +30,7 @@
           vars:
             _verify_kibana_url: "https://localhost:5601/api/status"
             _verify_kibana_retries: 18
+            _verify_kibana_validate_certs: false
 
         - name: Read kibana.yml
           ansible.builtin.slurp:

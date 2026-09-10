@@ -8,4 +8,5 @@
     state: started
   check_mode: true
   register: logstash_service
-  failed_when: logstash_service.changed
+  failed_when: >-
+    logstash_service.failed | default(false) | bool or logstash_service.changed
