@@ -49,6 +49,7 @@ jobs:
               - 'molecule/cert_renewal/**'
               - 'molecule/shared/**'
               - 'plugins/**'
+              - 'requirements-test.txt'
               - '.github/workflows/test_full_stack.yml'
 
   lint_full:
