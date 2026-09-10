@@ -1,0 +1,20 @@
+---
+
+- name: Resolve Logstash input TLS option names
+  ansible.builtin.set_fact:
+    _logstash_input_ssl_options:
+      enabled: "{{ 'ssl_enabled' if elasticstack_release | int >= 9 else 'ssl' }}"
+      client_authentication: "{{ 'ssl_client_authentication' if elasticstack_release | int >= 9 else 'ssl_verify_mode' }}"
+      beats_client_authentication: >-
+        {{ logstash_input_beats_client_auth | default('required')
+           if elasticstack_release | int >= 9 else 'force_peer' }}
+      elastic_agent_client_authentication: >-
+        {{ 'required' if elasticstack_release | int >= 9 else 'force_peer' }}
+
+- name: Resolve Logstash Elasticsearch output TLS option names
+  ansible.builtin.set_fact:
+    _logstash_output_ssl_options:
+      enabled: "{{ 'ssl_enabled' if elasticstack_release | int >= 9 else 'ssl' }}"
+      keystore_path: "{{ 'ssl_keystore_path' if elasticstack_release | int >= 9 else 'keystore' }}"
+      keystore_password: "{{ 'ssl_keystore_password' if elasticstack_release | int >= 9 else 'keystore_password' }}"
+      certificate_authorities: "{{ 'ssl_certificate_authorities' if elasticstack_release | int >= 9 else 'cacert' }}"

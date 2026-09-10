@@ -136,6 +136,12 @@
     - configuration
     - logstash_configuration
 
+- name: Resolve version-specific Logstash template options
+  ansible.builtin.import_tasks: logstash-template-options.yml
+  tags:
+    - configuration
+    - logstash_configuration
+
 - name: Configure Logstash
   ansible.builtin.template:
     src: logstash.yml.j2
