@@ -712,6 +712,23 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertEqual(fragment.count("setup.kibana:"), 1)
         self.assertIn("elasticstack_full_stack | bool", fragment)
 
+    def test_logstash_templates_use_resolved_tls_option_names(self):
+        options = yaml.safe_load(
+            (ROOT / "roles" / "logstash" / "tasks" / "logstash-template-options.yml").read_text()
+        )
+        self.assertEqual(len(options), 2)
+        self.assertIn("_logstash_input_ssl_options", options[0]["ansible.builtin.set_fact"])
+        self.assertIn("_logstash_output_ssl_options", options[1]["ansible.builtin.set_fact"])
+
+        input_template = (ROOT / "roles" / "logstash" / "templates" / "10-input.conf.j2").read_text()
+        output_template = (ROOT / "roles" / "logstash" / "templates" / "90-output.conf.j2").read_text()
+        for template in (input_template, output_template):
+            self.assertNotIn("elasticstack_release | int >= 9", template)
+        self.assertIn("_logstash_input_ssl_options.enabled", input_template)
+        self.assertIn("_logstash_input_ssl_options.client_authentication", input_template)
+        self.assertIn("_logstash_output_ssl_options.enabled", output_template)
+        self.assertIn("_logstash_output_ssl_options.keystore_path", output_template)
+
     def test_plugin_workflow_discovers_the_complete_unit_test_suite(self):
         source = (ROOT / ".github" / "workflows" / "test_plugins.yml").read_text()
         self.assertIn("pytest>=9.1.1,<10", source)

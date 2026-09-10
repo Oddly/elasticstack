@@ -197,6 +197,9 @@
     - name: Resolve Elasticsearch template values
       ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/elasticsearch-template-values.yml
 
+    - name: Resolve Logstash template options
+      ansible.builtin.include_tasks: ../../roles/logstash/tasks/logstash-template-options.yml
+
     - name: Render Elasticsearch configuration
       ansible.builtin.template:
         src: ../../roles/elasticsearch/templates/elasticsearch.yml.j2
@@ -264,6 +267,45 @@
         dest: "{{ _contract_tmp.path }}/90-output.conf"
         mode: "0644"
 
+    - name: Render secure Logstash output configuration for version 9
+      ansible.builtin.template:
+        src: ../../roles/logstash/templates/90-output.conf.j2
+        dest: "{{ _contract_tmp.path }}/90-output-secure-9.conf"
+        mode: "0644"
+      vars:
+        _logstash_security: true
+        logstash_certs_dir: /etc/logstash/certs
+        logstash_tls_key_passphrase: contract-passphrase
+        logstash_user_name: contract-user
+        logstash_user_password: contract-password
+
+    - name: Resolve Logstash template options for version 8
+      ansible.builtin.include_tasks:
+        file: ../../roles/logstash/tasks/logstash-template-options.yml
+      vars:
+        elasticstack_release: 8
+
+    - name: Render Logstash input configuration for version 8
+      ansible.builtin.template:
+        src: ../../roles/logstash/templates/10-input.conf.j2
+        dest: "{{ _contract_tmp.path }}/10-input-8.conf"
+        mode: "0644"
+      vars:
+        elasticstack_release: 8
+
+    - name: Render secure Logstash output configuration for version 8
+      ansible.builtin.template:
+        src: ../../roles/logstash/templates/90-output.conf.j2
+        dest: "{{ _contract_tmp.path }}/90-output-secure-8.conf"
+        mode: "0644"
+      vars:
+        elasticstack_release: 8
+        _logstash_security: true
+        logstash_certs_dir: /etc/logstash/certs
+        logstash_tls_key_passphrase: contract-passphrase
+        logstash_user_name: contract-user
+        logstash_user_password: contract-password
+
     - name: Read rendered configurations
       ansible.builtin.slurp:
         src: "{{ item }}"
@@ -277,6 +319,9 @@
         - "{{ _contract_tmp.path }}/50-filter.conf"
         - "{{ _contract_tmp.path }}/90-output.conf"
         - "{{ _contract_tmp.path }}/kibana-colocated.yml"
+        - "{{ _contract_tmp.path }}/90-output-secure-9.conf"
+        - "{{ _contract_tmp.path }}/10-input-8.conf"
+        - "{{ _contract_tmp.path }}/90-output-secure-8.conf"
       register: _rendered_configs
       loop_control:
         label: "{{ item | basename }}"
@@ -346,6 +391,17 @@
           - "'index => \"contract-%{+YYYY.MM.dd}\"' in (_rendered_configs.results[7].content | b64decode)"
           - "'sniffing_delay => 8' in (_rendered_configs.results[7].content | b64decode)"
           - "'sniffing_path => \"/_nodes/http\"' in (_rendered_configs.results[7].content | b64decode)"
+          - "'ssl_enabled => true' in (_rendered_configs.results[9].content | b64decode)"
+          - "'ssl_keystore_path => \"/etc/logstash/certs/keystore.pfx\"' in (_rendered_configs.results[9].content | b64decode)"
+          - "'ssl_keystore_password => \"contract-passphrase\"' in (_rendered_configs.results[9].content | b64decode)"
+          - "'ssl_certificate_authorities => [\"/etc/logstash/certs/ca.crt\"]' in (_rendered_configs.results[9].content | b64decode)"
+          - "'ssl_enabled' not in (_rendered_configs.results[10].content | b64decode)"
+          - "'ssl => true' in (_rendered_configs.results[10].content | b64decode)"
+          - "'ssl_verify_mode => force_peer' in (_rendered_configs.results[10].content | b64decode)"
+          - "'ssl_keystore_path' not in (_rendered_configs.results[11].content | b64decode)"
+          - "'keystore => \"/etc/logstash/certs/keystore.pfx\"' in (_rendered_configs.results[11].content | b64decode)"
+          - "'keystore_password => \"contract-passphrase\"' in (_rendered_configs.results[11].content | b64decode)"
+          - "'cacert => [\"/etc/logstash/certs/ca.crt\"]' in (_rendered_configs.results[11].content | b64decode)"
 
 - name: Logstash compatibility variable contract
   hosts: localhost
