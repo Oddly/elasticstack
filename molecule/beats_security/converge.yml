@@ -8,11 +8,22 @@
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticstack_full_stack: true
     elasticstack_no_log: false
+    beats_security: true
+    beats_ca_dir: /etc/beats/certs
+    beats_tls_cacert: /etc/beats/certs/ca.crt
+    beats_tls_cert: "/etc/beats/certs/{{ inventory_hostname }}-beats.crt"
+    beats_tls_key: "/etc/beats/certs/{{ inventory_hostname }}-beats.key"
+    beats_tls_key_passphrase: "BeatsSecurityPassword!"
+    beats_ssl_verification_mode: full
     elasticsearch_heap: "1"
     # Filebeat with ES output (uses TLS automatically in full_stack)
     beats_filebeat: true
     beats_filebeat_output: elasticsearch
+    beats_filebeat_elastic_monitoring: true
     beats_filebeat_log_input: true
+    beats_filebeat_syslog_tcp: true
+    beats_filebeat_syslog_tcp_port: 5516
+    beats_filebeat_syslog_tcp_ssl: true
     beats_filebeat_log_inputs:
       messages:
         name: messages

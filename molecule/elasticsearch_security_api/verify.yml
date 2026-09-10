@@ -17,6 +17,71 @@
       delay: 5
       until: es_info.status | default(0) == 200
 
+    - name: Read the role reconciled by the collection
+      ansible.builtin.uri:
+        url: https://localhost:9200/_security/role/molecule-managed-role
+        user: elastic
+        password: "{{ security_api_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        return_content: true
+        status_code: [200]
+      register: managed_role
+
+    - name: Assert the collection reconciled the declarative role
+      ansible.builtin.assert:
+        that:
+          - managed_role.json['molecule-managed-role'].cluster == ['monitor']
+          - managed_role.json['molecule-managed-role'].indices[0].names == ['molecule-managed-*']
+          - "'read' in managed_role.json['molecule-managed-role'].indices[0].privileges"
+          - managed_role.json['molecule-managed-role'].metadata.owner == 'molecule'
+
+    - name: Read the user reconciled by the collection
+      ansible.builtin.uri:
+        url: https://localhost:9200/_security/user/molecule-managed-user
+        user: elastic
+        password: "{{ security_api_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        return_content: true
+        status_code: [200]
+      register: managed_user
+
+    - name: Assert the collection reconciled the declarative user
+      ansible.builtin.assert:
+        that:
+          - managed_user.json['molecule-managed-user'].roles == ['molecule-managed-role']
+          - managed_user.json['molecule-managed-user'].full_name == 'Molecule managed user'
+          - managed_user.json['molecule-managed-user'].email == 'molecule-managed@example.test'
+          - managed_user.json['molecule-managed-user'].metadata.owner == 'molecule'
+
+    - name: Authenticate with the password reconciled for the managed user
+      ansible.builtin.uri:
+        url: https://localhost:9200/_cluster/health
+        user: molecule-managed-user
+        password: "MoleculeManagedUserPassword!"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200]
+      register: managed_user_health
+
+    - name: Read the role mapping reconciled by the collection
+      ansible.builtin.uri:
+        url: https://localhost:9200/_security/role_mapping/molecule-managed-mapping
+        user: elastic
+        password: "{{ security_api_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        return_content: true
+        status_code: [200]
+      register: managed_mapping
+
+    - name: Assert the collection reconciled the declarative role mapping
+      ansible.builtin.assert:
+        that:
+          - managed_mapping.json['molecule-managed-mapping'].roles == ['molecule-managed-role']
+          - managed_mapping.json['molecule-managed-mapping'].rules.field.username == 'molecule-managed-user'
+
     - name: Test 1 - Create role via REST API
       ansible.builtin.uri:
         url: https://localhost:9200/_security/role/api-test-role

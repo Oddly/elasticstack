@@ -9,6 +9,9 @@
     elasticstack_full_stack: false
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticstack_no_log: false
+    beats_target_hosts:
+      - localhost
+    beats_filebeat_loadbalance: false
   tasks:
     - name: Include Elastic repos role
       ansible.builtin.include_role:

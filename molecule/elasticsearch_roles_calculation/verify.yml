@@ -9,3 +9,14 @@
   tasks:
     - name: Confirm hosts are reachable (calculation mode does not install ES)
       ansible.builtin.ping:
+
+    - name: Gather service facts after calculation-only run
+      ansible.builtin.service_facts:
+
+    - name: Assert calculation mode did not install Elasticsearch
+      ansible.builtin.assert:
+        that:
+          - "'elasticsearch.service' not in ansible_facts.services"
+        fail_msg: >-
+          elasticsearch_check_calculation should end the host after validating
+          roles, before installing the Elasticsearch service.

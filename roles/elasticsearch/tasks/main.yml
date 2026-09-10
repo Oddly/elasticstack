@@ -271,46 +271,15 @@
     - elasticstack_password.stdout is defined
 
 # NOTE: When elasticstack_version is "latest", state: latest means the package
-# manager installs the newest available version. If a newer version is installed,
-# the post-install detection below triggers a rolling restart (node-by-node with
-# shard allocation management). This is intentional — even minor upgrades should
-# not restart all nodes at once.
-- name: Install Elasticsearch - rpm - full stack
-  ansible.builtin.package:
-    name: "{{ elasticsearch_package }}"
-    state: "{{ 'latest' if (elasticstack_version | default('') == 'latest') else 'present' }}"
-    enablerepo:
-      - 'elastic-{{ elasticstack_release }}.x'
-  register: _elasticsearch_install_rpm_full
-  until: _elasticsearch_install_rpm_full is success
-  retries: 3
-  delay: 10
-  when:
-    - ansible_facts.os_family == "RedHat"
-    - elasticstack_full_stack | bool
-
-- name: Install Elasticsearch - rpm - standalone
-  ansible.builtin.package:
-    name: "{{ elasticsearch_package }}"
-    state: "{{ 'latest' if (elasticstack_version | default('') == 'latest') else 'present' }}"
-  register: _elasticsearch_install_rpm
-  until: _elasticsearch_install_rpm is success
-  retries: 3
-  delay: 10
-  when:
-    - ansible_facts.os_family == "RedHat"
-    - not elasticstack_full_stack | bool
-
-- name: Install Elasticsearch - deb
-  ansible.builtin.package:
-    name: "{{ elasticsearch_package }}"
-    state: "{{ 'latest' if (elasticstack_version | default('') == 'latest') else 'present' }}"
-  register: _elasticsearch_install_deb
-  until: _elasticsearch_install_deb is success
-  retries: 3
-  delay: 10
-  when:
-    - ansible_facts.os_family == "Debian"
+# manager installs the newest available version. The shared installer records
+# whether that changed the package so the post-install detection below can
+# trigger a rolling restart (node-by-node with shard allocation management).
+- name: Install Elasticsearch package
+  ansible.builtin.include_tasks: "{{ role_path }}/../elasticstack/tasks/install_elastic_package.yml"
+  vars:
+    _package_name: "{{ elasticsearch_package }}"
+    _package_base_name: elasticsearch
+    _package_notify: []
 
 # If a normal package install (not the rolling upgrade path) changed the
 # package, we need a rolling restart to avoid bringing all nodes down at
@@ -319,9 +288,7 @@
 - name: Detect if package was upgraded (post-install)
   ansible.builtin.set_fact:
     _elasticsearch_package_upgraded: >-
-      {{ (_elasticsearch_install_rpm_full.changed | default(false)) or
-         (_elasticsearch_install_rpm.changed | default(false)) or
-         (_elasticsearch_install_deb.changed | default(false)) }}
+      {{ _elasticstack_package_changed | default(false) | bool }}
   when: not (_elasticsearch_needs_rolling_upgrade | bool)
 
 - name: Rolling restart after package upgrade
@@ -368,6 +335,16 @@
     backup: "{{ elasticsearch_config_backup }}"
   notify: Restart Elasticsearch
   when: elasticsearch_manage_logging | bool
+
+- name: Install logrotate package for Elasticsearch
+  ansible.builtin.package:
+    name: logrotate
+    state: present
+  register: _elasticsearch_logrotate_package_install
+  until: _elasticsearch_logrotate_package_install is success
+  retries: 3
+  delay: 10
+  when: elasticsearch_logrotate_enabled | bool
 
 - name: Install logrotate configuration for Elasticsearch
   ansible.builtin.template:

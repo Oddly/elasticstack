@@ -1,6 +1,6 @@
 ---
 # Certificate renewal test:
-# 1. Deploy full stack (ES 2-node + Kibana + Logstash)
+# 1. Deploy full stack (ES 2-node + Kibana + Logstash + Beats)
 # 2. Record original certificate fingerprints
 # 3. Re-run with *_cert_will_expire_soon: true to trigger renewal
 # 4. Verify new certificates are different from originals
@@ -17,6 +17,9 @@
     logstash_heap: "512m"
     logstash_pipeline_unsafe_shutdown: true
     logstash_user_password: "MoleculeLogstashPassword!"
+    beats_tls_key_passphrase: "BeatsMoleculePassword!"
+    beats_cert_validity_period: 30
+    beats_cert_expiration_buffer: 15
     # Enable Kibana web TLS so the role's readiness check exercises the
     # HTTPS code path (regression guard for #141). The role's curl uses -k,
     # so the self-signed cert chain is fine.
@@ -47,6 +50,11 @@
       ansible.builtin.include_role:
         name: oddly.elasticstack.kibana
       when: "'kibana' in group_names"
+
+    - name: Deploy Beats
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.beats
+      when: "'beats' in group_names"
 
 # --- Phase 2: Record original certificate fingerprints ---
 
@@ -96,12 +104,28 @@
       no_log: true
       when: "'kibana' in group_names"
 
+    - name: Get Beats cert fingerprint
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - x509
+          - -in
+          - "/etc/beats/certs/{{ ansible_facts.hostname }}-beats.crt"
+          - -fingerprint
+          - -sha256
+          - -noout
+      register: _beats_cert_fp_before
+      changed_when: false
+      no_log: true
+      when: "'beats' in group_names"
+
     - name: Display original fingerprints
       ansible.builtin.debug:
         msg: >-
           ES: {{ _es_cert_fp_before.stdout | default('N/A') }},
           LS: {{ _ls_cert_fp_before.stdout | default('N/A') }},
-          KB: {{ _kb_cert_fp_before.stdout | default('N/A') }}
+          KB: {{ _kb_cert_fp_before.stdout | default('N/A') }},
+          Beats: {{ _beats_cert_fp_before.stdout | default('N/A') }}
 
 # --- Phase 3: Re-run with cert renewal flags ---
 
@@ -116,6 +140,9 @@
     logstash_pipeline_unsafe_shutdown: true
     logstash_user_password: "MoleculeLogstashPassword!"
     kibana_tls: true
+    beats_tls_key_passphrase: "BeatsMoleculePassword!"
+    beats_cert_validity_period: 30
+    beats_cert_expiration_buffer: 15
     # Force certificate renewal by setting the *_cert_will_expire_soon
     # flags directly from play vars. These now live in each role's
     # defaults/main.yml (moved there in #171), so play vars override them
@@ -129,6 +156,7 @@
     kibana_cert_will_expire_soon: true
     logstash_cert_will_expire_soon: true
     logstash_cert_force_regenerate: true
+    beats_cert_will_expire_soon: true
   tasks:
     - name: Reset shared role import guard for re-run
       ansible.builtin.set_fact:
@@ -148,6 +176,11 @@
       ansible.builtin.include_role:
         name: oddly.elasticstack.kibana
       when: "'kibana' in group_names"
+
+    - name: Re-run Beats (triggers cert renewal)
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.beats
+      when: "'beats' in group_names"
 
 # --- Phase 4: Confirm certificates actually changed ---
 #
@@ -203,6 +236,21 @@
       no_log: true
       when: "'kibana' in group_names"
 
+    - name: Get Beats cert fingerprint (after renewal)
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - x509
+          - -in
+          - "/etc/beats/certs/{{ ansible_facts.hostname }}-beats.crt"
+          - -fingerprint
+          - -sha256
+          - -noout
+      register: _beats_cert_fp_after
+      changed_when: false
+      no_log: true
+      when: "'beats' in group_names"
+
     - name: Assert ES transport cert was actually replaced
       ansible.builtin.assert:
         that:
@@ -236,3 +284,14 @@
           Kibana cert was not renewed (before={{ _kb_cert_fp_before.stdout }},
           after={{ _kb_cert_fp_after.stdout }}).
       when: "'kibana' in group_names"
+
+    - name: Assert Beats cert was actually replaced
+      ansible.builtin.assert:
+        that:
+          - _beats_cert_fp_before.stdout != ""
+          - _beats_cert_fp_after.stdout | length > 0
+          - _beats_cert_fp_before.stdout != _beats_cert_fp_after.stdout
+        fail_msg: >-
+          Beats cert was not renewed (before={{ _beats_cert_fp_before.stdout }},
+          after={{ _beats_cert_fp_after.stdout }}).
+      when: "'beats' in group_names"

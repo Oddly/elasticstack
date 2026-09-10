@@ -38,6 +38,8 @@
     # Filebeat output to file (no ES/Logstash)
     beats_filebeat_output: file
     beats_filebeat_output_file_path: /var/lib/filebeat/test-output
+    beats_filebeat_docker: true
+    beats_filebeat_docker_ids: advanced-container
     # Metricbeat (install + configure only, no ES/Logstash available)
     beats_metricbeat: true
     beats_metricbeat_enable: false
@@ -56,6 +58,7 @@
     beats_logging_permissions: "0640"
     # Queue configuration (disk queue)
     beats_queue_type: disk
+    beats_queue_disk_path: /var/lib/filebeat/test-queue
     beats_queue_disk_max_size: 512MB
     # Extra inputs (verify rendering of beats_filebeat_extra_inputs)
     beats_filebeat_extra_inputs:

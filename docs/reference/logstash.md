@@ -40,10 +40,13 @@ graph TD
 ### Service Management
 
 ```yaml
+# logstash_security: true
 logstash_enable: true
 logstash_manage_yaml: true
 logstash_config_backup: false
 ```
+
+`logstash_security` overrides the inherited `elasticstack_security` setting. When it is left undefined, the role follows the shared security setting in a full-stack deployment; set it explicitly to `false` for a standalone or otherwise unauthenticated Logstash pipeline. The setting controls the secured Elasticsearch output and the certificate and Logstash writer-user setup that depend on it.
 
 `logstash_enable`
 :   Controls whether the Logstash systemd service is started and enabled at boot. Set to `false` if you want to install and configure Logstash without starting it — useful when you need to complete other setup steps before the service comes up.

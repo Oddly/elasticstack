@@ -21,6 +21,7 @@
           testfield2: thisisanothertest
     elasticstack_full_stack: false
     elasticstack_no_log: false
+    beats_security: false
     beats_filebeat_mysql_slowlog_input: true
     beats_auditbeat: true
     beats_auditbeat_output: logstash

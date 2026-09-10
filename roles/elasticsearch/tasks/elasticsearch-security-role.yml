@@ -11,12 +11,30 @@
       Each elasticsearch_security_roles item must contain a non-empty name;
       cluster and indices, when present, must be lists.
 
+- name: elasticsearch-security-role | Reset normalized index privileges
+  ansible.builtin.set_fact:
+    _elasticsearch_security_role_indices: []
+  changed_when: false
+
+- name: elasticsearch-security-role | Normalize index privilege defaults
+  ansible.builtin.set_fact:
+    _elasticsearch_security_role_indices: >-
+      {{ _elasticsearch_security_role_indices + [
+           _elasticsearch_security_role_index | combine({
+             'allow_restricted_indices': _elasticsearch_security_role_index.allow_restricted_indices | default(false)
+           })
+         ] }}
+  loop: "{{ _elasticsearch_security_role.indices | default([]) }}"
+  loop_control:
+    loop_var: _elasticsearch_security_role_index
+  changed_when: false
+
 - name: elasticsearch-security-role | Build role request body
   ansible.builtin.set_fact:
     _elasticsearch_security_role_body: >-
       {{ (_elasticsearch_security_role | combine({
            'cluster': _elasticsearch_security_role.cluster | default([]),
-           'indices': _elasticsearch_security_role.indices | default([])
+           'indices': _elasticsearch_security_role_indices | default([])
          }))
          | dict2items
          | rejectattr('key', 'equalto', 'name')

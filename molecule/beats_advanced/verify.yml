@@ -19,6 +19,10 @@
         src: /etc/filebeat/filebeat.yml
       register: filebeat_yml
 
+    - name: Parse filebeat.yml
+      ansible.builtin.set_fact:
+        filebeat_config: "{{ filebeat_yml.content | b64decode | from_yaml }}"
+
     - name: Verify syslog UDP input is configured
       ansible.builtin.assert:
         that:
@@ -64,7 +68,14 @@
       ansible.builtin.assert:
         that:
           - "'journald' in (filebeat_yml.content | b64decode)"
+          - "'id: everything' in (filebeat_yml.content | b64decode)"
         fail_msg: "Journald input not found in filebeat.yml"
+
+    - name: Verify log input path is configured
+      ansible.builtin.assert:
+        that:
+          - "'/var/log/messages' in (filebeat_yml.content | b64decode)"
+        fail_msg: "Configured log input path is missing from filebeat.yml"
 
     - name: Verify log level is debug
       ansible.builtin.assert:
@@ -85,6 +96,14 @@
           - "'output.file' in (filebeat_yml.content | b64decode)"
           - "'path: /var/lib/filebeat/test-output' in (filebeat_yml.content | b64decode)"
         fail_msg: "File output or its configured path is missing in filebeat.yml"
+
+    - name: Verify Docker input is configured for the selected container
+      ansible.builtin.assert:
+        that:
+          - "'id: docker-containers' in (filebeat_yml.content | b64decode)"
+          - "'/var/lib/docker/containers/advanced-container/*.log' in (filebeat_yml.content | b64decode)"
+          - "'add_docker_metadata' in (filebeat_yml.content | b64decode)"
+        fail_msg: "Docker input or its container selection is missing in filebeat.yml"
 
     # --- Filebeat syslog ports ---
 
@@ -154,6 +173,27 @@
       register: auditbeat_pkg
       failed_when: auditbeat_pkg.changed
 
+    - name: Read auditbeat.yml
+      ansible.builtin.slurp:
+        src: /etc/auditbeat/auditbeat.yml
+      register: auditbeat_yml
+
+    - name: Verify Auditbeat output is configured
+      ansible.builtin.assert:
+        that:
+          - "'output.logstash' in (auditbeat_yml.content | b64decode)"
+        fail_msg: "Auditbeat output was not configured for Logstash"
+
+    - name: Check disabled beat services are not running
+      ansible.builtin.service_facts:
+
+    - name: Assert disabled Metricbeat and Auditbeat remain stopped
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.services.get('metricbeat.service', {}).get('state', 'stopped') != 'running'
+          - ansible_facts.services.get('auditbeat.service', {}).get('state', 'stopped') != 'running'
+        fail_msg: "A beat service configured with enable: false is running"
+
     # --- Issue #4: Configurable logging keepfiles and permissions ---
 
     - name: Check beats log directory exists
@@ -217,3 +257,17 @@
       check_mode: true
       register: _queue_size
       failed_when: _queue_size.changed
+
+    - name: Verify filebeat disk queue path
+      ansible.builtin.lineinfile:
+        dest: /etc/filebeat/filebeat.yml
+        line: "  path: /var/lib/filebeat/test-queue"
+      check_mode: true
+      register: _queue_path
+      failed_when: _queue_path.changed
+
+    - name: Assert filebeat disk queue path is rendered
+      ansible.builtin.assert:
+        that:
+          - "'path: /var/lib/filebeat/test-queue' in (filebeat_yml.content | b64decode)"
+        fail_msg: "Filebeat disk queue path is missing from filebeat.yml"

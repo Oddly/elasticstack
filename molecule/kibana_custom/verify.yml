@@ -172,3 +172,9 @@
         - name: Report backup status
           ansible.builtin.debug:
             msg: "Found {{ backups.files | length }} kibana.yml backup(s)"
+
+        - name: Assert Kibana configuration backup was created
+          ansible.builtin.assert:
+            that:
+              - backups.files | length > 0
+            fail_msg: "No kibana.yml backup found despite kibana_config_backup: true"

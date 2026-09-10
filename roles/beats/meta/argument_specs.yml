@@ -29,6 +29,7 @@ argument_specs:
       beats_fields:
         description: Optional raw YAML field lines added to every Filebeat input
         type: list
+        default: []
       beats_filebeat_output_file_path:
         description: Directory used by Filebeat's file output. Defaults to /tmp/filebeat-output when unset
         type: str

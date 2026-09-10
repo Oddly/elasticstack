@@ -136,6 +136,24 @@ def handler(state):
                 return
             with state.lock:
                 if resource == "role":
+                    # Elasticsearch returns this default on index privilege
+                    # entries even when the PUT body omits it. Keep the fake
+                    # response faithful so the contract tests catch role
+                    # reconciliation that is not idempotent against a real
+                    # server.
+                    indices = payload.get("indices")
+                    if isinstance(indices, list):
+                        payload["indices"] = [
+                            dict(
+                                index,
+                                allow_restricted_indices=index.get(
+                                    "allow_restricted_indices", False
+                                ),
+                            )
+                            if isinstance(index, dict)
+                            else index
+                            for index in indices
+                        ]
                     state.roles[name] = payload
                 else:
                     state.role_mappings[name] = payload

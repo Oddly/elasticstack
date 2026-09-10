@@ -437,6 +437,20 @@ elasticsearch_logging_audit: true
 
 <!-- markdownlint-enable MD046 -->
 
+### Log rotation
+
+The role can install a logrotate safety net independently of Elasticsearch's own log4j2 rolling appenders:
+
+```yaml
+elasticsearch_logrotate_enabled: true
+elasticsearch_logrotate_frequency: daily
+elasticsearch_logrotate_rotate: 32
+elasticsearch_logrotate_size: 50M
+elasticsearch_logrotate_maxage: 370
+```
+
+`elasticsearch_logrotate_enabled` installs the `logrotate` package and controls `/etc/logrotate.d/elasticsearch`. The file uses `copytruncate`, so it does not require Elasticsearch to reopen its log files and does not replace log4j2 rotation. The other variables set the cadence, number of retained files, size threshold, and maximum age. Set `elasticsearch_logrotate_enabled: false` when another log rotation policy manages `/var/log/elasticsearch`.
+
 ### Custom Keystore Entries
 
 ```yaml
@@ -520,6 +534,16 @@ For taking a node down outside the role's own upgrade and restart flows (OS upda
 ```
 
 `node_maintenance_start` waits for cluster health, excludes the node from voting, sets allocation to primaries-only, enables ML upgrade mode, optionally applies `elasticsearch_drain_cluster_settings` (a recovery throughput boost for the drain window) and flushes. `node_maintenance_end` reverses all of it — restoring every boosted key to its baseline in `elasticsearch_cluster_settings` — waits for the node to rejoin when `elasticsearch_maintenance_wait_for_node` is set, and gates on `elasticsearch_maintenance_wait_status`. Restore steps are best-effort, so `node_maintenance_end` belongs in an `always` block and doubles as a defensive state reset (`elasticsearch_maintenance_wait_health: false` skips the health gate for that use).
+
+The health polling used by both entry points is controlled by:
+
+```yaml
+elasticsearch_maintenance_health_retries: 60
+elasticsearch_maintenance_health_delay: 30
+elasticsearch_maintenance_require_green: false
+```
+
+`elasticsearch_maintenance_health_retries` is the maximum number of health requests and `elasticsearch_maintenance_health_delay` is the delay in seconds between requests. The defaults allow about 30 minutes for a node to drain or rejoin. `elasticsearch_maintenance_require_green` makes the restore fail unless the cluster returns to green; leave it `false` when a yellow cluster is an accepted, expected state.
 
 ### Rolling Upgrades
 

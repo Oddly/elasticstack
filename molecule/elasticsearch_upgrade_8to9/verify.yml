@@ -8,6 +8,15 @@
     elasticstack_initial_passwords: /usr/share/elasticsearch/initial_passwords
     elasticstack_elasticsearch_group_name: elasticsearch
   tasks:
+    - name: Assert the configured rolling-upgrade health budget is active
+      ansible.builtin.assert:
+        that:
+          - elasticsearch_upgrade_health_retries | int == 20
+          - elasticsearch_upgrade_health_delay | int == 15
+        fail_msg: >-
+          The upgrade scenario must use the CI health budget from
+          molecule.yml (20 retries with a 15 second delay).
+
     - name: Set elasticsearch_ca variable if not already done
       ansible.builtin.set_fact:
         elasticsearch_ca: "{{ groups[elasticstack_elasticsearch_group_name][0] }}"

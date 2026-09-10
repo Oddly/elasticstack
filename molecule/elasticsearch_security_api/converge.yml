@@ -9,6 +9,37 @@
     elasticsearch_heap: "1"
     security_api_admin_password: "TestElasticPassword123!"
     elasticsearch_elastic_password: "{{ security_api_admin_password }}"
+    # Exercise the collection's declarative security manager against a real
+    # Elasticsearch API. The direct REST calls below remain as API CRUD
+    # coverage, while these objects prove the role can reconcile its own
+    # public variables with the custom elastic password above.
+    elasticsearch_security_roles:
+      - name: molecule-managed-role
+        cluster:
+          - monitor
+        indices:
+          - names:
+              - molecule-managed-*
+            privileges:
+              - read
+        metadata:
+          owner: molecule
+    elasticsearch_users:
+      - name: molecule-managed-user
+        password: "MoleculeManagedUserPassword!"
+        roles:
+          - molecule-managed-role
+        full_name: Molecule managed user
+        email: molecule-managed@example.test
+        metadata:
+          owner: molecule
+    elasticsearch_role_mappings:
+      - name: molecule-managed-mapping
+        roles:
+          - molecule-managed-role
+        rules:
+          field:
+            username: molecule-managed-user
     elasticstack_no_log: false
   tasks:
     - name: Include Elastics repos role
@@ -57,6 +88,9 @@
     - name: CI — set lenient disk watermarks
       ansible.builtin.include_tasks: ../shared/set_ci_watermarks.yml
 
+    # These two REST objects are fixtures for the direct API CRUD checks below;
+    # they are not managed by the role in this scenario. Keep their setup from
+    # making Molecule report a false idempotence failure on the second converge.
     - name: Create elasticsearch role via REST API
       ansible.builtin.uri:
         url: https://localhost:9200/_security/role/new-role1
@@ -77,6 +111,7 @@
                 - read
                 - write
         status_code: [200]
+      changed_when: false
 
     - name: Create elasticsearch user via REST API
       ansible.builtin.uri:
@@ -88,10 +123,11 @@
         validate_certs: false
         body_format: json
         body:
-          password: "{{ lookup('community.general.random_string', length=12, min_lower=1, min_upper=1, min_numeric=1, min_special=1, override_special='-_=!') }}"
+          password: "MoleculeApiUserPassword!"
           full_name: New User
           email: new@user.de
           roles:
             - new-role1
           enabled: true
         status_code: [200]
+      changed_when: false

@@ -14,7 +14,11 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from gen_argspecs import parse_defaults  # noqa: E402
+from gen_argspecs import (  # noqa: E402
+    build_argument_specs,
+    merge_main_options,
+    parse_defaults,
+)
 
 ACTION_SHA = re.compile(r"^[0-9a-f]{40}$")
 COLLECTION_CONSTRAINTS = {
@@ -56,6 +60,36 @@ def _assertion_text(path):
 
 
 class TestRepositoryContracts(unittest.TestCase):
+    def test_argspec_generator_refreshes_defaults_and_preserves_metadata(self):
+        entries = [
+            {
+                "name": "beats_fields",
+                "description": "New description",
+                "default": [],
+                "has_default": True,
+            }
+        ]
+        generated = build_argument_specs("beats", entries, "", "")["argument_specs"]["main"]
+        merged = merge_main_options(
+            {
+                "options": {
+                    "beats_fields": {
+                        "description": "Old description",
+                        "type": "list",
+                        "no_log": True,
+                    }
+                }
+            },
+            generated,
+            entries,
+        )
+
+        self.assertEqual(merged["options"]["beats_fields"]["default"], [])
+        self.assertEqual(
+            merged["options"]["beats_fields"]["description"], "New description"
+        )
+        self.assertTrue(merged["options"]["beats_fields"]["no_log"])
+
     def test_external_actions_are_commit_pinned(self):
         action_files = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
         action_files += sorted((ROOT / ".github" / "actions").rglob("*.yml"))
@@ -181,6 +215,36 @@ class TestRepositoryContracts(unittest.TestCase):
                 f"{path} must put the Python 3.12 executables first on PATH",
             )
 
+    def test_molecule_prepare_files_use_shared_name_resolution(self):
+        common = (ROOT / "molecule" / "shared" / "prepare_common.yml").read_text()
+        self.assertIn("Populate /etc/hosts with molecule instances", common)
+        self.assertIn("hostvars[item]['ansible_host']", common)
+        common_tasks = yaml.safe_load(common)
+        hosts_task = next(
+            task
+            for task in common_tasks
+            if task.get("name") == "Populate /etc/hosts with molecule instances"
+        )
+        self.assertEqual(
+            hosts_task["ansible.builtin.lineinfile"]["regexp"],
+            r"^.*\s{{ item | regex_escape }}$",
+        )
+
+        prepare_files = sorted((ROOT / "molecule").glob("*/prepare.yml"))
+        self.assertTrue(prepare_files)
+        for path in prepare_files:
+            source = path.read_text()
+            self.assertIn(
+                "include_tasks: ../shared/prepare_common.yml",
+                source,
+                f"{path} must include the shared prepare tasks",
+            )
+            self.assertNotIn(
+                "Populate /etc/hosts with molecule instances",
+                source,
+                f"{path} must use shared name resolution",
+            )
+
         for path in (
             ROOT / ".github" / "workflows" / "test_full_stack.yml",
             ROOT / ".github" / "workflows" / "test_elasticsearch_upgrade.yml",
@@ -205,6 +269,88 @@ class TestRepositoryContracts(unittest.TestCase):
             )
             self.assertNotIn("bookworm", debian["versions"])
             self.assertIn("trixie", debian["versions"])
+
+    def test_service_roles_share_elastic_package_installation(self):
+        shared = (
+            ROOT
+            / "roles"
+            / "elasticstack"
+            / "tasks"
+            / "install_elastic_package.yml"
+        ).read_text()
+        self.assertEqual(shared.count("ansible.builtin.package:"), 3)
+        self.assertIn("state: \"{{ 'latest' if", shared)
+        self.assertIn('enablerepo:', shared)
+        self.assertEqual(shared.count('notify: "{{ _package_notify | default([]) }}"'), 3)
+
+        for role, package_var, package_base, package_notify in (
+            ("elasticsearch", "elasticsearch_package", "elasticsearch", "[]"),
+            ("kibana", "kibana_package", "kibana", "- Restart Kibana"),
+            ("logstash", "logstash_package", "logstash", "- Restart Logstash"),
+        ):
+            source = (ROOT / "roles" / role / "tasks" / "main.yml").read_text()
+            include_block = re.search(
+                rf"(?ms)^- name: Install {package_base.capitalize()} package\n.*?(?=^- name:|\Z)",
+                source,
+            )
+            self.assertIsNotNone(include_block, f"{role} does not include the shared installer")
+            include_source = include_block.group(0)
+            self.assertIn(
+                'ansible.builtin.include_tasks: "{{ role_path }}/../elasticstack/tasks/install_elastic_package.yml"',
+                include_source,
+            )
+            self.assertIn(f'_package_name: "{{{{ {package_var} }}}}"', include_source)
+            self.assertIn(f"_package_base_name: {package_base}", include_source)
+            self.assertIn(package_notify, include_source)
+
+        elasticsearch = (ROOT / "roles" / "elasticsearch" / "tasks" / "main.yml").read_text()
+        self.assertIn("_elasticstack_package_changed", elasticsearch)
+        self.assertNotIn("_elasticsearch_install_rpm_full", elasticsearch)
+
+    def test_debian_package_bootstrap_retries_apt_lock_contention(self):
+        tasks = yaml.safe_load(
+            (ROOT / "roles" / "elasticstack" / "tasks" / "packages.yml").read_text()
+        )
+        bootstrap = next(
+            task
+            for task in tasks
+            if task.get("name") == "packages | Bootstrap python3-apt for Ansible apt module"
+        )
+        self.assertEqual(
+            bootstrap["ansible.builtin.raw"],
+            "apt-get -o DPkg::Lock::Timeout=120 install -y python3-apt",
+        )
+        self.assertEqual(bootstrap["register"], "_elasticstack_python3_apt_install")
+        self.assertEqual(
+            bootstrap["until"], "_elasticstack_python3_apt_install is success"
+        )
+        self.assertEqual(bootstrap["retries"], 3)
+        self.assertEqual(bootstrap["delay"], 10)
+
+        apt_update = next(
+            task for task in tasks if task.get("name") == "packages | Update apt cache."
+        )
+        self.assertEqual(apt_update["register"], "_elasticstack_apt_cache_update")
+        self.assertEqual(
+            apt_update["until"], "_elasticstack_apt_cache_update is success"
+        )
+        self.assertEqual(apt_update["retries"], 3)
+        self.assertEqual(apt_update["delay"], 10)
+
+    def test_elasticsearch_logrotate_installs_runtime_package_when_enabled(self):
+        tasks = yaml.safe_load(
+            (ROOT / "roles" / "elasticsearch" / "tasks" / "main.yml").read_text()
+        )
+        install = next(
+            task
+            for task in tasks
+            if task.get("name") == "Install logrotate package for Elasticsearch"
+        )
+        self.assertEqual(install["ansible.builtin.package"]["name"], "logrotate")
+        self.assertEqual(install["ansible.builtin.package"]["state"], "present")
+        self.assertEqual(install["when"], "elasticsearch_logrotate_enabled | bool")
+        self.assertEqual(install["retries"], 3)
+        self.assertEqual(install["delay"], 10)
 
     def test_security_defaults_and_secret_annotations(self):
         elasticsearch = yaml.safe_load(
@@ -415,6 +561,34 @@ class TestRepositoryContracts(unittest.TestCase):
             source,
         )
 
+    def test_kibana_readiness_commands_are_safe_on_dash(self):
+        """The readiness probes must not silently fall back to /bin/sh."""
+        for relative_path in (
+            "roles/kibana/tasks/main.yml",
+            "roles/kibana/tasks/restart_and_verify_kibana.yml",
+        ):
+            document = yaml.safe_load((ROOT / relative_path).read_text()) or []
+            readiness_tasks = []
+
+            def visit(node):
+                if isinstance(node, dict):
+                    shell = node.get("ansible.builtin.shell")
+                    command = shell.get("cmd", "") if isinstance(shell, dict) else ""
+                    if "HTTP_CODE" in command and "api/status" in command:
+                        readiness_tasks.append(shell)
+                    for value in node.values():
+                        visit(value)
+                elif isinstance(node, list):
+                    for item in node:
+                        visit(item)
+
+            visit(document)
+            self.assertEqual(len(readiness_tasks), 1, relative_path)
+            shell = readiness_tasks[0]
+            self.assertEqual(shell.get("executable"), "/bin/bash", relative_path)
+            self.assertIn("set -o pipefail", shell["cmd"], relative_path)
+            self.assertIn("systemctl is-active", shell["cmd"], relative_path)
+
     def test_plugin_workflow_discovers_the_complete_unit_test_suite(self):
         source = (ROOT / ".github" / "workflows" / "test_plugins.yml").read_text()
         self.assertIn("pytest>=8.3,<9", source)
@@ -444,15 +618,23 @@ class TestRepositoryContracts(unittest.TestCase):
             options = yaml.safe_load(specs_path.read_text())["argument_specs"]["main"]["options"]
 
             self.assertEqual(public, set(options), f"{role} public variable catalog drifted")
-            self.assertEqual(
-                optional,
-                set(explicit.get(role, {})),
+            explicit_variables = set(explicit.get(role, {}))
+            rollout_variables = set(rollouts.get(role, {}))
+            self.assertTrue(
+                optional <= explicit_variables,
                 f"{role} optional variables must have explicit executable coverage",
             )
-            self.assertEqual(
-                optional,
-                set(rollouts.get(role, {})),
+            self.assertTrue(
+                optional <= rollout_variables,
                 f"{role} optional variables must have Molecule rollout coverage",
+            )
+            self.assertTrue(
+                explicit_variables <= public,
+                f"{role} explicit coverage references an unknown public variable",
+            )
+            self.assertTrue(
+                rollout_variables <= public,
+                f"{role} rollout coverage references an unknown public variable",
             )
 
             for variable, paths in explicit.get(role, {}).items():
@@ -534,6 +716,34 @@ class TestRepositoryContracts(unittest.TestCase):
                         f"{scenario} verify.yml does not assert {variable}: {expected}",
                     )
 
+            recorded_variables = (
+                set(explicit.get(role, {}))
+                | set(rollouts.get(role, {}))
+                | {
+                    variable
+                    for behavior in behaviors
+                    if behavior["role"] == role
+                    for variable in behavior["variables"]
+                }
+            )
+            assigned_by_rollout = {
+                variable
+                for rollout_file in (
+                    list((ROOT / "molecule").glob("*/converge.yml"))
+                    + list((ROOT / "molecule").glob("*/molecule.yml"))
+                )
+                for variable in public
+                if re.search(
+                    rf"(?m)^(?!\s*#)\s*{re.escape(variable)}\s*:",
+                    rollout_file.read_text(),
+                )
+            }
+            self.assertTrue(
+                assigned_by_rollout <= recorded_variables,
+                f"{role} rollout assignments missing from variable coverage ledger: "
+                f"{sorted(assigned_by_rollout - recorded_variables)}",
+            )
+
         for behavior in behaviors:
             role = behavior["role"]
             defaults_path = ROOT / "roles" / role / "defaults" / "main.yml"
@@ -549,18 +759,34 @@ class TestRepositoryContracts(unittest.TestCase):
             if scenario:
                 converge = ROOT / "molecule" / scenario / "converge.yml"
                 verify = ROOT / "molecule" / scenario / "verify.yml"
-                coverage_source = converge.read_text()
-                assertion_source = _assertion_text(verify)
                 self.assertTrue(converge.exists(), f"Missing behavior converge: {converge}")
                 self.assertTrue(verify.exists(), f"Missing behavior verify: {verify}")
+                execution_source = converge.read_text()
                 self.assertIn(
                     scenario,
                     workflow_sources,
                     f"{scenario} behavior is not referenced by a CI workflow",
                 )
+                assignment_path = ROOT / behavior.get(
+                    "assignment_file", f"molecule/{scenario}/converge.yml"
+                )
+                self.assertTrue(
+                    assignment_path.exists(),
+                    f"Missing behavior assignment file: {assignment_path}",
+                )
+                coverage_source = assignment_path.read_text()
+                assertions_path = ROOT / behavior.get(
+                    "assertions_file", f"molecule/{scenario}/verify.yml"
+                )
+                self.assertTrue(
+                    assertions_path.exists(),
+                    f"Missing behavior assertions file: {assertions_path}",
+                )
+                assertion_source = _assertion_text(assertions_path)
             else:
                 contract_path = ROOT / contract
                 coverage_source = contract_path.read_text()
+                execution_source = coverage_source
                 assertion_source = _assertion_text(contract_path)
                 self.assertTrue(
                     contract_path.exists(),
@@ -589,7 +815,7 @@ class TestRepositoryContracts(unittest.TestCase):
             for role_reference in behavior["roles"]:
                 self.assertIn(
                     role_reference,
-                    coverage_source,
+                    execution_source,
                     f"{scenario} does not execute {role_reference}",
                 )
 
@@ -599,6 +825,25 @@ class TestRepositoryContracts(unittest.TestCase):
                     assertion_source,
                     f"{behavior['name']} does not assert behavior: {expected}",
                 )
+
+    def test_public_variables_are_documented(self):
+        documentation = "\n".join(
+            path.read_text() for path in (ROOT / "docs").rglob("*.md")
+        )
+        for role in ("beats", "elasticsearch", "elasticstack", "kibana", "logstash"):
+            readme = ROOT / "roles" / role / "README.md"
+            if readme.exists():
+                documentation += "\n" + readme.read_text()
+            missing = [
+                entry["name"]
+                for entry in parse_defaults(ROOT / "roles" / role / "defaults/main.yml")
+                if entry["name"] not in documentation
+            ]
+            self.assertEqual(
+                missing,
+                [],
+                f"{role} public variables missing documentation: {missing}",
+            )
 
     def test_markdownlint_scope_enforces_the_new_rules(self):
         config = yaml.safe_load((ROOT / ".markdownlint-cli2.yaml").read_text())

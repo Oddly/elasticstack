@@ -17,11 +17,40 @@
           - "'xpack.security.enabled: false' in (_es_config.content | b64decode)"
         fail_msg: "xpack.security.enabled: false not found in elasticsearch.yml"
 
+    - name: Check disabled Elasticsearch logrotate policy is absent
+      ansible.builtin.stat:
+        path: /etc/logrotate.d/elasticsearch
+      register: _es_logrotate
+
+    - name: Assert disabled Elasticsearch logrotate policy is removed
+      ansible.builtin.assert:
+        that:
+          - not _es_logrotate.stat.exists
+        fail_msg: "logrotate policy remains despite elasticsearch_logrotate_enabled: false"
+
     - name: Verify cluster health (no-security, plain HTTP)
       ansible.builtin.include_tasks: ../shared/verify_es_health.yml
       vars:
         _verify_es_scheme: http
         _verify_es_status: green
+
+    - name: Read persistent cluster settings for the disabled LogsDB check  # noqa: run-once[task]
+      ansible.builtin.uri:
+        url: "http://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/settings?flat_settings=true"
+        method: GET
+        return_content: true
+        status_code: 200
+      register: _logsdb_settings
+      run_once: true
+
+    - name: Assert disabled LogsDB does not write the persistent setting  # noqa: run-once[task]
+      ansible.builtin.assert:
+        that:
+          - "'cluster.logsdb.enabled' not in (_logsdb_settings.json.persistent | default({}))"
+        fail_msg: >-
+          elasticsearch_logsdb: false unexpectedly wrote a persistent LogsDB
+          setting: {{ _logsdb_settings.json | default({}) }}
+      run_once: true
 
     - name: Fetch _cat/nodes for membership check  # noqa: run-once[task]
       ansible.builtin.uri:

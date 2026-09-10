@@ -19,6 +19,8 @@
       ansible.builtin.assert:
         that:
           - "'output' in (filebeat_yml.content | b64decode)"
+          - "'localhost:5044' in (filebeat_yml.content | b64decode | from_yaml)['output.logstash']['hosts']"
+          - "((filebeat_yml.content | b64decode | from_yaml)['output.logstash']['loadbalance'] | bool) == false"
         fail_msg: "No output configured in filebeat.yml"
 
     - name: Verify filebeat config has inputs section
