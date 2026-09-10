@@ -337,6 +337,21 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertEqual(apt_update["retries"], 3)
         self.assertEqual(apt_update["delay"], 10)
 
+    def test_elasticsearch_logrotate_installs_runtime_package_when_enabled(self):
+        tasks = yaml.safe_load(
+            (ROOT / "roles" / "elasticsearch" / "tasks" / "main.yml").read_text()
+        )
+        install = next(
+            task
+            for task in tasks
+            if task.get("name") == "Install logrotate package for Elasticsearch"
+        )
+        self.assertEqual(install["ansible.builtin.package"]["name"], "logrotate")
+        self.assertEqual(install["ansible.builtin.package"]["state"], "present")
+        self.assertEqual(install["when"], "elasticsearch_logrotate_enabled | bool")
+        self.assertEqual(install["retries"], 3)
+        self.assertEqual(install["delay"], 10)
+
     def test_security_defaults_and_secret_annotations(self):
         elasticsearch = yaml.safe_load(
             (ROOT / "roles" / "elasticsearch" / "defaults" / "main.yml").read_text()

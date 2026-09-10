@@ -336,6 +336,16 @@
   notify: Restart Elasticsearch
   when: elasticsearch_manage_logging | bool
 
+- name: Install logrotate package for Elasticsearch
+  ansible.builtin.package:
+    name: logrotate
+    state: present
+  register: _elasticsearch_logrotate_package_install
+  until: _elasticsearch_logrotate_package_install is success
+  retries: 3
+  delay: 10
+  when: elasticsearch_logrotate_enabled | bool
+
 - name: Install logrotate configuration for Elasticsearch
   ansible.builtin.template:
     src: logrotate-elasticsearch.j2

@@ -449,7 +449,7 @@ elasticsearch_logrotate_size: 50M
 elasticsearch_logrotate_maxage: 370
 ```
 
-`elasticsearch_logrotate_enabled` controls `/etc/logrotate.d/elasticsearch`. The file uses `copytruncate`, so it does not require Elasticsearch to reopen its log files and does not replace log4j2 rotation. The other variables set the cadence, number of retained files, size threshold, and maximum age. Set `elasticsearch_logrotate_enabled: false` when another log rotation policy manages `/var/log/elasticsearch`.
+`elasticsearch_logrotate_enabled` installs the `logrotate` package and controls `/etc/logrotate.d/elasticsearch`. The file uses `copytruncate`, so it does not require Elasticsearch to reopen its log files and does not replace log4j2 rotation. The other variables set the cadence, number of retained files, size threshold, and maximum age. Set `elasticsearch_logrotate_enabled: false` when another log rotation policy manages `/var/log/elasticsearch`.
 
 ### Custom Keystore Entries
 
