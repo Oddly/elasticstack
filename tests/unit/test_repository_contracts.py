@@ -215,6 +215,18 @@ class TestRepositoryContracts(unittest.TestCase):
                 f"{path} must put the Python 3.12 executables first on PATH",
             )
 
+    def test_test_dependency_changes_trigger_dependency_sensitive_ci(self):
+        for relative_path in (
+            ".github/workflows/test_contracts.yml",
+            ".github/workflows/test_full_stack.yml",
+        ):
+            source = (ROOT / relative_path).read_text()
+            self.assertIn(
+                "requirements-test.txt",
+                source,
+                f"{relative_path} must test changes to test dependencies",
+            )
+
     def test_molecule_prepare_files_use_shared_name_resolution(self):
         common = (ROOT / "molecule" / "shared" / "prepare_common.yml").read_text()
         self.assertIn("Populate /etc/hosts with molecule instances", common)
