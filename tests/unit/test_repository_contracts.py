@@ -853,6 +853,35 @@ class TestRepositoryContracts(unittest.TestCase):
                 f"{scenario} must use the shared Logstash version check",
             )
 
+        cert_shared = (
+            ROOT / "molecule" / "shared" / "generate_test_certs_openssl.yml"
+        ).read_text()
+        for marker in (
+            "transport.cnf",
+            "transport.crt",
+            "http.cnf",
+            "http.crt",
+            "-CAcreateserial",
+        ):
+            self.assertIn(marker, cert_shared)
+
+        for scenario in (
+            "elasticsearch_cert_content",
+            "elasticsearch_custom_certs",
+            "kibana_custom_certs",
+        ):
+            source = (ROOT / "molecule" / scenario / "converge.yml").read_text()
+            self.assertIn(
+                "include_tasks: ../shared/generate_test_certs_openssl.yml",
+                source,
+                scenario,
+            )
+            self.assertNotIn(
+                "openssl genrsa",
+                source,
+                f"{scenario} must use the shared OpenSSL fixture",
+            )
+
     def test_plugin_workflow_discovers_the_complete_unit_test_suite(self):
         source = (ROOT / ".github" / "workflows" / "test_plugins.yml").read_text()
         self.assertIn("pytest>=9.1.1,<10", source)
