@@ -19,6 +19,9 @@
     - name: Include Elasticsearch role vars
       ansible.builtin.include_vars: ../../roles/elasticsearch/vars/main.yml
 
+    - name: Resolve Elasticsearch template values
+      ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/elasticsearch-template-values.yml
+
     - name: Render single-node elasticsearch.yml
       ansible.builtin.template:
         src: ../../roles/elasticsearch/templates/elasticsearch.yml.j2
@@ -61,9 +64,6 @@
       - master
       - data
       - ingest
-    elasticsearch_seed_hosts:
-      - 10.10.10.1
-      - 10.10.10.2
     elasticsearch_ml_enabled: true
     elasticsearch_security: true
     elasticsearch_http_security: true
@@ -79,6 +79,9 @@
   tasks:
     - name: Include Elasticsearch role vars
       ansible.builtin.include_vars: ../../roles/elasticsearch/vars/main.yml
+
+    - name: Resolve Elasticsearch template values
+      ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/elasticsearch-template-values.yml
 
     - name: Render multi-node elasticsearch.yml
       ansible.builtin.template:

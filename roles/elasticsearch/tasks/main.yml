@@ -98,6 +98,9 @@
   ansible.builtin.include_tasks: elasticsearch-node-role-check.yml
   when: elasticsearch_node_types is defined
 
+- name: Resolve Elasticsearch template values
+  ansible.builtin.import_tasks: elasticsearch-template-values.yml
+
 - name: Install openssl if security is activated
   ansible.builtin.package:
     name: openssl

@@ -194,6 +194,9 @@
     - name: Include Elasticsearch template vars
       ansible.builtin.include_vars: ../../roles/elasticsearch/vars/main.yml
 
+    - name: Resolve Elasticsearch template values
+      ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/elasticsearch-template-values.yml
+
     - name: Render Elasticsearch configuration
       ansible.builtin.template:
         src: ../../roles/elasticsearch/templates/elasticsearch.yml.j2

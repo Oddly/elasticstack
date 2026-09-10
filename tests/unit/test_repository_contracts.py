@@ -377,6 +377,25 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertEqual(install["retries"], 3)
         self.assertEqual(install["delay"], 10)
 
+    def test_elasticsearch_template_uses_precomputed_discovery_values(self):
+        template = (
+            ROOT / "roles" / "elasticsearch" / "templates" / "elasticsearch.yml.j2"
+        ).read_text()
+        values_task = (
+            ROOT / "roles" / "elasticsearch" / "tasks" / "elasticsearch-template-values.yml"
+        ).read_text()
+        main = (ROOT / "roles" / "elasticsearch" / "tasks" / "main.yml").read_text()
+
+        self.assertNotIn("{% for host in groups", template)
+        self.assertIn("_elasticsearch_discovery_seed_hosts | to_json", template)
+        self.assertIn("_elasticsearch_initial_master_nodes | to_json", template)
+        self.assertIn("_elasticsearch_discovery_seed_hosts", values_task)
+        self.assertIn("_elasticsearch_initial_master_nodes", values_task)
+        self.assertIn(
+            "ansible.builtin.import_tasks: elasticsearch-template-values.yml",
+            main,
+        )
+
     def test_security_defaults_and_secret_annotations(self):
         elasticsearch = yaml.safe_load(
             (ROOT / "roles" / "elasticsearch" / "defaults" / "main.yml").read_text()
