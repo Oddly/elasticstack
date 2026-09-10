@@ -1,37 +1,7 @@
 ---
 
-- name: restart_and_verify_beat | "Restart and verify beat — {{ _beat_service_name }}"  # noqa: name[template]
-  block:
-    - name: restart_and_verify_beat | "Restart beat service — {{ _beat_service_name }}"  # noqa: name[template]
-      ansible.builtin.service:
-        name: "{{ _beat_service_name }}"
-        state: restarted
-
-    - name: restart_and_verify_beat | "Verify beat service is running — {{ _beat_service_name }}"  # noqa: name[template]
-      ansible.builtin.systemd:
-        name: "{{ _beat_service_name }}"
-      register: _beats_service_state
-      until: _beats_service_state.status.ActiveState == 'active'
-      retries: 5
-      delay: 3
-
-  rescue:
-    - name: restart_and_verify_beat | "Get recent journal output — {{ _beat_service_name }}"  # noqa: name[template]
-      ansible.builtin.command:
-        argv:
-          - journalctl
-          - -u
-          - "{{ _beat_service_name }}"
-          - --no-pager
-          - -n
-          - "50"
-      register: _beats_journal
-      changed_when: false
-
-    - name: restart_and_verify_beat | "Fail with startup diagnostics — {{ _beat_service_name }}"  # noqa: name[template]
-      ansible.builtin.fail:
-        msg: |
-          {{ _beat_service_name }} failed to start.
-
-          Recent log output:
-          {{ _beats_journal.stdout }}
+- name: restart_and_verify_beat | Restart and verify beat  # noqa: name[template]
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/restart_and_verify_service.yml"
+  vars:
+    _service_name: "{{ _beat_service_name }}"
