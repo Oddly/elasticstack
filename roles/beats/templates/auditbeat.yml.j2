@@ -28,12 +28,7 @@ auditbeat.modules:
   login.wtmp_file_pattern: /var/log/wtmp*
   login.btmp_file_pattern: /var/log/btmp*
 
-setup.template.settings:
-  index.number_of_shards: 1
-setup.kibana:
-{% if elasticstack_full_stack | default(false) | bool and groups[elasticstack_kibana_group_name] | default([]) | length > 0 %}
-  host: "http://{{ groups[elasticstack_kibana_group_name][0] }}:{{ elasticstack_kibana_port }}"
-{% endif %}
+{% include '_beats_setup.j2' %}
 {% set _beat_output = beats_auditbeat_output %}
 {% set _beat_loadbalance = beats_auditbeat_loadbalance %}
 {% set _beat_name = "auditbeat" %}

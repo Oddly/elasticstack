@@ -689,6 +689,29 @@ class TestRepositoryContracts(unittest.TestCase):
             )
             self.assertEqual(includes[0].get("vars", {}).get("_service_name"), service_name)
 
+    def test_beats_templates_share_common_setup_fragment(self):
+        template_paths = (
+            "auditbeat.yml.j2",
+            "filebeat.yml.j2",
+            "metricbeat.yml.j2",
+        )
+        for filename in template_paths:
+            source = (ROOT / "roles" / "beats" / "templates" / filename).read_text()
+            self.assertEqual(
+                source.count("{% include '_beats_setup.j2' %}"),
+                1,
+                filename,
+            )
+            self.assertNotIn("setup.template.settings:", source, filename)
+            self.assertNotIn("setup.kibana:", source, filename)
+
+        fragment = (
+            ROOT / "roles" / "beats" / "templates" / "_beats_setup.j2"
+        ).read_text()
+        self.assertEqual(fragment.count("setup.template.settings:"), 1)
+        self.assertEqual(fragment.count("setup.kibana:"), 1)
+        self.assertIn("elasticstack_full_stack | bool", fragment)
+
     def test_plugin_workflow_discovers_the_complete_unit_test_suite(self):
         source = (ROOT / ".github" / "workflows" / "test_plugins.yml").read_text()
         self.assertIn("pytest>=9.1.1,<10", source)
