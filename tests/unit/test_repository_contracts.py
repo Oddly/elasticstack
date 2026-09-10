@@ -125,8 +125,15 @@ class TestRepositoryContracts(unittest.TestCase):
             "8a5aa375ccfdc0ddd1114eddf1f9638ad7f6122e98d12a592207509dbe6d81f8",
             source,
         )
+        self.assertIn(
+            "305fd652d9291fb5f0a3437a4f0a2c953fffa7d2827bb4fd4907c82c1a8cbad9",
+            source,
+        )
         self.assertIn("sha256sum --check --strict", source)
-        self.assertIn('"$RUNNER_TEMP/kics/kics" scan', source)
+        self.assertIn("unzip -q -o", source)
+        self.assertIn("cd \"$RUNNER_TEMP/kics\"", source)
+        self.assertIn("./kics scan", source)
+        self.assertIn("test -d \"$install_dir/assets/queries\"", source)
         self.assertIn("persist-credentials: false", source)
 
     def test_ci_run_label_consumer_uses_available_api_client(self):
