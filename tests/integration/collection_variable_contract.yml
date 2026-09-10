@@ -433,10 +433,10 @@
     - name: Assert Auditbeat module variables render
       ansible.builtin.assert:
         that:
-          - "'file_integrity' in (_rendered_configs.results[9].content | b64decode)"
-          - "'/var/log/auditbeat' in (_rendered_configs.results[9].content | b64decode)"
-          - "'recursive: false' in (_rendered_configs.results[9].content | b64decode)"
-          - "'period: 5m' in (_rendered_configs.results[9].content | b64decode)"
+          - "'file_integrity' in (_rendered_configs.results[12].content | b64decode)"
+          - "'/var/log/auditbeat' in (_rendered_configs.results[12].content | b64decode)"
+          - "'recursive: false' in (_rendered_configs.results[12].content | b64decode)"
+          - "'period: 5m' in (_rendered_configs.results[12].content | b64decode)"
 
 - name: Logstash compatibility variable contract
   hosts: localhost
