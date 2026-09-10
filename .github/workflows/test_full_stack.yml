@@ -48,6 +48,14 @@ jobs:
               # matrix in addition to the role-specific tests.
               - 'roles/elasticsearch/tasks/elasticsearch-cluster-settings.yml'
               - 'roles/elasticsearch/templates/elasticsearch.yml.j2'
+              # Certificate directory changes affect generated certificates
+              # in the multi-role renewal scenario as well as role-local tests.
+              - 'roles/elasticsearch/defaults/main.yml'
+              - 'roles/elasticsearch/tasks/elasticsearch-security.yml'
+              - 'roles/elasticsearch/templates/elasticsearch.yml.j2'
+              - 'roles/kibana/defaults/main.yml'
+              - 'roles/kibana/tasks/kibana-security.yml'
+              - 'roles/kibana/templates/kibana.yml.j2'
               - 'molecule/elasticstack_*/**'
               - 'molecule/es_kibana/**'
               - 'molecule/logstash_elasticsearch/**'

@@ -4,6 +4,8 @@
   vars:
     elasticstack_elasticsearch_http_port: 9200
     elasticstack_elasticsearch_group_name: elasticsearch
+    elasticsearch_certs_dir: /etc/elasticsearch/renewal-certs
+    kibana_certs_dir: /etc/kibana/renewal-certs
   tasks:
     - name: Set elasticsearch_ca variable
       ansible.builtin.set_fact:
@@ -50,7 +52,7 @@
 
     - name: Verify ES certificates exist after renewal
       ansible.builtin.stat:
-        path: "/etc/elasticsearch/certs/{{ ansible_facts.hostname }}.p12"
+        path: "{{ elasticsearch_certs_dir }}/{{ ansible_facts.hostname }}.p12"
       register: es_cert_after
       when: "'elasticsearch' in group_names"
 
@@ -110,7 +112,7 @@
 
         - name: Verify Kibana certificate exists after renewal
           ansible.builtin.stat:
-            path: "/etc/kibana/certs/{{ ansible_facts.hostname }}-kibana.p12"
+            path: "{{ kibana_certs_dir }}/{{ ansible_facts.hostname }}-kibana.p12"
           register: kb_cert_after
 
         - name: Assert Kibana certificate exists

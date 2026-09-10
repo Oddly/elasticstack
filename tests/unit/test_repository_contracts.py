@@ -422,6 +422,34 @@ class TestRepositoryContracts(unittest.TestCase):
                     f"{relative_path} does not use {variable}",
                 )
 
+    def test_certificate_renewal_exercises_custom_generated_certificate_directories(self):
+        converge = (ROOT / "molecule" / "cert_renewal" / "converge.yml").read_text()
+        verify = (ROOT / "molecule" / "cert_renewal" / "verify.yml").read_text()
+
+        for variable, directory, filename in (
+            (
+                "elasticsearch_certs_dir",
+                "/etc/elasticsearch/renewal-certs",
+                "{{ elasticsearch_certs_dir }}/{{ ansible_facts.hostname }}.p12",
+            ),
+            (
+                "kibana_certs_dir",
+                "/etc/kibana/renewal-certs",
+                "{{ kibana_certs_dir }}/{{ ansible_facts.hostname }}-kibana.p12",
+            ),
+        ):
+            self.assertGreaterEqual(converge.count(f"{variable}: {directory}"), 4)
+            self.assertIn(f"{variable}: {directory}", verify)
+            self.assertIn(filename, converge)
+            self.assertIn(filename, verify)
+
+        workflow = (ROOT / ".github" / "workflows" / "test_full_stack.yml").read_text()
+        for path in (
+            "roles/elasticsearch/tasks/elasticsearch-security.yml",
+            "roles/kibana/tasks/kibana-security.yml",
+        ):
+            self.assertIn(path, workflow)
+
     def test_debian_package_bootstrap_retries_apt_lock_contention(self):
         tasks = yaml.safe_load(
             (ROOT / "roles" / "elasticstack" / "tasks" / "packages.yml").read_text()

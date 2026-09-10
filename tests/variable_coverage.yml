@@ -181,6 +181,15 @@ behaviors:
       - "transport_key_stat.stat.exists"
       - "http_cert_stat.stat.exists"
       - "'count=1 ' in _ca_extract.stdout"
+  - name: elasticsearch_generated_certificate_directory
+    role: elasticsearch
+    variables:
+      - elasticsearch_certs_dir
+    scenario: cert_renewal
+    roles:
+      - oddly.elasticstack.elasticsearch
+    expected:
+      - "es_cert_after.stat.exists"
   - name: kibana_external_certificate_files
     role: kibana
     variables:
@@ -221,6 +230,15 @@ behaviors:
       - "_kibana_cert_stat.results | selectattr('stat.exists') | list | length == 3"
       - "_kibana_cert_hashes.stdout_lines | select('match', '^(\\\\S+) \\\\1$') | list | length == 3"
       - "'server.ssl.keystore.path' not in (_kibana_yml.content | b64decode)"
+  - name: kibana_generated_certificate_directory
+    role: kibana
+    variables:
+      - kibana_certs_dir
+    scenario: cert_renewal
+    roles:
+      - oddly.elasticstack.kibana
+    expected:
+      - "kb_cert_after.stat.exists"
   - name: logstash_external_certificate_files
     role: logstash
     variables:

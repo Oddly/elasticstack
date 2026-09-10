@@ -14,6 +14,10 @@
     elasticstack_full_stack: true
     elasticstack_no_log: false
     elasticsearch_heap: "1"
+    # Use non-default destinations so generated certificates and the renewal
+    # path prove that every consumer follows the configurable directory.
+    elasticsearch_certs_dir: /etc/elasticsearch/renewal-certs
+    kibana_certs_dir: /etc/kibana/renewal-certs
     logstash_heap: "512m"
     logstash_pipeline_unsafe_shutdown: true
     logstash_user_password: "MoleculeLogstashPassword!"
@@ -61,6 +65,8 @@
 - name: Record original certificate fingerprints
   hosts: all
   vars:
+    elasticsearch_certs_dir: /etc/elasticsearch/renewal-certs
+    kibana_certs_dir: /etc/kibana/renewal-certs
     elasticsearch_tls_key_passphrase: PleaseChangeMeIndividually
     logstash_tls_key_passphrase: LogstashChangeMe
     kibana_tls_key_passphrase: PleaseChangeMe
@@ -68,7 +74,7 @@
     - name: Get ES transport cert fingerprint
       ansible.builtin.shell: >-
         set -o pipefail &&
-        openssl pkcs12 -in /etc/elasticsearch/certs/{{ ansible_facts.hostname }}.p12
+        openssl pkcs12 -in {{ elasticsearch_certs_dir }}/{{ ansible_facts.hostname }}.p12
         -nokeys -passin pass:{{ elasticsearch_tls_key_passphrase }} 2>/dev/null |
         openssl x509 -fingerprint -sha256 -noout 2>/dev/null || echo "NONE"
       args:
@@ -94,7 +100,7 @@
     - name: Get Kibana cert fingerprint
       ansible.builtin.shell: >-
         set -o pipefail &&
-        openssl pkcs12 -in /etc/kibana/certs/{{ ansible_facts.hostname }}-kibana.p12
+        openssl pkcs12 -in {{ kibana_certs_dir }}/{{ ansible_facts.hostname }}-kibana.p12
         -nokeys -passin pass:{{ kibana_tls_key_passphrase }} 2>/dev/null |
         openssl x509 -fingerprint -sha256 -noout 2>/dev/null || echo "NONE"
       args:
@@ -136,6 +142,8 @@
     elasticstack_full_stack: true
     elasticstack_no_log: false
     elasticsearch_heap: "1"
+    elasticsearch_certs_dir: /etc/elasticsearch/renewal-certs
+    kibana_certs_dir: /etc/kibana/renewal-certs
     logstash_heap: "512m"
     logstash_pipeline_unsafe_shutdown: true
     logstash_user_password: "MoleculeLogstashPassword!"
@@ -193,6 +201,8 @@
 - name: Verify certificate fingerprints changed after renewal
   hosts: all
   vars:
+    elasticsearch_certs_dir: /etc/elasticsearch/renewal-certs
+    kibana_certs_dir: /etc/kibana/renewal-certs
     elasticsearch_tls_key_passphrase: PleaseChangeMeIndividually
     logstash_tls_key_passphrase: LogstashChangeMe
     kibana_tls_key_passphrase: PleaseChangeMe
@@ -200,7 +210,7 @@
     - name: Get ES transport cert fingerprint (after renewal)
       ansible.builtin.shell: >-
         set -o pipefail &&
-        openssl pkcs12 -in /etc/elasticsearch/certs/{{ ansible_facts.hostname }}.p12
+        openssl pkcs12 -in {{ elasticsearch_certs_dir }}/{{ ansible_facts.hostname }}.p12
         -nokeys -passin pass:{{ elasticsearch_tls_key_passphrase }} 2>/dev/null |
         openssl x509 -fingerprint -sha256 -noout 2>/dev/null
       args:
@@ -226,7 +236,7 @@
     - name: Get Kibana cert fingerprint (after renewal)
       ansible.builtin.shell: >-
         set -o pipefail &&
-        openssl pkcs12 -in /etc/kibana/certs/{{ ansible_facts.hostname }}-kibana.p12
+        openssl pkcs12 -in {{ kibana_certs_dir }}/{{ ansible_facts.hostname }}-kibana.p12
         -nokeys -passin pass:{{ kibana_tls_key_passphrase }} 2>/dev/null |
         openssl x509 -fingerprint -sha256 -noout 2>/dev/null
       args:
