@@ -1,12 +1,10 @@
 ---
-- name: Prepare
-  hosts: all
-  vars:
-    distro_cache_url: "{{ lookup('env', 'DISTRO_CACHE_URL') }}"
-  tasks:
-    - name: Common prepare tasks
-      ansible.builtin.include_tasks: ../shared/prepare_common.yml
+- name: Import shared Molecule preparation
+  import_playbook: ../shared/prepare.yml
 
+- name: Prepare custom Elasticsearch directories
+  hosts: all
+  tasks:
     - name: Create custom data directory
       ansible.builtin.file:
         path: /data/elasticsearch

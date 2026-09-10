@@ -1,0 +1,9 @@
+---
+
+- name: Prepare Molecule instances
+  hosts: all
+  vars:
+    distro_cache_url: "{{ lookup('env', 'DISTRO_CACHE_URL') }}"
+  tasks:
+    - name: Include common prepare tasks
+      ansible.builtin.include_tasks: prepare_common.yml
