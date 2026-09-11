@@ -949,32 +949,54 @@ class TestRepositoryContracts(unittest.TestCase):
         )
 
     def test_kibana_readiness_commands_are_safe_on_dash(self):
-        """The readiness probes must not silently fall back to /bin/sh."""
+        """The shared readiness probe must not silently fall back to /bin/sh."""
+        relative_path = "roles/elasticstack/tasks/wait_for_http_service.yml"
+        document = yaml.safe_load((ROOT / relative_path).read_text()) or []
+        readiness_tasks = []
+
+        def visit(node):
+            if isinstance(node, dict):
+                shell = node.get("ansible.builtin.shell")
+                command = shell.get("cmd", "") if isinstance(shell, dict) else ""
+                if "HTTP_CODE" in command and "systemctl is-active" in command:
+                    readiness_tasks.append(shell)
+                for value in node.values():
+                    visit(value)
+            elif isinstance(node, list):
+                for item in node:
+                    visit(item)
+
+        visit(document)
+        self.assertEqual(len(readiness_tasks), 1, relative_path)
+        shell = readiness_tasks[0]
+        self.assertEqual(shell.get("executable"), "/bin/bash", relative_path)
+        self.assertIn("set -o pipefail", shell["cmd"], relative_path)
+        self.assertIn("journalctl", shell["cmd"], relative_path)
+        self.assertIn("| quote", shell["cmd"], relative_path)
+
         for relative_path in (
             "roles/kibana/tasks/main.yml",
             "roles/kibana/tasks/restart_and_verify_kibana.yml",
+            "roles/elasticsearch/handlers/restart_kibana.yml",
         ):
-            document = yaml.safe_load((ROOT / relative_path).read_text()) or []
-            readiness_tasks = []
+            source = (ROOT / relative_path).read_text()
+            self.assertIn(
+                "../elasticstack/tasks/wait_for_http_service.yml",
+                source,
+                relative_path,
+            )
+            self.assertIn("elasticstack_kibana_port", source, relative_path)
 
-            def visit(node):
-                if isinstance(node, dict):
-                    shell = node.get("ansible.builtin.shell")
-                    command = shell.get("cmd", "") if isinstance(shell, dict) else ""
-                    if "HTTP_CODE" in command and "api/status" in command:
-                        readiness_tasks.append(shell)
-                    for value in node.values():
-                        visit(value)
-                elif isinstance(node, list):
-                    for item in node:
-                        visit(item)
+    def test_kibana_port_is_managed_and_deployed_with_the_shared_variable(self):
+        template = (ROOT / "roles/kibana/templates/kibana.yml.j2").read_text()
+        self.assertIn("server.port: {{ elasticstack_kibana_port }}", template)
+        self.assertIn("'server.port'", template)
 
-            visit(document)
-            self.assertEqual(len(readiness_tasks), 1, relative_path)
-            shell = readiness_tasks[0]
-            self.assertEqual(shell.get("executable"), "/bin/bash", relative_path)
-            self.assertIn("set -o pipefail", shell["cmd"], relative_path)
-            self.assertIn("systemctl is-active", shell["cmd"], relative_path)
+        converge = (ROOT / "molecule/kibana_custom/converge.yml").read_text()
+        verify = (ROOT / "molecule/kibana_custom/verify.yml").read_text()
+        self.assertIn("elasticstack_kibana_port: 15601", converge)
+        self.assertIn("elasticstack_kibana_port: 15601", verify)
+        self.assertIn("server.port: 15601", verify)
 
     def test_service_restart_wrappers_use_shared_lifecycle_tasks(self):
         expected = {
@@ -1001,6 +1023,27 @@ class TestRepositoryContracts(unittest.TestCase):
                 relative_path,
             )
             self.assertEqual(includes[0].get("vars", {}).get("_service_name"), service_name)
+
+    def test_service_roles_configure_repositories_through_shared_role(self):
+        shared = (ROOT / "roles/elasticstack/tasks/main.yml").read_text()
+        self.assertIn("../repos/tasks/redhat.yml", shared)
+        self.assertIn("../repos/tasks/debian.yml", shared)
+        self.assertIn("elasticstack_enable_repos", shared)
+        self.assertIn("_elasticstack_repositories_configured", shared)
+
+        repos = (ROOT / "roles/repos/tasks/main.yml").read_text()
+        self.assertIn("oddly.elasticstack.elasticstack", repos)
+        self.assertIn("not _elasticstack_repositories_configured", repos)
+        self.assertIn("elasticstack_enable_repos", repos)
+
+        default_converge = (ROOT / "molecule/elasticsearch_default/converge.yml").read_text()
+        self.assertNotIn(
+            "name: oddly.elasticstack.repos",
+            default_converge,
+            "the Elasticsearch baseline must prove repository setup is automatic",
+        )
+        default_verify = (ROOT / "molecule/elasticsearch_default/verify.yml").read_text()
+        self.assertIn("_shared_repo_file.stat.exists", default_verify)
 
     def test_beats_templates_share_common_setup_fragment(self):
         template_paths = (

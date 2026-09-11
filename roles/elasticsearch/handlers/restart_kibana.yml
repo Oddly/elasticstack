@@ -8,37 +8,22 @@
 - name: Restart and wait for Kibana
   when: "'kibana' in hostvars[item].ansible_facts.packages | default({})"
   block:
-    - name: Reset Kibana failed state before restart
-      ansible.builtin.command:
-        cmd: systemctl reset-failed kibana.service
-      delegate_to: "{{ item }}"
-      changed_when: false
-      failed_when: false
-
     - name: Restart Kibana service
-      ansible.builtin.service:
-        name: kibana
-        state: restarted
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/restart_and_verify_service.yml"
+      vars:
+        _service_name: kibana
       delegate_to: "{{ item }}"
 
     - name: Wait for Kibana HTTP readiness after restart
-      ansible.builtin.shell:
-        cmd: |
-          if ! systemctl is-active --quiet kibana; then
-            exit 2
-          fi
-          HTTP_CODE=$(curl -sk -o /dev/null -w '%{http_code}' http://localhost:5601/api/status 2>/dev/null) || true
-          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
-            exit 0
-          fi
-          exit 1
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/wait_for_http_service.yml"
+      vars:
+        _wait_service_name: kibana
+        _wait_url: >-
+          {{ ('https' if hostvars[item].kibana_tls | default(false) | bool else 'http') }}://localhost:{{ hostvars[item].elasticstack_kibana_port | default(5601) }}/api/status
+        _wait_fatal_pattern: "FATAL|Unable to connect to Elasticsearch|Authentication.*failed|Kibana server is not ready.*fatal"
       delegate_to: "{{ item }}"
-      register: _elasticsearch_kibana_handler_wait
-      until: _elasticsearch_kibana_handler_wait.rc == 0
-      retries: 60
-      delay: 5
-      changed_when: false
-      failed_when: _elasticsearch_kibana_handler_wait.rc == 2
 
   rescue:
     - name: Get recent Kibana journal output

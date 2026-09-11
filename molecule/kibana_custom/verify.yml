@@ -4,6 +4,8 @@
   vars:
     elasticstack_elasticsearch_http_port: 9200
     elasticstack_elasticsearch_group_name: elasticsearch
+    elasticstack_kibana_port: 15601
+    elasticstack_kibana_port: 15601
   tasks:
     - name: Set elasticsearch_ca variable
       ansible.builtin.set_fact:
@@ -28,8 +30,7 @@
         - name: Check Kibana availability
           ansible.builtin.include_tasks: ../shared/verify_kibana_available.yml
           vars:
-            # This scenario uses Kibana's default HTTP listener with security
-            # enabled, so the local status request must authenticate.
+            _verify_kibana_url: "http://localhost:{{ elasticstack_kibana_port }}/api/status"
             _verify_kibana_auth_http: true
 
         - name: Read kibana.yml
@@ -78,6 +79,10 @@
           ansible.builtin.assert:
             that:
               # The dedicated variable wins ...
+              - "'server.port: 15601' in (kibana_yml.content | b64decode)"
+              # ... and a conflicting extra-config value is filtered out.
+              - "'server.port: 9999' not in (kibana_yml.content | b64decode)"
+              - "(kibana_yml.content | b64decode).split('\\n') | select('match', '\\s*server\\.port\\s*:') | list | length == 1"
               - "'server.publicBaseUrl: \"https://kibana.example.com\"' in (kibana_yml.content | b64decode)"
               # ... the conflicting key from kibana_extra_config is filtered out ...
               - "'duplicate.example.com' not in (kibana_yml.content | b64decode)"

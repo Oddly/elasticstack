@@ -393,6 +393,7 @@
     - name: Assert Kibana optional variables render
       ansible.builtin.assert:
         that:
+          - "'server.port: 15601' in (_rendered_configs.results[3].content | b64decode)"
           - "'server.publicBaseUrl: \"http://kibana.example.test:15601\"' in (_rendered_configs.results[3].content | b64decode)"
           - "'server.protocol: \"http1\"' in (_rendered_configs.results[3].content | b64decode)"
           - "'elasticsearch.hosts:' in (_rendered_configs.results[3].content | b64decode)"

@@ -1,0 +1,98 @@
+---
+# Exercise the shared HTTP readiness task without requiring systemd or a
+# running service. The fake commands preserve the task's real exit-code
+# contract: 0 is ready, 1 is transient, and 2 is a permanent service failure.
+- name: Shared HTTP readiness task contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    _contract_bin: /tmp/elasticstack-http-readiness-contract
+  environment:
+    PATH: "{{ _contract_bin }}:/usr/local/bin:/usr/bin:/bin"
+    FAKE_DOWN_FILE: "{{ _contract_bin }}/service-down"
+  tasks:
+    - name: Create fake command directory
+      ansible.builtin.file:
+        path: "{{ _contract_bin }}"
+        state: directory
+        mode: "0755"
+
+    - name: Fake systemctl reports a running service unless asked otherwise
+      ansible.builtin.copy:
+        dest: "{{ _contract_bin }}/systemctl"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          if [ -e "$FAKE_DOWN_FILE" ]; then
+            exit 3
+          fi
+          exit 0
+
+    - name: Fake journalctl returns no fatal messages
+      ansible.builtin.copy:
+        dest: "{{ _contract_bin }}/journalctl"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          exit 0
+
+    - name: Fake curl returns a ready HTTP status
+      ansible.builtin.copy:
+        dest: "{{ _contract_bin }}/curl"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          echo 200
+
+    - name: Run the shared readiness task successfully
+      ansible.builtin.include_tasks:
+        file: ../../roles/elasticstack/tasks/wait_for_http_service.yml
+      vars:
+        _wait_service_name: fake-http
+        _wait_url: http://localhost:12345/health
+        _wait_fatal_pattern: FATAL
+        _wait_retries: 1
+        _wait_delay: 0
+
+    - name: Assert the shared task accepts a ready endpoint
+      ansible.builtin.assert:
+        that:
+          - _wait_http_probe.rc == 0
+
+    - name: Mark the fake service as stopped
+      ansible.builtin.file:
+        path: "{{ _contract_bin }}/service-down"
+        state: touch
+        mode: "0644"
+
+    - name: Run the shared readiness task against a stopped service
+      block:
+        - name: Include shared readiness task for the failure path
+          ansible.builtin.include_tasks:
+            file: ../../roles/elasticstack/tasks/wait_for_http_service.yml
+          vars:
+            _wait_service_name: fake-http
+            _wait_url: http://localhost:12345/health
+            _wait_fatal_pattern: FATAL
+            _wait_retries: 1
+            _wait_delay: 0
+
+        - name: Fail if the stopped-service task unexpectedly passed
+          ansible.builtin.fail:
+            msg: "The shared readiness task unexpectedly accepted a stopped service"
+      rescue:
+        - name: Assert the failure is classified as permanent
+          ansible.builtin.assert:
+            that:
+              - ansible_failed_result.msg is search('service died while waiting for HTTP readiness')
+
+    - name: Remove fake service-down marker
+      ansible.builtin.file:
+        path: "{{ _contract_bin }}/service-down"
+        state: absent
+
+    - name: Remove fake command directory
+      ansible.builtin.file:
+        path: "{{ _contract_bin }}"
+        state: absent

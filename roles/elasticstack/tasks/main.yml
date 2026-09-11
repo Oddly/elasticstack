@@ -58,6 +58,32 @@
     - name: Install common packages and dependencies
       ansible.builtin.import_tasks: packages.yml
 
+    # Service roles all import this shared role before installing packages.
+    # Configure the package source here so callers do not need a separate,
+    # order-sensitive repos role task in every service play. This follows the
+    # common package task because Debian's repository tasks use ansible.builtin.apt
+    # and the common task bootstraps python3-apt first.
+    - name: Configure Elastic repositories on RedHat
+      ansible.builtin.include_tasks: "{{ role_path }}/../repos/tasks/redhat.yml"
+      when:
+        - elasticstack_enable_repos | bool
+        - not _elasticstack_repositories_configured | default(false) | bool
+        - ansible_facts.os_family == 'RedHat'
+
+    - name: Configure Elastic repositories on Debian
+      ansible.builtin.include_tasks: "{{ role_path }}/../repos/tasks/debian.yml"
+      when:
+        - elasticstack_enable_repos | bool
+        - not _elasticstack_repositories_configured | default(false) | bool
+        - ansible_facts.os_family == 'Debian'
+
+    - name: Mark Elastic repositories as configured
+      ansible.builtin.set_fact:
+        _elasticstack_repositories_configured: true
+      when:
+        - elasticstack_enable_repos | bool
+        - not _elasticstack_repositories_configured | default(false) | bool
+
     - name: Register elasticstack role has run for that host
       ansible.builtin.set_fact:
         _elasticstack_role_imported: true

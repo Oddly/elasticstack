@@ -7,8 +7,21 @@
 
 - name: Import RedHat tasks
   ansible.builtin.import_tasks: redhat.yml
-  when: ansible_facts.os_family == 'RedHat'
+  when:
+    - ansible_facts.os_family == 'RedHat'
+    - elasticstack_enable_repos | bool
+    - not _elasticstack_repositories_configured | default(false) | bool
 
 - name: Import Debian tasks
   ansible.builtin.import_tasks: debian.yml
-  when: ansible_facts.os_family == 'Debian'
+  when:
+    - ansible_facts.os_family == 'Debian'
+    - elasticstack_enable_repos | bool
+    - not _elasticstack_repositories_configured | default(false) | bool
+
+- name: Mark Elastic repositories as configured  # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    _elasticstack_repositories_configured: true
+  when:
+    - elasticstack_enable_repos | bool
+    - not _elasticstack_repositories_configured | default(false) | bool

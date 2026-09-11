@@ -67,46 +67,37 @@
               - "(kibana_yml.content | b64decode | from_yaml) is mapping"
             fail_msg: "kibana.yml is not parseable as YAML after the extras were applied"
 
-        # Coverage for #173's fail-fast rescue branch. The role's readiness
-        # probe was patched to short-circuit with rc=2 when `systemctl
-        # is-active` reports the unit as dead. Stop Kibana, run the
-        # readiness script inline, and assert rc=2 — no existing scenario
-        # deliberately breaks Kibana so this whole code path was cold.
+        # Coverage for #173's fail-fast rescue branch. The shared readiness
+        # probe short-circuits with rc=2 when `systemctl is-active` reports
+        # the unit as dead. Stop Kibana, run that task file, and assert its
+        # diagnostic identifies the permanent service failure.
         - name: Stop Kibana to trigger the permanent-error branch
           ansible.builtin.service:
             name: kibana
             state: stopped
 
-        - name: Re-run the readiness probe against a stopped Kibana
-          ansible.builtin.shell:
-            cmd: |
-              set -o pipefail
-              if ! systemctl is-active --quiet kibana; then
-                exit 2
-              fi
-              if journalctl -u kibana --no-pager -n 100 --since '2 minutes ago' 2>/dev/null | \
-                  grep -Eq 'FATAL|Unable to connect to Elasticsearch|Authentication.*failed|Kibana server is not ready.*fatal'; then
-                exit 2
-              fi
-              HTTP_CODE=$(curl -sk -o /dev/null -w '%{http_code}' http://localhost:5601/api/status 2>/dev/null) || true
-              if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
-                exit 0
-              fi
-              exit 1
-            executable: /bin/bash
-          register: _dead_probe
-          failed_when: false
-          changed_when: false
+        - name: Run the shared readiness probe against a stopped Kibana
+          block:
+            - name: Include shared Kibana readiness task
+              ansible.builtin.include_tasks:
+                file: ../../roles/elasticstack/tasks/wait_for_http_service.yml
+              vars:
+                _wait_service_name: kibana
+                _wait_url: "http://localhost:{{ elasticstack_kibana_port | default(5601) }}/api/status"
+                _wait_fatal_pattern: "FATAL|Unable to connect to Elasticsearch|Authentication.*failed|Kibana server is not ready.*fatal"
 
-        - name: Assert the probe returned rc=2 (permanent, not 1 = transient)
-          ansible.builtin.assert:
-            that:
-              - _dead_probe.rc == 2
-            fail_msg: >-
-              Kibana readiness probe returned rc={{ _dead_probe.rc }} against
-              a stopped service; expected rc=2 so the role's rescue block
-              fails fast with 'Kibana service died' instead of waiting out
-              the 5-minute retry loop.
+            - name: Fail if the stopped-service readiness probe unexpectedly passed
+              ansible.builtin.fail:
+                msg: "The shared Kibana readiness probe unexpectedly passed for a stopped service"
+
+          rescue:
+            - name: Assert the shared probe failed with permanent-service diagnostics
+              ansible.builtin.assert:
+                that:
+                  - ansible_failed_result.msg is search('service died while waiting for HTTP readiness')
+                fail_msg: >-
+                  The shared Kibana readiness probe did not report a permanent
+                  service failure: {{ ansible_failed_result.msg | default('no failure message') }}
 
         # Start Kibana again so the follow-up idempotence run sees it as
         # already-started and Start Kibana reports changed=false.
