@@ -117,6 +117,24 @@
           - "'bootstrap.memory_lock: true' in (_multi_template.content | b64decode)"
           - "'/mnt/snapshots' in (_multi_template.content | b64decode)"
 
+    - name: Render post-bootstrap elasticsearch.yml
+      ansible.builtin.template:
+        src: ../../roles/elasticsearch/templates/elasticsearch.yml.j2
+        dest: "/tmp/elasticsearch-template-{{ inventory_hostname }}-post-bootstrap.yml"
+        mode: "0644"
+      vars:
+        elasticsearch_cluster_set_up: true
+
+    - name: Read post-bootstrap elasticsearch.yml
+      ansible.builtin.slurp:
+        src: "/tmp/elasticsearch-template-{{ inventory_hostname }}-post-bootstrap.yml"
+      register: _post_bootstrap_template
+
+    - name: Assert bootstrap-only setting is removed after cluster setup
+      ansible.builtin.assert:
+        that:
+          - "'cluster.initial_master_nodes:' not in (_post_bootstrap_template.content | b64decode)"
+
 - name: Elasticsearch quorum contract - even bootstrap count is rejected
   hosts: elasticsearch
   gather_facts: false

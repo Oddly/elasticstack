@@ -39,7 +39,8 @@ discovery.type: single-node
 discovery.seed_hosts: {{ _elasticsearch_discovery_seed_hosts | to_json }}
 {% endif %}
 
-{% if _elasticsearch_initial_master_nodes is defined %}
+{# Bootstrap nodes are valid only until this node has joined the cluster. #}
+{% if not (elasticsearch_cluster_set_up | default(false) | bool) and (_elasticsearch_initial_master_nodes | default([]) | length > 0) %}
 cluster.initial_master_nodes: {{ _elasticsearch_initial_master_nodes | to_json }}
 {% endif %}
 

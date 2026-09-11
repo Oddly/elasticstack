@@ -43,6 +43,11 @@ jobs:
           filters: |
             should_test:
               - 'roles/elasticstack/**'
+              # These Elasticsearch configuration paths affect the multi-node
+              # convergence lifecycle and must run the full-stack idempotence
+              # matrix in addition to the role-specific tests.
+              - 'roles/elasticsearch/tasks/elasticsearch-cluster-settings.yml'
+              - 'roles/elasticsearch/templates/elasticsearch.yml.j2'
               - 'molecule/elasticstack_*/**'
               - 'molecule/es_kibana/**'
               - 'molecule/logstash_elasticsearch/**'

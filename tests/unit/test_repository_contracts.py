@@ -275,6 +275,15 @@ class TestRepositoryContracts(unittest.TestCase):
             path_filters["should_test"],
             f"{full_stack_path} must test changes to test dependencies",
         )
+        for path in (
+            "roles/elasticsearch/tasks/elasticsearch-cluster-settings.yml",
+            "roles/elasticsearch/templates/elasticsearch.yml.j2",
+        ):
+            self.assertIn(
+                path,
+                path_filters["should_test"],
+                f"{full_stack_path} must run full-stack idempotence for {path}",
+            )
 
     def test_molecule_prepare_files_use_shared_name_resolution(self):
         common = (ROOT / "molecule" / "shared" / "prepare_common.yml").read_text()
@@ -425,12 +434,33 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertNotIn("{% for host in groups", template)
         self.assertIn("_elasticsearch_discovery_seed_hosts | to_json", template)
         self.assertIn("_elasticsearch_initial_master_nodes | to_json", template)
+        self.assertIn(
+            "not (elasticsearch_cluster_set_up | default(false) | bool)", template
+        )
         self.assertIn("_elasticsearch_discovery_seed_hosts", values_task)
         self.assertIn("_elasticsearch_initial_master_nodes", values_task)
         self.assertIn(
             "ansible.builtin.import_tasks: elasticsearch-template-values.yml",
             main,
         )
+
+    def test_cluster_settings_match_check_is_idempotent(self):
+        tasks = yaml.safe_load(
+            (
+                ROOT
+                / "roles"
+                / "elasticsearch"
+                / "tasks"
+                / "elasticsearch-cluster-settings.yml"
+            ).read_text()
+        )
+        check = next(
+            task
+            for task in tasks[1]["block"]
+            if task.get("name")
+            == "elasticsearch-cluster-settings | Check if settings already match"
+        )
+        self.assertFalse(check["changed_when"])
 
     def test_security_defaults_and_secret_annotations(self):
         elasticsearch = yaml.safe_load(
