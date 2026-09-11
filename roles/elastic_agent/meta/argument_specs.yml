@@ -51,10 +51,10 @@ argument_specs:
         type: str
         default: '{{ elastic_agent_config_dir }}/elastic-agent.yml'
       elastic_agent_package_flavor_file:
-        description: Path to the 9.x package-managed Elastic Agent flavor marker used to detect basic and servers transitions;
-          8.x packages do not use a flavor marker
+        description: Optional path to the 9.x package-managed Elastic Agent flavor marker used to detect basic and servers transitions;
+          leave empty to resolve the marker beside the active package binary; 8.x packages do not use a flavor marker
         type: str
-        default: /opt/Elastic/Agent/.flavor
+        default: ''
       elastic_agent_certificate_dir:
         description: Directory where Fleet Server CA, certificate, and private key files are stored
         type: str

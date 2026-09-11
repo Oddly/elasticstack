@@ -23,7 +23,7 @@ The package layout variables are useful for package wrappers or a non-default pa
 elastic_agent_binary_path: /usr/bin/elastic-agent
 elastic_agent_config_dir: /etc/elastic-agent
 elastic_agent_config_file: "{{ elastic_agent_config_dir }}/elastic-agent.yml"
-elastic_agent_package_flavor_file: /opt/Elastic/Agent/.flavor
+elastic_agent_package_flavor_file: ""
 elastic_agent_certificate_dir: "{{ elastic_agent_config_dir }}/certs"
 elastic_agent_enrollment_state_file: "{{ elastic_agent_config_dir }}/.enrollment.sha256"
 ```
@@ -32,8 +32,10 @@ The default paths match the DEB and RPM installation layout. The role creates
 the parent directory of `elastic_agent_config_file`, including when it is
 outside `elastic_agent_config_dir`; configure the installed service to read a
 custom path when needed. On 9.x, the package flavor marker is configured with
-`elastic_agent_package_flavor_file` and defaults to `/opt/Elastic/Agent/.flavor`;
-8.x packages do not use a flavor marker.
+`elastic_agent_package_flavor_file`. Its empty default resolves the marker beside
+the active package binary under the versioned `/var/lib/elastic-agent/data`
+directory; set an explicit path for a custom package layout. 8.x packages do
+not use a flavor marker.
 The enrollment state file contains only a SHA-256 fingerprint and can be moved
 to a separate persistent path when the configuration directory is ephemeral.
 

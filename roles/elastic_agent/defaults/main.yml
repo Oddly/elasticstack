@@ -28,8 +28,8 @@ elastic_agent_binary_path: /usr/bin/elastic-agent
 elastic_agent_config_dir: /etc/elastic-agent
 # @var elastic_agent_config_file:description: Path to the standalone Elastic Agent policy file
 elastic_agent_config_file: "{{ elastic_agent_config_dir }}/elastic-agent.yml"
-# @var elastic_agent_package_flavor_file:description: Path to the 9.x package-managed Elastic Agent flavor marker; 8.x packages do not use a flavor marker
-elastic_agent_package_flavor_file: /opt/Elastic/Agent/.flavor
+# @var elastic_agent_package_flavor_file:description: Optional path to the 9.x package-managed Elastic Agent flavor marker; leave empty to resolve the marker beside the active package binary; 8.x packages do not use a flavor marker
+elastic_agent_package_flavor_file: ""
 # @var elastic_agent_certificate_dir:description: Directory where Fleet Server CA, certificate, and private key files are stored
 elastic_agent_certificate_dir: "{{ elastic_agent_config_dir }}/certs"
 # @var elastic_agent_enrollment_state_file:description: Path to the enrollment fingerprint file that records the desired Fleet command without storing credentials

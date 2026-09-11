@@ -65,6 +65,27 @@
               elasticstack_version != 'latest') else '') | replace(' ', '') }}
   when: elastic_agent_manage | bool
 
+- name: Locate the active Elastic Agent package binary
+  ansible.builtin.stat:
+    path: /usr/share/elastic-agent/bin/elastic-agent
+    follow: false
+  register: _elastic_agent_package_binary
+  when:
+    - elastic_agent_manage | bool
+    - elasticstack_release | int >= 9
+
+- name: Resolve the active Elastic Agent package flavor marker
+  ansible.builtin.set_fact:
+    _elastic_agent_resolved_package_flavor_file: >-
+      {{ elastic_agent_package_flavor_file
+         if (elastic_agent_package_flavor_file | length > 0)
+         else (((_elastic_agent_package_binary.stat.lnk_target | dirname) ~ '/.flavor')
+               if (_elastic_agent_package_binary.stat.islnk | default(false) | bool)
+               else '') }}
+  when:
+    - elastic_agent_manage | bool
+    - elasticstack_release | int >= 9
+
 - name: Gather installed package facts for Elastic Agent flavor validation
   ansible.builtin.package_facts:
     manager: auto
@@ -74,19 +95,21 @@
 
 - name: Check the installed Elastic Agent flavor marker
   ansible.builtin.stat:
-    path: "{{ elastic_agent_package_flavor_file }}"
+    path: "{{ _elastic_agent_resolved_package_flavor_file }}"
   register: _elastic_agent_package_flavor_marker
   when:
     - elastic_agent_manage | bool
     - elasticstack_release | int >= 9
+    - _elastic_agent_resolved_package_flavor_file | length > 0
 
 - name: Read the installed Elastic Agent flavor marker
   ansible.builtin.slurp:
-    src: "{{ elastic_agent_package_flavor_file }}"
+    src: "{{ _elastic_agent_resolved_package_flavor_file }}"
   register: _elastic_agent_package_flavor_marker_content
   when:
     - elastic_agent_manage | bool
     - elasticstack_release | int >= 9
+    - _elastic_agent_resolved_package_flavor_file | length > 0
     - _elastic_agent_package_flavor_marker.stat.exists
 
 - name: Validate the installed Elastic Agent package flavor
@@ -94,12 +117,13 @@
     that:
       - >-
         ('elastic-agent' not in (ansible_facts.packages | default({}))) or
-        (_elastic_agent_package_flavor_marker.stat.exists and
+        (_elastic_agent_resolved_package_flavor_file | length > 0 and
+        _elastic_agent_package_flavor_marker.stat.exists and
         ((_elastic_agent_package_flavor_marker_content.content | b64decode | trim) == elastic_agent_package_flavor))
     fail_msg: >-
       The installed Elastic Agent package flavor cannot satisfy
       elastic_agent_package_flavor={{ elastic_agent_package_flavor }}. The package flavor marker
-      {{ elastic_agent_package_flavor_file }} is missing or contains
+      {{ _elastic_agent_resolved_package_flavor_file | default(elastic_agent_package_flavor_file) }} is missing or contains
       {{ _elastic_agent_package_flavor_marker_content.content | default('') | b64decode | trim }}.
       Purge the existing Elastic Agent package and reinstall it with the requested flavor.
   when:
@@ -119,18 +143,43 @@
       - Restart Elastic Agent
   when: elastic_agent_manage | bool
 
-- name: Verify the installed Elastic Agent package flavor marker
-  ansible.builtin.slurp:
-    src: "{{ elastic_agent_package_flavor_file }}"
-  register: _elastic_agent_package_flavor_after_install
+- name: Refresh the active Elastic Agent package binary after installation
+  ansible.builtin.stat:
+    path: /usr/share/elastic-agent/bin/elastic-agent
+    follow: false
+  register: _elastic_agent_package_binary
   when:
     - elastic_agent_manage | bool
     - elasticstack_release | int >= 9
     - not ansible_check_mode
 
+- name: Resolve the active Elastic Agent package flavor marker after installation
+  ansible.builtin.set_fact:
+    _elastic_agent_resolved_package_flavor_file: >-
+      {{ elastic_agent_package_flavor_file
+         if (elastic_agent_package_flavor_file | length > 0)
+         else (((_elastic_agent_package_binary.stat.lnk_target | dirname) ~ '/.flavor')
+               if (_elastic_agent_package_binary.stat.islnk | default(false) | bool)
+               else '') }}
+  when:
+    - elastic_agent_manage | bool
+    - elasticstack_release | int >= 9
+    - not ansible_check_mode
+
+- name: Verify the installed Elastic Agent package flavor marker
+  ansible.builtin.slurp:
+    src: "{{ _elastic_agent_resolved_package_flavor_file }}"
+  register: _elastic_agent_package_flavor_after_install
+  when:
+    - elastic_agent_manage | bool
+    - elasticstack_release | int >= 9
+    - not ansible_check_mode
+    - _elastic_agent_resolved_package_flavor_file | length > 0
+
 - name: Assert the installed Elastic Agent package flavor matches the requested flavor
   ansible.builtin.assert:
     that:
+      - _elastic_agent_resolved_package_flavor_file | length > 0
       - (_elastic_agent_package_flavor_after_install.content | b64decode | trim) == elastic_agent_package_flavor
     fail_msg: >-
       Elastic Agent was installed, but its flavor marker does not match
