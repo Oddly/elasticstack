@@ -256,10 +256,11 @@
       ansible.builtin.assert:
         that:
           - "'/packages/9.x/' in (_elastic_release_repository.content | b64decode)"
+          - "'/packages/8.x/' not in (_elastic_release_repository.content | b64decode)"
         fail_msg: >-
           The release-only upgrade did not switch the package repository to
-          9.x. Repository contents: {{ _elastic_release_repository.content | b64decode }}
-        success_msg: "The 9.x repository is selected"
+          9.x exclusively. Repository contents: {{ _elastic_release_repository.content | b64decode }}
+        success_msg: "The 9.x repository is selected without a stale 8.x release"
       when: ansible_facts.os_family == 'Debian'
 
     - name: Reset shared role guard for upgrade play

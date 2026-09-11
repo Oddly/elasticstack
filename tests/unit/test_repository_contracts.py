@@ -1102,6 +1102,22 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertEqual(stale_releases["loop"], [7, 8, 9])
         self.assertIn("elasticstack_release", stale_releases["when"])
 
+        debian = yaml.safe_load((ROOT / "roles/repos/tasks/debian.yml").read_text())
+        stale_releases = next(
+            task
+            for task in debian
+            if task.get("name") == "debian | Remove stale Elastic repository releases"
+        )
+        self.assertEqual(
+            stale_releases["ansible.builtin.apt_repository"]["state"], "absent"
+        )
+        self.assertEqual(stale_releases["loop"], [7, 8, 9])
+        self.assertEqual(
+            stale_releases["ansible.builtin.apt_repository"]["filename"],
+            "elasticstack",
+        )
+        self.assertIn("elasticstack_release", stale_releases["when"])
+
         default_converge = (ROOT / "molecule/elasticsearch_default/converge.yml").read_text()
         self.assertNotIn(
             "name: oddly.elasticstack.repos",
@@ -1125,6 +1141,7 @@ class TestRepositoryContracts(unittest.TestCase):
             )
             self.assertIn("'/packages/9.x/' in", source)
             self.assertIn("'[elastic-8.x]' not in", source)
+            self.assertIn("'/packages/8.x/' not in", source)
 
     def test_beats_templates_share_common_setup_fragment(self):
         template_paths = (

@@ -8,6 +8,21 @@
     - "8"
     - "9"
 
+- name: debian | Remove stale Elastic repository releases
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [signed-by=/usr/share/keyrings/elasticsearch.asc]
+      {{ elasticstack_repo_base_url }}/packages/{{ item }}.x/apt stable main
+    filename: elasticstack
+    state: absent
+  loop:
+    - 7
+    - 8
+    - 9
+  loop_control:
+    label: "elastic-{{ item }}.x"
+  when: item | int != elasticstack_release | int
+
 - name: debian | Ensure gpg exists, for signing keys
   ansible.builtin.apt:
     name:
