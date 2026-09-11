@@ -1240,6 +1240,8 @@ class TestRepositoryContracts(unittest.TestCase):
 
         self.assertIn("_package_environment", main)
         self.assertIn("ELASTIC_AGENT_FLAVOR", main)
+        self.assertIn("elasticstack_release | int >= 9", main)
+        self.assertIn("elasticstack_release | int < 9", main)
         self.assertIn("elasticsearch_http_publish_host", main)
         self.assertIn("elasticsearch_http_publish_port", main)
         self.assertNotIn(".elasticsearch_api_host", main)
@@ -1267,6 +1269,9 @@ class TestRepositoryContracts(unittest.TestCase):
 
         fleet_converge = (ROOT / "molecule" / "elastic_agent_fleet" / "converge.yml").read_text()
         fleet_verify = (ROOT / "molecule" / "elastic_agent_fleet" / "verify.yml").read_text()
+        self.assertIn("_elastic_agent_test_package_flavor", fleet_converge)
+        self.assertIn("elasticstack_release | int >= 9", fleet_converge)
+        self.assertIn("elasticstack_release | int < 9", fleet_converge)
         self.assertIn("elastic-agent-collection-ca-raw-argv", fleet_converge)
         self.assertIn("ansible_failed_task.name", fleet_converge)
         self.assertIn("fleet_server_argv_lines.index('--fleet-server-port')", fleet_verify)
@@ -1284,6 +1289,8 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("fleet.enc", reference)
         architecture = (ROOT / "docs" / "guide" / "architecture.md").read_text()
         self.assertIn("Fleet Server mode: CA + service token", architecture)
+        self.assertIn("elastic_agent_standalone_config", architecture)
+        self.assertIn("elastic_agent_enrollment_token", architecture)
 
     def test_beats_templates_share_common_setup_fragment(self):
         template_paths = (

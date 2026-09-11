@@ -4,10 +4,11 @@
   vars:
     elasticstack_full_stack: false
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    _elastic_agent_test_package_flavor: "{{ 'servers' if elasticstack_release | int >= 9 else 'basic' }}"
     elastic_agent_manage: true
     elastic_agent_enable: false
     elastic_agent_mode: fleet
-    elastic_agent_package_flavor: servers
+    elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
     elastic_agent_binary_path: /usr/local/bin/elastic-agent-contract
     elastic_agent_migrate_from_beats: true
     elastic_agent_certificate_dir: /var/lib/elastic-agent-fleet-certs
@@ -225,7 +226,7 @@
         elastic_agent_manage: true
         elastic_agent_enable: false
         elastic_agent_mode: fleet_server
-        elastic_agent_package_flavor: servers
+        elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
         elastic_agent_config_dir: /var/lib/elastic-agent-fleet-server
         elastic_agent_config_file: /var/lib/elastic-agent-fleet-server/elastic-agent.yml
         elastic_agent_binary_path: /usr/local/bin/elastic-agent-contract
@@ -294,7 +295,7 @@
         elastic_agent_manage: true
         elastic_agent_enable: false
         elastic_agent_mode: fleet
-        elastic_agent_package_flavor: servers
+        elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
         elastic_agent_config_dir: /var/lib/elastic-agent-collection-ca
         elastic_agent_config_file: /var/lib/elastic-agent-collection-ca/elastic-agent.yml
         elastic_agent_certificate_dir: /var/lib/elastic-agent-collection-ca-certs
@@ -341,7 +342,7 @@
         elastic_agent_manage: true
         elastic_agent_enable: false
         elastic_agent_mode: fleet_server
-        elastic_agent_package_flavor: servers
+        elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
         elastic_agent_config_dir: /var/lib/elastic-agent-no-ca
         elastic_agent_config_file: /var/lib/elastic-agent-no-ca/elastic-agent.yml
         elastic_agent_certificate_dir: /var/lib/elastic-agent-no-ca-certs
@@ -381,6 +382,7 @@
         dest: /tmp/elastic-agent-package-flavor-transition
         content: basic
         mode: "0600"
+      when: elasticstack_release | int >= 9
 
     - name: Confirm a basic to servers flavor transition is rejected
       block:
@@ -410,12 +412,14 @@
         - name: Record expected flavor transition failure
           ansible.builtin.set_fact:
             flavor_transition_rejected: true
+      when: elasticstack_release | int >= 9
 
     - name: Restore the requested Elastic Agent flavor marker
       ansible.builtin.copy:
         dest: /tmp/elastic-agent-package-flavor-transition
         content: servers
         mode: "0600"
+      when: elasticstack_release | int >= 9
 
     - name: Record the rejected flavor transition for verify
       ansible.builtin.copy:
@@ -472,6 +476,7 @@
         - name: Record expected Fleet Server flavor failure
           ansible.builtin.set_fact:
             invalid_fleet_server_flavor_failed: true
+      when: elasticstack_release | int >= 9
 
     - name: Confirm incomplete Fleet Server certificate pair is rejected
       block:
@@ -481,7 +486,7 @@
           vars:
             elastic_agent_manage: true
             elastic_agent_mode: fleet
-            elastic_agent_package_flavor: servers
+            elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
             elastic_agent_fleet_server_url: https://fleet.example.test:8220
             elastic_agent_enrollment_token: contract-invalid-enrollment-token
             elastic_agent_fleet_server_ca_source: none
@@ -503,7 +508,7 @@
       ansible.builtin.assert:
         that:
           - invalid_agent_configuration_failed | default(false)
-          - invalid_fleet_server_flavor_failed | default(false)
+          - (elasticstack_release | int < 9) or invalid_fleet_server_flavor_failed | default(false)
           - invalid_certificate_pair_failed | default(false)
-          - flavor_transition_rejected | default(false)
+          - (elasticstack_release | int < 9) or flavor_transition_rejected | default(false)
           - existing_enrollment_rejected | default(false)

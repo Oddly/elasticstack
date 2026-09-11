@@ -74,6 +74,11 @@ graph TD
     style B fill:#f04e98,stroke:#333,color:#fff
 ```
 
+Elastic Agent prerequisites depend on its mode: standalone uses
+`elastic_agent_standalone_config`, Fleet enrollment uses
+`elastic_agent_enrollment_token`, and Fleet Server uses its CA plus
+`elastic_agent_fleet_server_service_token`.
+
 1. **repos** — Adds Elastic package repositories (APT/YUM). Must run first so packages are available.
 2. **elasticsearch** — Installs ES, forms the cluster, initializes security (generates passwords, CA, certificates). Other roles need the CA and passwords.
 3. **kibana** — Connects to Elasticsearch using the `kibana_system` password, gets its TLS certificate from the ES CA.
