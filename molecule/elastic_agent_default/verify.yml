@@ -1,6 +1,8 @@
 ---
 - name: Verify standalone Elastic Agent deployment
   hosts: all
+  vars:
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
   tasks:
     - name: Check Elastic Agent service is running
       ansible.builtin.service:
@@ -45,6 +47,12 @@
       register: elastic_agent_version
       changed_when: false
 
+    - name: Read the 9.x package flavor marker at the package top directory
+      ansible.builtin.slurp:
+        src: /var/lib/elastic-agent/.flavor
+      register: elastic_agent_package_flavor_marker
+      when: elasticstack_release | int >= 9
+
     - name: Assert standalone policy and service
       ansible.builtin.assert:
         that:
@@ -60,3 +68,9 @@
           - "'127.0.0.1:5044' in (elastic_agent_config.content | b64decode)"
           - "'contract-system-metrics' in (elastic_agent_config.content | b64decode)"
           - "'agent.logging.to_stderr: true' in (elastic_agent_config.content | b64decode)"
+
+    - name: Assert the 9.x package flavor marker is stored at the package top directory
+      ansible.builtin.assert:
+        that:
+          - (elastic_agent_package_flavor_marker.content | b64decode | trim) == 'basic'
+      when: elasticstack_release | int >= 9

@@ -52,7 +52,7 @@ argument_specs:
         default: '{{ elastic_agent_config_dir }}/elastic-agent.yml'
       elastic_agent_package_flavor_file:
         description: Optional path to the 9.x package-managed Elastic Agent flavor marker used to detect basic and servers transitions;
-          leave empty to resolve the marker beside the active package binary; 8.x packages do not use a flavor marker
+          leave empty to resolve the marker at the package top directory from the active package binary; 8.x packages do not use a flavor marker
         type: str
         default: ''
       elastic_agent_certificate_dir:

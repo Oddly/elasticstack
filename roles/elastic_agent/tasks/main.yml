@@ -79,7 +79,7 @@
     _elastic_agent_resolved_package_flavor_file: >-
       {{ elastic_agent_package_flavor_file
          if (elastic_agent_package_flavor_file | length > 0)
-         else (((_elastic_agent_package_binary.stat.lnk_target | dirname) ~ '/.flavor')
+         else (((_elastic_agent_package_binary.stat.lnk_target | dirname | dirname | dirname) ~ '/.flavor')
                if (_elastic_agent_package_binary.stat.islnk | default(false) | bool)
                else '') }}
   when:
@@ -158,7 +158,7 @@
     _elastic_agent_resolved_package_flavor_file: >-
       {{ elastic_agent_package_flavor_file
          if (elastic_agent_package_flavor_file | length > 0)
-         else (((_elastic_agent_package_binary.stat.lnk_target | dirname) ~ '/.flavor')
+         else (((_elastic_agent_package_binary.stat.lnk_target | dirname | dirname | dirname) ~ '/.flavor')
                if (_elastic_agent_package_binary.stat.islnk | default(false) | bool)
                else '') }}
   when:
