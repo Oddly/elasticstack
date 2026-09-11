@@ -8,6 +8,7 @@
     fake_kibana_server: "{{ contract_dir }}/fake_kibana.py"
     fake_kibana_pid: "{{ contract_dir }}/fake_kibana.pid"
     fake_kibana_headers: "{{ contract_dir }}/request-headers.txt"
+    fake_kibana_requests: "{{ contract_dir }}/requests.log"
     fake_kibana_port: 18371
     elastic_pass:
       stdout: contract-password
@@ -30,10 +31,19 @@
 
           port = int(sys.argv[1])
           header_path = Path(sys.argv[2])
+          request_path = Path(sys.argv[3])
 
           class Handler(BaseHTTPRequestHandler):
               def do_GET(self):
-                  header_path.write_text(self.headers.get("Authorization", ""))
+                  authorization = self.headers.get("Authorization", "")
+                  header_path.write_text(authorization)
+                  with request_path.open("a") as requests:
+                      requests.write(f"{self.path}\\t{authorization}\\n")
+                  if self.path == "/redirect":
+                      self.send_response(302)
+                      self.send_header("Location", "/target")
+                      self.end_headers()
+                      return
                   body = json.dumps({
                       "status": {"overall": {"level": "available"}}
                   }).encode()
@@ -54,6 +64,7 @@
           set -eu;
           nohup python3 "{{ fake_kibana_server }}"
           "{{ fake_kibana_port }}" "{{ fake_kibana_headers }}"
+          "{{ fake_kibana_requests }}"
           >/dev/null 2>&1 &
           echo $! > "{{ fake_kibana_pid }}"
         executable: /bin/bash
@@ -85,6 +96,39 @@
         fail_msg: >-
           The HTTP Kibana verifier sent credentials:
           {{ request_headers.content | b64decode | trim }}
+
+    - name: Run the shared Kibana verifier against a redirect
+      block:
+        - name: Expect the redirected readiness probe to fail without following it
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../../molecule/shared/verify_kibana_available.yml"
+          vars:
+            _verify_kibana_url: "http://127.0.0.1:{{ fake_kibana_port }}/redirect"
+            _verify_kibana_retries: 1
+            _verify_kibana_delay: 0
+            _verify_kibana_status_codes: [200, 302]
+      rescue:
+        - name: Record expected redirect rejection
+          ansible.builtin.set_fact:
+            redirect_verification_failed: true
+
+    - name: Assert the Kibana verifier rejected the redirect
+      ansible.builtin.assert:
+        that:
+          - redirect_verification_failed | default(false) | bool
+        fail_msg: The Kibana verifier followed a redirect instead of rejecting it.
+
+    - name: Read the recorded request paths
+      ansible.builtin.slurp:
+        src: "{{ fake_kibana_requests }}"
+      register: request_log
+
+    - name: Assert the Kibana verifier did not follow the redirect
+      ansible.builtin.assert:
+        that:
+          - "'/target' not in (request_log.content | b64decode)"
+        fail_msg: >-
+          The Kibana verifier followed the redirect:
+          {{ request_log.content | b64decode }}
 
     - name: Stop the local Kibana status endpoint
       ansible.builtin.command:

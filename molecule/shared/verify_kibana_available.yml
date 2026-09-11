@@ -20,6 +20,8 @@
   ansible.builtin.uri:
     url: "{{ _kibana_url }}"
     method: GET
+    # Never forward credentials from this readiness probe to a redirected host.
+    follow_redirects: none
     force_basic_auth: "{{ _kibana_use_auth | bool }}"
     user: "{{ _verify_kibana_user | default('elastic') if (_kibana_use_auth | bool) else omit }}"
     password: "{{ elastic_pass.stdout if (_kibana_use_auth | bool) else omit }}"
