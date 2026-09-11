@@ -17,6 +17,10 @@
         src: /tmp/elastic-agent-fleet-server-argv
       register: fleet_server_argv
 
+    - name: Decode Fleet Server command arguments
+      ansible.builtin.set_fact:
+        fleet_server_argv_lines: "{{ (fleet_server_argv.content | b64decode).splitlines() }}"
+
     - name: Read collection CA command arguments
       ansible.builtin.slurp:
         src: /tmp/elastic-agent-collection-ca-argv
@@ -31,6 +35,11 @@
       ansible.builtin.slurp:
         src: /var/lib/elastic-agent-no-ca/.enrollment.sha256
       register: enrollment_marker
+
+    - name: Check package-managed Fleet state
+      ansible.builtin.stat:
+        path: /etc/elastic-agent/fleet.enc
+      register: fleet_state
 
     - name: Read enrollment command invocation audit
       ansible.builtin.slurp:
@@ -157,7 +166,8 @@
           - "'contract-enrollment-token' in (enrollment_argv.content | b64decode)"
           - >-
             (enrollment_invocations.content | b64decode).splitlines()
-            | select('equalto', 'contract-enrollment-token') | list | length == 1
+            | select('equalto', 'contract-enrollment-token') | list | length == 2
+          - fleet_state.stat.exists
           - "'--certificate-authorities' in (enrollment_argv.content | b64decode)"
           - "'--insecure' in (enrollment_argv.content | b64decode)"
           - fleet_ca.stat.exists
@@ -191,6 +201,9 @@
           - "'fleet-server-ca.crt' in (fleet_server_argv.content | b64decode)"
           - "'--fleet-server-host' in (fleet_server_argv.content | b64decode)"
           - "'--fleet-server-port' in (fleet_server_argv.content | b64decode)"
+          - >-
+            fleet_server_argv_lines[fleet_server_argv_lines.index('--fleet-server-port') + 1]
+            == '8220'
           - "'--fleet-server-cert' in (fleet_server_argv.content | b64decode)"
           - "'fleet-server.crt' in (fleet_server_argv.content | b64decode)"
           - "'--fleet-server-cert-key' in (fleet_server_argv.content | b64decode)"
@@ -201,6 +214,8 @@
           - "'8220' in (fleet_server_argv.content | b64decode)"
           - "'--certificate-authorities' in (collection_ca_argv.content | b64decode)"
           - "'fleet-server-ca.crt' in (collection_ca_argv.content | b64decode)"
+          - "'contract-collection-ca-token' in (collection_ca_argv.content | b64decode)"
+          - "'contract-enrollment-token' not in (collection_ca_argv.content | b64decode)"
           - "'https://elasticsearch-derived.example.test:19299' in (no_ca_argv.content | b64decode)"
           - "'contract-derived-service-token' in (no_ca_argv.content | b64decode)"
           - "'contract-derived-fleet-policy' in (no_ca_argv.content | b64decode)"

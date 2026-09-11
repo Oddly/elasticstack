@@ -1059,8 +1059,20 @@ class TestRepositoryContracts(unittest.TestCase):
         ))
         self.assertIn("argv: \"{{ _elastic_agent_enroll_argv }}\"", enroll)
         self.assertIn("hash('sha256')", enroll)
+        self.assertIn("{{ elastic_agent_config_dir }}/fleet.enc", enroll)
+        self.assertIn("_elastic_agent_fleet_state", enroll)
+        self.assertIn("Refuse to overwrite an existing enrollment", enroll)
+        self.assertIn("not _elastic_agent_fleet_state.stat.exists", enroll)
         self.assertIn("Persist enrollment state without storing credentials", enroll)
         self.assertIn("to_nice_yaml", template)
+
+        fleet_converge = (ROOT / "molecule" / "elastic_agent_fleet" / "converge.yml").read_text()
+        fleet_verify = (ROOT / "molecule" / "elastic_agent_fleet" / "verify.yml").read_text()
+        self.assertIn("elastic-agent-collection-ca-raw-argv", fleet_converge)
+        self.assertIn("ansible_failed_task.name", fleet_converge)
+        self.assertIn("fleet_server_argv_lines.index('--fleet-server-port')", fleet_verify)
+        self.assertIn("fleet_state.stat.exists", fleet_verify)
+        self.assertIn("length == 2", fleet_verify)
 
         readme = (ROOT / "roles" / "elastic_agent" / "README.md").read_text()
         reference = (ROOT / "docs" / "reference" / "elastic_agent.md").read_text()
@@ -1070,6 +1082,9 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("elastic_agent_package_flavor_file", reference)
         self.assertIn("elasticsearch_http_publish_host", readme)
         self.assertIn("elasticsearch_http_publish_host", reference)
+        self.assertIn("fleet.enc", reference)
+        architecture = (ROOT / "docs" / "guide" / "architecture.md").read_text()
+        self.assertIn("Fleet Server mode: CA + service token", architecture)
 
     def test_beats_templates_share_common_setup_fragment(self):
         template_paths = (

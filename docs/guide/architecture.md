@@ -65,7 +65,7 @@ graph TD
     E -->|"CA + passwords available"| L[logstash]
     L -->|"Logstash listening :5044"| B[beats]
     E -->|"CA available"| B
-    E -->|"CA and service token available"| A[elastic_agent]
+    E -->|"Fleet Server mode: CA + service token"| A[elastic_agent]
 
     style R fill:#f5f5f5,stroke:#333
     style E fill:#005571,stroke:#333,color:#fff
