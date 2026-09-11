@@ -1,0 +1,25 @@
+---
+- name: packages | Remove legacy Elastic APT sources before package manager bootstrap
+  ansible.builtin.raw: >-
+    for source in
+    /etc/apt/sources.list.d/artifacts_elastic_co_packages_7_x_apt.list
+    /etc/apt/sources.list.d/artifacts_elastic_co_packages_8_x_apt.list
+    /etc/apt/sources.list.d/artifacts_elastic_co_packages_9_x_apt.list; do
+    rm -f -- "$source";
+    done
+  changed_when: false
+  when:
+    - ansible_facts.os_family == 'Debian'
+    - ansible_facts.pkg_mgr == 'apt'
+
+- name: packages | Bootstrap python3-apt for Ansible apt module
+  ansible.builtin.raw: >-
+    apt-get -o DPkg::Lock::Timeout=120 install -y python3-apt
+  register: _elasticstack_python3_apt_install
+  changed_when: false
+  until: _elasticstack_python3_apt_install is success
+  retries: 3
+  delay: 10
+  when:
+    - ansible_facts.os_family == 'Debian'
+    - ansible_facts.pkg_mgr == 'apt'

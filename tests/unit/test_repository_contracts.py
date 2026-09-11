@@ -524,12 +524,24 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertNotIn("elasticsearch_certs_dir:", converge)
 
     def test_debian_package_bootstrap_retries_apt_lock_contention(self):
-        tasks = yaml.safe_load(
-            (ROOT / "roles" / "elasticstack" / "tasks" / "packages.yml").read_text()
+        bootstrap_tasks = yaml.safe_load(
+            (
+                ROOT
+                / "roles"
+                / "elasticstack"
+                / "tasks"
+                / "package_manager_bootstrap.yml"
+            ).read_text()
         )
+        legacy_cleanup = bootstrap_tasks[0]
+        self.assertEqual(
+            legacy_cleanup["ansible.builtin.raw"],
+            "for source in /etc/apt/sources.list.d/artifacts_elastic_co_packages_7_x_apt.list /etc/apt/sources.list.d/artifacts_elastic_co_packages_8_x_apt.list /etc/apt/sources.list.d/artifacts_elastic_co_packages_9_x_apt.list; do rm -f -- \"$source\"; done",
+        )
+
         bootstrap = next(
             task
-            for task in tasks
+            for task in bootstrap_tasks
             if task.get("name") == "packages | Bootstrap python3-apt for Ansible apt module"
         )
         self.assertEqual(
@@ -543,6 +555,9 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertEqual(bootstrap["retries"], 3)
         self.assertEqual(bootstrap["delay"], 10)
 
+        tasks = yaml.safe_load(
+            (ROOT / "roles" / "elasticstack" / "tasks" / "packages.yml").read_text()
+        )
         apt_update = next(
             task for task in tasks if task.get("name") == "packages | Update apt cache."
         )
@@ -552,6 +567,16 @@ class TestRepositoryContracts(unittest.TestCase):
         )
         self.assertEqual(apt_update["retries"], 3)
         self.assertEqual(apt_update["delay"], 10)
+
+        main = (ROOT / "roles" / "elasticstack" / "tasks" / "main.yml").read_text()
+        self.assertLess(
+            main.index("package_manager_bootstrap.yml"),
+            main.index("../repos/tasks/debian.yml"),
+        )
+        self.assertLess(
+            main.index("../repos/tasks/debian.yml"),
+            main.index("import_tasks: packages.yml"),
+        )
 
     def test_elasticsearch_logrotate_installs_runtime_package_when_enabled(self):
         tasks = yaml.safe_load(

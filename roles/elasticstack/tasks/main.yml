@@ -55,14 +55,14 @@
     - name: Fetch passwords if passwords are initialized
       ansible.builtin.import_tasks: elasticstack-passwords.yml
 
-    - name: Install common packages and dependencies
-      ansible.builtin.import_tasks: packages.yml
+    - name: Bootstrap package manager
+      ansible.builtin.import_tasks: package_manager_bootstrap.yml
 
     # Service roles all import this shared role before installing packages.
     # Configure the package source here so callers do not need a separate,
-    # order-sensitive repos role task in every service play. This follows the
-    # common package task because Debian's repository tasks use ansible.builtin.apt
-    # and the common task bootstraps python3-apt first.
+    # order-sensitive repos role task in every service play. The bootstrap
+    # above installs python3-apt after removing legacy Elastic sources, so the
+    # repository tasks can safely use Ansible's apt modules.
     - name: Configure Elastic repositories on RedHat
       ansible.builtin.include_tasks: "{{ role_path }}/../repos/tasks/redhat.yml"
       when:
@@ -83,6 +83,9 @@
       when:
         - elasticstack_enable_repos | bool
         - not _elasticstack_repositories_configured | default(false) | bool
+
+    - name: Install common packages and dependencies
+      ansible.builtin.import_tasks: packages.yml
 
     - name: Register elasticstack role has run for that host
       ansible.builtin.set_fact:
