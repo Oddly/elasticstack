@@ -74,7 +74,7 @@ elastic_agent_fleet_server_ca_remote_src: false
 
 Use `elastic_agent_mode: fleet` with the URL and enrollment token generated for the agent policy. `elastic_agent_fleet_server_insecure` adds `--insecure` and should be limited to temporary development use. For a public CA, leave `elastic_agent_fleet_server_ca_source` at `none`. For the collection CA, use `elasticsearch_ca`; for a private CA, use `external` and set either `elastic_agent_fleet_server_ca_file` or `elastic_agent_fleet_server_ca_content`. Set `elastic_agent_fleet_server_ca_remote_src` when the file already exists on the managed host.
 
-Enrollment uses the package's `elastic-agent enroll` command with an argv list, so URLs and tokens are not assembled into a shell command. The role hashes the desired command inputs into `elastic_agent_enrollment_state_file` internally. Only a missing or changed fingerprint runs enrollment; the marker contains no token or policy content.
+Enrollment uses the package's `elastic-agent enroll` command with an argv list, so URLs and tokens are not assembled into a shell command. The role hashes the desired command inputs into `elastic_agent_enrollment_state_file` internally and also checks the package-managed encrypted Fleet state at `{{ elastic_agent_config_dir }}/fleet.enc`. A matching marker skips enrollment only when that Fleet state exists. If the state is recreated, enrollment runs again; if an existing Fleet state has no matching marker, the role refuses to run `--force` because that can create duplicate Fleet agents. The marker contains no token or policy content.
 
 ## Fleet Server
 

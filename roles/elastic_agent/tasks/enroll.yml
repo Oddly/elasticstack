@@ -41,6 +41,11 @@
     path: "{{ elastic_agent_enrollment_state_file }}"
   register: _elastic_agent_enrollment_state
 
+- name: enroll | Check package-managed Fleet state
+  ansible.builtin.stat:
+    path: "{{ elastic_agent_config_dir }}/fleet.enc"
+  register: _elastic_agent_fleet_state
+
 - name: enroll | Read enrollment state marker
   ansible.builtin.slurp:
     src: "{{ elastic_agent_enrollment_state_file }}"
@@ -48,12 +53,29 @@
   when: _elastic_agent_enrollment_state.stat.exists
   no_log: true
 
+- name: enroll | Check whether the enrollment marker matches
+  ansible.builtin.set_fact:
+    _elastic_agent_enrollment_marker_matches: >-
+      {{ _elastic_agent_enrollment_state.stat.exists and
+         ((_elastic_agent_enrollment_marker.content | default('') | b64decode | trim) ==
+          _elastic_agent_enrollment_fingerprint) }}
+  no_log: true
+
+- name: enroll | Refuse to overwrite an existing enrollment
+  ansible.builtin.fail:
+    msg: >-
+      Elastic Agent already has package-managed Fleet state at
+      {{ elastic_agent_config_dir }}/fleet.enc, but it does not match the
+      enrollment marker managed by this role. Refusing to run enroll --force;
+      remove or restore the existing Fleet state and marker only as part of an
+      intentional re-enrollment.
+  when:
+    - _elastic_agent_fleet_state.stat.exists
+    - not _elastic_agent_enrollment_marker_matches | bool
+
 - name: enroll | Decide whether Elastic Agent enrollment is required
   ansible.builtin.set_fact:
-    _elastic_agent_enrollment_required: >-
-      {{ not _elastic_agent_enrollment_state.stat.exists or
-         ((_elastic_agent_enrollment_marker.content | default('') | b64decode | trim) !=
-          _elastic_agent_enrollment_fingerprint) }}
+    _elastic_agent_enrollment_required: "{{ not _elastic_agent_fleet_state.stat.exists }}"
   no_log: true
 
 - name: enroll | Enroll Elastic Agent in Fleet

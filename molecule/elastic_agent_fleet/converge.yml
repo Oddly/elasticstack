@@ -47,15 +47,21 @@
           import sys
 
           arguments = sys.argv[1:]
+          token = (
+              arguments[arguments.index("--enrollment-token") + 1]
+              if "--enrollment-token" in arguments
+              else ""
+          )
           target = (
               "/tmp/elastic-agent-fleet-server-argv"
               if "--fleet-server-es" in arguments
               else "/tmp/elastic-agent-enrollment-argv"
           )
+          if token == "contract-collection-ca-token":
+              target = "/tmp/elastic-agent-collection-ca-raw-argv"
           Path("/tmp/elastic-agent-contract-path").write_text(sys.argv[0] + "\n")
           Path(target).write_text("\n".join(arguments) + "\n")
-          if "--enrollment-token" in arguments:
-              token = arguments[arguments.index("--enrollment-token") + 1]
+          if token:
               with Path("/tmp/elastic-agent-contract-invocations").open("a") as audit:
                   audit.write(token + "\n")
 
@@ -129,13 +135,72 @@
             elasticsearch-ca
             -----END CERTIFICATE-----
 
+    - name: Reset enrollment command contract fixtures
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/elastic-agent/fleet.enc
+        - /var/lib/elastic-agent-fleet/.enrollment.sha256
+        - /var/lib/elastic-agent-fleet-server/fleet.enc
+        - /var/lib/elastic-agent-fleet-server/.enrollment.sha256
+        - /var/lib/elastic-agent-collection-ca/fleet.enc
+        - /var/lib/elastic-agent-collection-ca/.enrollment.sha256
+        - /var/lib/elastic-agent-no-ca/fleet.enc
+        - /var/lib/elastic-agent-no-ca/.enrollment.sha256
+        - /tmp/elastic-agent-contract-invocations
+        - /tmp/elastic-agent-enrollment-argv
+        - /tmp/elastic-agent-fleet-server-argv
+        - /tmp/elastic-agent-collection-ca-raw-argv
+        - /tmp/elastic-agent-collection-ca-argv
+        - /tmp/elastic-agent-no-ca-argv
+
     - name: Include Elastic Agent
       ansible.builtin.include_role:
         name: oddly.elasticstack.elastic_agent
 
-    - name: Reapply Elastic Agent to exercise enrollment marker idempotency
+    - name: Create package-managed Fleet state fixture after enrollment
+      ansible.builtin.copy:
+        dest: /etc/elastic-agent/fleet.enc
+        content: encrypted-fleet-state
+        mode: "0600"
+
+    - name: Reapply Elastic Agent to exercise enrollment state idempotency
       ansible.builtin.include_role:
         name: oddly.elasticstack.elastic_agent
+
+    - name: Remove package-managed Fleet state to simulate state recreation
+      ansible.builtin.file:
+        path: /etc/elastic-agent/fleet.enc
+        state: absent
+
+    - name: Re-enroll after package-managed Fleet state recreation
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elastic_agent
+
+    - name: Restore package-managed Fleet state after recreation coverage
+      ansible.builtin.copy:
+        dest: /etc/elastic-agent/fleet.enc
+        content: encrypted-fleet-state
+        mode: "0600"
+
+    - name: Confirm an existing enrollment is not overwritten
+      block:
+        - name: Include Elastic Agent with a rotated enrollment token
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elastic_agent
+          vars:
+            elastic_agent_enrollment_token: contract-rotated-token
+      rescue:
+        - name: Assert the existing enrollment guard caused the failure
+          ansible.builtin.assert:
+            that:
+              - >-
+                ansible_failed_task.name | default('') is search(
+                'Refuse to overwrite an existing enrollment')
+        - name: Record expected existing enrollment rejection
+          ansible.builtin.set_fact:
+            existing_enrollment_rejected: true
 
     - name: Preserve content-mode certificate outputs
       ansible.builtin.copy:
@@ -161,6 +226,8 @@
         elastic_agent_enable: false
         elastic_agent_mode: fleet_server
         elastic_agent_package_flavor: servers
+        elastic_agent_config_dir: /var/lib/elastic-agent-fleet-server
+        elastic_agent_config_file: /var/lib/elastic-agent-fleet-server/elastic-agent.yml
         elastic_agent_binary_path: /usr/local/bin/elastic-agent-contract
         elastic_agent_migrate_from_beats: true
         elastic_agent_certificate_dir: /var/lib/elastic-agent-fleet-server-certs
@@ -257,7 +324,7 @@
       loop:
         - src: /var/lib/elastic-agent-collection-ca/certs/fleet-server-ca.crt
           dest: /tmp/collection-fleet-server-ca.crt
-        - src: /tmp/elastic-agent-enrollment-argv
+        - src: /tmp/elastic-agent-collection-ca-raw-argv
           dest: /tmp/elastic-agent-collection-ca-argv
 
     - name: Add an Elasticsearch host for URL discovery coverage
@@ -275,8 +342,8 @@
         elastic_agent_enable: false
         elastic_agent_mode: fleet_server
         elastic_agent_package_flavor: servers
-        elastic_agent_config_dir: /etc/elastic-agent
-        elastic_agent_config_file: /etc/elastic-agent/elastic-agent.yml
+        elastic_agent_config_dir: /var/lib/elastic-agent-no-ca
+        elastic_agent_config_file: /var/lib/elastic-agent-no-ca/elastic-agent.yml
         elastic_agent_certificate_dir: /var/lib/elastic-agent-no-ca-certs
         elastic_agent_binary_path: /usr/local/bin/elastic-agent-contract
         elastic_agent_migrate_from_beats: false
@@ -334,6 +401,12 @@
             elastic_agent_enrollment_token: contract-transition-token
             elastic_agent_fleet_server_ca_source: none
       rescue:
+        - name: Assert the package flavor guard caused the failure
+          ansible.builtin.assert:
+            that:
+              - >-
+                ansible_failed_task.name | default('') is search(
+                'Validate the installed Elastic Agent package flavor')
         - name: Record expected flavor transition failure
           ansible.builtin.set_fact:
             flavor_transition_rejected: true
@@ -362,6 +435,12 @@
             elastic_agent_fleet_server_url: ""
             elastic_agent_enrollment_token: ""
       rescue:
+        - name: Assert the configuration guard caused the failure
+          ansible.builtin.assert:
+            that:
+              - >-
+                ansible_failed_task.name | default('') is search(
+                'Validate Elastic Agent configuration')
         - name: Record expected incomplete Fleet failure
           ansible.builtin.set_fact:
             invalid_agent_configuration_failed: true
@@ -384,6 +463,12 @@
             elastic_agent_fleet_server_cert_key_content: ""
             elastic_agent_fleet_server_es_ca_content: ""
       rescue:
+        - name: Assert the configuration guard caused the failure
+          ansible.builtin.assert:
+            that:
+              - >-
+                ansible_failed_task.name | default('') is search(
+                'Validate Elastic Agent configuration')
         - name: Record expected Fleet Server flavor failure
           ansible.builtin.set_fact:
             invalid_fleet_server_flavor_failed: true
@@ -404,6 +489,12 @@
             elastic_agent_fleet_server_cert_key_content: ""
             elastic_agent_fleet_server_es_ca_content: ""
       rescue:
+        - name: Assert the configuration guard caused the failure
+          ansible.builtin.assert:
+            that:
+              - >-
+                ansible_failed_task.name | default('') is search(
+                'Validate Elastic Agent configuration')
         - name: Record expected certificate pair failure
           ansible.builtin.set_fact:
             invalid_certificate_pair_failed: true
@@ -415,3 +506,4 @@
           - invalid_fleet_server_flavor_failed | default(false)
           - invalid_certificate_pair_failed | default(false)
           - flavor_transition_rejected | default(false)
+          - existing_enrollment_rejected | default(false)
