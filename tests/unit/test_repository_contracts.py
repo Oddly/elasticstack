@@ -235,14 +235,17 @@ class TestRepositoryContracts(unittest.TestCase):
         )
         for path in workflows:
             source = path.read_text()
-            self.assertIn(
-                "command -v python3.12",
-                source,
+            self.assertTrue(
+                "command -v python3.12" in source
+                or (
+                    "actions/setup-python@" in source
+                    and "python-version: '3.12'" in source
+                ),
                 f"{path} must select Python 3.12 for Ansible 2.20",
             )
-            self.assertIn(
-                'uv venv "$RUNNER_TEMP/venv"',
-                source,
+            self.assertTrue(
+                'uv venv "$RUNNER_TEMP/venv"' in source
+                or 'python -m venv "$RUNNER_TEMP/venv"' in source,
                 f"{path} must install into an isolated Python 3.12 environment",
             )
             self.assertIn(
@@ -1072,6 +1075,16 @@ class TestRepositoryContracts(unittest.TestCase):
             action,
         )
         self.assertNotIn("path: /tmp/molecule-diagnostics/", action)
+
+    def test_linting_does_not_consume_the_incus_runner_pool(self):
+        workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "test_linting.yml").read_text())
+        lint_job = workflow["jobs"]["lint"]
+        self.assertEqual(lint_job["runs-on"], "ubuntu-latest")
+        source = (ROOT / ".github" / "workflows" / "test_linting.yml").read_text()
+        self.assertIn("actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97", source)
+        self.assertIn('python -m venv "$RUNNER_TEMP/venv"', source)
+        self.assertNotIn("secrets.INCUS_HOST", source)
+        self.assertNotIn("CACHE_HOST", source)
 
     def test_ci_coverage_script_handles_untracked_and_quoted_scenarios(self):
         with tempfile.TemporaryDirectory(prefix="elasticstack-ci-coverage-") as directory:
