@@ -16,6 +16,9 @@
     - name: Check cluster health
       ansible.builtin.include_tasks: ../shared/verify_es_health.yml
       vars:
+        # A single-node cluster keeps one replica unassigned, so yellow is
+        # healthy for this scenario. The shared default remains green.
+        _verify_es_statuses: [green, yellow]
         _verify_when: "{{ 'elasticsearch' in group_names }}"
 
     - name: Run Beats TLS checks

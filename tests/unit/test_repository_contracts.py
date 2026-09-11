@@ -1018,6 +1018,13 @@ class TestRepositoryContracts(unittest.TestCase):
                 f"{scenario} must use the shared Elasticsearch health check",
             )
 
+        beats_security = (ROOT / "molecule" / "beats_security" / "verify.yml").read_text()
+        self.assertIn(
+            "_verify_es_statuses: [green, yellow]",
+            beats_security,
+            "beats_security must allow yellow health for its single-node cluster",
+        )
+
         for relative_path in (
             "molecule/elasticsearch_upgrade_8to9/converge.yml",
             "molecule/elasticsearch_upgrade_8to9/verify.yml",
