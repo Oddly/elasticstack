@@ -6,9 +6,10 @@ The role is opt-in because a standalone policy must contain a real output and in
 
 ## Standalone mode
 
-Provide the complete standalone policy. Store credentials or API keys in Ansible Vault or a secrets manager.
+Provide the complete standalone policy. Set `elasticstack_full_stack: false` on a host that only runs Elastic Agent, then store credentials or API keys in Ansible Vault or a secrets manager.
 
 ```yaml
+elasticstack_full_stack: false
 elastic_agent_manage: true
 elastic_agent_mode: standalone
 elastic_agent_standalone_config:
@@ -25,6 +26,11 @@ elastic_agent_standalone_config:
         - metricsets: [cpu, memory]
           data_stream.dataset: system
 ```
+
+The package flavor marker is read from `elastic_agent_package_flavor_file`,
+which defaults to `/opt/Elastic/Agent/.flavor`. The role stops with a clear
+error when an existing package's flavor differs from the requested flavor;
+purge and reinstall the package to change between `basic` and `servers`.
 
 ## Fleet mode
 
@@ -46,7 +52,7 @@ content are suppressed from Ansible output.
 
 ## Fleet Server mode
 
-Set `elastic_agent_mode: fleet_server`, install the `servers` package flavor, and provide the Fleet Server policy, Elasticsearch service token, and Elasticsearch URL. The role resolves the Elasticsearch URL from the collection's Elasticsearch inventory group when `elastic_agent_fleet_server_es` is empty. The Fleet Server policy and service token are created in Kibana or through the Elasticsearch security APIs; this role installs and enrolls the host but does not create Fleet policies.
+Set `elastic_agent_mode: fleet_server`, install the `servers` package flavor, and provide the Fleet Server policy, Elasticsearch service token, and Elasticsearch URL. The role resolves the Elasticsearch URL from the collection's Elasticsearch inventory group when `elastic_agent_fleet_server_es` is empty, using `elasticsearch_http_publish_host` and `elasticsearch_http_publish_port` when configured and otherwise the inventory address and service port. The Fleet Server policy and service token are created in Kibana or through the Elasticsearch security APIs; this role installs and enrolls the host but does not create Fleet policies.
 
 ```yaml
 elastic_agent_manage: true

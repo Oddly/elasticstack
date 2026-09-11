@@ -50,6 +50,10 @@ argument_specs:
         description: Path to the standalone Elastic Agent policy file
         type: str
         default: '{{ elastic_agent_config_dir }}/elastic-agent.yml'
+      elastic_agent_package_flavor_file:
+        description: Path to the package-managed Elastic Agent flavor marker used to detect basic and servers transitions
+        type: str
+        default: /opt/Elastic/Agent/.flavor
       elastic_agent_certificate_dir:
         description: Directory where Fleet Server CA, certificate, and private key files are stored
         type: str

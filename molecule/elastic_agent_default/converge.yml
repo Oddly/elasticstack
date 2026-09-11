@@ -97,3 +97,11 @@
     - name: Include Elastic Agent in standalone mode
       ansible.builtin.include_role:
         name: oddly.elasticstack.elastic_agent
+
+    - name: Include Elastic Agent with an independent standalone policy path
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elastic_agent
+      vars:
+        elastic_agent_config_dir: /var/lib/elastic-agent-independent
+        elastic_agent_config_file: /var/lib/elastic-agent-independent-policy/nested/elastic-agent.yml
+        elastic_agent_config_backup: false

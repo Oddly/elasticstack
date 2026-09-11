@@ -111,6 +111,11 @@
         path: /var/lib/elastic-agent-no-ca
       register: enrollment_state_dir
 
+    - name: Check flavor transition rejection marker
+      ansible.builtin.stat:
+        path: /tmp/elastic-agent-flavor-transition-rejected
+      register: flavor_transition_marker
+
     - name: Check migrated Beat services are disabled
       ansible.builtin.command:
         argv:
@@ -196,7 +201,7 @@
           - "'8220' in (fleet_server_argv.content | b64decode)"
           - "'--certificate-authorities' in (collection_ca_argv.content | b64decode)"
           - "'fleet-server-ca.crt' in (collection_ca_argv.content | b64decode)"
-          - "'https://elasticsearch-derived.example.test:9200' in (no_ca_argv.content | b64decode)"
+          - "'https://elasticsearch-derived.example.test:19299' in (no_ca_argv.content | b64decode)"
           - "'contract-derived-service-token' in (no_ca_argv.content | b64decode)"
           - "'contract-derived-fleet-policy' in (no_ca_argv.content | b64decode)"
           - "'127.0.0.1' in (no_ca_argv.content | b64decode)"
@@ -206,6 +211,7 @@
           - "'--fleet-server-es-ca' not in (no_ca_argv.content | b64decode)"
           - "no_ca_directory.stat.exists == false"
           - enrollment_state_dir.stat.exists
+          - flavor_transition_marker.stat.exists
           - "elastic_agent_service.changed == false"
           - "agent_enabled.stdout == 'disabled'"
           - "migrated_beat_services.results | selectattr('stdout', 'equalto', 'disabled') | list | length == 3"
