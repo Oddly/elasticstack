@@ -465,7 +465,9 @@ class TestRepositoryContracts(unittest.TestCase):
 
         workflow = (ROOT / ".github" / "workflows" / "test_full_stack.yml").read_text()
         for path in (
+            "roles/elasticsearch/meta/argument_specs.yml",
             "roles/elasticsearch/tasks/elasticsearch-security.yml",
+            "roles/kibana/meta/argument_specs.yml",
             "roles/kibana/tasks/kibana-security.yml",
         ):
             self.assertIn(path, workflow)
