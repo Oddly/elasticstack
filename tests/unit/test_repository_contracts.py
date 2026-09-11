@@ -1021,8 +1021,13 @@ class TestRepositoryContracts(unittest.TestCase):
             defaults["elastic_agent_enrollment_state_file"],
             "{{ elastic_agent_config_dir }}/.enrollment.sha256",
         )
+        self.assertEqual(
+            defaults["elastic_agent_package_flavor_file"],
+            "/opt/Elastic/Agent/.flavor",
+        )
         self.assertEqual(specs["elastic_agent_mode"]["choices"], ["standalone", "fleet", "fleet_server"])
         self.assertEqual(specs["elastic_agent_package_flavor"]["choices"], ["basic", "servers"])
+        self.assertEqual(specs["elastic_agent_package_flavor_file"]["default"], "/opt/Elastic/Agent/.flavor")
         for secret in (
             "elastic_agent_standalone_config",
             "elastic_agent_enrollment_token",
@@ -1036,6 +1041,15 @@ class TestRepositoryContracts(unittest.TestCase):
 
         self.assertIn("_package_environment", main)
         self.assertIn("ELASTIC_AGENT_FLAVOR", main)
+        self.assertIn("elasticsearch_http_publish_host", main)
+        self.assertIn("elasticsearch_http_publish_port", main)
+        self.assertNotIn(".elasticsearch_api_host", main)
+        self.assertIn("Gather service facts for Beat migration", main)
+        migration_block = main[main.index("Stop Beats services") :]
+        self.assertNotIn("failed_when: false", migration_block)
+        self.assertIn("item ~ '.service'", migration_block)
+        self.assertIn("elastic_agent_config_file | dirname", main)
+        self.assertIn("_elastic_agent_package_flavor_marker_content", main)
         self.assertLess(
             main.index("Validate Elastic Agent configuration"),
             main.index("Install Elastic Agent package"),
@@ -1047,6 +1061,15 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("hash('sha256')", enroll)
         self.assertIn("Persist enrollment state without storing credentials", enroll)
         self.assertIn("to_nice_yaml", template)
+
+        readme = (ROOT / "roles" / "elastic_agent" / "README.md").read_text()
+        reference = (ROOT / "docs" / "reference" / "elastic_agent.md").read_text()
+        self.assertIn("elasticstack_full_stack: false", readme)
+        self.assertIn("elasticstack_full_stack: false", reference)
+        self.assertIn("elastic_agent_package_flavor_file", readme)
+        self.assertIn("elastic_agent_package_flavor_file", reference)
+        self.assertIn("elasticsearch_http_publish_host", readme)
+        self.assertIn("elasticsearch_http_publish_host", reference)
 
     def test_beats_templates_share_common_setup_fragment(self):
         template_paths = (

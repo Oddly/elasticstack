@@ -10,9 +10,11 @@
   ansible.builtin.set_fact:
     elastic_agent_fleet_server_es: >-
       {{ ('https' if elasticstack_security | bool else 'http') ~ '://' ~
-         (hostvars[groups[elasticstack_elasticsearch_group_name][0]].elasticsearch_api_host |
-          default(groups[elasticstack_elasticsearch_group_name][0])) ~ ':' ~
-         (elasticstack_elasticsearch_http_port | string) }}
+         (hostvars[groups[elasticstack_elasticsearch_group_name][0]].elasticsearch_http_publish_host |
+          default(hostvars[groups[elasticstack_elasticsearch_group_name][0]].ansible_host |
+          default(groups[elasticstack_elasticsearch_group_name][0], true), true)) ~ ':' ~
+         (hostvars[groups[elasticstack_elasticsearch_group_name][0]].elasticsearch_http_publish_port |
+          default(elasticstack_elasticsearch_http_port, true) | string) }}
   when:
     - elastic_agent_manage | bool
     - elastic_agent_mode == 'fleet_server'
@@ -60,6 +62,41 @@
               elasticstack_version != 'latest') else '') | replace(' ', '') }}
   when: elastic_agent_manage | bool
 
+- name: Gather installed package facts for Elastic Agent flavor validation
+  ansible.builtin.package_facts:
+    manager: auto
+  when: elastic_agent_manage | bool
+
+- name: Check the installed Elastic Agent flavor marker
+  ansible.builtin.stat:
+    path: "{{ elastic_agent_package_flavor_file }}"
+  register: _elastic_agent_package_flavor_marker
+  when: elastic_agent_manage | bool
+
+- name: Read the installed Elastic Agent flavor marker
+  ansible.builtin.slurp:
+    src: "{{ elastic_agent_package_flavor_file }}"
+  register: _elastic_agent_package_flavor_marker_content
+  when:
+    - elastic_agent_manage | bool
+    - _elastic_agent_package_flavor_marker.stat.exists
+
+- name: Validate the installed Elastic Agent package flavor
+  ansible.builtin.assert:
+    that:
+      - >-
+        ('elastic-agent' not in (ansible_facts.packages | default({}))) or
+        (_elastic_agent_package_flavor_marker.stat.exists and
+        ((_elastic_agent_package_flavor_marker_content.content | b64decode | trim) == elastic_agent_package_flavor))
+    fail_msg: >-
+      The installed Elastic Agent package flavor cannot satisfy
+      elastic_agent_package_flavor={{ elastic_agent_package_flavor }}. The package flavor marker
+      {{ elastic_agent_package_flavor_file }} is missing or contains
+      {{ _elastic_agent_package_flavor_marker_content.content | default('') | b64decode | trim }}.
+      Purge the existing Elastic Agent package and reinstall it with the requested flavor.
+  when: elastic_agent_manage | bool
+  no_log: true
+
 - name: Install Elastic Agent package
   ansible.builtin.include_tasks: "{{ role_path }}/../elasticstack/tasks/install_elastic_package.yml"
   vars:
@@ -71,6 +108,27 @@
       - Restart Elastic Agent
   when: elastic_agent_manage | bool
 
+- name: Verify the installed Elastic Agent package flavor marker
+  ansible.builtin.slurp:
+    src: "{{ elastic_agent_package_flavor_file }}"
+  register: _elastic_agent_package_flavor_after_install
+  when:
+    - elastic_agent_manage | bool
+    - not ansible_check_mode
+
+- name: Assert the installed Elastic Agent package flavor matches the requested flavor
+  ansible.builtin.assert:
+    that:
+      - (_elastic_agent_package_flavor_after_install.content | b64decode | trim) == elastic_agent_package_flavor
+    fail_msg: >-
+      Elastic Agent was installed, but its flavor marker does not match
+      elastic_agent_package_flavor={{ elastic_agent_package_flavor }}. Check the package repository
+      and reinstall the package with the requested flavor.
+  when:
+    - elastic_agent_manage | bool
+    - not ansible_check_mode
+  no_log: true
+
 - name: Ensure Elastic Agent configuration directory exists
   ansible.builtin.file:
     path: "{{ elastic_agent_config_dir }}"
@@ -79,6 +137,24 @@
     group: root
     mode: "0750"
   when: elastic_agent_manage | bool
+
+- name: Ensure Elastic Agent standalone configuration file parent exists
+  ansible.builtin.file:
+    path: "{{ elastic_agent_config_file | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  when:
+    - elastic_agent_manage | bool
+    - elastic_agent_mode == 'standalone'
+
+- name: Gather service facts for Beat migration
+  ansible.builtin.service_facts:
+  when:
+    - elastic_agent_manage | bool
+    - elastic_agent_migrate_from_beats | bool
+    - not ansible_check_mode
 
 - name: Stop Beats services for Elastic Agent migration
   ansible.builtin.service:
@@ -91,11 +167,13 @@
     - auditbeat
   loop_control:
     label: "{{ item }}"
-  failed_when: false
   when:
     - elastic_agent_manage | bool
     - elastic_agent_migrate_from_beats | bool
     - not ansible_check_mode
+    - >-
+      item in (ansible_facts.services | default({})) or
+      (item ~ '.service') in (ansible_facts.services | default({}))
 
 - name: Ensure Elastic Agent enrollment state directory exists
   ansible.builtin.file:

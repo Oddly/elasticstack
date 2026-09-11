@@ -20,6 +20,11 @@
         path: /etc/elastic-agent/elastic-agent.yml
       register: config_stat
 
+    - name: Check standalone policy file with an independent parent path
+      ansible.builtin.stat:
+        path: /var/lib/elastic-agent-independent-policy/nested/elastic-agent.yml
+      register: independent_config_stat
+
     - name: Find standalone policy backups
       ansible.builtin.find:
         paths: /etc/elastic-agent
@@ -46,6 +51,8 @@
           - elastic_agent_service.changed == false
           - config_stat.stat.exists
           - config_stat.stat.mode == '0600'
+          - independent_config_stat.stat.exists
+          - independent_config_stat.stat.mode == '0600'
           - config_backups.files | length > 0
           - not unmanaged_agent_dir.stat.exists
           - elastic_agent_version.rc == 0

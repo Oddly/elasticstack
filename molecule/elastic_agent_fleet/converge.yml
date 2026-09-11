@@ -264,7 +264,8 @@
       ansible.builtin.add_host:
         name: elasticsearch-contract
         groups: elasticsearch
-        elasticsearch_api_host: elasticsearch-derived.example.test
+        elasticsearch_http_publish_host: elasticsearch-derived.example.test
+        elasticsearch_http_publish_port: 19299
 
     - name: Include Elastic Agent Fleet Server with default CA handling
       ansible.builtin.include_role:
@@ -307,6 +308,48 @@
         dest: /tmp/elastic-agent-no-ca-argv
         remote_src: true
         mode: "0640"
+
+    - name: Seed a basic Elastic Agent flavor marker for transition coverage
+      ansible.builtin.copy:
+        dest: /tmp/elastic-agent-package-flavor-transition
+        content: basic
+        mode: "0600"
+
+    - name: Confirm a basic to servers flavor transition is rejected
+      block:
+        - name: Include Elastic Agent with a mismatched installed flavor
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elastic_agent
+          vars:
+            elastic_agent_manage: true
+            elastic_agent_enable: false
+            elastic_agent_mode: fleet
+            elastic_agent_package_flavor: servers
+            elastic_agent_package_flavor_file: /tmp/elastic-agent-package-flavor-transition
+            elastic_agent_binary_path: /usr/local/bin/elastic-agent-contract
+            elastic_agent_config_dir: /var/lib/elastic-agent-flavor-transition
+            elastic_agent_config_file: /var/lib/elastic-agent-flavor-transition/elastic-agent.yml
+            elastic_agent_enrollment_state_file: /var/lib/elastic-agent-flavor-transition/.enrollment.sha256
+            elastic_agent_fleet_server_url: https://fleet.example.test:8220
+            elastic_agent_enrollment_token: contract-transition-token
+            elastic_agent_fleet_server_ca_source: none
+      rescue:
+        - name: Record expected flavor transition failure
+          ansible.builtin.set_fact:
+            flavor_transition_rejected: true
+
+    - name: Restore the requested Elastic Agent flavor marker
+      ansible.builtin.copy:
+        dest: /tmp/elastic-agent-package-flavor-transition
+        content: servers
+        mode: "0600"
+
+    - name: Record the rejected flavor transition for verify
+      ansible.builtin.copy:
+        dest: /tmp/elastic-agent-flavor-transition-rejected
+        content: rejected
+        mode: "0600"
+      when: flavor_transition_rejected | default(false)
 
     - name: Confirm incomplete Fleet configuration is rejected
       block:
@@ -371,3 +414,4 @@
           - invalid_agent_configuration_failed | default(false)
           - invalid_fleet_server_flavor_failed | default(false)
           - invalid_certificate_pair_failed | default(false)
+          - flavor_transition_rejected | default(false)

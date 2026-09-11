@@ -1187,7 +1187,11 @@ rollouts:
     elastic_agent_config_file:
       scenario: elastic_agent_default
       expected:
-        - "config_stat.stat.exists"
+        - "independent_config_stat.stat.exists"
+    elastic_agent_package_flavor_file:
+      scenario: elastic_agent_fleet
+      expected:
+        - "flavor_transition_marker.stat.exists"
     elastic_agent_enrollment_state_file:
       scenario: elastic_agent_fleet
       expected:
