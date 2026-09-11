@@ -115,6 +115,11 @@ argument_specs:
         type: str
         default: ''
         no_log: true
+      elastic_agent_fleet_server_service_token_file:
+        description: Root-owned file used to pass the Fleet Server Elasticsearch service token without placing it in process
+          arguments
+        type: str
+        default: '{{ elastic_agent_config_dir }}/.fleet-server-service-token'
       elastic_agent_fleet_server_policy:
         description: Fleet Server agent policy ID used by a self-managed Fleet Server
         type: str

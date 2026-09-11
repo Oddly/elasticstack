@@ -1195,7 +1195,7 @@ rollouts:
     elastic_agent_enrollment_state_file:
       scenario: elastic_agent_fleet
       expected:
-        - "(enrollment_marker.content | b64decode | trim) | length == 64"
+        - "(enrollment_marker.content | b64decode | trim) == enrollment_fingerprint"
     elastic_agent_migrate_from_beats:
       scenario: elastic_agent_fleet
       expected:
@@ -1236,6 +1236,10 @@ rollouts:
       scenario: elastic_agent_fleet
       expected:
         - "contract-service-token"
+    elastic_agent_fleet_server_service_token_file:
+      scenario: elastic_agent_fleet
+      expected:
+        - "fleet_service_token_file.stat.mode == '0600'"
     elastic_agent_fleet_server_policy:
       scenario: elastic_agent_fleet
       expected:

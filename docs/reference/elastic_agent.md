@@ -15,7 +15,7 @@ elastic_agent_config_backup: false
 elastic_agent_migrate_from_beats: false
 ```
 
-`elastic_agent_manage` defaults to `false` so an accidentally included role cannot install an agent without a policy or enrollment credentials. Set it to `true` on the intended hosts. `elastic_agent_enable` controls the systemd service. `elastic_agent_mode` accepts `standalone`, `fleet`, or `fleet_server`. On 9.x, `elastic_agent_package_flavor` accepts `basic` or `servers`, and Fleet Server mode requires `servers`; on 8.x use `basic` because the regular package includes Fleet Server. `elastic_agent_config_backup` controls backups of the standalone policy. `elastic_agent_migrate_from_beats` stops and disables the three Beat services before the Agent starts, leaving their packages and configuration available for rollback.
+`elastic_agent_manage` defaults to `false` so an accidentally included role cannot install an agent without a policy or enrollment credentials. Set it to `true` on the intended hosts. `elastic_agent_enable` controls the systemd service. `elastic_agent_mode` accepts `standalone`, `fleet`, or `fleet_server`. On 9.x, `elastic_agent_package_flavor` accepts `basic` or `servers`, and Fleet Server mode requires `servers`; on 8.x use `basic` because the regular package includes Fleet Server. `elastic_agent_config_backup` controls backups of the standalone policy. `elastic_agent_migrate_from_beats` configures and enrolls the Agent before stopping and disabling the three Beat services, leaving their packages and configuration available for rollback. If the later Agent lifecycle fails, the role restores their previous service state.
 
 The package layout variables are useful for package wrappers or a non-default package layout:
 
@@ -85,12 +85,13 @@ Enrollment uses the package's `elastic-agent enroll` command with an argv list, 
 ```yaml
 elastic_agent_fleet_server_es: ""
 elastic_agent_fleet_server_service_token: "{{ vault_fleet_service_token }}"
+elastic_agent_fleet_server_service_token_file: "{{ elastic_agent_config_dir }}/.fleet-server-service-token"
 elastic_agent_fleet_server_policy: fleet-server-policy-id
 elastic_agent_fleet_server_host: ""
 elastic_agent_fleet_server_port: 8220
 ```
 
-Use `elastic_agent_mode: fleet_server` and set `elastic_agent_package_flavor: servers` on 9.x. On 8.x, use `basic` because the regular package includes Fleet Server. `elastic_agent_fleet_server_es` is the Elasticsearch URL; when empty, the role derives it from the first host in `elasticstack_elasticsearch_group_name`, preferring `elasticsearch_http_publish_host` and `elasticsearch_http_publish_port` and falling back to the inventory address and shared HTTP port. `elastic_agent_fleet_server_service_token` is the Elasticsearch service token, while `elastic_agent_fleet_server_policy` is the Fleet Server policy ID. `elastic_agent_fleet_server_host` and `elastic_agent_fleet_server_port` add the corresponding Fleet Server command options.
+Use `elastic_agent_mode: fleet_server` and set `elastic_agent_package_flavor: servers` on 9.x. On 8.x, use `basic` because the regular package includes Fleet Server. `elastic_agent_fleet_server_es` is the Elasticsearch URL; when empty, the role derives it from the first host in `elasticstack_elasticsearch_group_name`, preferring `elasticsearch_http_publish_host` and `elasticsearch_http_publish_port` and falling back to the inventory address and shared HTTP port. `elastic_agent_fleet_server_service_token` is the Elasticsearch service token, while `elastic_agent_fleet_server_policy` is the Fleet Server policy ID. The service token is stored in the root-owned `0600` file at `elastic_agent_fleet_server_service_token_file` and passed with `--fleet-server-service-token-path`. An `http://` Elasticsearch URL also adds `--fleet-server-es-insecure`; TLS is preferred. The enrollment token remains a command argument because Elastic Agent does not provide an enrollment-token path option, so use a short-lived token and protect access to the host process table during enrollment. `elastic_agent_fleet_server_host` and `elastic_agent_fleet_server_port` add the corresponding Fleet Server command options.
 
 The Fleet Server TLS inputs are:
 
@@ -116,7 +117,7 @@ selected through `elastic_agent_fleet_server_ca_source` is passed as
 
 ## Migration and upgrades
 
-The package version follows the shared `elasticstack_version` setting, so setting an exact version upgrades the DEB or RPM through the package manager and restarts the service when needed. Package-based Fleet Agents do not support Fleet-managed binary upgrades; use the collection's package version controls for those upgrades. Set `elastic_agent_migrate_from_beats: true` for a controlled handover from the individual Beat services, then move the existing Beat policy into Fleet or the standalone policy format.
+The package version follows the shared `elasticstack_version` setting, so setting an exact version upgrades the DEB or RPM through the package manager and restarts the service when needed. Package-based Fleet Agents do not support Fleet-managed binary upgrades; use the collection's package version controls for those upgrades. Set `elastic_agent_migrate_from_beats: true` for a controlled handover from the individual Beat services. The role completes Agent configuration and enrollment before disabling Beats and restores their previous service state if the later Agent lifecycle fails. Then move the existing Beat policy into Fleet or the standalone policy format.
 
 ## Tags
 

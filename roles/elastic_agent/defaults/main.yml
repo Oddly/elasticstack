@@ -63,6 +63,8 @@ elastic_agent_fleet_server_ca_remote_src: false
 elastic_agent_fleet_server_es: ""
 # @var elastic_agent_fleet_server_service_token:description: Elasticsearch service token used by a self-managed Fleet Server. Keep it in Ansible Vault or a secrets manager
 elastic_agent_fleet_server_service_token: ""
+# @var elastic_agent_fleet_server_service_token_file:description: Root-owned file used to pass the Fleet Server Elasticsearch service token without placing it in process arguments
+elastic_agent_fleet_server_service_token_file: "{{ elastic_agent_config_dir }}/.fleet-server-service-token"
 # @var elastic_agent_fleet_server_policy:description: Fleet Server agent policy ID used by a self-managed Fleet Server
 elastic_agent_fleet_server_policy: ""
 # @var elastic_agent_fleet_server_host:description: Fleet Server bind or advertised host passed to the Elastic Agent Fleet Server process

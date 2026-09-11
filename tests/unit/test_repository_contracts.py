@@ -1025,9 +1025,17 @@ class TestRepositoryContracts(unittest.TestCase):
             defaults["elastic_agent_package_flavor_file"],
             "",
         )
+        self.assertEqual(
+            defaults["elastic_agent_fleet_server_service_token_file"],
+            "{{ elastic_agent_config_dir }}/.fleet-server-service-token",
+        )
         self.assertEqual(specs["elastic_agent_mode"]["choices"], ["standalone", "fleet", "fleet_server"])
         self.assertEqual(specs["elastic_agent_package_flavor"]["choices"], ["basic", "servers"])
         self.assertEqual(specs["elastic_agent_package_flavor_file"]["default"], "")
+        self.assertEqual(
+            specs["elastic_agent_fleet_server_service_token_file"]["default"],
+            "{{ elastic_agent_config_dir }}/.fleet-server-service-token",
+        )
         for secret in (
             "elastic_agent_standalone_config",
             "elastic_agent_enrollment_token",
@@ -1052,7 +1060,15 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("Gather service facts for Beat migration", main)
         migration_block = main[main.index("Stop Beats services") :]
         self.assertNotIn("failed_when: false", migration_block)
-        self.assertIn("item ~ '.service'", migration_block)
+        self.assertIn("item ~ '.service'", main)
+        self.assertLess(
+            main.index("Enroll Elastic Agent in Fleet"),
+            main.index("Stop Beats services"),
+        )
+        self.assertIn("Record Beat service state before migration", main)
+        self.assertIn("Restore Beat services after Elastic Agent lifecycle failure", main)
+        self.assertIn("elastic_agent_fleet_server_cert_file | length > 0", main)
+        self.assertIn("elastic_agent_fleet_server_cert_key_file | length > 0", main)
         self.assertIn("elastic_agent_config_file | dirname", main)
         self.assertIn("_elastic_agent_package_flavor_marker_content", main)
         self.assertLess(
@@ -1064,6 +1080,11 @@ class TestRepositoryContracts(unittest.TestCase):
         ))
         self.assertIn("argv: \"{{ _elastic_agent_enroll_argv }}\"", enroll)
         self.assertIn("hash('sha256')", enroll)
+        self.assertIn("--fleet-server-service-token-path", enroll)
+        self.assertIn("elastic_agent_fleet_server_service_token_file", enroll)
+        self.assertIn("--fleet-server-es-insecure", enroll)
+        self.assertIn("match('^http://')", enroll)
+        self.assertIn("Write Fleet Server service token to a protected file", enroll)
         self.assertIn("{{ elastic_agent_config_dir }}/fleet.enc", enroll)
         self.assertIn("_elastic_agent_fleet_state", enroll)
         self.assertIn("Refuse to overwrite an existing enrollment", enroll)
@@ -1081,6 +1102,9 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("fleet_server_argv_lines.index('--fleet-server-port')", fleet_verify)
         self.assertIn("fleet_state.stat.exists", fleet_verify)
         self.assertIn("length == 2", fleet_verify)
+        self.assertIn("enrollment_fingerprint", fleet_verify)
+        self.assertIn("fleet_service_token_file.stat.mode == '0600'", fleet_verify)
+        self.assertIn("--fleet-server-es-insecure", fleet_verify)
 
         readme = (ROOT / "roles" / "elastic_agent" / "README.md").read_text()
         reference = (ROOT / "docs" / "reference" / "elastic_agent.md").read_text()

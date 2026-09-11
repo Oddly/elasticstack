@@ -14,6 +14,18 @@
         src: /tmp/elastic-agent-contract-path
       register: contract_path
 
+    - name: Decode the enrollment command contract
+      ansible.builtin.set_fact:
+        enrollment_argv_lines: "{{ (enrollment_argv.content | b64decode).splitlines() }}"
+
+    - name: Reconstruct the enrollment command argv
+      ansible.builtin.set_fact:
+        enrollment_command_argv: "{{ [contract_path.content | b64decode | trim] + enrollment_argv_lines }}"
+
+    - name: Calculate the expected enrollment fingerprint
+      ansible.builtin.set_fact:
+        enrollment_fingerprint: "{{ (enrollment_command_argv | join('|')) | hash('sha256') }}"
+
     - name: Read Fleet Server command arguments
       ansible.builtin.slurp:
         src: /tmp/elastic-agent-fleet-server-argv
@@ -32,6 +44,26 @@
       ansible.builtin.slurp:
         src: /tmp/elastic-agent-no-ca-argv
       register: no_ca_argv
+
+    - name: Check Fleet Server service token file
+      ansible.builtin.stat:
+        path: /var/lib/elastic-agent-fleet-server/custom-service-token
+      register: fleet_service_token_file
+
+    - name: Read Fleet Server service token file
+      ansible.builtin.slurp:
+        src: /var/lib/elastic-agent-fleet-server/custom-service-token
+      register: fleet_service_token
+
+    - name: Check derived URL Fleet Server service token file
+      ansible.builtin.stat:
+        path: /var/lib/elastic-agent-no-ca/custom-service-token
+      register: no_ca_service_token_file
+
+    - name: Read derived URL Fleet Server service token file
+      ansible.builtin.slurp:
+        src: /var/lib/elastic-agent-no-ca/custom-service-token
+      register: no_ca_service_token
 
     - name: Read enrollment state marker
       ansible.builtin.slurp:
@@ -192,13 +224,18 @@
           - "'elasticsearch-ca' in (file_tls_files.results[3].content | b64decode)"
           - "'contract-collection-ca' in (collection_ca.content | b64decode)"
           - collection_config_dir.stat.exists
-          - "(enrollment_marker.content | b64decode | trim) | length == 64"
+          - "(enrollment_marker.content | b64decode | trim) == enrollment_fingerprint"
           - "'contract-enrollment-token' not in (enrollment_marker.content | b64decode)"
           - "'contract-service-token' not in (enrollment_marker.content | b64decode)"
           - "'contract-derived-service-token' not in (enrollment_marker.content | b64decode)"
           - "'--fleet-server-es' in (fleet_server_argv.content | b64decode)"
           - "'https://elasticsearch.example.test:9200' in (fleet_server_argv.content | b64decode)"
-          - "'contract-service-token' in (fleet_server_argv.content | b64decode)"
+          - "'--fleet-server-service-token-path' in (fleet_server_argv.content | b64decode)"
+          - "'custom-service-token' in (fleet_server_argv.content | b64decode)"
+          - "'contract-service-token' not in (fleet_server_argv.content | b64decode)"
+          - fleet_service_token_file.stat.exists
+          - fleet_service_token_file.stat.mode == '0600'
+          - "'contract-service-token' in (fleet_service_token.content | b64decode)"
           - "'contract-fleet-policy' in (fleet_server_argv.content | b64decode)"
           - "'fleet-server-ca.crt' in (fleet_server_argv.content | b64decode)"
           - "'--fleet-server-host' in (fleet_server_argv.content | b64decode)"
@@ -218,8 +255,14 @@
           - "'fleet-server-ca.crt' in (collection_ca_argv.content | b64decode)"
           - "'contract-collection-ca-token' in (collection_ca_argv.content | b64decode)"
           - "'contract-enrollment-token' not in (collection_ca_argv.content | b64decode)"
-          - "'https://elasticsearch-derived.example.test:19299' in (no_ca_argv.content | b64decode)"
-          - "'contract-derived-service-token' in (no_ca_argv.content | b64decode)"
+          - "'http://elasticsearch-derived.example.test:19299' in (no_ca_argv.content | b64decode)"
+          - "'--fleet-server-es-insecure' in (no_ca_argv.content | b64decode)"
+          - "'--fleet-server-service-token-path' in (no_ca_argv.content | b64decode)"
+          - "'custom-service-token' in (no_ca_argv.content | b64decode)"
+          - "'contract-derived-service-token' not in (no_ca_argv.content | b64decode)"
+          - no_ca_service_token_file.stat.exists
+          - no_ca_service_token_file.stat.mode == '0600'
+          - "'contract-derived-service-token' in (no_ca_service_token.content | b64decode)"
           - "'contract-derived-fleet-policy' in (no_ca_argv.content | b64decode)"
           - "'127.0.0.1' in (no_ca_argv.content | b64decode)"
           - "'8221' in (no_ca_argv.content | b64decode)"
