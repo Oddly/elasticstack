@@ -1023,11 +1023,11 @@ class TestRepositoryContracts(unittest.TestCase):
         )
         self.assertEqual(
             defaults["elastic_agent_package_flavor_file"],
-            "/opt/Elastic/Agent/.flavor",
+            "",
         )
         self.assertEqual(specs["elastic_agent_mode"]["choices"], ["standalone", "fleet", "fleet_server"])
         self.assertEqual(specs["elastic_agent_package_flavor"]["choices"], ["basic", "servers"])
-        self.assertEqual(specs["elastic_agent_package_flavor_file"]["default"], "/opt/Elastic/Agent/.flavor")
+        self.assertEqual(specs["elastic_agent_package_flavor_file"]["default"], "")
         for secret in (
             "elastic_agent_standalone_config",
             "elastic_agent_enrollment_token",
@@ -1041,6 +1041,9 @@ class TestRepositoryContracts(unittest.TestCase):
 
         self.assertIn("_package_environment", main)
         self.assertIn("ELASTIC_AGENT_FLAVOR", main)
+        self.assertIn("/usr/share/elastic-agent/bin/elastic-agent", main)
+        self.assertIn("_elastic_agent_resolved_package_flavor_file", main)
+        self.assertIn("lnk_target | dirname", main)
         self.assertIn("elasticstack_release | int >= 9", main)
         self.assertIn("elasticstack_release | int < 9", main)
         self.assertIn("elasticsearch_http_publish_host", main)
