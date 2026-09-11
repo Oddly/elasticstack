@@ -275,6 +275,15 @@ class TestRepositoryContracts(unittest.TestCase):
             path_filters["should_test"],
             f"{full_stack_path} must test changes to test dependencies",
         )
+        for path in (
+            "roles/elasticsearch/tasks/elasticsearch-cluster-settings.yml",
+            "roles/elasticsearch/templates/elasticsearch.yml.j2",
+        ):
+            self.assertIn(
+                path,
+                path_filters["should_test"],
+                f"{full_stack_path} must run full-stack idempotence for {path}",
+            )
 
     def test_molecule_prepare_files_use_shared_name_resolution(self):
         common = (ROOT / "molecule" / "shared" / "prepare_common.yml").read_text()
