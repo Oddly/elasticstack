@@ -55,12 +55,18 @@
           {% endfor %}
           exit 1
         executable: /bin/bash
+      vars:
+        _wait_attempt_limit: "{{ _wait_retries | default(60) | int }}"
       register: _wait_http_probe
       until: _wait_http_probe.rc == 0
-      retries: "{{ _wait_retries | default(60) }}"
+      retries: "{{ _wait_attempt_limit }}"
       delay: "{{ _wait_delay | default(5) }}"
       changed_when: false
-      failed_when: _wait_http_probe.rc == 2
+      failed_when:
+        - >-
+          _wait_http_probe.rc == 2 or
+          ((_wait_http_probe.attempts | default(0) | int) >= (_wait_attempt_limit | int)
+          and _wait_http_probe.rc != 0)
 
   rescue:
     - name: "wait_for_http_service | Get recent {{ _wait_service_name }} journal output"  # noqa: name[template] var-naming[no-role-prefix]

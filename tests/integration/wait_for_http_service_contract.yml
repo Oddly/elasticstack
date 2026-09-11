@@ -11,6 +11,7 @@
   environment:
     PATH: "{{ _contract_bin }}:/usr/local/bin:/usr/bin:/bin"
     FAKE_DOWN_FILE: "{{ _contract_bin }}/service-down"
+    FAKE_CURL_TRANSIENT_FILE: "{{ _contract_bin }}/curl-transient"
     FAKE_CURL_ARGS_FILE: "{{ _contract_bin }}/curl-args"
   tasks:
     - name: Create fake command directory
@@ -50,6 +51,9 @@
         content: |
           #!/bin/sh
           printf '%s\n' "$@" > "$FAKE_CURL_ARGS_FILE"
+          if [ -e "$FAKE_CURL_TRANSIENT_FILE" ]; then
+            exit 7
+          fi
           echo 200
 
     - name: Run the shared readiness task successfully
@@ -137,6 +141,38 @@
     - name: Remove fake service-down marker before status validation
       ansible.builtin.file:
         path: "{{ _contract_bin }}/service-down"
+        state: absent
+
+    - name: Mark the fake endpoint as transiently unavailable
+      ansible.builtin.file:
+        path: "{{ _contract_bin }}/curl-transient"
+        state: touch
+        mode: "0644"
+
+    - name: Run the shared readiness task through its transient timeout path
+      block:
+        - name: Include shared readiness task for the timeout path
+          ansible.builtin.include_tasks:
+            file: ../../roles/elasticstack/tasks/wait_for_http_service.yml
+          vars:
+            _wait_service_name: fake-http
+            _wait_url: http://localhost:12345/health
+            _wait_fatal_pattern: FATAL
+            _wait_retries: 2
+            _wait_delay: 0
+
+        - name: Fail if the transient timeout unexpectedly passed
+          ansible.builtin.fail:
+            msg: "The shared readiness task unexpectedly accepted a transient timeout"
+      rescue:
+        - name: Assert the transient timeout is reported as a readiness failure
+          ansible.builtin.assert:
+            that:
+              - ansible_failed_result.msg is search('did not become ready within')
+
+    - name: Remove fake transient endpoint marker before status validation
+      ansible.builtin.file:
+        path: "{{ _contract_bin }}/curl-transient"
         state: absent
 
     - name: Run the shared readiness task with an unsafe status value

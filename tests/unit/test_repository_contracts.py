@@ -588,6 +588,8 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("--cacert", source)
         self.assertIn("status | int", source)
         self.assertIn("_wait_resolve", source)
+        self.assertIn("_wait_attempt_limit", source)
+        self.assertIn("_wait_http_probe.attempts", source)
 
     def test_elasticsearch_logrotate_installs_runtime_package_when_enabled(self):
         tasks = yaml.safe_load(
