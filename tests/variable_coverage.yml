@@ -856,7 +856,6 @@ behaviors:
       - logstash_http_host
       - logstash_http_port
       - logstash_dead_letter_queue_enable
-      - logstash_dead_letter_queue_retain_age
       - logstash_log_format
       - logstash_global_ecs
       - logstash_monitoring_enabled
@@ -1024,10 +1023,12 @@ rollouts:
         - "beats {' in"
     logstash_sniffing_delay:
       scenario: logstash_elasticsearch
+      uses_default: true
       expected:
-        - "sniffing_delay => 8"
+        - "sniffing_delay => 5"
     logstash_sniffing_path:
       scenario: logstash_elasticsearch
+      uses_default: true
       expected:
         - "sniffing_path =>"
     logstash_output_elasticsearch:
@@ -1060,6 +1061,7 @@ rollouts:
         - "dead_letter_queue.enable: true"
     logstash_dead_letter_queue_retain_age:
       scenario: logstash_centralized_pipelines
+      uses_default: true
       expected:
         - "dead_letter_queue.retain.age: 7d"
     logstash_log_format:

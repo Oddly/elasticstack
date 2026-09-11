@@ -245,7 +245,7 @@ The role waits for Kibana's `/api/status` endpoint with an explicit 300-second t
 
 ### Handler guard
 
-The "Restart Kibana" handler does not fire on fresh installs (guarded by `kibana_freshstart.changed`). On a first run, the service starts naturally during the "Start Kibana" task, so a handler restart would be redundant and could cause a brief outage during initial index creation.
+The "Restart Kibana" handler does not fire on fresh installs (guarded by `_kibana_freshstart.changed`). On a first run, the service starts naturally during the "Start Kibana" task, so a handler restart would be redundant and could cause a brief outage during initial index creation.
 
 ### Three-tier certificate backup
 

@@ -1022,11 +1022,18 @@ class TestRepositoryContracts(unittest.TestCase):
                 assignment = re.compile(
                     rf"(?m)^(?!\s*#)\s*{re.escape(variable)}\s*:"
                 )
-                self.assertRegex(
-                    converge.read_text(),
-                    assignment,
-                    f"{scenario} does not assign rollout variable {variable}",
-                )
+                if rollout.get("uses_default", False):
+                    self.assertNotRegex(
+                        converge.read_text(),
+                        assignment,
+                        f"{scenario} overrides default rollout variable {variable}",
+                    )
+                else:
+                    self.assertRegex(
+                        converge.read_text(),
+                        assignment,
+                        f"{scenario} does not assign rollout variable {variable}",
+                    )
                 assertions_path = ROOT / rollout.get(
                     "assertions_file", f"molecule/{scenario}/verify.yml"
                 )

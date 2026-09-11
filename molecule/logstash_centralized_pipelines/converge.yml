@@ -29,7 +29,6 @@
 
     # Dead letter queue
     logstash_dead_letter_queue_enable: true
-    logstash_dead_letter_queue_retain_age: 7d
 
     # Log format
     logstash_log_format: json

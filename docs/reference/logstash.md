@@ -711,7 +711,7 @@ The role supports three deprecated variable names that map to current ones:
 
 Two restart handlers exist:
 
-- **"Restart Logstash"** — fires on config/cert changes, but NOT on fresh install (`logstash_freshstart.changed` guard)
+- **"Restart Logstash"** — fires on config/cert changes, but NOT on fresh install (`_logstash_freshstart.changed` guard)
 - **"Restart Logstash noauto"** — only fires when `logstash_config_autoreload` is disabled. Pipeline changes notify this handler, but if autoreload is enabled, Logstash picks up changes on its own and the handler is skipped.
 
 ### Elasticsearch host discovery
