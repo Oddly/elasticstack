@@ -14,18 +14,6 @@
         src: /tmp/elastic-agent-contract-path
       register: contract_path
 
-    - name: Decode the enrollment command contract
-      ansible.builtin.set_fact:
-        enrollment_argv_lines: "{{ (enrollment_argv.content | b64decode).splitlines() }}"
-
-    - name: Reconstruct the enrollment command argv
-      ansible.builtin.set_fact:
-        enrollment_command_argv: "{{ [contract_path.content | b64decode | trim] + enrollment_argv_lines }}"
-
-    - name: Calculate the expected enrollment fingerprint
-      ansible.builtin.set_fact:
-        enrollment_fingerprint: "{{ (enrollment_command_argv | join('|')) | hash('sha256') }}"
-
     - name: Read Fleet Server command arguments
       ansible.builtin.slurp:
         src: /tmp/elastic-agent-fleet-server-argv
@@ -44,6 +32,18 @@
       ansible.builtin.slurp:
         src: /tmp/elastic-agent-no-ca-argv
       register: no_ca_argv
+
+    - name: Decode the final enrollment command contract
+      ansible.builtin.set_fact:
+        no_ca_argv_lines: "{{ (no_ca_argv.content | b64decode).splitlines() }}"
+
+    - name: Reconstruct the final enrollment command argv
+      ansible.builtin.set_fact:
+        no_ca_command_argv: "{{ [contract_path.content | b64decode | trim] + no_ca_argv_lines }}"
+
+    - name: Calculate the expected final enrollment fingerprint
+      ansible.builtin.set_fact:
+        enrollment_fingerprint: "{{ (no_ca_command_argv | join('|')) | hash('sha256') }}"
 
     - name: Check Fleet Server service token file
       ansible.builtin.stat:
