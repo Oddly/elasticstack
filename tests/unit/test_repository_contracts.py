@@ -791,6 +791,32 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("- test", verify)
         self.assertIn("- config", verify)
 
+    def test_logstash_role_permission_variables_use_corrected_spelling(self):
+        defaults = (ROOT / "roles" / "logstash" / "defaults" / "main.yml").read_text()
+        specs = yaml.safe_load(
+            (ROOT / "roles" / "logstash" / "meta" / "argument_specs.yml").read_text()
+        )["argument_specs"]["main"]["options"]
+        security = (ROOT / "roles" / "logstash" / "tasks" / "logstash-security.yml").read_text()
+
+        for variable in (
+            "logstash_role_indices_names",
+            "logstash_role_indices_privileges",
+            "logstash_role_indicies_names",
+            "logstash_role_indicies_privileges",
+        ):
+            self.assertIn(variable, defaults)
+            self.assertIn(variable, specs)
+
+        self.assertIn("logstash-role-permissions.yml", security)
+        permissions = (
+            ROOT / "roles" / "logstash" / "tasks" / "logstash-role-permissions.yml"
+        ).read_text()
+        self.assertIn("else logstash_role_indicies_names", permissions)
+        self.assertIn("else logstash_role_indicies_privileges", permissions)
+        contract = (ROOT / "tests" / "integration" / "collection_variable_contract.yml").read_text()
+        self.assertIn("legacy-logs-*", contract)
+        self.assertIn("preferred-logs-*", contract)
+
     def test_plugin_workflow_discovers_the_complete_unit_test_suite(self):
         source = (ROOT / ".github" / "workflows" / "test_plugins.yml").read_text()
         self.assertIn("pytest>=9.1.1,<10", source)

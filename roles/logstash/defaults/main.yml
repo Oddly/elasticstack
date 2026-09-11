@@ -174,12 +174,16 @@ logstash_role_cluster_privileges:
   - manage_index_templates
   - monitor
   - manage_ilm
-# @var logstash_role_indicies_names:description: Index patterns the Logstash writer role is allowed to write to
+# @var logstash_role_indices_names:description: Preferred spelling for the index patterns the Logstash writer role is allowed to write to. Overrides logstash_role_indicies_names when set
+# logstash_role_indices_names: []
+# @var logstash_role_indicies_names:description: Deprecated misspelled alias for logstash_role_indices_names. Index patterns the Logstash writer role is allowed to write to
 logstash_role_indicies_names:
   - "ecs-logstash*"
   - "logstash*"
   - "logs*"
-# @var logstash_role_indicies_privileges:description: Index-level privileges granted to the Logstash writer role
+# @var logstash_role_indices_privileges:description: Preferred spelling for the index-level privileges granted to the Logstash writer role. Overrides logstash_role_indicies_privileges when set
+# logstash_role_indices_privileges: []
+# @var logstash_role_indicies_privileges:description: Deprecated misspelled alias for logstash_role_indices_privileges. Index-level privileges granted to the Logstash writer role
 logstash_role_indicies_privileges:
   - write
   - create
