@@ -49,6 +49,21 @@
         msg: "Cluster status: {{ result.json.status }}, nodes: {{ result.json.number_of_nodes }}"
       when: "'elasticsearch' in group_names"
 
+    - name: Read Elasticsearch configuration after bootstrap
+      ansible.builtin.slurp:
+        src: /etc/elasticsearch/elasticsearch.yml
+      register: _elasticsearch_config
+      when: "'elasticsearch' in group_names"
+
+    - name: Assert bootstrap-only setting is absent after cluster initialization
+      ansible.builtin.assert:
+        that:
+          - "'cluster.initial_master_nodes:' not in (_elasticsearch_config.content | b64decode)"
+        fail_msg: >-
+          cluster.initial_master_nodes must be removed after the multi-node
+          cluster has initialized.
+      when: "'elasticsearch' in group_names"
+
     - name: Connect to Kibana
       ansible.builtin.uri:
         url: "http://localhost:5601/api/status"
