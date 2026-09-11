@@ -472,6 +472,15 @@ class TestRepositoryContracts(unittest.TestCase):
         ):
             self.assertIn(path, workflow)
 
+    def test_elasticsearch_certificate_content_verification_uses_configured_directory(self):
+        converge = (ROOT / "molecule" / "elasticsearch_cert_content" / "converge.yml").read_text()
+        verify = (ROOT / "molecule" / "elasticsearch_cert_content" / "verify.yml").read_text()
+
+        self.assertIn("elasticsearch_certs_dir: /etc/elasticsearch/certs", verify)
+        self.assertGreaterEqual(verify.count("{{ elasticsearch_certs_dir }}"), 4)
+        self.assertNotIn("certificate: certs/", verify)
+        self.assertNotIn("elasticsearch_certs_dir:", converge)
+
     def test_debian_package_bootstrap_retries_apt_lock_contention(self):
         tasks = yaml.safe_load(
             (ROOT / "roles" / "elasticstack" / "tasks" / "packages.yml").read_text()
