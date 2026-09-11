@@ -1037,6 +1037,28 @@ class TestRepositoryContracts(unittest.TestCase):
             self.assertIn("_wait_ca_file", source, relative_path)
             self.assertIn("kibana_certs_dir", source, relative_path)
 
+        handler = yaml.safe_load(
+            (ROOT / "roles/elasticsearch/handlers/restart_kibana.yml").read_text()
+        )
+        delegated_includes = []
+
+        def collect_includes(node):
+            if isinstance(node, dict):
+                include = node.get("ansible.builtin.include_tasks")
+                if isinstance(include, dict) and "apply" in include:
+                    delegated_includes.append((node, include))
+                for value in node.values():
+                    collect_includes(value)
+            elif isinstance(node, list):
+                for item in node:
+                    collect_includes(item)
+
+        collect_includes(handler)
+        self.assertEqual(len(delegated_includes), 2)
+        for task, include in delegated_includes:
+            self.assertNotIn("delegate_to", task)
+            self.assertEqual(include["apply"]["delegate_to"], "{{ item }}")
+
     def test_kibana_port_is_managed_and_deployed_with_the_shared_variable(self):
         template = (ROOT / "roles/kibana/templates/kibana.yml.j2").read_text()
         self.assertIn("server.port: {{ elasticstack_kibana_port }}", template)

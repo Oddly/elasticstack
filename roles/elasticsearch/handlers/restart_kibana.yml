@@ -11,13 +11,16 @@
     - name: Restart Kibana service
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/restart_and_verify_service.yml"
+        apply:
+          delegate_to: "{{ item }}"
       vars:
         _service_name: kibana
-      delegate_to: "{{ item }}"
 
     - name: Wait for Kibana HTTP readiness after restart
       ansible.builtin.include_tasks:
         file: "{{ role_path }}/../elasticstack/tasks/wait_for_http_service.yml"
+        apply:
+          delegate_to: "{{ item }}"
       vars:
         _wait_service_name: kibana
         _wait_url: >-
@@ -38,7 +41,6 @@
           {{ (hostvars[item].elasticstack_kibana_host | default(hostvars[item].ansible_facts.hostname)) ~ ':' ~
              (hostvars[item].elasticstack_kibana_port | default(5601) | string) ~ ':127.0.0.1'
              if hostvars[item].kibana_tls | default(false) | bool else '' }}
-      delegate_to: "{{ item }}"
 
   rescue:
     - name: Get recent Kibana journal output
