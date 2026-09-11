@@ -1,0 +1,101 @@
+---
+- name: Shared Molecule verification contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    contract_dir: /tmp/elasticstack-molecule-verification-contract
+    fake_kibana_server: "{{ contract_dir }}/fake_kibana.py"
+    fake_kibana_pid: "{{ contract_dir }}/fake_kibana.pid"
+    fake_kibana_headers: "{{ contract_dir }}/request-headers.txt"
+    fake_kibana_port: 18371
+    elastic_pass:
+      stdout: contract-password
+  tasks:
+    - name: Create contract workspace
+      ansible.builtin.file:
+        path: "{{ contract_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Create a local Kibana status endpoint that records headers
+      ansible.builtin.copy:
+        dest: "{{ fake_kibana_server }}"
+        mode: "0700"
+        content: |
+          from http.server import BaseHTTPRequestHandler, HTTPServer
+          import json
+          from pathlib import Path
+          import sys
+
+          port = int(sys.argv[1])
+          header_path = Path(sys.argv[2])
+
+          class Handler(BaseHTTPRequestHandler):
+              def do_GET(self):
+                  header_path.write_text(self.headers.get("Authorization", ""))
+                  body = json.dumps({
+                      "status": {"overall": {"level": "available"}}
+                  }).encode()
+                  self.send_response(200)
+                  self.send_header("Content-Type", "application/json")
+                  self.send_header("Content-Length", str(len(body)))
+                  self.end_headers()
+                  self.wfile.write(body)
+
+              def log_message(self, *_args):
+                  pass
+
+          HTTPServer(("127.0.0.1", port), Handler).serve_forever()
+
+    - name: Start the local Kibana status endpoint
+      ansible.builtin.shell:
+        cmd: >-
+          set -eu;
+          nohup python3 "{{ fake_kibana_server }}"
+          "{{ fake_kibana_port }}" "{{ fake_kibana_headers }}"
+          >/dev/null 2>&1 &
+          echo $! > "{{ fake_kibana_pid }}"
+        executable: /bin/bash
+      changed_when: true
+
+    - name: Wait for the local Kibana status endpoint
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: "{{ fake_kibana_port }}"
+        timeout: 10
+
+    - name: Run the shared Kibana verifier over HTTP
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../molecule/shared/verify_kibana_available.yml"
+      vars:
+        _verify_kibana_url: "http://127.0.0.1:{{ fake_kibana_port }}/api/status"
+        _verify_kibana_retries: 3
+        _verify_kibana_delay: 1
+        _verify_kibana_status_codes: [200]
+
+    - name: Read the recorded request headers
+      ansible.builtin.slurp:
+        src: "{{ fake_kibana_headers }}"
+      register: request_headers
+
+    - name: Assert HTTP verification did not send basic-auth credentials
+      ansible.builtin.assert:
+        that:
+          - (request_headers.content | b64decode | trim) == ''
+        fail_msg: >-
+          The HTTP Kibana verifier sent credentials:
+          {{ request_headers.content | b64decode | trim }}
+
+    - name: Stop the local Kibana status endpoint
+      ansible.builtin.command:
+        argv:
+          - kill
+          - "{{ lookup('file', fake_kibana_pid) | trim }}"
+      when: lookup('ansible.builtin.file', fake_kibana_pid, errors='ignore') | length > 0
+      failed_when: false
+      changed_when: false
+
+    - name: Remove contract workspace
+      ansible.builtin.file:
+        path: "{{ contract_dir }}"
+        state: absent
