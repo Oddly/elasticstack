@@ -77,7 +77,9 @@ graph TD
 Elastic Agent prerequisites depend on its mode: standalone uses
 `elastic_agent_standalone_config`, Fleet enrollment uses
 `elastic_agent_enrollment_token`, and Fleet Server uses its CA plus
-`elastic_agent_fleet_server_service_token`.
+`elastic_agent_fleet_server_service_token`. Fleet Server service tokens are
+passed through the root-owned
+`elastic_agent_fleet_server_service_token_file`.
 
 1. **repos** — Adds Elastic package repositories (APT/YUM). Must run first so packages are available.
 2. **elasticsearch** — Installs ES, forms the cluster, initializes security (generates passwords, CA, certificates). Other roles need the CA and passwords.

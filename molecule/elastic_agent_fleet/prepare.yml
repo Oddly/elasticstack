@@ -1,0 +1,37 @@
+---
+- name: Prepare Fleet enrollment contract fixtures
+  hosts: all
+  vars:
+    distro_cache_url: "{{ lookup('env', 'DISTRO_CACHE_URL') }}"
+  tasks:
+    - name: Common prepare tasks
+      ansible.builtin.include_tasks: ../shared/prepare_common.yml
+
+    - name: Reset Fleet enrollment contract fixtures
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/elastic-agent/fleet.enc
+        - /etc/elastic-agent/.fleet-server-service-token
+        - /var/lib/elastic-agent-fleet/.enrollment.sha256
+        - /var/lib/elastic-agent-fleet-server/fleet.enc
+        - /var/lib/elastic-agent-fleet-server/.enrollment.sha256
+        - /var/lib/elastic-agent-fleet-server/.fleet-server-service-token
+        - /var/lib/elastic-agent-fleet-server/custom-service-token
+        - /var/lib/elastic-agent-collection-ca/fleet.enc
+        - /var/lib/elastic-agent-collection-ca/.enrollment.sha256
+        - /var/lib/elastic-agent-no-ca/fleet.enc
+        - /var/lib/elastic-agent-no-ca/.enrollment.sha256
+        - /var/lib/elastic-agent-no-ca/.fleet-server-service-token
+        - /var/lib/elastic-agent-no-ca/custom-service-token
+        - /tmp/elastic-agent-beat-fixtures-ready
+        - /tmp/elastic-agent-contract-invocations
+        - /tmp/elastic-agent-enrollment-argv
+        - /tmp/elastic-agent-fleet-server-argv
+        - /tmp/elastic-agent-collection-ca-raw-argv
+        - /tmp/elastic-agent-collection-ca-argv
+        - /tmp/elastic-agent-no-ca-argv
+        - /tmp/elastic-agent-fleet-contract-complete
+        - /tmp/elastic-agent-flavor-transition-rejected
+        - /tmp/elastic-agent-package-flavor-transition

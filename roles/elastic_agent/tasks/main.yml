@@ -34,6 +34,8 @@
          elastic_agent_fleet_server_es | length > 0 and
          elastic_agent_fleet_server_service_token | length > 0 and
          elastic_agent_fleet_server_policy | length > 0)
+      - (elastic_agent_mode != 'fleet_server') or
+        (elastic_agent_fleet_server_service_token_file | length > 0)
       - (elasticstack_release | int >= 9) or elastic_agent_package_flavor == 'basic'
       - (elastic_agent_mode != 'fleet_server') or
         (elasticstack_release | int < 9) or
@@ -45,6 +47,11 @@
         (elastic_agent_fleet_server_cert_key_content | length > 0 or elastic_agent_fleet_server_cert_key_file | length > 0)
       - (elastic_agent_fleet_server_cert_key_content | length == 0) or
         (elastic_agent_fleet_server_cert_content | length > 0 or elastic_agent_fleet_server_cert_file | length > 0)
+      - >-
+        ((elastic_agent_fleet_server_cert_file | length > 0 or
+          elastic_agent_fleet_server_cert_content | length > 0) ==
+         (elastic_agent_fleet_server_cert_key_file | length > 0 or
+          elastic_agent_fleet_server_cert_key_content | length > 0))
       - (elastic_agent_fleet_server_cert_file | length == 0) or
         (elastic_agent_fleet_server_cert_content | length == 0)
       - (elastic_agent_fleet_server_cert_key_file | length == 0) or
@@ -211,32 +218,6 @@
     - elastic_agent_manage | bool
     - elastic_agent_mode == 'standalone'
 
-- name: Gather service facts for Beat migration
-  ansible.builtin.service_facts:
-  when:
-    - elastic_agent_manage | bool
-    - elastic_agent_migrate_from_beats | bool
-    - not ansible_check_mode
-
-- name: Stop Beats services for Elastic Agent migration
-  ansible.builtin.service:
-    name: "{{ item }}"
-    state: stopped
-    enabled: false
-  loop:
-    - filebeat
-    - metricbeat
-    - auditbeat
-  loop_control:
-    label: "{{ item }}"
-  when:
-    - elastic_agent_manage | bool
-    - elastic_agent_migrate_from_beats | bool
-    - not ansible_check_mode
-    - >-
-      item in (ansible_facts.services | default({})) or
-      (item ~ '.service') in (ansible_facts.services | default({}))
-
 - name: Ensure Elastic Agent enrollment state directory exists
   ansible.builtin.file:
     path: "{{ elastic_agent_enrollment_state_file | dirname }}"
@@ -266,30 +247,94 @@
     - elastic_agent_manage | bool
     - elastic_agent_mode in ['fleet', 'fleet_server']
 
-- name: Manage Elastic Agent service
-  ansible.builtin.service:
-    name: elastic-agent
-    state: "{{ 'started' if elastic_agent_enable | bool else 'stopped' }}"
-    enabled: "{{ elastic_agent_enable | bool }}"
-  when:
-    - elastic_agent_manage | bool
-    - not ansible_check_mode
+- name: Manage Elastic Agent lifecycle and migrate from Beats
+  when: elastic_agent_manage | bool
+  block:
+    - name: Gather service facts for Beat migration
+      ansible.builtin.service_facts:
+      when:
+        - elastic_agent_migrate_from_beats | bool
+        - not ansible_check_mode
 
-- name: Flush Elastic Agent handlers before verification
-  ansible.builtin.meta: flush_handlers
-  when:
-    - elastic_agent_manage | bool
-    - elastic_agent_enable | bool
-    - not ansible_check_mode
+    - name: Initialize Beat migration state
+      ansible.builtin.set_fact:
+        _elastic_agent_beats_before_migration: []
+      when:
+        - elastic_agent_migrate_from_beats | bool
+        - not ansible_check_mode
 
-- name: Verify Elastic Agent service is running
-  ansible.builtin.systemd:
-    name: elastic-agent
-  register: _elastic_agent_service_state
-  until: _elastic_agent_service_state.status.ActiveState == 'active'
-  retries: 5
-  delay: 3
-  when:
-    - elastic_agent_manage | bool
-    - elastic_agent_enable | bool
-    - not ansible_check_mode
+    - name: Record Beat service state before migration
+      ansible.builtin.set_fact:
+        _elastic_agent_beats_before_migration: >-
+          {{ (_elastic_agent_beats_before_migration | default([])) + [{
+            'name': item,
+            'state': ansible_facts.services[item if item in ansible_facts.services else item ~ '.service'].state,
+            'enabled': (ansible_facts.services[item if item in ansible_facts.services else item ~ '.service'].status in ['enabled', 'enabled-runtime'])
+          }] }}
+      loop:
+        - filebeat
+        - metricbeat
+        - auditbeat
+      loop_control:
+        label: "{{ item }}"
+      when:
+        - elastic_agent_migrate_from_beats | bool
+        - not ansible_check_mode
+        - >-
+          item in (ansible_facts.services | default({})) or
+          (item ~ '.service') in (ansible_facts.services | default({}))
+
+    - name: Stop Beats services for Elastic Agent migration
+      ansible.builtin.service:
+        name: "{{ item.name }}"
+        state: stopped
+        enabled: false
+      loop: "{{ _elastic_agent_beats_before_migration | default([]) }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when:
+        - elastic_agent_migrate_from_beats | bool
+        - not ansible_check_mode
+
+    - name: Manage Elastic Agent service
+      ansible.builtin.service:
+        name: elastic-agent
+        state: "{{ 'started' if elastic_agent_enable | bool else 'stopped' }}"
+        enabled: "{{ elastic_agent_enable | bool }}"
+      when: not ansible_check_mode
+
+    - name: Flush Elastic Agent handlers before verification
+      ansible.builtin.meta: flush_handlers
+      when:
+        - elastic_agent_enable | bool
+        - not ansible_check_mode
+
+    - name: Verify Elastic Agent service is running
+      ansible.builtin.systemd:
+        name: elastic-agent
+      register: _elastic_agent_service_state
+      until: _elastic_agent_service_state.status.ActiveState == 'active'
+      retries: 5
+      delay: 3
+      when:
+        - elastic_agent_enable | bool
+        - not ansible_check_mode
+
+  rescue:
+    - name: Restore Beat services after Elastic Agent lifecycle failure
+      ansible.builtin.service:
+        name: "{{ item.name }}"
+        state: "{{ 'started' if item.state == 'running' else 'stopped' }}"
+        enabled: "{{ item.enabled }}"
+      loop: "{{ _elastic_agent_beats_before_migration | default([]) }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when:
+        - elastic_agent_migrate_from_beats | bool
+        - not ansible_check_mode
+
+    - name: Report Elastic Agent lifecycle failure after Beat restoration
+      ansible.builtin.fail:
+        msg: >-
+          Elastic Agent lifecycle management failed. Any Beats services changed by
+          elastic_agent_migrate_from_beats were restored to their pre-migration state.

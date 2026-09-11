@@ -71,6 +71,7 @@ elastic_agent_package_flavor: servers
 elastic_agent_fleet_server_url: https://fleet.example.test:8220
 elastic_agent_fleet_server_es: https://es.example.test:9200
 elastic_agent_fleet_server_service_token: "{{ vault_fleet_service_token }}"
+elastic_agent_fleet_server_service_token_file: /etc/elastic-agent/.fleet-server-service-token
 elastic_agent_fleet_server_policy: fleet-server-policy-id
 elastic_agent_fleet_server_ca_source: external
 elastic_agent_fleet_server_ca_file: /srv/pki/fleet-server-ca.crt
@@ -79,8 +80,10 @@ elastic_agent_fleet_server_cert_file: /srv/pki/fleet-server.crt
 elastic_agent_fleet_server_cert_key_file: /srv/pki/fleet-server.key
 ```
 
+The service token is written to `elastic_agent_fleet_server_service_token_file` with root ownership and mode `0600`, then passed to Elastic Agent with `--fleet-server-service-token-path`. The enrollment token is currently passed through the Agent command because the supported Agent command has no enrollment-token file option; keep that token short-lived and limit access to the host process table during enrollment. An `http://` Elasticsearch URL adds `--fleet-server-es-insecure`; use TLS whenever possible.
+
 Certificate files can be read from the controller or the managed host with the matching `*_remote_src` variables. Inline PEM values are available for the CA, certificate, private key, and Elasticsearch CA. Set `elastic_agent_certificate_dir` to change the destination directory. Certificate changes notify the shared service restart lifecycle.
 
 ## Migration from Beats
 
-`elastic_agent_migrate_from_beats: true` stops and disables Filebeat, Metricbeat, and Auditbeat before the Agent starts. It leaves their configuration and package files in place so the migration can be reversed. Translate the existing Beat inputs and outputs into a standalone policy or an Agent policy in Kibana before enabling the Agent.
+`elastic_agent_migrate_from_beats: true` configures and enrolls Elastic Agent before stopping and disabling Filebeat, Metricbeat, and Auditbeat. If the Agent lifecycle fails after migration begins, the role restores each Beat service's previous running and enabled state. It leaves their configuration and package files in place so the migration can be reversed. Translate the existing Beat inputs and outputs into a standalone policy or an Agent policy in Kibana before enabling the Agent.

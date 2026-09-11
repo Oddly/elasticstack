@@ -136,25 +136,10 @@
             elasticsearch-ca
             -----END CERTIFICATE-----
 
-    - name: Reset enrollment command contract fixtures
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: absent
-      loop:
-        - /etc/elastic-agent/fleet.enc
-        - /var/lib/elastic-agent-fleet/.enrollment.sha256
-        - /var/lib/elastic-agent-fleet-server/fleet.enc
-        - /var/lib/elastic-agent-fleet-server/.enrollment.sha256
-        - /var/lib/elastic-agent-collection-ca/fleet.enc
-        - /var/lib/elastic-agent-collection-ca/.enrollment.sha256
-        - /var/lib/elastic-agent-no-ca/fleet.enc
-        - /var/lib/elastic-agent-no-ca/.enrollment.sha256
-        - /tmp/elastic-agent-contract-invocations
-        - /tmp/elastic-agent-enrollment-argv
-        - /tmp/elastic-agent-fleet-server-argv
-        - /tmp/elastic-agent-collection-ca-raw-argv
-        - /tmp/elastic-agent-collection-ca-argv
-        - /tmp/elastic-agent-no-ca-argv
+    - name: Check whether Fleet enrollment contract coverage is complete
+      ansible.builtin.stat:
+        path: /tmp/elastic-agent-fleet-contract-complete
+      register: fleet_contract_complete
 
     - name: Include Elastic Agent
       ansible.builtin.include_role:
@@ -174,16 +159,19 @@
       ansible.builtin.file:
         path: /etc/elastic-agent/fleet.enc
         state: absent
+      when: not fleet_contract_complete.stat.exists
 
     - name: Re-enroll after package-managed Fleet state recreation
       ansible.builtin.include_role:
         name: oddly.elasticstack.elastic_agent
+      when: not fleet_contract_complete.stat.exists
 
     - name: Restore package-managed Fleet state after recreation coverage
       ansible.builtin.copy:
         dest: /etc/elastic-agent/fleet.enc
         content: encrypted-fleet-state
         mode: "0600"
+      when: not fleet_contract_complete.stat.exists
 
     - name: Confirm an existing enrollment is not overwritten
       block:
@@ -244,6 +232,7 @@
         elastic_agent_fleet_server_es_ca_content: ""
         elastic_agent_fleet_server_es: https://elasticsearch.example.test:9200
         elastic_agent_fleet_server_service_token: contract-service-token
+        elastic_agent_fleet_server_service_token_file: /var/lib/elastic-agent-fleet-server/custom-service-token
         elastic_agent_fleet_server_policy: contract-fleet-policy
         elastic_agent_fleet_server_host: 0.0.0.0
         elastic_agent_fleet_server_port: 8220
@@ -334,6 +323,7 @@
         groups: elasticsearch
         elasticsearch_http_publish_host: elasticsearch-derived.example.test
         elasticsearch_http_publish_port: 19299
+      changed_when: false
 
     - name: Include Elastic Agent Fleet Server with default CA handling
       ansible.builtin.include_role:
@@ -352,12 +342,14 @@
         elastic_agent_fleet_server_url: https://fleet.example.test:8220
         elastic_agent_enrollment_token: ""
         elastic_agent_fleet_server_insecure: false
+        elasticstack_security: false
         elastic_agent_fleet_server_ca_source: none
         elastic_agent_fleet_server_ca_file: ""
         elastic_agent_fleet_server_ca_content: ""
         elastic_agent_fleet_server_ca_remote_src: false
         elastic_agent_fleet_server_es: ""
         elastic_agent_fleet_server_service_token: contract-derived-service-token
+        elastic_agent_fleet_server_service_token_file: /var/lib/elastic-agent-no-ca/custom-service-token
         elastic_agent_fleet_server_policy: contract-derived-fleet-policy
         elastic_agent_fleet_server_host: 127.0.0.1
         elastic_agent_fleet_server_port: 8221
@@ -382,9 +374,14 @@
         dest: /tmp/elastic-agent-package-flavor-transition
         content: basic
         mode: "0600"
-      when: elasticstack_release | int >= 9
+      when:
+        - elasticstack_release | int >= 9
+        - not fleet_contract_complete.stat.exists
 
     - name: Confirm a basic to servers flavor transition is rejected
+      when:
+        - elasticstack_release | int >= 9
+        - not fleet_contract_complete.stat.exists
       block:
         - name: Include Elastic Agent with a mismatched installed flavor
           ansible.builtin.include_role:
@@ -412,21 +409,28 @@
         - name: Record expected flavor transition failure
           ansible.builtin.set_fact:
             flavor_transition_rejected: true
-      when: elasticstack_release | int >= 9
-
     - name: Restore the requested Elastic Agent flavor marker
       ansible.builtin.copy:
         dest: /tmp/elastic-agent-package-flavor-transition
         content: servers
         mode: "0600"
-      when: elasticstack_release | int >= 9
+      when:
+        - elasticstack_release | int >= 9
+        - not fleet_contract_complete.stat.exists
 
     - name: Record the rejected flavor transition for verify
       ansible.builtin.copy:
         dest: /tmp/elastic-agent-flavor-transition-rejected
         content: rejected
         mode: "0600"
-      when: flavor_transition_rejected | default(false)
+      when:
+        - not fleet_contract_complete.stat.exists
+        - flavor_transition_rejected | default(false)
+
+    - name: Check the recorded flavor transition coverage
+      ansible.builtin.stat:
+        path: /tmp/elastic-agent-flavor-transition-rejected
+      register: flavor_transition_coverage
 
     - name: Confirm incomplete Fleet configuration is rejected
       block:
@@ -450,6 +454,7 @@
             invalid_agent_configuration_failed: true
 
     - name: Confirm Fleet Server basic flavor is rejected
+      when: elasticstack_release | int >= 9
       block:
         - name: Include Elastic Agent Fleet Server with the basic flavor
           ansible.builtin.include_role:
@@ -476,8 +481,6 @@
         - name: Record expected Fleet Server flavor failure
           ansible.builtin.set_fact:
             invalid_fleet_server_flavor_failed: true
-      when: elasticstack_release | int >= 9
-
     - name: Confirm incomplete Fleet Server certificate pair is rejected
       block:
         - name: Include Elastic Agent with an incomplete certificate pair
@@ -504,11 +507,80 @@
           ansible.builtin.set_fact:
             invalid_certificate_pair_failed: true
 
+    - name: Confirm certificate file without key is rejected
+      block:
+        - name: Include Elastic Agent with a certificate file without a key
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elastic_agent
+          vars:
+            elastic_agent_manage: true
+            elastic_agent_mode: fleet
+            elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
+            elastic_agent_fleet_server_url: https://fleet.example.test:8220
+            elastic_agent_enrollment_token: contract-file-only-enrollment-token
+            elastic_agent_fleet_server_ca_source: none
+            elastic_agent_fleet_server_ca_file: ""
+            elastic_agent_fleet_server_ca_content: ""
+            elastic_agent_fleet_server_cert_file: /tmp/fleet-server.crt
+            elastic_agent_fleet_server_cert_content: ""
+            elastic_agent_fleet_server_cert_key_file: ""
+            elastic_agent_fleet_server_cert_key_content: ""
+            elastic_agent_fleet_server_es_ca_content: ""
+      rescue:
+        - name: Assert the certificate pair guard caused the file-only failure
+          ansible.builtin.assert:
+            that:
+              - >-
+                ansible_failed_task.name | default('') is search(
+                'Validate Elastic Agent configuration')
+        - name: Record expected certificate file-only failure
+          ansible.builtin.set_fact:
+            invalid_certificate_file_pair_failed: true
+
+    - name: Confirm key file without certificate is rejected
+      block:
+        - name: Include Elastic Agent with a key file without a certificate
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elastic_agent
+          vars:
+            elastic_agent_manage: true
+            elastic_agent_mode: fleet
+            elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
+            elastic_agent_fleet_server_url: https://fleet.example.test:8220
+            elastic_agent_enrollment_token: contract-key-only-enrollment-token
+            elastic_agent_fleet_server_ca_source: none
+            elastic_agent_fleet_server_ca_file: ""
+            elastic_agent_fleet_server_ca_content: ""
+            elastic_agent_fleet_server_cert_file: ""
+            elastic_agent_fleet_server_cert_content: ""
+            elastic_agent_fleet_server_cert_key_file: /tmp/fleet-server.key
+            elastic_agent_fleet_server_cert_key_content: ""
+            elastic_agent_fleet_server_es_ca_content: ""
+      rescue:
+        - name: Assert the certificate pair guard caused the key-only failure
+          ansible.builtin.assert:
+            that:
+              - >-
+                ansible_failed_task.name | default('') is search(
+                'Validate Elastic Agent configuration')
+        - name: Record expected certificate key-only failure
+          ansible.builtin.set_fact:
+            invalid_certificate_key_pair_failed: true
+
     - name: Assert invalid Elastic Agent configurations failed before deployment
       ansible.builtin.assert:
         that:
           - invalid_agent_configuration_failed | default(false)
           - (elasticstack_release | int < 9) or invalid_fleet_server_flavor_failed | default(false)
           - invalid_certificate_pair_failed | default(false)
-          - (elasticstack_release | int < 9) or flavor_transition_rejected | default(false)
+          - invalid_certificate_file_pair_failed | default(false)
+          - invalid_certificate_key_pair_failed | default(false)
+          - (elasticstack_release | int < 9) or flavor_transition_coverage.stat.exists
           - existing_enrollment_rejected | default(false)
+
+    - name: Mark Fleet enrollment contract coverage complete
+      ansible.builtin.copy:
+        dest: /tmp/elastic-agent-fleet-contract-complete
+        content: complete
+        mode: "0600"
+      when: not fleet_contract_complete.stat.exists
