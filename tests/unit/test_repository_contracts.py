@@ -571,10 +571,10 @@ class TestRepositoryContracts(unittest.TestCase):
         main = (ROOT / "roles" / "elasticstack" / "tasks" / "main.yml").read_text()
         self.assertLess(
             main.index("package_manager_bootstrap.yml"),
-            main.index("../repos/tasks/debian.yml"),
+            main.index("configure_repositories.yml"),
         )
         self.assertLess(
-            main.index("../repos/tasks/debian.yml"),
+            main.index("configure_repositories.yml"),
             main.index("import_tasks: packages.yml"),
         )
 
@@ -1076,16 +1076,31 @@ class TestRepositoryContracts(unittest.TestCase):
 
     def test_service_roles_configure_repositories_through_shared_role(self):
         shared = (ROOT / "roles/elasticstack/tasks/main.yml").read_text()
-        self.assertIn("../repos/tasks/redhat.yml", shared)
-        self.assertIn("../repos/tasks/debian.yml", shared)
-        self.assertIn("elasticstack_enable_repos", shared)
-        self.assertIn("_elasticstack_repositories_configured_release", shared)
-        self.assertIn("elasticstack_release | int", shared)
+        repository_tasks = (ROOT / "roles/elasticstack/tasks/configure_repositories.yml").read_text()
+        self.assertIn("../repos/tasks/redhat.yml", repository_tasks)
+        self.assertIn("../repos/tasks/debian.yml", repository_tasks)
+        self.assertIn("elasticstack_enable_repos", repository_tasks)
+        self.assertIn("_elasticstack_repositories_configured_release", repository_tasks)
+        self.assertIn("elasticstack_release | int", repository_tasks)
+        self.assertIn("configure_repositories.yml", shared)
+
+        for role in ("elasticsearch", "kibana", "logstash", "beats"):
+            service = (ROOT / f"roles/{role}/tasks/main.yml").read_text()
+            self.assertIn("configure_repositories.yml", service)
 
         repos = (ROOT / "roles/repos/tasks/main.yml").read_text()
         self.assertIn("oddly.elasticstack.elasticstack", repos)
-        self.assertIn("_elasticstack_repositories_configured_release", repos)
-        self.assertIn("elasticstack_enable_repos", repos)
+        self.assertIn("../elasticstack/tasks/configure_repositories.yml", repos)
+
+        redhat = yaml.safe_load((ROOT / "roles/repos/tasks/redhat.yml").read_text())
+        stale_releases = next(
+            task
+            for task in redhat
+            if task.get("name") == "redhat | Remove stale Elastic repository releases"
+        )
+        self.assertEqual(stale_releases["ansible.builtin.yum_repository"]["state"], "absent")
+        self.assertEqual(stale_releases["loop"], [7, 8, 9])
+        self.assertIn("elasticstack_release", stale_releases["when"])
 
         default_converge = (ROOT / "molecule/elasticsearch_default/converge.yml").read_text()
         self.assertNotIn(
@@ -1109,6 +1124,7 @@ class TestRepositoryContracts(unittest.TestCase):
                 source,
             )
             self.assertIn("'/packages/9.x/' in", source)
+            self.assertIn("'[elastic-8.x]' not in", source)
 
     def test_beats_templates_share_common_setup_fragment(self):
         template_paths = (

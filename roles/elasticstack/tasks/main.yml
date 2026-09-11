@@ -62,35 +62,9 @@
     # Configure the package source here so callers do not need a separate,
     # order-sensitive repos role task in every service play. The bootstrap
     # above installs python3-apt after removing legacy Elastic sources, so the
-    # repository tasks can safely use Ansible's apt modules. Track the selected
-    # release instead of a boolean: one playbook execution may switch from
-    # 8.x to 9.x during an upgrade.
-    - name: Configure Elastic repositories on RedHat
-      ansible.builtin.include_tasks: "{{ role_path }}/../repos/tasks/redhat.yml"
-      when:
-        - elasticstack_enable_repos | bool
-        - >-
-          (_elasticstack_repositories_configured_release | default(-1) | int)
-          != (elasticstack_release | int)
-        - ansible_facts.os_family == 'RedHat'
-
-    - name: Configure Elastic repositories on Debian
-      ansible.builtin.include_tasks: "{{ role_path }}/../repos/tasks/debian.yml"
-      when:
-        - elasticstack_enable_repos | bool
-        - >-
-          (_elasticstack_repositories_configured_release | default(-1) | int)
-          != (elasticstack_release | int)
-        - ansible_facts.os_family == 'Debian'
-
-    - name: Mark Elastic repositories as configured
-      ansible.builtin.set_fact:
-        _elasticstack_repositories_configured_release: "{{ elasticstack_release | int }}"
-      when:
-        - elasticstack_enable_repos | bool
-        - >-
-          (_elasticstack_repositories_configured_release | default(-1) | int)
-          != (elasticstack_release | int)
+    # repository tasks can safely use Ansible's apt modules.
+    - name: Configure Elastic repositories for selected release
+      ansible.builtin.include_tasks: configure_repositories.yml
 
     - name: Install common packages and dependencies
       ansible.builtin.import_tasks: packages.yml
@@ -98,3 +72,9 @@
     - name: Register elasticstack role has run for that host
       ansible.builtin.set_fact:
         _elasticstack_role_imported: true
+
+# A service role may call the shared role again after its import guard has been
+# set, for example when a single playbook changes from Elastic 8.x to 9.x.
+# Keep repository refresh reachable on those calls as well.
+- name: Refresh Elastic repositories for selected release
+  ansible.builtin.include_tasks: configure_repositories.yml

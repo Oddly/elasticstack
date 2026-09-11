@@ -1,0 +1,30 @@
+---
+# Keep repository setup idempotent for repeated role calls, but refresh it when
+# a playbook changes the selected Elastic major release.
+
+- name: Configure Elastic repositories on RedHat
+  ansible.builtin.include_tasks: "{{ role_path }}/../repos/tasks/redhat.yml"
+  when:
+    - elasticstack_enable_repos | bool
+    - >-
+      (_elasticstack_repositories_configured_release | default(-1) | int)
+      != (elasticstack_release | int)
+    - ansible_facts.os_family == 'RedHat'
+
+- name: Configure Elastic repositories on Debian
+  ansible.builtin.include_tasks: "{{ role_path }}/../repos/tasks/debian.yml"
+  when:
+    - elasticstack_enable_repos | bool
+    - >-
+      (_elasticstack_repositories_configured_release | default(-1) | int)
+      != (elasticstack_release | int)
+    - ansible_facts.os_family == 'Debian'
+
+- name: Mark Elastic repositories as configured
+  ansible.builtin.set_fact:
+    _elasticstack_repositories_configured_release: "{{ elasticstack_release | int }}"
+  when:
+    - elasticstack_enable_repos | bool
+    - >-
+      (_elasticstack_repositories_configured_release | default(-1) | int)
+      != (elasticstack_release | int)

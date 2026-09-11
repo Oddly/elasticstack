@@ -1,35 +1,8 @@
 ---
-# The release marker makes repeated role calls idempotent while still
-# reconfiguring the repository when a playbook changes major releases.
-
 - name: Include global role
   ansible.builtin.import_role:
     name: oddly.elasticstack.elasticstack
   when: not hostvars[inventory_hostname]._elasticstack_role_imported | default(false)
 
-- name: Import RedHat tasks
-  ansible.builtin.import_tasks: redhat.yml
-  when:
-    - ansible_facts.os_family == 'RedHat'
-    - elasticstack_enable_repos | bool
-    - >-
-      (_elasticstack_repositories_configured_release | default(-1) | int)
-      != (elasticstack_release | int)
-
-- name: Import Debian tasks
-  ansible.builtin.import_tasks: debian.yml
-  when:
-    - ansible_facts.os_family == 'Debian'
-    - elasticstack_enable_repos | bool
-    - >-
-      (_elasticstack_repositories_configured_release | default(-1) | int)
-      != (elasticstack_release | int)
-
-- name: Mark Elastic repositories as configured  # noqa: var-naming[no-role-prefix]
-  ansible.builtin.set_fact:
-    _elasticstack_repositories_configured_release: "{{ elasticstack_release | int }}"
-  when:
-    - elasticstack_enable_repos | bool
-    - >-
-      (_elasticstack_repositories_configured_release | default(-1) | int)
-      != (elasticstack_release | int)
+- name: Configure Elastic repositories for selected release
+  ansible.builtin.include_tasks: "{{ role_path }}/../elasticstack/tasks/configure_repositories.yml"
