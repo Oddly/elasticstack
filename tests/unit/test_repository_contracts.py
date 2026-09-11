@@ -1059,6 +1059,20 @@ class TestRepositoryContracts(unittest.TestCase):
             ],
         )
 
+    def test_diagnostic_artifacts_are_isolated_per_workflow_attempt(self):
+        action = (ROOT / ".github" / "actions" / "collect-diagnostics" / "action.yml").read_text()
+        diagnostic_dir = (
+            '"/tmp/molecule-diagnostics-${GITHUB_RUN_ID:-local}-'
+            '${GITHUB_RUN_ATTEMPT:-1}-${DIAGNOSTIC_ARTIFACT_NAME:-unknown}"'
+        )
+        self.assertEqual(action.count(f"diag={diagnostic_dir}"), 2)
+        self.assertEqual(action.count("DIAGNOSTIC_ARTIFACT_NAME: ${{ inputs.artifact-name }}"), 2)
+        self.assertIn(
+            "path: /tmp/molecule-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact-name }}/",
+            action,
+        )
+        self.assertNotIn("path: /tmp/molecule-diagnostics/", action)
+
     def test_ci_coverage_script_handles_untracked_and_quoted_scenarios(self):
         with tempfile.TemporaryDirectory(prefix="elasticstack-ci-coverage-") as directory:
             repo = Path(directory)
