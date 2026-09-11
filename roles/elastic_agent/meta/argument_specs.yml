@@ -23,8 +23,8 @@ argument_specs:
         - fleet
         - fleet_server
       elastic_agent_package_flavor:
-        description: Elastic Agent package flavor. The servers flavor includes Fleet Server and the server-side components
-          required for a Fleet Server installation
+        description: Elastic Agent package flavor. On 9.x use servers for Fleet Server; 8.x packages use basic because Fleet
+          Server is included in the regular package
         type: str
         default: basic
         choices:
@@ -51,7 +51,8 @@ argument_specs:
         type: str
         default: '{{ elastic_agent_config_dir }}/elastic-agent.yml'
       elastic_agent_package_flavor_file:
-        description: Path to the package-managed Elastic Agent flavor marker used to detect basic and servers transitions
+        description: Path to the 9.x package-managed Elastic Agent flavor marker used to detect basic and servers transitions;
+          8.x packages do not use a flavor marker
         type: str
         default: /opt/Elastic/Agent/.flavor
       elastic_agent_certificate_dir:

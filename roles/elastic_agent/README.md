@@ -27,10 +27,13 @@ elastic_agent_standalone_config:
           data_stream.dataset: system
 ```
 
-The package flavor marker is read from `elastic_agent_package_flavor_file`,
-which defaults to `/opt/Elastic/Agent/.flavor`. The role stops with a clear
-error when an existing package's flavor differs from the requested flavor;
-purge and reinstall the package to change between `basic` and `servers`.
+On Elastic Stack 9.x, the package flavor marker is read from
+`elastic_agent_package_flavor_file`, which defaults to
+`/opt/Elastic/Agent/.flavor`. The role stops with a clear error when an existing
+9.x package's flavor differs from the requested flavor; purge and reinstall the
+package to change between `basic` and `servers`. Elastic Stack 8.x uses the
+`basic` package and does not use a flavor marker; its regular package includes
+Fleet Server.
 
 ## Fleet mode
 
@@ -56,7 +59,7 @@ suppressed from Ansible output.
 
 ## Fleet Server mode
 
-Set `elastic_agent_mode: fleet_server`, install the `servers` package flavor, and provide the Fleet Server policy, Elasticsearch service token, and Elasticsearch URL. The role resolves the Elasticsearch URL from the collection's Elasticsearch inventory group when `elastic_agent_fleet_server_es` is empty, using `elasticsearch_http_publish_host` and `elasticsearch_http_publish_port` when configured and otherwise the inventory address and service port. The Fleet Server policy and service token are created in Kibana or through the Elasticsearch security APIs; this role installs and enrolls the host but does not create Fleet policies.
+Set `elastic_agent_mode: fleet_server` and provide the Fleet Server policy, Elasticsearch service token, and Elasticsearch URL. Use the `servers` package flavor on 9.x; use the default `basic` package on 8.x, where Fleet Server is included. The role resolves the Elasticsearch URL from the collection's Elasticsearch inventory group when `elastic_agent_fleet_server_es` is empty, using `elasticsearch_http_publish_host` and `elasticsearch_http_publish_port` when configured and otherwise the inventory address and service port. The Fleet Server policy and service token are created in Kibana or through the Elasticsearch security APIs; this role installs and enrolls the host but does not create Fleet policies.
 
 ```yaml
 elastic_agent_manage: true

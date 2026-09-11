@@ -1,6 +1,8 @@
 ---
 - name: Verify Fleet enrollment orchestration
   hosts: all
+  vars:
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
   tasks:
     - name: Read enrollment command arguments
       ansible.builtin.slurp:
@@ -226,7 +228,7 @@
           - "'--fleet-server-es-ca' not in (no_ca_argv.content | b64decode)"
           - "no_ca_directory.stat.exists == false"
           - enrollment_state_dir.stat.exists
-          - flavor_transition_marker.stat.exists
+          - (elasticstack_release | int < 9) or flavor_transition_marker.stat.exists
           - "elastic_agent_service.changed == false"
           - "agent_enabled.stdout == 'disabled'"
           - "migrated_beat_services.results | selectattr('stdout', 'equalto', 'disabled') | list | length == 3"

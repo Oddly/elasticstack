@@ -34,7 +34,10 @@
          elastic_agent_fleet_server_es | length > 0 and
          elastic_agent_fleet_server_service_token | length > 0 and
          elastic_agent_fleet_server_policy | length > 0)
-      - (elastic_agent_mode != 'fleet_server') or elastic_agent_package_flavor == 'servers'
+      - (elasticstack_release | int >= 9) or elastic_agent_package_flavor == 'basic'
+      - (elastic_agent_mode != 'fleet_server') or
+        (elasticstack_release | int < 9) or
+        elastic_agent_package_flavor == 'servers'
       - elastic_agent_fleet_server_ca_source in ['none', 'elasticsearch_ca', 'external']
       - elastic_agent_fleet_server_ca_source != 'external' or
         (elastic_agent_fleet_server_ca_file | length > 0 or elastic_agent_fleet_server_ca_content | length > 0)
@@ -65,13 +68,17 @@
 - name: Gather installed package facts for Elastic Agent flavor validation
   ansible.builtin.package_facts:
     manager: auto
-  when: elastic_agent_manage | bool
+  when:
+    - elastic_agent_manage | bool
+    - elasticstack_release | int >= 9
 
 - name: Check the installed Elastic Agent flavor marker
   ansible.builtin.stat:
     path: "{{ elastic_agent_package_flavor_file }}"
   register: _elastic_agent_package_flavor_marker
-  when: elastic_agent_manage | bool
+  when:
+    - elastic_agent_manage | bool
+    - elasticstack_release | int >= 9
 
 - name: Read the installed Elastic Agent flavor marker
   ansible.builtin.slurp:
@@ -79,6 +86,7 @@
   register: _elastic_agent_package_flavor_marker_content
   when:
     - elastic_agent_manage | bool
+    - elasticstack_release | int >= 9
     - _elastic_agent_package_flavor_marker.stat.exists
 
 - name: Validate the installed Elastic Agent package flavor
@@ -94,7 +102,9 @@
       {{ elastic_agent_package_flavor_file }} is missing or contains
       {{ _elastic_agent_package_flavor_marker_content.content | default('') | b64decode | trim }}.
       Purge the existing Elastic Agent package and reinstall it with the requested flavor.
-  when: elastic_agent_manage | bool
+  when:
+    - elastic_agent_manage | bool
+    - elasticstack_release | int >= 9
   no_log: true
 
 - name: Install Elastic Agent package
@@ -102,8 +112,9 @@
   vars:
     _package_name: "{{ elastic_agent_package }}"
     _package_base_name: elastic-agent
-    _package_environment:
-      ELASTIC_AGENT_FLAVOR: "{{ elastic_agent_package_flavor }}"
+    _package_environment: >-
+      {{ {'ELASTIC_AGENT_FLAVOR': elastic_agent_package_flavor}
+         if elasticstack_release | int >= 9 else {} }}
     _package_notify:
       - Restart Elastic Agent
   when: elastic_agent_manage | bool
@@ -114,6 +125,7 @@
   register: _elastic_agent_package_flavor_after_install
   when:
     - elastic_agent_manage | bool
+    - elasticstack_release | int >= 9
     - not ansible_check_mode
 
 - name: Assert the installed Elastic Agent package flavor matches the requested flavor
@@ -126,6 +138,7 @@
       and reinstall the package with the requested flavor.
   when:
     - elastic_agent_manage | bool
+    - elasticstack_release | int >= 9
     - not ansible_check_mode
   no_log: true
 
