@@ -1035,6 +1035,7 @@ class TestRepositoryContracts(unittest.TestCase):
             self.assertIn("elasticstack_kibana_port", source, relative_path)
             self.assertIn("_wait_validate_certs", source, relative_path)
             self.assertIn("_wait_ca_file", source, relative_path)
+            self.assertIn("kibana_certs_dir", source, relative_path)
 
     def test_kibana_port_is_managed_and_deployed_with_the_shared_variable(self):
         template = (ROOT / "roles/kibana/templates/kibana.yml.j2").read_text()

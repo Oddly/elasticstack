@@ -18,7 +18,7 @@
     _wait_fatal_pattern: "FATAL|Unable to connect to Elasticsearch|Authentication.*failed|Kibana server is not ready.*fatal"
     _wait_validate_certs: "{{ kibana_tls_validate_certs | bool }}"
     _wait_ca_file: >-
-      {{ '/etc/kibana/certs/ca.crt'
+      {{ (kibana_certs_dir | default('/etc/kibana/certs', true)) ~ '/ca.crt'
          if kibana_tls | default(false) | bool and
             (kibana_cert_source | default('elasticsearch_ca') == 'elasticsearch_ca' or
              kibana_tls_ca_file | default('', true) | length > 0 or
