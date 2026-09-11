@@ -304,6 +304,14 @@ beats_auditbeat_enable: true
 beats_auditbeat_setup: true
 beats_auditbeat_output: elasticsearch
 beats_auditbeat_loadbalance: true
+beats_auditbeat_modules:
+  - module: auditd
+    audit_rule_files:
+      - ${path.config}/audit.rules.d/*.conf
+  - module: file_integrity
+    paths:
+      - /etc
+    recursive: true
 ```
 
 `beats_auditbeat_enable` controls whether the Auditbeat systemd service is started. Set to `false` in containers or environments where the `auditd` kernel module is unavailable.
@@ -312,12 +320,36 @@ beats_auditbeat_loadbalance: true
 
 `beats_auditbeat_output` sets the output destination: `elasticsearch` or `logstash`. `beats_auditbeat_loadbalance` enables round-robin across multiple output hosts.
 
-The Auditbeat template configures four modules that are not variable-controlled:
+`beats_auditbeat_modules` is a list of module configuration dictionaries rendered under `auditbeat.modules`. The default includes auditd, file integrity, and two system datasets. Override the list to change audit rule files, monitored paths, datasets, intervals, or any other Auditbeat module setting.
 
-- **auditd** -- Linux audit framework, loads rules from `${path.config}/audit.rules.d/*.conf`
-- **file_integrity** -- monitors `/bin`, `/usr/bin`, `/sbin`, `/usr/sbin`, `/etc` recursively
-- **system (packages)** -- inventories installed packages every 2 minutes
-- **system (state)** -- captures host, login, process, socket, and user state every 12 hours, with `user.detect_password_changes: true`
+Example (this replaces the complete default module list):
+
+```yaml
+beats_auditbeat_modules:
+  - module: auditd
+    audit_rule_files:
+      - ${path.config}/audit.rules.d/*.conf
+  - module: file_integrity
+    paths:
+      - /etc
+      - /opt/myapp
+    recursive: true
+  - module: system
+    datasets:
+      - package
+    period: 2m
+  - module: system
+    datasets:
+      - host
+      - login
+      - process
+      - socket
+      - user
+    state.period: 12h
+    user.detect_password_changes: true
+    login.wtmp_file_pattern: /var/log/wtmp*
+    login.btmp_file_pattern: /var/log/btmp*
+```
 
 ### Metricbeat Configuration
 

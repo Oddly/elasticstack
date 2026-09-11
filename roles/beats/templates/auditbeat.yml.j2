@@ -1,32 +1,7 @@
 {{ ansible_managed | comment }}
 
 auditbeat.modules:
-- module: auditd
-  audit_rule_files: [ '${path.config}/audit.rules.d/*.conf' ]
-  audit_rules: |
-- module: file_integrity
-  paths:
-  - /bin
-  - /usr/bin
-  - /sbin
-  - /usr/sbin
-  - /etc
-  recursive: true
-- module: system
-  datasets:
-    - package # Installed, updated, and removed packages
-  period: 2m # The frequency at which the datasets check for changes
-- module: system
-  datasets:
-    - host    # General host information, e.g. uptime, IPs
-    - login   # User logins, logouts, and system boots.
-    - process # Started and stopped processes
-    - socket  # Opened and closed sockets
-    - user    # User information
-  state.period: 12h
-  user.detect_password_changes: true
-  login.wtmp_file_pattern: /var/log/wtmp*
-  login.btmp_file_pattern: /var/log/btmp*
+{{ beats_auditbeat_modules | to_nice_yaml(indent=2, sort_keys=False) }}
 
 {% include '_beats_setup.j2' %}
 {% set _beat_output = beats_auditbeat_output %}

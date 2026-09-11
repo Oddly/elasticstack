@@ -181,6 +181,44 @@ beats_auditbeat_enable: true
 beats_auditbeat_output: elasticsearch
 # @var beats_auditbeat_loadbalance:description: Load balance events across multiple output hosts
 beats_auditbeat_loadbalance: true
+# @var beats_auditbeat_modules:description: Auditbeat module configurations rendered under auditbeat.modules
+# @var beats_auditbeat_modules:example: |
+# beats_auditbeat_modules:
+#   - module: auditd
+#     audit_rule_files:
+#       - ${path.config}/audit.rules.d/*.conf
+#   - module: file_integrity
+#     paths:
+#       - /etc
+#     recursive: true
+# @end
+beats_auditbeat_modules:
+  - module: auditd
+    audit_rule_files:
+      - ${path.config}/audit.rules.d/*.conf
+  - module: file_integrity
+    paths:
+      - /bin
+      - /usr/bin
+      - /sbin
+      - /usr/sbin
+      - /etc
+    recursive: true
+  - module: system
+    datasets:
+      - package
+    period: 2m
+  - module: system
+    datasets:
+      - host
+      - login
+      - process
+      - socket
+      - user
+    state.period: 12h
+    user.detect_password_changes: true
+    login.wtmp_file_pattern: /var/log/wtmp*
+    login.btmp_file_pattern: /var/log/btmp*
 
 # === Metricbeat Configuration ===
 

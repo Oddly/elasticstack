@@ -735,6 +735,29 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("_logstash_output_ssl_options.enabled", output_template)
         self.assertIn("_logstash_output_ssl_options.keystore_path", output_template)
 
+    def test_auditbeat_modules_are_configurable(self):
+        defaults = yaml.safe_load(
+            (ROOT / "roles" / "beats" / "defaults" / "main.yml").read_text()
+        )
+        template = (
+            ROOT / "roles" / "beats" / "templates" / "auditbeat.yml.j2"
+        ).read_text()
+
+        self.assertEqual(len(defaults["beats_auditbeat_modules"]), 4)
+        self.assertEqual(defaults["beats_auditbeat_modules"][0]["module"], "auditd")
+        self.assertEqual(
+            defaults["beats_auditbeat_modules"][1]["module"], "file_integrity"
+        )
+        self.assertIn("beats_auditbeat_modules | to_nice_yaml", template)
+        self.assertNotIn("/usr/bin", template)
+        documentation = (ROOT / "docs" / "reference" / "beats.md").read_text()
+        self.assertIn("audit_rule_files:", documentation)
+        self.assertIn("state.period: 12h", documentation)
+        verify = (ROOT / "molecule" / "beats_advanced" / "verify.yml").read_text()
+        self.assertIn("auditbeat", verify)
+        self.assertIn("- test", verify)
+        self.assertIn("- config", verify)
+
     def test_plugin_workflow_discovers_the_complete_unit_test_suite(self):
         source = (ROOT / ".github" / "workflows" / "test_plugins.yml").read_text()
         self.assertIn("pytest>=9.1.1,<10", source)

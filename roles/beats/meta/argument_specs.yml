@@ -194,6 +194,36 @@ argument_specs:
         description: Load balance events across multiple output hosts
         type: bool
         default: true
+      beats_auditbeat_modules:
+        description: Auditbeat module configurations rendered under auditbeat.modules
+        type: list
+        default:
+        - module: auditd
+          audit_rule_files:
+          - ${path.config}/audit.rules.d/*.conf
+        - module: file_integrity
+          paths:
+          - /bin
+          - /usr/bin
+          - /sbin
+          - /usr/sbin
+          - /etc
+          recursive: true
+        - module: system
+          datasets:
+          - package
+          period: 2m
+        - module: system
+          datasets:
+          - host
+          - login
+          - process
+          - socket
+          - user
+          state.period: 12h
+          user.detect_password_changes: true
+          login.wtmp_file_pattern: /var/log/wtmp*
+          login.btmp_file_pattern: /var/log/btmp*
       beats_metricbeat_enable:
         description: Enable the Metricbeat service after installation
         type: bool

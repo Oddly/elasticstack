@@ -306,6 +306,32 @@
         logstash_user_name: contract-user
         logstash_user_password: contract-password
 
+    - name: Render configurable Auditbeat modules
+      ansible.builtin.template:
+        src: ../../roles/beats/templates/auditbeat.yml.j2
+        dest: "{{ _contract_tmp.path }}/auditbeat.yml"
+        mode: "0644"
+      vars:
+        beats_security: false
+        beats_target_hosts:
+          - localhost
+        beats_logging: file
+        beats_logpath: /var/log/beats
+        beats_loglevel: info
+        beats_logging_keepfiles: 7
+        beats_logging_permissions: "0644"
+        beats_auditbeat_output: logstash
+        beats_auditbeat_loadbalance: true
+        beats_auditbeat_modules:
+          - module: file_integrity
+            paths:
+              - /var/log/auditbeat
+            recursive: false
+          - module: system
+            datasets:
+              - process
+            period: 5m
+
     - name: Read rendered configurations
       ansible.builtin.slurp:
         src: "{{ item }}"
@@ -322,9 +348,14 @@
         - "{{ _contract_tmp.path }}/90-output-secure-9.conf"
         - "{{ _contract_tmp.path }}/10-input-8.conf"
         - "{{ _contract_tmp.path }}/90-output-secure-8.conf"
+        - "{{ _contract_tmp.path }}/auditbeat.yml"
       register: _rendered_configs
       loop_control:
         label: "{{ item | basename }}"
+
+    - name: Parse rendered Auditbeat configuration
+      ansible.builtin.set_fact:
+        _auditbeat_config: "{{ _rendered_configs.results[12].content | b64decode | from_yaml }}"
 
     - name: Assert Elasticsearch optional variables render
       ansible.builtin.assert:
@@ -402,6 +433,16 @@
           - "'keystore => \"/etc/logstash/certs/keystore.pfx\"' in (_rendered_configs.results[11].content | b64decode)"
           - "'keystore_password => \"contract-passphrase\"' in (_rendered_configs.results[11].content | b64decode)"
           - "'cacert => [\"/etc/logstash/certs/ca.crt\"]' in (_rendered_configs.results[11].content | b64decode)"
+
+    - name: Assert Auditbeat module variables render
+      ansible.builtin.assert:
+        that:
+          - _auditbeat_config['auditbeat.modules'][0].module == 'file_integrity'
+          - _auditbeat_config['auditbeat.modules'][0].paths == ['/var/log/auditbeat']
+          - not _auditbeat_config['auditbeat.modules'][0].recursive | bool
+          - _auditbeat_config['auditbeat.modules'][1].module == 'system'
+          - _auditbeat_config['auditbeat.modules'][1].datasets == ['process']
+          - _auditbeat_config['auditbeat.modules'][1].period == '5m'
 
 - name: Logstash compatibility variable contract
   hosts: localhost

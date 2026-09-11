@@ -687,6 +687,7 @@ behaviors:
       - beats_metricbeat_modules
       - beats_auditbeat
       - beats_auditbeat_output
+      - beats_auditbeat_modules
     scenario: beats_advanced
     roles:
       - oddly.elasticstack.repos
@@ -702,6 +703,10 @@ behaviors:
       - "'extra-test' in (filebeat_yml.content | b64decode)"
       - "'metricbeat.config.modules' in (metricbeat_yml.content | b64decode)"
       - "'output.logstash' in (auditbeat_yml.content | b64decode)"
+      - "'audit.rules.d/*.conf' in (auditbeat_yml.content | b64decode)"
+      - "'/var/log/auditbeat' in (auditbeat_yml.content | b64decode)"
+      - "'recursive: false' in (auditbeat_yml.content | b64decode)"
+      - "'period: 5m' in (auditbeat_yml.content | b64decode)"
   - name: elasticsearch_custom_runtime
     role: elasticsearch
     variables:
