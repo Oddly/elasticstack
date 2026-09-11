@@ -188,7 +188,7 @@
     seconds: "{{ elasticsearch_upgrade_countdown | default(10) }}"
     prompt: >-
       Elasticsearch {{ ansible_facts.packages['elasticsearch'][0].version }}
-      will be upgraded to {{ elasticstack_version | default('latest ' ~ elasticstack_release ~ '.x') }}.
+      will be upgraded to {{ elasticstack_version | default('latest ' ~ elasticstack_release ~ '.x', true) }}.
       Nodes will be restarted one at a time with shard allocation management.
       Press Ctrl+C to abort, or wait {{ elasticsearch_upgrade_countdown | default(10) }} seconds to continue.
   when:

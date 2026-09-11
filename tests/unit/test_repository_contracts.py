@@ -580,6 +580,11 @@ class TestRepositoryContracts(unittest.TestCase):
             "elasticstack_version | default('') | string | length > 0",
             upgrade_detection,
         )
+        upgrade_tasks = (ROOT / "roles" / "elasticsearch" / "tasks" / "main.yml").read_text()
+        self.assertIn(
+            "elasticstack_version | default('latest ' ~ elasticstack_release ~ '.x', true)",
+            upgrade_tasks,
+        )
         for variable in (
             "logstash_security",
             "logstash_input_beats",
