@@ -51,6 +51,7 @@ jobs:
               # Certificate directory changes affect generated certificates
               # in the multi-role renewal scenario as well as role-local tests.
               - 'roles/elasticsearch/defaults/main.yml'
+              - 'roles/elasticsearch/tasks/main.yml'
               - 'roles/elasticsearch/tasks/elasticsearch-security.yml'
               - 'roles/elasticsearch/templates/elasticsearch.yml.j2'
               - 'roles/kibana/defaults/main.yml'

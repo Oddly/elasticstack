@@ -377,6 +377,27 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("_elasticstack_package_changed", elasticsearch)
         self.assertNotIn("_elasticsearch_install_rpm_full", elasticsearch)
 
+        elasticsearch_template = (
+            ROOT / "roles" / "elasticsearch" / "templates" / "elasticsearch.yml.j2"
+        ).read_text()
+        self.assertIn(
+            "[elasticsearch_certs_dir ~ '/ca.crt'] | to_json",
+            elasticsearch_template,
+        )
+        self.assertGreaterEqual(
+            elasticsearch_template.count("elasticsearch_certs_dir ~"),
+            14,
+        )
+
+        workflow = (ROOT / ".github" / "workflows" / "test_full_stack.yml").read_text()
+        self.assertIn("roles/elasticsearch/tasks/main.yml", workflow)
+
+        elasticsearch_docs = (ROOT / "docs" / "reference" / "elasticsearch.md").read_text()
+        kibana_docs = (ROOT / "docs" / "reference" / "kibana.md").read_text()
+        self.assertIn("generated or external TLS certificates", elasticsearch_docs)
+        self.assertIn("generated or external TLS certificates", kibana_docs)
+        self.assertIn("{{ kibana_certs_dir }}/", kibana_docs)
+
     def test_elasticsearch_and_kibana_certificate_directories_are_configurable(self):
         for role, variable, default, hardcoded, files in (
             (
@@ -416,9 +437,8 @@ class TestRepositoryContracts(unittest.TestCase):
                     source,
                     f"{relative_path} still hardcodes the cert directory",
                 )
-                self.assertIn(
-                    f"{{{{ {variable} }}}}",
-                    source,
+                self.assertTrue(
+                    f"{{{{ {variable} }}}}" in source or f"{variable} ~" in source,
                     f"{relative_path} does not use {variable}",
                 )
 
