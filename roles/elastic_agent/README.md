@@ -28,10 +28,11 @@ elastic_agent_standalone_config:
 ```
 
 On Elastic Stack 9.x, the package flavor marker is read from
-`elastic_agent_package_flavor_file`. It defaults to an automatic lookup beside
-the active package binary, which is stored under the versioned
-`/var/lib/elastic-agent/data` directory. Set the variable explicitly when using
-a custom package layout. The role stops with a clear error when an existing 9.x
+`elastic_agent_package_flavor_file`. It defaults to an automatic lookup at
+the active package's top directory. The active package binary is stored under
+the versioned `/var/lib/elastic-agent/data` directory, so the default marker is
+`/var/lib/elastic-agent/.flavor`. Set the variable explicitly when using a
+custom package layout. The role stops with a clear error when an existing 9.x
 package's flavor differs from the requested flavor; purge and reinstall the
 package to change between `basic` and `servers`. Elastic Stack 8.x uses the
 `basic` package and does not use a flavor marker; its regular package includes
