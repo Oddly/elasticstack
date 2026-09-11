@@ -1079,11 +1079,12 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("../repos/tasks/redhat.yml", shared)
         self.assertIn("../repos/tasks/debian.yml", shared)
         self.assertIn("elasticstack_enable_repos", shared)
-        self.assertIn("_elasticstack_repositories_configured", shared)
+        self.assertIn("_elasticstack_repositories_configured_release", shared)
+        self.assertIn("elasticstack_release | int", shared)
 
         repos = (ROOT / "roles/repos/tasks/main.yml").read_text()
         self.assertIn("oddly.elasticstack.elasticstack", repos)
-        self.assertIn("not _elasticstack_repositories_configured", repos)
+        self.assertIn("_elasticstack_repositories_configured_release", repos)
         self.assertIn("elasticstack_enable_repos", repos)
 
         default_converge = (ROOT / "molecule/elasticsearch_default/converge.yml").read_text()
@@ -1094,6 +1095,20 @@ class TestRepositoryContracts(unittest.TestCase):
         )
         default_verify = (ROOT / "molecule/elasticsearch_default/verify.yml").read_text()
         self.assertIn("_shared_repo_file.stat.exists", default_verify)
+
+    def test_release_only_upgrade_scenarios_verify_repository_switch(self):
+        for relative_path in (
+            "molecule/elasticsearch_upgrade_8to9/converge.yml",
+            "molecule/elasticsearch_upgrade_8to9_single/converge.yml",
+        ):
+            source = (ROOT / relative_path).read_text()
+            self.assertIn("elasticstack_release: 8", source)
+            self.assertIn("elasticstack_release: 9", source)
+            self.assertIn(
+                "Verify the 9.x repository is selected before package upgrade",
+                source,
+            )
+            self.assertIn("'/packages/9.x/' in", source)
 
     def test_beats_templates_share_common_setup_fragment(self):
         template_paths = (

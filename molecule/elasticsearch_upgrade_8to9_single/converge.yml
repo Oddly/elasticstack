@@ -233,6 +233,22 @@
       ansible.builtin.include_role:
         name: oddly.elasticstack.repos
 
+    - name: Read the repository selected for the release-only upgrade
+      ansible.builtin.slurp:
+        src: >-
+          {{ '/etc/yum.repos.d/elastic-release.repo'
+             if ansible_facts.os_family == 'RedHat'
+             else '/etc/apt/sources.list.d/elasticstack.list' }}
+      register: _elastic_release_repository
+
+    - name: Verify the 9.x repository is selected before package upgrade
+      ansible.builtin.assert:
+        that:
+          - "'/packages/9.x/' in (_elastic_release_repository.content | b64decode)"
+        fail_msg: >-
+          The release-only upgrade did not switch the package repository to
+          9.x. Repository contents: {{ _elastic_release_repository.content | b64decode }}
+
     - name: Reset shared role guard for upgrade play
       ansible.builtin.set_fact:
         _elasticstack_role_imported: false
