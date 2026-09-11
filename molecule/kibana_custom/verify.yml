@@ -27,6 +27,10 @@
       block:
         - name: Check Kibana availability
           ansible.builtin.include_tasks: ../shared/verify_kibana_available.yml
+          vars:
+            # This scenario uses Kibana's default HTTP listener with security
+            # enabled, so the local status request must authenticate.
+            _verify_kibana_auth_http: true
 
         - name: Read kibana.yml
           ansible.builtin.slurp:

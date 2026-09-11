@@ -9,14 +9,16 @@
 #   _verify_kibana_status_codes: accepted transient/ready HTTP statuses
 #   _verify_kibana_user: HTTP basic-auth user (default: elastic)
 #   _verify_kibana_auth: use basic auth when the endpoint is HTTPS (default: true)
+#   _verify_kibana_auth_http: explicitly use basic auth for a local HTTP endpoint (default: false)
 - name: Connect to Kibana
   vars:
     _kibana_url: "{{ _verify_kibana_url | default('http://localhost:5601/api/status') }}"
     _kibana_is_https: "{{ _kibana_url is match('^https://') }}"
-    # Never attach credentials to a plain HTTP request. Kibana's status endpoint
-    # is intentionally checked without authentication in the default HTTP mode.
+    # Kibana's status endpoint is checked without authentication in the default
+    # HTTP mode; callers must opt in explicitly for a secured local HTTP check.
     _kibana_use_auth: >-
-      {{ (_verify_kibana_auth | default(true) | bool) and (_kibana_is_https | bool) }}
+      {{ ((_verify_kibana_auth | default(true) | bool) and (_kibana_is_https | bool)) or
+         (_verify_kibana_auth_http | default(false) | bool) }}
   ansible.builtin.uri:
     url: "{{ _kibana_url }}"
     method: GET

@@ -830,6 +830,7 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("overall.level", kibana_shared)
         self.assertIn("_kibana_is_https", kibana_shared)
         self.assertIn("_kibana_use_auth", kibana_shared)
+        self.assertIn("_verify_kibana_auth_http", kibana_shared)
         self.assertIn("follow_redirects: none", kibana_shared)
         self.assertIn("else omit", kibana_shared)
         self.assertIn("_verify_kibana_validate_certs | default(true)", kibana_shared)
@@ -855,6 +856,9 @@ class TestRepositoryContracts(unittest.TestCase):
                 source,
                 scenario,
             )
+
+        custom_kibana_verify = (ROOT / "molecule" / "kibana_custom" / "verify.yml").read_text()
+        self.assertIn("_verify_kibana_auth_http: true", custom_kibana_verify)
 
         logstash_service_shared = (
             ROOT / "molecule" / "shared" / "verify_logstash_service.yml"
