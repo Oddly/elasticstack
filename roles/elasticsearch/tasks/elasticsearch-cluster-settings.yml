@@ -46,6 +46,7 @@
           {%   endif %}
           {% endfor %}
           {{ ns.changed }}
+      changed_when: false
 
     - name: elasticsearch-cluster-settings | Apply cluster settings
       ansible.builtin.uri:
