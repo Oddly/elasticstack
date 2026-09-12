@@ -55,10 +55,12 @@ The enrollment fingerprint is stored in `elastic_agent_enrollment_state_file`,
 which defaults to `/etc/elastic-agent/.enrollment.sha256`. It lets repeated runs
 remain idempotent without persisting the enrollment token. The role also checks
 the package-managed encrypted Fleet state at `/etc/elastic-agent/fleet.enc`;
-state and marker must both be present for a run to skip enrollment. It refuses
-to overwrite an existing Fleet state when the marker is missing or changed, to
-avoid creating duplicate Fleet agents. The token and policy content are
-suppressed from Ansible output.
+state and marker must both be present for a run to skip enrollment. A fresh
+package installation may create this file while the package starts, so only
+state that existed before package installation is treated as an existing
+enrollment. The role refuses to overwrite that state when the marker is missing
+or changed, to avoid creating duplicate Fleet agents. The token and policy
+content are suppressed from Ansible output.
 
 ## Fleet Server mode
 
