@@ -58,9 +58,14 @@
         - name: Verify server.ssl.certificate and server.ssl.key paths are rendered
           ansible.builtin.assert:
             that:
-              - kibana_certs_dir == '/etc/kibana/custom-certs'
-              - "'server.ssl.certificate:' in (kibana_yml.content | b64decode)"
-              - "'server.ssl.key:' in (kibana_yml.content | b64decode)"
+              - >-
+                ('server.ssl.certificate: ' ~
+                ((kibana_certs_dir ~ '/' ~ inventory_hostname ~ '-kibana.crt') | to_json))
+                in (kibana_yml.content | b64decode)
+              - >-
+                ('server.ssl.key: ' ~
+                ((kibana_certs_dir ~ '/' ~ inventory_hostname ~ '-kibana.key') | to_json))
+                in (kibana_yml.content | b64decode)
               - "'keystore.path' not in (kibana_yml.content | b64decode)"
               - "'elasticsearch.ssl.verificationMode: none' in (kibana_yml.content | b64decode)"
             fail_msg: |

@@ -46,7 +46,6 @@
     - name: Assert transport cert exists
       ansible.builtin.assert:
         that:
-          - elasticsearch_certs_dir == '/etc/elasticsearch/custom-certs'
           - transport_cert_stat.stat.exists
         fail_msg: "Transport certificate file not found"
 
@@ -84,15 +83,38 @@
     - name: Verify PEM-style transport config
       ansible.builtin.assert:
         that:
-          - "'xpack.security.transport.ssl.certificate' in _es_config"
-          - "'xpack.security.transport.ssl.key' in _es_config"
+          - >-
+            ('xpack.security.transport.ssl.certificate: ' ~
+            ((elasticsearch_certs_dir ~ '/' ~ inventory_hostname ~ '-transport.crt') | to_json))
+            in _es_config
+          - >-
+            ('xpack.security.transport.ssl.key: ' ~
+            ((elasticsearch_certs_dir ~ '/' ~ inventory_hostname ~ '-transport.key') | to_json))
+            in _es_config
         fail_msg: "Expected PEM-style transport SSL config in elasticsearch.yml"
+
+    - name: Verify PEM-style HTTP config
+      ansible.builtin.assert:
+        that:
+          - >-
+            ('xpack.security.http.ssl.certificate: ' ~
+            ((elasticsearch_certs_dir ~ '/' ~ inventory_hostname ~ '-http.crt') | to_json))
+            in _es_config
+          - >-
+            ('xpack.security.http.ssl.key: ' ~
+            ((elasticsearch_certs_dir ~ '/' ~ inventory_hostname ~ '-http.key') | to_json))
+            in _es_config
+        fail_msg: "Expected PEM-style HTTP SSL config in elasticsearch.yml"
 
     - name: Verify CA referenced in both transport and HTTP sections
       ansible.builtin.assert:
         that:
-          - "'transport.ssl.certificate_authorities' in _es_config"
-          - "'http.ssl.certificate_authorities' in _es_config"
+          - >-
+            ('xpack.security.transport.ssl.certificate_authorities: ' ~
+            ([elasticsearch_certs_dir ~ '/ca.crt'] | to_json)) in _es_config
+          - >-
+            ('xpack.security.http.ssl.certificate_authorities: ' ~
+            ([elasticsearch_certs_dir ~ '/ca.crt'] | to_json)) in _es_config
         fail_msg: >-
           certificate_authorities missing from elasticsearch.yml — CA was
           configured but the template omitted it (first-install rendering bug).
