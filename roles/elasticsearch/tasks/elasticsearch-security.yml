@@ -135,7 +135,7 @@
     - name: elasticsearch-security | Create certificate directory
       ansible.builtin.file:
         state: directory
-        path: /etc/elasticsearch/certs
+        path: "{{ elasticsearch_certs_dir }}"
         owner: root
         group: elasticsearch
         mode: "0750"
@@ -145,7 +145,7 @@
     - name: elasticsearch-security | Write transport certificate (from content)
       ansible.builtin.copy:
         content: "{{ elasticsearch_transport_tls_certificate_content }}"
-        dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-transport.crt"
+        dest: "{{ elasticsearch_certs_dir }}/{{ inventory_hostname }}-transport.crt"
         owner: root
         group: elasticsearch
         mode: "0640"
@@ -154,7 +154,7 @@
     - name: elasticsearch-security | Copy transport certificate (from file)
       ansible.builtin.copy:
         src: "{{ elasticsearch_transport_tls_certificate }}"
-        dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-transport{{ '.p12' if _elasticsearch_transport_cert_format == 'p12' else '.crt' }}"
+        dest: "{{ elasticsearch_certs_dir }}/{{ inventory_hostname }}-transport{{ '.p12' if _elasticsearch_transport_cert_format == 'p12' else '.crt' }}"
         owner: root
         group: elasticsearch
         mode: "0640"
@@ -164,7 +164,7 @@
     - name: elasticsearch-security | Write transport key (from content)
       ansible.builtin.copy:
         content: "{{ elasticsearch_transport_tls_key_content }}"
-        dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-transport.key"
+        dest: "{{ elasticsearch_certs_dir }}/{{ inventory_hostname }}-transport.key"
         owner: root
         group: elasticsearch
         mode: "0640"
@@ -173,7 +173,7 @@
     - name: elasticsearch-security | Copy transport key (from file, PEM only)
       ansible.builtin.copy:
         src: "{{ _elasticsearch_transport_resolved_key }}"
-        dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-transport.key"
+        dest: "{{ elasticsearch_certs_dir }}/{{ inventory_hostname }}-transport.key"
         owner: root
         group: elasticsearch
         mode: "0640"
@@ -187,7 +187,7 @@
     - name: elasticsearch-security | Write HTTP certificate (from content)
       ansible.builtin.copy:
         content: "{{ _elasticsearch_effective_http_cert_content }}"
-        dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-http.crt"
+        dest: "{{ elasticsearch_certs_dir }}/{{ inventory_hostname }}-http.crt"
         owner: root
         group: elasticsearch
         mode: "0640"
@@ -198,7 +198,7 @@
     - name: elasticsearch-security | Copy HTTP certificate (from file)
       ansible.builtin.copy:
         src: "{{ _elasticsearch_effective_http_cert }}"
-        dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-http{{ '.p12' if _elasticsearch_http_cert_format == 'p12' else '.crt' }}"
+        dest: "{{ elasticsearch_certs_dir }}/{{ inventory_hostname }}-http{{ '.p12' if _elasticsearch_http_cert_format == 'p12' else '.crt' }}"
         owner: root
         group: elasticsearch
         mode: "0640"
@@ -210,7 +210,7 @@
     - name: elasticsearch-security | Write HTTP key (from content)
       ansible.builtin.copy:
         content: "{{ _elasticsearch_effective_http_key_content }}"
-        dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-http.key"
+        dest: "{{ elasticsearch_certs_dir }}/{{ inventory_hostname }}-http.key"
         owner: root
         group: elasticsearch
         mode: "0640"
@@ -221,7 +221,7 @@
     - name: elasticsearch-security | Copy HTTP key (from file, PEM only)
       ansible.builtin.copy:
         src: "{{ _elasticsearch_http_resolved_key }}"
-        dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}-http.key"
+        dest: "{{ elasticsearch_certs_dir }}/{{ inventory_hostname }}-http.key"
         owner: root
         group: elasticsearch
         mode: "0640"
@@ -236,7 +236,7 @@
     - name: elasticsearch-security | Write CA certificate (from content)
       ansible.builtin.copy:
         content: "{{ elasticsearch_tls_ca_certificate_content }}"
-        dest: /etc/elasticsearch/certs/ca.crt
+        dest: "{{ elasticsearch_certs_dir }}/ca.crt"
         owner: root
         group: elasticsearch
         mode: "0640"
@@ -245,7 +245,7 @@
     - name: elasticsearch-security | Copy CA certificate (from file)
       ansible.builtin.copy:
         src: "{{ elasticsearch_tls_ca_certificate }}"
-        dest: /etc/elasticsearch/certs/ca.crt
+        dest: "{{ elasticsearch_certs_dir }}/ca.crt"
         owner: root
         group: elasticsearch
         mode: "0640"
@@ -261,7 +261,7 @@
         argv:
           - awk
           - '/-----BEGIN CERTIFICATE-----/{n++} n>1'
-          - "/etc/elasticsearch/certs/{{ inventory_hostname }}-transport.crt"
+          - "{{ elasticsearch_certs_dir }}/{{ inventory_hostname }}-transport.crt"
       register: _elasticsearch_extracted_ca_chain
       changed_when: false
       when:
@@ -272,7 +272,7 @@
     - name: elasticsearch-security | Write extracted CA chain
       ansible.builtin.copy:
         content: "{{ _elasticsearch_extracted_ca_chain.stdout }}\n"
-        dest: /etc/elasticsearch/certs/ca.crt
+        dest: "{{ elasticsearch_certs_dir }}/ca.crt"
         owner: root
         group: elasticsearch
         mode: "0640"
@@ -292,7 +292,7 @@
 
     - name: elasticsearch-security | Find stale auto-generated P12 certificate files
       ansible.builtin.find:
-        paths: /etc/elasticsearch/certs
+        paths: "{{ elasticsearch_certs_dir }}"
         patterns: "*.p12"
         excludes:
           - "{{ inventory_hostname }}-transport.p12"
@@ -428,7 +428,7 @@
             - certificates
             - renew_es_cert
       vars:
-        _cert_path: "/etc/elasticsearch/certs/{{ inventory_hostname_short }}.p12"
+        _cert_path: "{{ elasticsearch_certs_dir }}/{{ inventory_hostname_short }}.p12"
         _cert_pass: "{{ elasticsearch_tls_key_passphrase }}"
         _cert_buffer_days: "{{ elasticsearch_cert_expiration_buffer }}"
         _cert_expiry_fact: elasticsearch_cert_will_expire_soon
@@ -445,7 +445,7 @@
             - renew_ca
             - renew_es_cert
       vars:
-        _backup_path: /etc/elasticsearch/certs
+        _backup_path: "{{ elasticsearch_certs_dir }}"
         _backup_target: "{{ inventory_hostname }}"
       when: "'renew_es_cert' in ansible_run_tags or 'renew_ca' in ansible_run_tags or elasticsearch_cert_will_expire_soon | bool"
       tags:
@@ -571,7 +571,7 @@
     - name: elasticsearch-security | Create certificate directory
       ansible.builtin.file:
         state: directory
-        path: /etc/elasticsearch/certs
+        path: "{{ elasticsearch_certs_dir }}"
         owner: root
         group: elasticsearch
         mode: "0750"
@@ -591,7 +591,7 @@
             - renew_es_cert
       vars:
         _cert_src: "{{ elasticstack_ca_dir }}/ca.crt"
-        _cert_dest: /etc/elasticsearch/certs/ca.crt
+        _cert_dest: "{{ elasticsearch_certs_dir }}/ca.crt"
         _cert_owner: root
         _cert_group: elasticsearch
         _cert_mode: "0640"
@@ -613,7 +613,7 @@
             - renew_es_cert
       vars:
         _cert_src: "{{ elasticstack_ca_dir }}/{{ inventory_hostname_short }}.p12"
-        _cert_dest: "/etc/elasticsearch/certs/{{ inventory_hostname_short }}.p12"
+        _cert_dest: "{{ elasticsearch_certs_dir }}/{{ inventory_hostname_short }}.p12"
         _cert_owner: root
         _cert_group: elasticsearch
         _cert_mode: "0640"
@@ -1091,10 +1091,10 @@
     file: "{{ role_path }}/../elasticstack/tasks/certs/cert_expiry_warn.yml"
   vars:
     _warn_cert_path: >-
-      {{ '/etc/elasticsearch/certs/' ~ inventory_hostname ~ '-transport'
+      {{ elasticsearch_certs_dir ~ '/' ~ inventory_hostname ~ '-transport'
          ~ ('.p12' if (_elasticsearch_transport_cert_format | default('')) == 'p12' else '.crt')
          if elasticsearch_cert_source == 'external'
-         else '/etc/elasticsearch/certs/' ~ inventory_hostname_short ~ '.p12' }}
+         else elasticsearch_certs_dir ~ '/' ~ inventory_hostname_short ~ '.p12' }}
     _warn_cert_pass: >-
       {{ elasticsearch_transport_tls_key_passphrase
          if elasticsearch_cert_source == 'external'
@@ -1112,10 +1112,10 @@
     file: "{{ role_path }}/../elasticstack/tasks/certs/cert_expiry_warn.yml"
   vars:
     _warn_cert_path: >-
-      {{ '/etc/elasticsearch/certs/' ~ inventory_hostname ~ '-http'
+      {{ elasticsearch_certs_dir ~ '/' ~ inventory_hostname ~ '-http'
          ~ ('.p12' if (_elasticsearch_http_cert_format | default('')) == 'p12' else '.crt')
          if elasticsearch_cert_source == 'external'
-         else '/etc/elasticsearch/certs/' ~ inventory_hostname_short ~ '.p12' }}
+         else elasticsearch_certs_dir ~ '/' ~ inventory_hostname_short ~ '.p12' }}
     _warn_cert_pass: >-
       {{ _elasticsearch_effective_http_pass | default(elasticsearch_transport_tls_key_passphrase)
          if elasticsearch_cert_source == 'external'

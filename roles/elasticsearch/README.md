@@ -130,7 +130,7 @@ When switching an existing cluster from `elasticsearch_ca` to `external`, the ro
 1. New certificate files are deployed under different names (`<inventory_hostname>-transport.crt` vs the old `<hostname>.p12`), so there is no collision.
 2. The `elasticsearch.yml` template switches from P12 keystore/truststore entries to PEM certificate/key entries (or external P12 entries with different paths).
 3. Stale P12 keystore and truststore password entries are removed from the Elasticsearch keystore.
-4. Old auto-generated `.p12` files are cleaned up from `/etc/elasticsearch/certs/`.
+4. Old auto-generated `.p12` files are cleaned up from `elasticsearch_certs_dir` (default: `/etc/elasticsearch/certs/`).
 5. Elasticsearch is restarted to pick up the new configuration.
 
 On a multi-node cluster this is an all-at-once operation — all nodes switch cert source in the same playbook run. The role does not support a mixed-cert-source rolling migration where some nodes use the old CA while others use external certs, because the transport layer requires mutual trust between all nodes. Ensure the new external certificates are signed by a CA that all nodes will trust before running the migration.

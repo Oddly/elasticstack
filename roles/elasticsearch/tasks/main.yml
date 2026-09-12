@@ -205,7 +205,7 @@
 # restarts into a config that trusts no CA and can no longer join the cluster.
 - name: Detect existing external CA for template rendering
   ansible.builtin.stat:
-    path: /etc/elasticsearch/certs/ca.crt
+    path: "{{ elasticsearch_certs_dir }}/ca.crt"
   register: _elasticsearch_existing_ca_cert
   when: elasticsearch_cert_source == 'external'
 

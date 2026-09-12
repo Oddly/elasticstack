@@ -19,9 +19,9 @@
     logstash_role_cluster_privileges:
       - monitor
       - manage_ilm
-    logstash_role_indicies_names:
+    logstash_role_indices_names:
       - molecule-logs-*
-    logstash_role_indicies_privileges:
+    logstash_role_indices_privileges:
       - write
       - create_index
     logstash_create_user: true

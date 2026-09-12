@@ -344,11 +344,11 @@ logstash_role_cluster_privileges:
   - manage_index_templates
   - monitor
   - manage_ilm
-logstash_role_indicies_names:
+logstash_role_indices_names:
   - "ecs-logstash*"
   - "logstash*"
   - "logs*"
-logstash_role_indicies_privileges:
+logstash_role_indices_privileges:
   - write
   - create
   - delete
@@ -372,11 +372,11 @@ logstash_user_fullname: "Internal Logstash User"
 `logstash_role_cluster_privileges`
 :   Cluster-level privileges granted to the role. The defaults allow Logstash to manage index templates, monitor cluster health, and manage ILM policies. Add `manage_pipeline` if you use ingest pipelines, or `manage_data_stream_lifecycle` for data streams.
 
-`logstash_role_indicies_names`
-:   Index patterns the role is allowed to operate on. The defaults cover the standard Logstash index names and the ECS-compatible prefix. Add your custom index patterns here if you set `logstash_elasticsearch_index` to something outside these patterns — otherwise Logstash will get 403 errors when writing.
+`logstash_role_indices_names`
+:   Preferred spelling for the index patterns the role is allowed to operate on. The defaults cover the standard Logstash index names and the ECS-compatible prefix. Add your custom index patterns here if you set `logstash_elasticsearch_index` to something outside these patterns — otherwise Logstash will get 403 errors when writing. The legacy misspelled `logstash_role_indicies_names` remains accepted and is used when the preferred variable is not set.
 
-`logstash_role_indicies_privileges`
-:   Index-level privileges granted on the patterns above. The defaults provide full write access including index creation and ILM management.
+`logstash_role_indices_privileges`
+:   Preferred spelling for the index-level privileges granted on the patterns above. The defaults provide full write access including index creation and ILM management. The legacy misspelled `logstash_role_indicies_privileges` remains accepted and is used when the preferred variable is not set.
 
 `logstash_create_user`
 :   Create the Elasticsearch user that Logstash authenticates as. Set to `false` if the user already exists or is managed through an external identity provider.
