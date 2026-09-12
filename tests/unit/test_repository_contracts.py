@@ -1037,6 +1037,14 @@ class TestRepositoryContracts(unittest.TestCase):
             self.assertIn("_wait_ca_file", source, relative_path)
             self.assertIn("kibana_certs_dir", source, relative_path)
 
+        handler_source = (
+            ROOT / "roles/elasticsearch/handlers/restart_kibana.yml"
+        ).read_text()
+        self.assertIn("kibana_tls is defined", handler_source)
+        self.assertIn("_elasticsearch_kibana_tls_enabled", handler_source)
+        self.assertIn("if _elasticsearch_kibana_tls_enabled", handler_source)
+        self.assertIn("https://' ~ _elasticsearch_kibana_host", handler_source)
+
         handler = yaml.safe_load(
             (ROOT / "roles/elasticsearch/handlers/restart_kibana.yml").read_text()
         )
