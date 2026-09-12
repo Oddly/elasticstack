@@ -1,6 +1,8 @@
 ---
 - name: Verify Elasticsearch with certificate content variables
   hosts: elasticsearch
+  vars:
+    elasticsearch_certs_dir: /etc/elasticsearch/certs
   tasks:
     - name: Fetch Elastic password
       ansible.builtin.include_tasks: ../shared/verify_fetch_password.yml
@@ -21,9 +23,9 @@
         cmd: |
           set -o pipefail
           for pair in \
-            "/tmp/test-certs/transport.crt /etc/elasticsearch/certs/{{ inventory_hostname }}-transport.crt" \
-            "/tmp/test-certs/http.crt /etc/elasticsearch/certs/{{ inventory_hostname }}-http.crt" \
-            "/tmp/test-certs/ca.crt /etc/elasticsearch/certs/ca.crt"; do
+            "/tmp/test-certs/transport.crt {{ elasticsearch_certs_dir }}/{{ inventory_hostname }}-transport.crt" \
+            "/tmp/test-certs/http.crt {{ elasticsearch_certs_dir }}/{{ inventory_hostname }}-http.crt" \
+            "/tmp/test-certs/ca.crt {{ elasticsearch_certs_dir }}/ca.crt"; do
             src=$(echo "$pair" | awk '{print $1}')
             dst=$(echo "$pair" | awk '{print $2}')
             src_sum=$(sha256sum "$src" | awk '{print $1}')
@@ -54,7 +56,7 @@
 
     - name: Verify no P12 files exist (content mode is always PEM)
       ansible.builtin.find:
-        paths: /etc/elasticsearch/certs
+        paths: "{{ elasticsearch_certs_dir }}"
         patterns: "*.p12"
       register: p12_files
 
@@ -75,10 +77,10 @@
           - "'xpack.security.transport.ssl.verification_mode: certificate' in (_es_yml.content | b64decode)"
           - "'verification_mode: none' not in (_es_yml.content | b64decode)"
           - >-
-            ('xpack.security.transport.ssl.certificate: certs/' ~ inventory_hostname ~ '-transport.crt')
+            (elasticsearch_certs_dir ~ '/' ~ inventory_hostname ~ '-transport.crt')
             in (_es_yml.content | b64decode)
           - >-
-            ('xpack.security.http.ssl.certificate: certs/' ~ inventory_hostname ~ '-http.crt')
+            (elasticsearch_certs_dir ~ '/' ~ inventory_hostname ~ '-http.crt')
             in (_es_yml.content | b64decode)
         fail_msg: |
           elasticsearch.yml is missing one of the expected verification_mode / cert

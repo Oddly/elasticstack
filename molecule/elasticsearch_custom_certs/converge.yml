@@ -14,6 +14,7 @@
     elasticsearch_heap: "1"
     elasticstack_no_log: false
     elasticsearch_cert_source: external
+    elasticsearch_certs_dir: /etc/elasticsearch/custom-certs
     elasticsearch_transport_tls_certificate: /tmp/test-certs/transport.crt
     elasticsearch_transport_tls_key: /tmp/test-certs/transport.key
     elasticsearch_http_tls_certificate: /tmp/test-certs/http.crt

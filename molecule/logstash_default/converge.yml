@@ -4,9 +4,13 @@
   vars:
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticstack_full_stack: false
+    elasticstack_security: false
     elasticstack_no_log: false
-    logstash_output_elasticsearch: false
-    logstash_security: false
+    # Keep an Elasticsearch output in the rendered pipeline so the scenario
+    # proves the inherited stack security setting produces a plain output.
+    logstash_output_elasticsearch: true
+    logstash_elasticsearch_hosts:
+      - 127.0.0.1
     logstash_create_user: false
     logstash_create_role: false
     logstash_input_beats_ssl: false

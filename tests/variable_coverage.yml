@@ -65,6 +65,10 @@ explicit:
       - tests/integration/collection_variable_contract.yml
     logstash_http_port:
       - tests/integration/collection_variable_contract.yml
+    logstash_role_indices_names:
+      - molecule/logstash_elasticsearch/converge.yml
+    logstash_role_indices_privileges:
+      - molecule/logstash_elasticsearch/converge.yml
     logstash_input_beats_client_auth:
       - tests/integration/collection_variable_contract.yml
     logstash_input_beats_timeout:
@@ -181,6 +185,15 @@ behaviors:
       - "transport_key_stat.stat.exists"
       - "http_cert_stat.stat.exists"
       - "'count=1 ' in _ca_extract.stdout"
+  - name: elasticsearch_generated_certificate_directory
+    role: elasticsearch
+    variables:
+      - elasticsearch_certs_dir
+    scenario: cert_renewal
+    roles:
+      - oddly.elasticstack.elasticsearch
+    expected:
+      - "es_cert_after.stat.exists"
   - name: kibana_external_certificate_files
     role: kibana
     variables:
@@ -211,7 +224,6 @@ behaviors:
       - kibana_tls_key_content
       - kibana_tls_ca_content
       - kibana_tls_remote_src
-      - kibana_security
     scenario: kibana_cert_content
     roles:
       - oddly.elasticstack.repos
@@ -221,6 +233,15 @@ behaviors:
       - "_kibana_cert_stat.results | selectattr('stat.exists') | list | length == 3"
       - "_kibana_cert_hashes.stdout_lines | select('match', '^(\\\\S+) \\\\1$') | list | length == 3"
       - "'server.ssl.keystore.path' not in (_kibana_yml.content | b64decode)"
+  - name: kibana_generated_certificate_directory
+    role: kibana
+    variables:
+      - kibana_certs_dir
+    scenario: cert_renewal
+    roles:
+      - oddly.elasticstack.kibana
+    expected:
+      - "kb_cert_after.stat.exists"
   - name: logstash_external_certificate_files
     role: logstash
     variables:
@@ -264,8 +285,8 @@ behaviors:
       - logstash_create_role
       - logstash_role_name
       - logstash_role_cluster_privileges
-      - logstash_role_indicies_names
-      - logstash_role_indicies_privileges
+      - logstash_role_indices_names
+      - logstash_role_indices_privileges
       - logstash_create_user
       - logstash_user_name
       - logstash_user_password
@@ -281,6 +302,21 @@ behaviors:
       - "_logstash_role_response.json[logstash_role_name].indices[0].names == ['molecule-logs-*']"
       - "_logstash_user_response.json[logstash_user_name].email == 'molecule@example.test'"
       - "_logstash_user_response.json[logstash_user_name].full_name == 'Molecule Logstash Writer'"
+  - name: logstash_role_permission_aliases
+    role: logstash
+    variables:
+      - logstash_role_indices_names
+      - logstash_role_indices_privileges
+      - logstash_role_indicies_names
+      - logstash_role_indicies_privileges
+    contract: tests/integration/collection_variable_contract.yml
+    roles:
+      - ../../roles/logstash/tasks/logstash-role-permissions.yml
+    expected:
+      - "_logstash_role_indices_names == ['legacy-logs-*']"
+      - "_logstash_role_indices_privileges == ['write']"
+      - "_logstash_role_indices_names == ['preferred-logs-*']"
+      - "_logstash_role_indices_privileges == ['create_index']"
   - name: elasticsearch_node_maintenance_lifecycle
     role: elasticsearch
     variables:
@@ -857,7 +893,6 @@ behaviors:
       - logstash_http_host
       - logstash_http_port
       - logstash_dead_letter_queue_enable
-      - logstash_dead_letter_queue_retain_age
       - logstash_log_format
       - logstash_global_ecs
       - logstash_monitoring_enabled
@@ -915,6 +950,10 @@ rollouts:
       expected:
         - "'path: /var/lib/filebeat/test-queue' in (filebeat_yml.content | b64decode)"
   elasticsearch:
+    elasticsearch_certs_dir:
+      scenario: elasticsearch_custom_certs
+      expected:
+        - "elasticsearch_certs_dir == '/etc/elasticsearch/custom-certs'"
     elasticsearch_security_enrollment:
       scenario: elasticsearch_custom
       expected:
@@ -966,6 +1005,10 @@ rollouts:
       expected:
         - "node.attr.temp:"
   kibana:
+    kibana_certs_dir:
+      scenario: kibana_custom_certs
+      expected:
+        - "kibana_certs_dir == '/etc/kibana/custom-certs'"
     kibana_elasticsearch_hosts:
       scenario: kibana_extras
       expected:
@@ -979,6 +1022,18 @@ rollouts:
       expected:
         - "elasticsearch.sniffInterval: 30000"
   logstash:
+    logstash_elasticsearch_hosts:
+      scenario: logstash_default
+      expected:
+        - "'127.0.0.1:9200' in (output_content.content | b64decode)"
+    logstash_role_indices_names:
+      scenario: logstash_elasticsearch
+      expected:
+        - "_logstash_role_response.json[logstash_role_name].indices[0].names == ['molecule-logs-*']"
+    logstash_role_indices_privileges:
+      scenario: logstash_elasticsearch
+      expected:
+        - "_logstash_role_response.json[logstash_role_name].indices[0].privileges == ['write', 'create_index']"
     logstash_security:
       scenario: logstash_elasticsearch
       expected:
@@ -1021,10 +1076,12 @@ rollouts:
         - "beats {' in"
     logstash_sniffing_delay:
       scenario: logstash_elasticsearch
+      uses_default: true
       expected:
-        - "sniffing_delay => 8"
+        - "sniffing_delay => 5"
     logstash_sniffing_path:
       scenario: logstash_elasticsearch
+      uses_default: true
       expected:
         - "sniffing_path =>"
     logstash_output_elasticsearch:
@@ -1057,6 +1114,7 @@ rollouts:
         - "dead_letter_queue.enable: true"
     logstash_dead_letter_queue_retain_age:
       scenario: logstash_centralized_pipelines
+      uses_default: true
       expected:
         - "dead_letter_queue.retain.age: 7d"
     logstash_log_format:

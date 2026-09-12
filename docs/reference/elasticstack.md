@@ -39,12 +39,12 @@ elasticstack_no_log: true
 <!-- MkDocs definition-list and admonition indentation is intentional. -->
 <!-- markdownlint-disable MD046 -->
 `elasticstack_version`
-:   Pin a specific Elastic Stack version (e.g. `"9.1.2"`). When set, the package manager installs exactly this version. When unset (the default), the latest available version within the major release is installed.
+:   Pin a specific Elastic Stack version (e.g. `"9.1.2"`). When set, the package manager installs exactly this version. When empty (the default), the role installs the unversioned package and leaves an existing installation at its current version.
 
     Set to `"latest"` to always upgrade to the newest version in the repository. This means every playbook run where a newer version is available will trigger a **rolling restart** of Elasticsearch nodes one at a time. This is safe (shard allocation is managed), but be aware that routine playbook runs may cause node restarts if a new minor or patch release was published since the last run.
 
     !!! warning
-        When `elasticstack_version` is set to `"latest"`, every new minor or patch release triggers a rolling restart of your Elasticsearch cluster. If you prefer controlled upgrades, leave this unset and pin specific versions when you're ready to upgrade.
+        When `elasticstack_version` is set to `"latest"`, every new minor or patch release triggers a rolling restart of your Elasticsearch cluster. If you prefer controlled upgrades, leave this empty and pin specific versions when you're ready to upgrade.
 
 <!-- markdownlint-enable MD046 -->
 

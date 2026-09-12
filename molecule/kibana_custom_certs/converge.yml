@@ -65,6 +65,7 @@
     # Skip ES-side cert verification: update-ca-certificates doesn't
     # reliably update the CA bundle in containers.
     kibana_cert_source: external
+    kibana_certs_dir: /etc/kibana/custom-certs
     kibana_tls: true
     kibana_tls_certificate_file: /tmp/test-certs/http.crt
     kibana_tls_key_file: /tmp/test-certs/http.key

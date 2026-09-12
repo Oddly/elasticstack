@@ -268,14 +268,17 @@ class TestRepositoryContracts(unittest.TestCase):
         )
         for path in workflows:
             source = path.read_text()
-            self.assertIn(
-                "command -v python3.12",
-                source,
+            self.assertTrue(
+                "command -v python3.12" in source
+                or (
+                    "actions/setup-python@" in source
+                    and "python-version: '3.12'" in source
+                ),
                 f"{path} must select Python 3.12 for Ansible 2.20",
             )
-            self.assertIn(
-                'uv venv "$RUNNER_TEMP/venv"',
-                source,
+            self.assertTrue(
+                'uv venv "$RUNNER_TEMP/venv"' in source
+                or 'python -m venv "$RUNNER_TEMP/venv"' in source,
                 f"{path} must install into an isolated Python 3.12 environment",
             )
             self.assertIn(
@@ -410,6 +413,110 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("_elasticstack_package_changed", elasticsearch)
         self.assertNotIn("_elasticsearch_install_rpm_full", elasticsearch)
 
+        elasticsearch_template = (
+            ROOT / "roles" / "elasticsearch" / "templates" / "elasticsearch.yml.j2"
+        ).read_text()
+        self.assertIn(
+            "[elasticsearch_certs_dir ~ '/ca.crt'] | to_json",
+            elasticsearch_template,
+        )
+        self.assertGreaterEqual(
+            elasticsearch_template.count("elasticsearch_certs_dir ~"),
+            14,
+        )
+
+        workflow = (ROOT / ".github" / "workflows" / "test_full_stack.yml").read_text()
+        self.assertIn("roles/elasticsearch/tasks/main.yml", workflow)
+
+        elasticsearch_docs = (ROOT / "docs" / "reference" / "elasticsearch.md").read_text()
+        kibana_docs = (ROOT / "docs" / "reference" / "kibana.md").read_text()
+        self.assertIn("generated or external TLS certificates", elasticsearch_docs)
+        self.assertIn("generated or external TLS certificates", kibana_docs)
+        self.assertIn("{{ kibana_certs_dir }}/", kibana_docs)
+
+    def test_elasticsearch_and_kibana_certificate_directories_are_configurable(self):
+        for role, variable, default, hardcoded, files in (
+            (
+                "elasticsearch",
+                "elasticsearch_certs_dir",
+                "/etc/elasticsearch/certs",
+                "/etc/elasticsearch/certs",
+                (
+                    "tasks/main.yml",
+                    "tasks/elasticsearch-security.yml",
+                    "templates/elasticsearch.yml.j2",
+                ),
+            ),
+            (
+                "kibana",
+                "kibana_certs_dir",
+                "/etc/kibana/certs",
+                "/etc/kibana/certs",
+                ("tasks/kibana-security.yml", "templates/kibana.yml.j2"),
+            ),
+        ):
+            defaults = (ROOT / "roles" / role / "defaults" / "main.yml").read_text()
+            self.assertRegex(
+                defaults,
+                rf"(?m)^{re.escape(variable)}:\s+{re.escape(default)}$",
+            )
+            specs = yaml.safe_load(
+                (ROOT / "roles" / role / "meta" / "argument_specs.yml").read_text()
+            )
+            option = specs["argument_specs"]["main"]["options"][variable]
+            self.assertEqual(option["type"], "str")
+            self.assertEqual(option["default"], default)
+            for relative_path in files:
+                source = (ROOT / "roles" / role / relative_path).read_text()
+                self.assertNotIn(
+                    hardcoded,
+                    source,
+                    f"{relative_path} still hardcodes the cert directory",
+                )
+                self.assertTrue(
+                    f"{{{{ {variable} }}}}" in source or f"{variable} ~" in source,
+                    f"{relative_path} does not use {variable}",
+                )
+
+    def test_certificate_renewal_exercises_custom_generated_certificate_directories(self):
+        converge = (ROOT / "molecule" / "cert_renewal" / "converge.yml").read_text()
+        verify = (ROOT / "molecule" / "cert_renewal" / "verify.yml").read_text()
+
+        for variable, directory, filename in (
+            (
+                "elasticsearch_certs_dir",
+                "/etc/elasticsearch/renewal-certs",
+                "{{ elasticsearch_certs_dir }}/{{ ansible_facts.hostname }}.p12",
+            ),
+            (
+                "kibana_certs_dir",
+                "/etc/kibana/renewal-certs",
+                "{{ kibana_certs_dir }}/{{ ansible_facts.hostname }}-kibana.p12",
+            ),
+        ):
+            self.assertGreaterEqual(converge.count(f"{variable}: {directory}"), 4)
+            self.assertIn(f"{variable}: {directory}", verify)
+            self.assertIn(filename, converge)
+            self.assertIn(filename, verify)
+
+        workflow = (ROOT / ".github" / "workflows" / "test_full_stack.yml").read_text()
+        for path in (
+            "roles/elasticsearch/meta/argument_specs.yml",
+            "roles/elasticsearch/tasks/elasticsearch-security.yml",
+            "roles/kibana/meta/argument_specs.yml",
+            "roles/kibana/tasks/kibana-security.yml",
+        ):
+            self.assertIn(path, workflow)
+
+    def test_elasticsearch_certificate_content_verification_uses_configured_directory(self):
+        converge = (ROOT / "molecule" / "elasticsearch_cert_content" / "converge.yml").read_text()
+        verify = (ROOT / "molecule" / "elasticsearch_cert_content" / "verify.yml").read_text()
+
+        self.assertIn("elasticsearch_certs_dir: /etc/elasticsearch/certs", verify)
+        self.assertGreaterEqual(verify.count("{{ elasticsearch_certs_dir }}"), 4)
+        self.assertNotIn("certificate: certs/", verify)
+        self.assertNotIn("elasticsearch_certs_dir:", converge)
+
     def test_debian_package_bootstrap_retries_apt_lock_contention(self):
         tasks = yaml.safe_load(
             (ROOT / "roles" / "elasticstack" / "tasks" / "packages.yml").read_text()
@@ -525,6 +632,135 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertTrue(options["elasticsearch_users"]["no_log"])
         self.assertTrue(options["elasticsearch_builtin_passwords"]["no_log"])
 
+    def test_variable_defaults_are_explicit_and_internal_sentinels_are_private(self):
+        shared_defaults = yaml.safe_load(
+            (ROOT / "roles" / "elasticstack" / "defaults" / "main.yml").read_text()
+        )
+        self.assertEqual(shared_defaults["elasticstack_version"], "")
+        self.assertEqual(shared_defaults["elasticstack_cert_pass"], "")
+
+        for role, expected in {
+            "elasticsearch": {
+                "elasticsearch_extra_config": {},
+                "elasticsearch_fs_repo": [],
+            },
+            "kibana": {"kibana_extra_config": {}},
+            "beats": {"beats_fields": [], "beats_filebeat_modules": []},
+            "logstash": {
+                "logstash_pipeline_unsafe_shutdown": False,
+                "logstash_skip_root_check": False,
+            },
+        }.items():
+            defaults = yaml.safe_load(
+                (ROOT / "roles" / role / "defaults" / "main.yml").read_text()
+            )
+            for variable, value in expected.items():
+                self.assertEqual(defaults[variable], value)
+
+        for path, dead_variable in (
+            (ROOT / "roles" / "kibana" / "defaults" / "main.yml", "kibana_tls_cert"),
+            (ROOT / "roles" / "kibana" / "defaults" / "main.yml", "kibana_tls_key"),
+        ):
+            self.assertNotRegex(
+                path.read_text(),
+                rf"(?m)^\s*{re.escape(dead_variable)}\s*:",
+            )
+        role_sources = "\n".join(
+            path.read_text()
+            for path in (ROOT / "roles").rglob("*.yml")
+        )
+        self.assertNotIn("elasticstack_globals_set", role_sources)
+
+        logstash_defaults = yaml.safe_load(
+            (ROOT / "roles" / "logstash" / "defaults" / "main.yml").read_text()
+        )
+        self.assertEqual(
+            {
+                name: logstash_defaults[name]
+                for name in (
+                    "logstash_config_autoreload_interval",
+                    "logstash_http_host",
+                    "logstash_http_port",
+                    "logstash_input_beats_timeout",
+                    "logstash_sniffing_delay",
+                    "logstash_sniffing_path",
+                    "logstash_dead_letter_queue_enable",
+                    "logstash_dead_letter_queue_retain_age",
+                    "logstash_log_format",
+                )
+            },
+            {
+                "logstash_config_autoreload_interval": "3s",
+                "logstash_http_host": "127.0.0.1",
+                "logstash_http_port": "9600-9700",
+                "logstash_input_beats_timeout": "60s",
+                "logstash_sniffing_delay": 5,
+                "logstash_sniffing_path": "/_nodes/http",
+                "logstash_dead_letter_queue_enable": False,
+                "logstash_dead_letter_queue_retain_age": "7d",
+                "logstash_log_format": "plain",
+            },
+        )
+
+        for role, sentinels in {
+            "elasticsearch": ("_elasticsearch_freshstart", "_elasticsearch_freshstart_security"),
+            "kibana": ("_kibana_freshstart",),
+            "logstash": ("_logstash_freshstart",),
+        }.items():
+            public = {entry["name"] for entry in parse_defaults(ROOT / "roles" / role / "defaults/main.yml")}
+            private_vars = yaml.safe_load((ROOT / "roles" / role / "vars/main.yml").read_text()) or {}
+            for sentinel in sentinels:
+                self.assertNotIn(sentinel.lstrip("_"), public)
+                self.assertEqual(private_vars[sentinel], {"changed": False})
+
+        upgrade_detection = (
+            ROOT / "roles" / "elasticsearch" / "tasks" / "elasticsearch-upgrade-detection.yml"
+        ).read_text()
+        self.assertIn(
+            "elasticstack_version | default('') | string | length > 0",
+            upgrade_detection,
+        )
+        upgrade_tasks = (ROOT / "roles" / "elasticsearch" / "tasks" / "main.yml").read_text()
+        self.assertIn(
+            "elasticstack_version | default('latest ' ~ elasticstack_release ~ '.x', true)",
+            upgrade_tasks,
+        )
+        for variable in (
+            "logstash_security",
+            "logstash_input_beats",
+            "logstash_input_beats_ssl",
+            "logstash_output_elasticsearch",
+            "logstash_elasticsearch_output",
+            "logstash_monitoring_enabled",
+            "logstash_global_ecs",
+        ):
+            entry = next(
+                entry
+                for entry in parse_defaults(ROOT / "roles" / "logstash" / "defaults/main.yml")
+                if entry["name"] == variable
+            )
+            self.assertFalse(entry["has_default"], variable)
+
+    def test_stack_security_scenarios_exercise_inherited_false(self):
+        scenarios = {
+            "molecule/elasticsearch_no-security/converge.yml": "elasticsearch_security",
+            "molecule/kibana_cert_content/converge.yml": "kibana_security",
+            "molecule/logstash_default/converge.yml": "logstash_security",
+        }
+        for relative_path, role_variable in scenarios.items():
+            source = (ROOT / relative_path).read_text()
+            self.assertIn("elasticstack_security: false", source)
+            self.assertNotRegex(
+                source,
+                rf"(?m)^\s*{re.escape(role_variable)}\s*:\s*false\s*$",
+            )
+
+        for role in ("elasticsearch", "kibana"):
+            source = (ROOT / "roles" / role / "tasks" / "main.yml").read_text()
+            self.assertIn("elasticstack_security | bool", source)
+        logstash = (ROOT / "roles" / "logstash" / "tasks" / "logstash-compatibility.yml").read_text()
+        self.assertIn("elasticstack_security | default(false)", logstash)
+
     def test_elasticsearch_security_bootstrap_uses_a_certificate_validated_endpoint(self):
         source = (
             ROOT
@@ -639,7 +875,9 @@ class TestRepositoryContracts(unittest.TestCase):
 
     def test_kibana_certificate_content_scenario_disables_backend_tls(self):
         source = (ROOT / "molecule" / "kibana_cert_content" / "converge.yml").read_text()
-        self.assertIn("elasticsearch_security: false", source)
+        self.assertIn("elasticstack_security: false", source)
+        self.assertNotIn("elasticsearch_security: false", source)
+        self.assertNotIn("kibana_security: false", source)
         self.assertIn("elasticsearch_http_security: false", source)
         self.assertNotIn(
             "set_ci_watermarks.yml",
@@ -1073,6 +1311,32 @@ class TestRepositoryContracts(unittest.TestCase):
                 scenario,
             )
 
+    def test_logstash_role_permission_variables_use_corrected_spelling(self):
+        defaults = (ROOT / "roles" / "logstash" / "defaults" / "main.yml").read_text()
+        specs = yaml.safe_load(
+            (ROOT / "roles" / "logstash" / "meta" / "argument_specs.yml").read_text()
+        )["argument_specs"]["main"]["options"]
+        security = (ROOT / "roles" / "logstash" / "tasks" / "logstash-security.yml").read_text()
+
+        for variable in (
+            "logstash_role_indices_names",
+            "logstash_role_indices_privileges",
+            "logstash_role_indicies_names",
+            "logstash_role_indicies_privileges",
+        ):
+            self.assertIn(variable, defaults)
+            self.assertIn(variable, specs)
+
+        self.assertIn("logstash-role-permissions.yml", security)
+        permissions = (
+            ROOT / "roles" / "logstash" / "tasks" / "logstash-role-permissions.yml"
+        ).read_text()
+        self.assertIn("else logstash_role_indicies_names", permissions)
+        self.assertIn("else logstash_role_indicies_privileges", permissions)
+        contract = (ROOT / "tests" / "integration" / "collection_variable_contract.yml").read_text()
+        self.assertIn("legacy-logs-*", contract)
+        self.assertIn("preferred-logs-*", contract)
+
     def test_plugin_workflow_discovers_the_complete_unit_test_suite(self):
         source = (ROOT / ".github" / "workflows" / "test_plugins.yml").read_text()
         self.assertIn("pytest>=9.1.1,<10", source)
@@ -1177,11 +1441,18 @@ class TestRepositoryContracts(unittest.TestCase):
                 assignment = re.compile(
                     rf"(?m)^(?!\s*#)\s*{re.escape(variable)}\s*:"
                 )
-                self.assertRegex(
-                    converge.read_text(),
-                    assignment,
-                    f"{scenario} does not assign rollout variable {variable}",
-                )
+                if rollout.get("uses_default", False):
+                    self.assertNotRegex(
+                        converge.read_text(),
+                        assignment,
+                        f"{scenario} overrides default rollout variable {variable}",
+                    )
+                else:
+                    self.assertRegex(
+                        converge.read_text(),
+                        assignment,
+                        f"{scenario} does not assign rollout variable {variable}",
+                    )
                 assertions_path = ROOT / rollout.get(
                     "assertions_file", f"molecule/{scenario}/verify.yml"
                 )
@@ -1344,6 +1615,30 @@ class TestRepositoryContracts(unittest.TestCase):
                 "roles/**/README.md",
             ],
         )
+
+    def test_diagnostic_artifacts_are_isolated_per_workflow_attempt(self):
+        action = (ROOT / ".github" / "actions" / "collect-diagnostics" / "action.yml").read_text()
+        diagnostic_dir = (
+            '"/tmp/molecule-diagnostics-${GITHUB_RUN_ID:-local}-'
+            '${GITHUB_RUN_ATTEMPT:-1}-${DIAGNOSTIC_ARTIFACT_NAME:-unknown}"'
+        )
+        self.assertEqual(action.count(f"diag={diagnostic_dir}"), 2)
+        self.assertEqual(action.count("DIAGNOSTIC_ARTIFACT_NAME: ${{ inputs.artifact-name }}"), 2)
+        self.assertIn(
+            "path: /tmp/molecule-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact-name }}/",
+            action,
+        )
+        self.assertNotIn("path: /tmp/molecule-diagnostics/", action)
+
+    def test_linting_does_not_consume_the_incus_runner_pool(self):
+        workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "test_linting.yml").read_text())
+        lint_job = workflow["jobs"]["lint"]
+        self.assertEqual(lint_job["runs-on"], "ubuntu-latest")
+        source = (ROOT / ".github" / "workflows" / "test_linting.yml").read_text()
+        self.assertIn("actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97", source)
+        self.assertIn('python -m venv "$RUNNER_TEMP/venv"', source)
+        self.assertNotIn("secrets.INCUS_HOST", source)
+        self.assertNotIn("CACHE_HOST", source)
 
     def test_ci_coverage_script_handles_untracked_and_quoted_scenarios(self):
         with tempfile.TemporaryDirectory(prefix="elasticstack-ci-coverage-") as directory:

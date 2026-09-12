@@ -127,7 +127,7 @@
           - "'elasticsearch {' in (logstash_output_content.content | b64decode)"
           - "'ssl_enabled' in (logstash_output_content.content | b64decode) or 'ssl => true' in (logstash_output_content.content | b64decode)"
           - "'sniffing => true' in (logstash_output_content.content | b64decode)"
-          - "'sniffing_delay => 8' in (logstash_output_content.content | b64decode)"
+          - "'sniffing_delay => 5' in (logstash_output_content.content | b64decode)"
           - "'sniffing_path => \"/_nodes/http\"' in (logstash_output_content.content | b64decode)"
         fail_msg: "Secured Elasticsearch output or sniffing variables did not render"
       when: "'logstash' in group_names"

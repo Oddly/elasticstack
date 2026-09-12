@@ -16,8 +16,10 @@ runs:
   steps:
     - name: Collect diagnostic logs
       shell: bash
+      env:
+        DIAGNOSTIC_ARTIFACT_NAME: ${{ inputs.artifact-name }}
       run: |
-        diag="/tmp/molecule-diagnostics"
+        diag="/tmp/molecule-diagnostics-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}-${DIAGNOSTIC_ARTIFACT_NAME:-unknown}"
         mkdir -p "$diag"/service-logs
 
         INCUS_HOST="${INCUS_HOST:?INCUS_HOST secret must be set}"
@@ -164,8 +166,10 @@ runs:
 
     - name: OOM detection summary
       shell: bash
+      env:
+        DIAGNOSTIC_ARTIFACT_NAME: ${{ inputs.artifact-name }}
       run: |
-        diag="/tmp/molecule-diagnostics"
+        diag="/tmp/molecule-diagnostics-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}-${DIAGNOSTIC_ARTIFACT_NAME:-unknown}"
         report="$diag/OOM-REPORT.txt"
         found_oom=false
 
@@ -285,6 +289,6 @@ runs:
       uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
       with:
         name: ${{ inputs.artifact-name }}
-        path: /tmp/molecule-diagnostics/
+        path: /tmp/molecule-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact-name }}/
         retention-days: 7
         if-no-files-found: ignore

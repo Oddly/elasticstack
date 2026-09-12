@@ -28,7 +28,7 @@
     _elasticsearch_needs_rolling_upgrade: >-
       {{ ansible_facts.packages['elasticsearch'] is defined and
          ansible_facts.packages['elasticsearch'][0].version is defined and
-         ((elasticstack_version is defined and
+         ((elasticstack_version | default('') | string | length > 0 and
            elasticstack_version != 'latest' and
            elasticstack_version is version(ansible_facts.packages['elasticsearch'][0].version, '>'))
           or
