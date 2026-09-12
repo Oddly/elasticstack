@@ -208,11 +208,11 @@ This variable is not defined in the role defaults (so it is undefined by default
 ### Internal Variables
 
 ```yaml
-kibana_freshstart:
+_kibana_freshstart:
   changed: false
 ```
 
-`kibana_freshstart` tracks whether the current run is a fresh installation. The role registers this from the "Start Kibana" task. Do not set it manually. It gates the restart handler: on a first run the service starts naturally, so a handler restart would be redundant.
+`_kibana_freshstart` tracks whether the current run is a fresh installation. The role registers this from the "Start Kibana" task. Do not set it manually. It gates the restart handler: on a first run the service starts naturally, so a handler restart would be redundant.
 
 ## Operational Notes
 
@@ -248,7 +248,7 @@ The role waits for Kibana's `/api/status` endpoint with an explicit 300-second t
 
 ### Handler guard
 
-The "Restart Kibana" handler does not fire on fresh installs (guarded by `kibana_freshstart.changed`). On a first run, the service starts naturally during the "Start Kibana" task, so a handler restart would be redundant and could cause a brief outage during initial index creation.
+The "Restart Kibana" handler does not fire on fresh installs (guarded by `_kibana_freshstart.changed`). On a first run, the service starts naturally during the "Start Kibana" task, so a handler restart would be redundant and could cause a brief outage during initial index creation.
 
 ### Three-tier certificate backup
 

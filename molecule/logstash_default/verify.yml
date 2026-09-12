@@ -80,11 +80,14 @@
         src: /etc/logstash/conf.d/main/90-output.conf
       register: output_content
 
-    - name: Verify no elasticsearch output (standalone mode)
+    - name: Verify the inherited security setting produces a plain Elasticsearch output
       ansible.builtin.assert:
         that:
-          - "'elasticsearch {' not in (output_content.content | b64decode)"
-        fail_msg: "Elasticsearch output should not be present in standalone mode"
+          - "'elasticsearch {' in (output_content.content | b64decode)"
+          - "'127.0.0.1:9200' in (output_content.content | b64decode)"
+          - "'ssl_enabled' not in (output_content.content | b64decode)"
+          - "'ssl => true' not in (output_content.content | b64decode)"
+        fail_msg: "Inherited elasticstack_security: false did not produce a plain Elasticsearch output"
 
     - name: Verify file output is configured
       ansible.builtin.assert:
@@ -226,6 +229,27 @@
         that:
           - "'config.reload.automatic: true' in (logstash_yml.content | b64decode)"
         fail_msg: "Config autoreload not found in logstash.yml"
+
+    - name: Verify package-aligned Logstash defaults are rendered
+      ansible.builtin.assert:
+        that:
+          - "'config.reload.interval: 3s' in (logstash_yml.content | b64decode)"
+          - "'api.http.host: 127.0.0.1' in (logstash_yml.content | b64decode)"
+          - "'api.http.port: 9600-9700' in (logstash_yml.content | b64decode)"
+          - "'dead_letter_queue.enable: false' in (logstash_yml.content | b64decode)"
+          - "'log.format: plain' in (logstash_yml.content | b64decode)"
+        fail_msg: "Package-aligned Logstash defaults were not rendered"
+
+    - name: Read the default Beats input configuration
+      ansible.builtin.slurp:
+        src: /etc/logstash/conf.d/main/10-input.conf
+      register: logstash_input
+
+    - name: Verify the default Beats input timeout is rendered
+      ansible.builtin.assert:
+        that:
+          - "'client_inactivity_timeout => 60' in (logstash_input.content | b64decode)"
+        fail_msg: "Default Beats input timeout was not rendered"
 
     - name: Verify pipeline.unsafe_shutdown is set
       ansible.builtin.assert:

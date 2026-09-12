@@ -36,6 +36,7 @@ argument_specs:
       logstash_config_autoreload_interval:
         description: How often Logstash checks for pipeline config changes when autoreload is enabled
         type: str
+        default: 3s
       logstash_config_path_data:
         description: Filesystem path for Logstash persistent data (queue, dead letter queue)
         type: str
@@ -45,11 +46,13 @@ argument_specs:
         type: str
         default: /var/log/logstash
       logstash_http_host:
-        description: Bind address for the Logstash monitoring API. Only written to logstash.yml when defined
+        description: Bind address for the Logstash monitoring API
         type: str
+        default: 127.0.0.1
       logstash_http_port:
-        description: Port range for the Logstash monitoring API. Only written to logstash.yml when defined
+        description: Port range for the Logstash monitoring API
         type: str
+        default: 9600-9700
       logstash_pipeline_buffer_type:
         description: Pipeline buffer type ('direct' or 'heap'). Logstash 9.x changed the default from 'direct' to 'heap'.
           This is set version-aware to prevent silent behaviour changes during 8.x to 9.x upgrades.
@@ -87,6 +90,7 @@ argument_specs:
       logstash_input_beats_timeout:
         description: Idle timeout for Beats input connections. Connections idle longer than this are closed
         type: str
+        default: 60s
       logstash_beats_tls:
         description: Deprecated alias for logstash_input_beats_ssl
         type: bool
@@ -139,9 +143,11 @@ argument_specs:
       logstash_sniffing_delay:
         description: Seconds between ES sniffing requests when sniffing is enabled
         type: int
+        default: 5
       logstash_sniffing_path:
         description: ES API path used for node sniffing
         type: str
+        default: /_nodes/http
       logstash_elasticsearch_output:
         description: Deprecated alias for logstash_output_elasticsearch
         type: bool
@@ -276,12 +282,15 @@ argument_specs:
       logstash_dead_letter_queue_enable:
         description: Enable the dead letter queue for failed events
         type: bool
+        default: false
       logstash_dead_letter_queue_retain_age:
         description: Retention period for dead letter queue entries
         type: str
+        default: 7d
       logstash_log_format:
         description: Log output format ('plain' or 'json')
         type: str
+        default: plain
       logstash_global_ecs:
         description: Global pipeline ECS compatibility mode ('disabled', 'v1', or 'v8')
         type: str

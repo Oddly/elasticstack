@@ -224,7 +224,6 @@ behaviors:
       - kibana_tls_key_content
       - kibana_tls_ca_content
       - kibana_tls_remote_src
-      - kibana_security
     scenario: kibana_cert_content
     roles:
       - oddly.elasticstack.repos
@@ -894,7 +893,6 @@ behaviors:
       - logstash_http_host
       - logstash_http_port
       - logstash_dead_letter_queue_enable
-      - logstash_dead_letter_queue_retain_age
       - logstash_log_format
       - logstash_global_ecs
       - logstash_monitoring_enabled
@@ -1024,6 +1022,10 @@ rollouts:
       expected:
         - "elasticsearch.sniffInterval: 30000"
   logstash:
+    logstash_elasticsearch_hosts:
+      scenario: logstash_default
+      expected:
+        - "'127.0.0.1:9200' in (output_content.content | b64decode)"
     logstash_role_indices_names:
       scenario: logstash_elasticsearch
       expected:
@@ -1074,10 +1076,12 @@ rollouts:
         - "beats {' in"
     logstash_sniffing_delay:
       scenario: logstash_elasticsearch
+      uses_default: true
       expected:
-        - "sniffing_delay => 8"
+        - "sniffing_delay => 5"
     logstash_sniffing_path:
       scenario: logstash_elasticsearch
+      uses_default: true
       expected:
         - "sniffing_path =>"
     logstash_output_elasticsearch:
@@ -1110,6 +1114,7 @@ rollouts:
         - "dead_letter_queue.enable: true"
     logstash_dead_letter_queue_retain_age:
       scenario: logstash_centralized_pipelines
+      uses_default: true
       expected:
         - "dead_letter_queue.retain.age: 7d"
     logstash_log_format:

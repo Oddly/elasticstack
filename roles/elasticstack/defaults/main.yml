@@ -47,8 +47,8 @@ elasticstack_cert_pass: ""
 elasticstack_ca_validity_period: 1095
 # === General Settings ===
 
-# @var elasticstack_version:description: Optional exact Elastic Stack package version, or latest to follow the newest version in the selected major release
-# elasticstack_version: "9.2.0"
+# @var elasticstack_version:description: Optional exact Elastic Stack package version. Empty installs the unversioned package without upgrading an existing installation; latest follows the newest version in the selected major release
+elasticstack_version: ""
 # @var elasticstack_enable_repos:description: Let the repos role manage Elastic APT/YUM repositories
 elasticstack_enable_repos: true
 # @var elasticstack_full_stack:description: Running a full Elastic Stack deployment. Enables auto-discovery of hosts from inventory groups and cross-role TLS setup

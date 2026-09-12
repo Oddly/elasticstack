@@ -54,15 +54,17 @@ argument_specs:
         description: Common passphrase applied to all role TLS private keys when set. Overrides elasticsearch_tls_key_passphrase,
           kibana_tls_key_passphrase, logstash_tls_key_passphrase, and beats_tls_key_passphrase. Leave empty to use the per-role
           passphrases.
-        type: raw
+        type: str
+        default: ''
       elasticstack_ca_validity_period:
         description: Validity period in days for the CA certificate
         type: int
         default: 1095
       elasticstack_version:
-        description: Optional exact Elastic Stack package version, or latest to follow the newest version in the selected
-          major release
+        description: Optional exact Elastic Stack package version. Empty installs the unversioned package without upgrading an
+          existing installation; latest follows the newest version in the selected major release
         type: str
+        default: ''
       elasticstack_enable_repos:
         description: Let the repos role manage Elastic APT/YUM repositories
         type: bool

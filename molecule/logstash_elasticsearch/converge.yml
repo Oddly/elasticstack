@@ -13,8 +13,6 @@
     logstash_security: true
     logstash_output_elasticsearch: true
     logstash_sniffing: true
-    logstash_sniffing_delay: 8
-    logstash_sniffing_path: /_nodes/http
     logstash_pipeline_unsafe_shutdown: true
     logstash_create_role: true
     logstash_role_name: molecule_writer
