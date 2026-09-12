@@ -39,7 +39,7 @@ Values are passed via stdin and never appear in logs. See the [Elasticsearch ref
 
 ### Where are certificates stored?
 
-On each node at `/etc/elasticsearch/certs/`, `/etc/kibana/certs/`, etc. The CA private key lives only on the CA host (first node in the `elasticsearch` group by default).
+By default, Elasticsearch certificates are stored in `/etc/elasticsearch/certs/` and Kibana certificates in `/etc/kibana/certs/`. Override these locations with `elasticsearch_certs_dir` and `kibana_certs_dir`. The CA private key lives only on the CA host (first node in the `elasticsearch` group by default).
 
 ### Can I bring my own certificates?
 

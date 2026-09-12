@@ -70,6 +70,7 @@
     elasticsearch_security_enrollment: false
     elasticsearch_ssl_verification_mode: certificate
     elasticsearch_cert_source: external
+    elasticsearch_certs_dir: /etc/elasticsearch/template-certs
     _elasticsearch_transport_cert_format: pem
     _elasticsearch_http_cert_format: pem
     _elasticsearch_external_has_ca: true
@@ -111,9 +112,9 @@
           - "'10.10.10.2' in (_multi_template.content | b64decode)"
           - "'es-node-1' in (_multi_template.content | b64decode)"
           - "'es-node-2' in (_multi_template.content | b64decode)"
-          - "'xpack.security.transport.ssl.certificate: certs/' ~ inventory_hostname ~ '-transport.crt' in (_multi_template.content | b64decode)"
-          - "'xpack.security.http.ssl.certificate: certs/' ~ inventory_hostname ~ '-http.crt' in (_multi_template.content | b64decode)"
-          - "'xpack.security.transport.ssl.certificate_authorities: [\"certs/ca.crt\"]' in (_multi_template.content | b64decode)"
+          - "'xpack.security.transport.ssl.certificate: \"/etc/elasticsearch/template-certs/' ~ inventory_hostname ~ '-transport.crt\"' in (_multi_template.content | b64decode)"
+          - "'xpack.security.http.ssl.certificate: \"/etc/elasticsearch/template-certs/' ~ inventory_hostname ~ '-http.crt\"' in (_multi_template.content | b64decode)"
+          - "'xpack.security.transport.ssl.certificate_authorities: [\"/etc/elasticsearch/template-certs/ca.crt\"]' in (_multi_template.content | b64decode)"
           - "'bootstrap.memory_lock: true' in (_multi_template.content | b64decode)"
           - "'/mnt/snapshots' in (_multi_template.content | b64decode)"
 

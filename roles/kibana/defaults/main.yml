@@ -70,6 +70,8 @@ kibana_cert_expiration_buffer: 30
 kibana_cert_validity_period: 1095
 # @var kibana_cert_source:description: Where to get TLS certificates. 'elasticsearch_ca' (default) auto-generates from the built-in CA; 'external' uses user-provided files
 kibana_cert_source: elasticsearch_ca
+# @var kibana_certs_dir:description: Directory on the Kibana host where TLS certificates are stored
+kibana_certs_dir: /etc/kibana/certs
 
 # --- External certificate settings (only used when kibana_cert_source: external) ---
 

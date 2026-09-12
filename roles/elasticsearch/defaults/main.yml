@@ -222,6 +222,8 @@ elasticsearch_ssl_verification_mode: full
 
 # @var elasticsearch_cert_source:description: Where to get TLS certificates. 'elasticsearch_ca' (default) auto-generates from the built-in CA; 'external' uses user-provided files
 elasticsearch_cert_source: elasticsearch_ca
+# @var elasticsearch_certs_dir:description: Directory on the Elasticsearch host where TLS certificates are stored
+elasticsearch_certs_dir: /etc/elasticsearch/certs
 
 # --- External certificate settings (only used when elasticsearch_cert_source: external) ---
 
