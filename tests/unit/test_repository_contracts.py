@@ -1105,6 +1105,18 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("elasticstack_release | int >= 9", fleet_converge)
         self.assertIn("elasticstack_release | int < 9", fleet_converge)
         self.assertIn("elastic-agent-collection-ca-raw-argv", fleet_converge)
+        self.assertIn(
+            "elastic_agent_certificate_dir: /var/lib/elastic-agent-collection-ca-certs",
+            fleet_converge,
+        )
+        self.assertIn(
+            "src: /var/lib/elastic-agent-collection-ca-certs/fleet-server-ca.crt",
+            fleet_converge,
+        )
+        self.assertNotIn(
+            "src: /var/lib/elastic-agent-collection-ca/certs/fleet-server-ca.crt",
+            fleet_converge,
+        )
         self.assertIn("ansible_failed_task.name", fleet_converge)
         self.assertIn("fleet_server_argv_lines.index('--fleet-server-port')", fleet_verify)
         self.assertIn("fleet_state.stat.exists", fleet_verify)
