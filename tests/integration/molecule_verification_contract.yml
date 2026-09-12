@@ -58,88 +58,91 @@
 
           HTTPServer(("127.0.0.1", port), Handler).serve_forever()
 
-    - name: Start the local Kibana status endpoint
-      ansible.builtin.shell:
-        cmd: >-
-          set -eu;
-          nohup python3 "{{ fake_kibana_server }}"
-          "{{ fake_kibana_port }}" "{{ fake_kibana_headers }}"
-          "{{ fake_kibana_requests }}"
-          >/dev/null 2>&1 &
-          echo $! > "{{ fake_kibana_pid }}"
-        executable: /bin/bash
-      changed_when: true
-
-    - name: Wait for the local Kibana status endpoint
-      ansible.builtin.wait_for:
-        host: 127.0.0.1
-        port: "{{ fake_kibana_port }}"
-        timeout: 10
-
-    - name: Run the shared Kibana verifier over HTTP
-      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../molecule/shared/verify_kibana_available.yml"
-      vars:
-        _verify_kibana_url: "http://127.0.0.1:{{ fake_kibana_port }}/api/status"
-        _verify_kibana_retries: 3
-        _verify_kibana_delay: 1
-        _verify_kibana_status_codes: [200]
-
-    - name: Read the recorded request headers
-      ansible.builtin.slurp:
-        src: "{{ fake_kibana_headers }}"
-      register: request_headers
-
-    - name: Assert HTTP verification did not send basic-auth credentials
-      ansible.builtin.assert:
-        that:
-          - (request_headers.content | b64decode | trim) == ''
-        fail_msg: >-
-          The HTTP Kibana verifier sent credentials:
-          {{ request_headers.content | b64decode | trim }}
-
-    - name: Run the shared Kibana verifier against a redirect
+    - name: Run the Kibana verification lifecycle contract
       block:
-        - name: Expect the redirected readiness probe to fail without following it
+        - name: Start the local Kibana status endpoint
+          ansible.builtin.shell:
+            cmd: >-
+              set -eu;
+              nohup python3 "{{ fake_kibana_server }}"
+              "{{ fake_kibana_port }}" "{{ fake_kibana_headers }}"
+              "{{ fake_kibana_requests }}"
+              >/dev/null 2>&1 &
+              echo $! > "{{ fake_kibana_pid }}"
+            executable: /bin/bash
+          changed_when: true
+
+        - name: Wait for the local Kibana status endpoint
+          ansible.builtin.wait_for:
+            host: 127.0.0.1
+            port: "{{ fake_kibana_port }}"
+            timeout: 10
+
+        - name: Run the shared Kibana verifier over HTTP
           ansible.builtin.include_tasks: "{{ playbook_dir }}/../../molecule/shared/verify_kibana_available.yml"
           vars:
-            _verify_kibana_url: "http://127.0.0.1:{{ fake_kibana_port }}/redirect"
-            _verify_kibana_retries: 1
-            _verify_kibana_delay: 0
-            _verify_kibana_status_codes: [200, 302]
-      rescue:
-        - name: Record expected redirect rejection
-          ansible.builtin.set_fact:
-            redirect_verification_failed: true
+            _verify_kibana_url: "http://127.0.0.1:{{ fake_kibana_port }}/api/status"
+            _verify_kibana_retries: 3
+            _verify_kibana_delay: 1
+            _verify_kibana_status_codes: [200]
 
-    - name: Assert the Kibana verifier rejected the redirect
-      ansible.builtin.assert:
-        that:
-          - redirect_verification_failed | default(false) | bool
-        fail_msg: The Kibana verifier followed a redirect instead of rejecting it.
+        - name: Read the recorded request headers
+          ansible.builtin.slurp:
+            src: "{{ fake_kibana_headers }}"
+          register: request_headers
 
-    - name: Read the recorded request paths
-      ansible.builtin.slurp:
-        src: "{{ fake_kibana_requests }}"
-      register: request_log
+        - name: Assert HTTP verification did not send basic-auth credentials
+          ansible.builtin.assert:
+            that:
+              - (request_headers.content | b64decode | trim) == ''
+            fail_msg: >-
+              The HTTP Kibana verifier sent credentials:
+              {{ request_headers.content | b64decode | trim }}
 
-    - name: Assert the Kibana verifier did not follow the redirect
-      ansible.builtin.assert:
-        that:
-          - "'/target' not in (request_log.content | b64decode)"
-        fail_msg: >-
-          The Kibana verifier followed the redirect:
-          {{ request_log.content | b64decode }}
+        - name: Run the shared Kibana verifier against a redirect
+          block:
+            - name: Expect the redirected readiness probe to fail without following it
+              ansible.builtin.include_tasks: "{{ playbook_dir }}/../../molecule/shared/verify_kibana_available.yml"
+              vars:
+                _verify_kibana_url: "http://127.0.0.1:{{ fake_kibana_port }}/redirect"
+                _verify_kibana_retries: 1
+                _verify_kibana_delay: 0
+                _verify_kibana_status_codes: [200, 302]
+          rescue:
+            - name: Record expected redirect rejection
+              ansible.builtin.set_fact:
+                redirect_verification_failed: true
 
-    - name: Stop the local Kibana status endpoint
-      ansible.builtin.command:
-        argv:
-          - kill
-          - "{{ lookup('file', fake_kibana_pid) | trim }}"
-      when: lookup('ansible.builtin.file', fake_kibana_pid, errors='ignore') | length > 0
-      failed_when: false
-      changed_when: false
+        - name: Assert the Kibana verifier rejected the redirect
+          ansible.builtin.assert:
+            that:
+              - redirect_verification_failed | default(false) | bool
+            fail_msg: The Kibana verifier followed a redirect instead of rejecting it.
 
-    - name: Remove contract workspace
-      ansible.builtin.file:
-        path: "{{ contract_dir }}"
-        state: absent
+        - name: Read the recorded request paths
+          ansible.builtin.slurp:
+            src: "{{ fake_kibana_requests }}"
+          register: request_log
+
+        - name: Assert the Kibana verifier did not follow the redirect
+          ansible.builtin.assert:
+            that:
+              - "'/target' not in (request_log.content | b64decode)"
+            fail_msg: >-
+              The Kibana verifier followed the redirect:
+              {{ request_log.content | b64decode }}
+
+      always:
+        - name: Stop the local Kibana status endpoint
+          ansible.builtin.command:
+            argv:
+              - kill
+              - "{{ lookup('file', fake_kibana_pid) | trim }}"
+          when: lookup('ansible.builtin.file', fake_kibana_pid, errors='ignore') | length > 0
+          failed_when: false
+          changed_when: false
+
+        - name: Remove contract workspace
+          ansible.builtin.file:
+            path: "{{ contract_dir }}"
+            state: absent

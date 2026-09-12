@@ -1073,6 +1073,21 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("else omit", kibana_shared)
         self.assertIn("_verify_kibana_validate_certs | default(true)", kibana_shared)
 
+        verification_contract = yaml.safe_load(
+            (ROOT / "tests" / "integration" / "molecule_verification_contract.yml").read_text()
+        )
+        lifecycle = next(
+            task
+            for task in verification_contract[0]["tasks"]
+            if task.get("name") == "Run the Kibana verification lifecycle contract"
+        )
+        lifecycle_names = [task.get("name") for task in lifecycle["block"]]
+        cleanup_names = [task.get("name") for task in lifecycle["always"]]
+        self.assertIn("Start the local Kibana status endpoint", lifecycle_names)
+        self.assertIn("Run the shared Kibana verifier over HTTP", lifecycle_names)
+        self.assertIn("Stop the local Kibana status endpoint", cleanup_names)
+        self.assertIn("Remove contract workspace", cleanup_names)
+
         for scenario in ("cert_renewal", "kibana_custom_certs"):
             source = (ROOT / "molecule" / scenario / "verify.yml").read_text()
             self.assertIn(
