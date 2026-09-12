@@ -129,6 +129,13 @@
       {{ ('https://' ~ (elasticstack_kibana_host | default(ansible_facts.hostname))
           if kibana_tls | default(false) | bool
           else 'http://localhost') }}:{{ elasticstack_kibana_port }}/api/status
+    # Kibana 9's standalone interactive setup deliberately remains in preboot
+    # until an Elasticsearch enrollment is completed and reports HTTP 503.
+    # Keep full-stack readiness strict: a 503 is acceptable only when this
+    # role is being used without the stack-managed Elasticsearch backend.
+    _wait_success_statuses: >-
+      {{ [200, 401, 503] if not (elasticstack_full_stack | default(false) | bool)
+         else [200, 401] }}
     _wait_fatal_pattern: "FATAL|Unable to connect to Elasticsearch|Authentication.*failed|Kibana server is not ready.*fatal"
     _wait_validate_certs: "{{ kibana_tls_validate_certs | bool }}"
     _wait_ca_file: >-
