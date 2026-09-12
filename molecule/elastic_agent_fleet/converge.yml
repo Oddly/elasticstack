@@ -312,7 +312,7 @@
         remote_src: true
         mode: "0640"
       loop:
-        - src: /var/lib/elastic-agent-collection-ca/certs/fleet-server-ca.crt
+        - src: /var/lib/elastic-agent-collection-ca-certs/fleet-server-ca.crt
           dest: /tmp/collection-fleet-server-ca.crt
         - src: /tmp/elastic-agent-collection-ca-raw-argv
           dest: /tmp/elastic-agent-collection-ca-argv
