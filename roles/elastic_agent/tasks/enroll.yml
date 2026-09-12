@@ -11,7 +11,7 @@
             if elastic_agent_mode == 'fleet_server' else [])
          + (['--fleet-server-es-insecure']
             if elastic_agent_mode == 'fleet_server' and
-               (elastic_agent_fleet_server_es | lower) is match('^http://') else [])
+               elastic_agent_fleet_server_es_insecure | bool else [])
          + (['--certificate-authorities', elastic_agent_fleet_server_ca_path]
             if elastic_agent_fleet_server_ca_source != 'none' else [])
          + (['--fleet-server-es-ca', elastic_agent_fleet_server_es_ca_path]

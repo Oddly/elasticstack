@@ -51,8 +51,8 @@ argument_specs:
         type: str
         default: '{{ elastic_agent_config_dir }}/elastic-agent.yml'
       elastic_agent_package_flavor_file:
-        description: Optional path to the 9.x package-managed Elastic Agent flavor marker used to detect basic and servers transitions;
-          leave empty to resolve the marker at the package top directory from the active package binary; 8.x packages do not use a flavor marker
+        description: Optional path to the 9.x package-managed Elastic Agent flavor marker; leave empty to resolve the marker
+          at the package top directory from the active package binary; 8.x packages do not use a flavor marker
         type: str
         default: ''
       elastic_agent_certificate_dir:
@@ -109,6 +109,11 @@ argument_specs:
         description: Elasticsearch URL used by a self-managed Fleet Server
         type: str
         default: ''
+      elastic_agent_fleet_server_es_insecure:
+        description: Allow Fleet Server to connect to Elasticsearch without certificate verification; required for HTTP and
+          intended only for temporary development deployments
+        type: bool
+        default: false
       elastic_agent_fleet_server_service_token:
         description: Elasticsearch service token used by a self-managed Fleet Server. Keep it in Ansible Vault or a secrets
           manager

@@ -33,6 +33,16 @@
         src: /tmp/elastic-agent-no-ca-argv
       register: no_ca_argv
 
+    - name: Read IPv6 publish host command arguments
+      ansible.builtin.slurp:
+        src: /tmp/elastic-agent-ipv6-publish-argv
+      register: ipv6_publish_argv
+
+    - name: Read IPv6 ansible_host fallback command arguments
+      ansible.builtin.slurp:
+        src: /tmp/elastic-agent-ipv6-fallback-argv
+      register: ipv6_fallback_argv
+
     - name: Decode the final enrollment command contract
       ansible.builtin.set_fact:
         no_ca_argv_lines: "{{ (no_ca_argv.content | b64decode).splitlines() }}"
@@ -198,6 +208,7 @@
           - "'/usr/local/bin/elastic-agent-contract' in (contract_path.content | b64decode)"
           - "'--enrollment-token' in (enrollment_argv.content | b64decode)"
           - "'contract-enrollment-token' in (enrollment_argv.content | b64decode)"
+          - "'--fleet-server-es-insecure' not in (enrollment_argv.content | b64decode)"
           - >-
             (enrollment_invocations.content | b64decode).splitlines()
             | select('equalto', 'contract-enrollment-token') | list | length == 2
@@ -230,6 +241,7 @@
           - "'contract-derived-service-token' not in (enrollment_marker.content | b64decode)"
           - "'--fleet-server-es' in (fleet_server_argv.content | b64decode)"
           - "'https://elasticsearch.example.test:9200' in (fleet_server_argv.content | b64decode)"
+          - "'--fleet-server-es-insecure' not in (fleet_server_argv.content | b64decode)"
           - "'--fleet-server-service-token-path' in (fleet_server_argv.content | b64decode)"
           - "'custom-service-token' in (fleet_server_argv.content | b64decode)"
           - "'contract-service-token' not in (fleet_server_argv.content | b64decode)"
@@ -257,6 +269,12 @@
           - "'contract-enrollment-token' not in (collection_ca_argv.content | b64decode)"
           - "'http://elasticsearch-derived.example.test:19299' in (no_ca_argv.content | b64decode)"
           - "'--fleet-server-es-insecure' in (no_ca_argv.content | b64decode)"
+          - "'https://[2001:db8::10]:19299' in (ipv6_publish_argv.content | b64decode)"
+          - "'https://[2001:db8::20]:9200' in (ipv6_fallback_argv.content | b64decode)"
+          - "'--fleet-server-es-insecure' not in (ipv6_publish_argv.content | b64decode)"
+          - "'--fleet-server-es-insecure' not in (ipv6_fallback_argv.content | b64decode)"
+          - "'https://2001:db8::10:19299' not in (ipv6_publish_argv.content | b64decode)"
+          - "'https://2001:db8::20:9200' not in (ipv6_fallback_argv.content | b64decode)"
           - "'--fleet-server-service-token-path' in (no_ca_argv.content | b64decode)"
           - "'custom-service-token' in (no_ca_argv.content | b64decode)"
           - "'contract-derived-service-token' not in (no_ca_argv.content | b64decode)"

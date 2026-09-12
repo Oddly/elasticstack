@@ -61,6 +61,8 @@ elastic_agent_fleet_server_ca_remote_src: false
 
 # @var elastic_agent_fleet_server_es:description: Elasticsearch URL used by a self-managed Fleet Server
 elastic_agent_fleet_server_es: ""
+# @var elastic_agent_fleet_server_es_insecure:description: Allow Fleet Server to connect to Elasticsearch without certificate verification; required for HTTP and intended only for temporary development deployments
+elastic_agent_fleet_server_es_insecure: false
 # @var elastic_agent_fleet_server_service_token:description: Elasticsearch service token used by a self-managed Fleet Server. Keep it in Ansible Vault or a secrets manager
 elastic_agent_fleet_server_service_token: ""
 # @var elastic_agent_fleet_server_service_token_file:description: Root-owned file used to pass the Fleet Server Elasticsearch service token without placing it in process arguments

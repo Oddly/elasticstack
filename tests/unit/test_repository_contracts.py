@@ -1029,9 +1029,12 @@ class TestRepositoryContracts(unittest.TestCase):
             defaults["elastic_agent_fleet_server_service_token_file"],
             "{{ elastic_agent_config_dir }}/.fleet-server-service-token",
         )
+        self.assertFalse(defaults["elastic_agent_fleet_server_es_insecure"])
         self.assertEqual(specs["elastic_agent_mode"]["choices"], ["standalone", "fleet", "fleet_server"])
         self.assertEqual(specs["elastic_agent_package_flavor"]["choices"], ["basic", "servers"])
         self.assertEqual(specs["elastic_agent_package_flavor_file"]["default"], "")
+        self.assertEqual(specs["elastic_agent_fleet_server_es_insecure"]["type"], "bool")
+        self.assertFalse(specs["elastic_agent_fleet_server_es_insecure"]["default"])
         self.assertEqual(
             specs["elastic_agent_fleet_server_service_token_file"]["default"],
             "{{ elastic_agent_config_dir }}/.fleet-server-service-token",
@@ -1055,7 +1058,11 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("elasticstack_release | int >= 9", main)
         self.assertIn("elasticstack_release | int < 9", main)
         self.assertIn("elasticsearch_http_publish_host", main)
+        self.assertIn("ansible_host", main)
         self.assertIn("elasticsearch_http_publish_port", main)
+        self.assertIn("_elastic_agent_fleet_server_es_host", main)
+        self.assertIn("Bracket an IPv6 Fleet Server Elasticsearch host", main)
+        self.assertIn("not ((elastic_agent_fleet_server_es | lower) is match('^http://'))", main)
         self.assertNotIn(".elasticsearch_api_host", main)
         self.assertIn("Gather service facts for Beat migration", main)
         migration_block = main[main.index("Stop Beats services") :]
@@ -1088,7 +1095,9 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("--fleet-server-service-token-path", enroll)
         self.assertIn("elastic_agent_fleet_server_service_token_file", enroll)
         self.assertIn("--fleet-server-es-insecure", enroll)
-        self.assertIn("match('^http://')", enroll)
+        self.assertIn("elastic_agent_fleet_server_es_insecure | bool", enroll)
+        self.assertIn("elastic_agent_fleet_server_insecure | bool", enroll)
+        self.assertNotIn("(elastic_agent_fleet_server_es | lower) is match('^http://')", enroll)
         self.assertIn("Write Fleet Server service token to a protected file", enroll)
         self.assertIn("{{ elastic_agent_config_dir }}/fleet.enc", enroll)
         self.assertIn("_elastic_agent_fleet_state", enroll)
@@ -1105,6 +1114,12 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("elasticstack_release | int >= 9", fleet_converge)
         self.assertIn("elasticstack_release | int < 9", fleet_converge)
         self.assertIn("elastic-agent-collection-ca-raw-argv", fleet_converge)
+        self.assertIn("elastic_agent_fleet_server_es_insecure: true", fleet_converge)
+        self.assertIn("insecure_fleet_server_es_rejected", fleet_converge)
+        self.assertIn("elasticsearch_http_publish_host: '2001:db8::10'", fleet_converge)
+        self.assertIn("ansible_host: '2001:db8::20'", fleet_converge)
+        self.assertIn("elasticstack_elasticsearch_group_name: elasticsearch_ipv6_publish", fleet_converge)
+        self.assertIn("elasticstack_elasticsearch_group_name: elasticsearch_ipv6_fallback", fleet_converge)
         self.assertIn(
             "elastic_agent_certificate_dir: /var/lib/elastic-agent-collection-ca-certs",
             fleet_converge,
@@ -1124,6 +1139,8 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("enrollment_fingerprint", fleet_verify)
         self.assertIn("fleet_service_token_file.stat.mode == '0600'", fleet_verify)
         self.assertIn("--fleet-server-es-insecure", fleet_verify)
+        self.assertIn("https://[2001:db8::10]:19299", fleet_verify)
+        self.assertIn("https://[2001:db8::20]:9200", fleet_verify)
 
         readme = (ROOT / "roles" / "elastic_agent" / "README.md").read_text()
         reference = (ROOT / "docs" / "reference" / "elastic_agent.md").read_text()
@@ -1136,7 +1153,13 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("Assert the 9.x package flavor marker", default_verify)
         self.assertIn("elasticsearch_http_publish_host", readme)
         self.assertIn("elasticsearch_http_publish_host", reference)
+        self.assertIn("elastic_agent_fleet_server_es_insecure", readme)
+        self.assertIn("elastic_agent_fleet_server_es_insecure", reference)
+        self.assertIn("elastic_agent_fleet_server_insecure", readme)
+        self.assertIn("elastic_agent_fleet_server_insecure", reference)
         self.assertIn("fleet.enc", reference)
+        self.assertIn("Fleet enrollment using an enrollment token", reference)
+        self.assertNotIn("Fleet enrollment using a policy token", reference)
         architecture = (ROOT / "docs" / "guide" / "architecture.md").read_text()
         self.assertIn("Fleet Server mode: CA + service token", architecture)
         self.assertIn("elastic_agent_standalone_config", architecture)

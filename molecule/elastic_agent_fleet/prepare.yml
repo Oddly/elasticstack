@@ -25,13 +25,25 @@
         - /var/lib/elastic-agent-no-ca/.enrollment.sha256
         - /var/lib/elastic-agent-no-ca/.fleet-server-service-token
         - /var/lib/elastic-agent-no-ca/custom-service-token
+        - /var/lib/elastic-agent-insecure-es/fleet.enc
+        - /var/lib/elastic-agent-insecure-es/.enrollment.sha256
+        - /var/lib/elastic-agent-insecure-es/.fleet-server-service-token
+        - /var/lib/elastic-agent-ipv6-publish/fleet.enc
+        - /var/lib/elastic-agent-ipv6-publish/.enrollment.sha256
+        - /var/lib/elastic-agent-ipv6-publish/.fleet-server-service-token
+        - /var/lib/elastic-agent-ipv6-fallback/fleet.enc
+        - /var/lib/elastic-agent-ipv6-fallback/.enrollment.sha256
+        - /var/lib/elastic-agent-ipv6-fallback/.fleet-server-service-token
         - /tmp/elastic-agent-beat-fixtures-ready
         - /tmp/elastic-agent-contract-invocations
         - /tmp/elastic-agent-enrollment-argv
         - /tmp/elastic-agent-fleet-server-argv
+        - /tmp/elastic-agent-fleet-server-custom-argv
         - /tmp/elastic-agent-collection-ca-raw-argv
         - /tmp/elastic-agent-collection-ca-argv
         - /tmp/elastic-agent-no-ca-argv
+        - /tmp/elastic-agent-ipv6-publish-argv
+        - /tmp/elastic-agent-ipv6-fallback-argv
         - /tmp/elastic-agent-fleet-contract-complete
         - /tmp/elastic-agent-flavor-transition-rejected
         - /tmp/elastic-agent-package-flavor-transition
