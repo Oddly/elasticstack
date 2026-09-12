@@ -74,11 +74,14 @@
       intentional re-enrollment.
   when:
     - _elastic_agent_fleet_state.stat.exists
+    - _elastic_agent_fleet_state_before_install.stat.exists
     - not _elastic_agent_enrollment_marker_matches | bool
 
 - name: enroll | Decide whether Elastic Agent enrollment is required
   ansible.builtin.set_fact:
-    _elastic_agent_enrollment_required: "{{ not _elastic_agent_fleet_state.stat.exists }}"
+    _elastic_agent_enrollment_required: >-
+      {{ not _elastic_agent_fleet_state.stat.exists or
+         not _elastic_agent_fleet_state_before_install.stat.exists }}
   no_log: true
 
 - name: enroll | Write Fleet Server service token to a protected file

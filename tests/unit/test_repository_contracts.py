@@ -1071,6 +1071,11 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("elastic_agent_fleet_server_cert_key_file | length > 0", main)
         self.assertIn("elastic_agent_config_file | dirname", main)
         self.assertIn("_elastic_agent_package_flavor_marker_content", main)
+        self.assertIn("_elastic_agent_fleet_state_before_install", main)
+        self.assertLess(
+            main.index("Check package-managed Fleet state before package installation"),
+            main.index("Install Elastic Agent package"),
+        )
         self.assertLess(
             main.index("Validate Elastic Agent configuration"),
             main.index("Install Elastic Agent package"),
@@ -1087,6 +1092,8 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("Write Fleet Server service token to a protected file", enroll)
         self.assertIn("{{ elastic_agent_config_dir }}/fleet.enc", enroll)
         self.assertIn("_elastic_agent_fleet_state", enroll)
+        self.assertIn("_elastic_agent_fleet_state_before_install.stat.exists", enroll)
+        self.assertIn("not _elastic_agent_fleet_state_before_install.stat.exists", enroll)
         self.assertIn("Refuse to overwrite an existing enrollment", enroll)
         self.assertIn("not _elastic_agent_fleet_state.stat.exists", enroll)
         self.assertIn("Persist enrollment state without storing credentials", enroll)

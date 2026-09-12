@@ -72,6 +72,12 @@
               elasticstack_version != 'latest') else '') | replace(' ', '') }}
   when: elastic_agent_manage | bool
 
+- name: Check package-managed Fleet state before package installation
+  ansible.builtin.stat:
+    path: "{{ elastic_agent_config_dir }}/fleet.enc"
+  register: _elastic_agent_fleet_state_before_install
+  when: elastic_agent_manage | bool
+
 - name: Locate the active Elastic Agent package binary
   ansible.builtin.stat:
     path: /usr/share/elastic-agent/bin/elastic-agent
