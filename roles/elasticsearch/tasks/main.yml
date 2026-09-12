@@ -188,7 +188,7 @@
     seconds: "{{ elasticsearch_upgrade_countdown | default(10) }}"
     prompt: >-
       Elasticsearch {{ ansible_facts.packages['elasticsearch'][0].version }}
-      will be upgraded to {{ elasticstack_version | default('latest ' ~ elasticstack_release ~ '.x') }}.
+      will be upgraded to {{ elasticstack_version | default('latest ' ~ elasticstack_release ~ '.x', true) }}.
       Nodes will be restarted one at a time with shard allocation management.
       Press Ctrl+C to abort, or wait {{ elasticsearch_upgrade_countdown | default(10) }} seconds to continue.
   when:
@@ -205,7 +205,7 @@
 # restarts into a config that trusts no CA and can no longer join the cluster.
 - name: Detect existing external CA for template rendering
   ansible.builtin.stat:
-    path: /etc/elasticsearch/certs/ca.crt
+    path: "{{ elasticsearch_certs_dir }}/ca.crt"
   register: _elasticsearch_existing_ca_cert
   when: elasticsearch_cert_source == 'external'
 

@@ -77,6 +77,10 @@ argument_specs:
           uses user-provided files
         type: str
         default: elasticsearch_ca
+      kibana_certs_dir:
+        description: Directory on the Kibana host where TLS certificates are stored
+        type: str
+        default: /etc/kibana/certs
       kibana_tls_certificate_file:
         description: "Path to Kibana TLS certificate. Accepts PEM (.crt/.pem) or PKCS12 (.p12/.pfx) \u2014 format auto-detected"
         type: str

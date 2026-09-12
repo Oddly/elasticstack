@@ -487,6 +487,10 @@
       ansible.builtin.set_fact:
         _logstash_es_url: "https://{{ hostvars[elasticstack_ca_host].ansible_host | default(hostvars[elasticstack_ca_host].inventory_hostname) }}:{{ elasticstack_elasticsearch_http_port }}"
 
+    - name: logstash-security | Resolve role permission variables
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/tasks/logstash-role-permissions.yml"
+
     - name: logstash-security | Create logstash role
       ansible.builtin.uri:
         url: "{{ _logstash_es_url }}/_security/role/{{ logstash_role_name }}"
@@ -500,8 +504,10 @@
         body:
           cluster: "{{ logstash_role_cluster_privileges }}"
           indices:
-            - names: "{{ logstash_role_indicies_names }}"
-              privileges: "{{ logstash_role_indicies_privileges }}"
+            - names: >-
+                {{ _logstash_role_indices_names }}
+              privileges: >-
+                {{ _logstash_role_indices_privileges }}
         status_code: [200]
       register: _logstash_role_result
       changed_when: _logstash_role_result.json.role.created | default(false)

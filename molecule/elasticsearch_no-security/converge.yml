@@ -4,7 +4,6 @@
 - name: Converge
   hosts: all
   vars:
-    elasticsearch_security: false
     elasticstack_security: false
     elasticsearch_heap: "1"
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
@@ -30,7 +29,6 @@
 - name: "Re-include ES role in check mode (regression cover for #154)"
   hosts: all
   vars:
-    elasticsearch_security: false
     elasticstack_security: false
     elasticsearch_heap: "1"
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"

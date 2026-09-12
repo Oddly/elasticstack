@@ -61,14 +61,14 @@ logstash_config_backup: false
 
 ```yaml
 logstash_config_autoreload: true
-# logstash_config_autoreload_interval: 3s
+logstash_config_autoreload_interval: 3s
 ```
 
 `logstash_config_autoreload`
 :   When enabled, Logstash watches for pipeline configuration file changes and reloads them without a full service restart. Safe to leave on in production. When disabled, the role uses a separate restart handler for pipeline changes — any modification to `10-input.conf`, `50-filter.conf`, or `90-output.conf` triggers a full Logstash restart.
 
 `logstash_config_autoreload_interval`
-:   How often Logstash checks for configuration file changes. Only applies when `logstash_config_autoreload` is enabled. Uncomment and set to a duration string like `3s`, `10s`, or `1m`. The package default is `3s`.
+:   How often Logstash checks for configuration file changes. Only applies when `logstash_config_autoreload` is enabled. Set to a duration string like `3s`, `10s`, or `1m`. The default is `3s`.
 
 ### Paths
 
@@ -86,8 +86,8 @@ logstash_config_path_logs: /var/log/logstash
 ### API Endpoint
 
 ```yaml
-# logstash_http_host: "127.0.0.1"
-# logstash_http_port: 9600-9700
+logstash_http_host: "127.0.0.1"
+logstash_http_port: 9600-9700
 ```
 
 `logstash_http_host`
@@ -97,7 +97,7 @@ logstash_config_path_logs: /var/log/logstash
 :   Port or port range for the Logstash monitoring API (`api.http.port`). The default `9600-9700` lets Logstash pick the first available port in that range, which avoids conflicts when running multiple instances on the same host.
 
 !!! note
-    Both `logstash_http_host` and `logstash_http_port` are only written to `logstash.yml` when explicitly defined. When left commented out, Logstash uses its built-in defaults (`127.0.0.1` and `9600-9700`).
+    The role writes both API settings explicitly with the same defaults used by the Logstash package. Change them when the monitoring API must be reachable at another address or port.
 
 ### JVM Configuration
 
@@ -115,7 +115,7 @@ logstash_heap: ""
 ```
 
 `logstash_pipeline_buffer_type`
-:   Controls the `pipeline.buffer.type` setting in `logstash.yml`. Accepts `direct` or `heap`. Only written when explicitly defined.
+:   Controls the `pipeline.buffer.type` setting in `logstash.yml`. Accepts `direct` or `heap`. The role selects `direct` for 8.x and `heap` for 9.x unless you set it explicitly.
 
 !!! note "9.x behaviour change"
     Logstash 9.x changed the default buffer type from `direct` (off-heap) to `heap` (on-heap). If you are upgrading from 8.x with tightly-tuned heap sizing, the additional on-heap pressure may cause garbage collection pauses or out-of-memory errors. Set this explicitly to `direct` to preserve 8.x behaviour, or increase `logstash_heap` to compensate.
@@ -169,7 +169,7 @@ logstash_custom_pipeline: |
 logstash_input_beats_port: 5044
 # logstash_input_beats_ssl: false
 # logstash_input_beats_client_auth: required
-# logstash_input_beats_timeout: 60s
+logstash_input_beats_timeout: 60s
 
 logstash_input_elastic_agent: false
 logstash_input_elastic_agent_port: 5044
@@ -201,7 +201,7 @@ logstash_extra_inputs: ""
     Renders as `ssl_verify_mode => force_peer` (hardcoded; the variable has no effect in 8.x).
 
 `logstash_input_beats_timeout`
-:   Idle timeout for Beats connections. Connections with no data for this duration are closed. Accepts a duration string ending in `s`, such as `60s` or `300s`; the role renders the value as the numeric seconds required by Logstash. When undefined, the Beats input uses its built-in default. Set this lower if you have many idle Beat agents holding open connections.
+:   Idle timeout for Beats connections. Connections with no data for this duration are closed. Accepts a duration string ending in `s`, such as `60s` or `300s`; the role renders the value as the numeric seconds required by Logstash. The default is `60s`. Set this lower if you have many idle Beat agents holding open connections.
 
 <!-- markdownlint-enable MD046 -->
 
@@ -274,8 +274,8 @@ logstash_elasticsearch_hosts: []
 logstash_elasticsearch_index: ""
 logstash_validate_after_inactivity: 300
 logstash_sniffing: false
-# logstash_sniffing_delay: 5
-# logstash_sniffing_path: "/_nodes/http"
+logstash_sniffing_delay: 5
+logstash_sniffing_path: "/_nodes/http"
 logstash_extra_outputs: ""
 ```
 
@@ -344,11 +344,11 @@ logstash_role_cluster_privileges:
   - manage_index_templates
   - monitor
   - manage_ilm
-logstash_role_indicies_names:
+logstash_role_indices_names:
   - "ecs-logstash*"
   - "logstash*"
   - "logs*"
-logstash_role_indicies_privileges:
+logstash_role_indices_privileges:
   - write
   - create
   - delete
@@ -372,11 +372,11 @@ logstash_user_fullname: "Internal Logstash User"
 `logstash_role_cluster_privileges`
 :   Cluster-level privileges granted to the role. The defaults allow Logstash to manage index templates, monitor cluster health, and manage ILM policies. Add `manage_pipeline` if you use ingest pipelines, or `manage_data_stream_lifecycle` for data streams.
 
-`logstash_role_indicies_names`
-:   Index patterns the role is allowed to operate on. The defaults cover the standard Logstash index names and the ECS-compatible prefix. Add your custom index patterns here if you set `logstash_elasticsearch_index` to something outside these patterns — otherwise Logstash will get 403 errors when writing.
+`logstash_role_indices_names`
+:   Preferred spelling for the index patterns the role is allowed to operate on. The defaults cover the standard Logstash index names and the ECS-compatible prefix. Add your custom index patterns here if you set `logstash_elasticsearch_index` to something outside these patterns — otherwise Logstash will get 403 errors when writing. The legacy misspelled `logstash_role_indicies_names` remains accepted and is used when the preferred variable is not set.
 
-`logstash_role_indicies_privileges`
-:   Index-level privileges granted on the patterns above. The defaults provide full write access including index creation and ILM management.
+`logstash_role_indices_privileges`
+:   Preferred spelling for the index-level privileges granted on the patterns above. The defaults provide full write access including index creation and ILM management. The legacy misspelled `logstash_role_indicies_privileges` remains accepted and is used when the preferred variable is not set.
 
 `logstash_create_user`
 :   Create the Elasticsearch user that Logstash authenticates as. Set to `false` if the user already exists or is managed through an external identity provider.
@@ -454,12 +454,12 @@ logstash_cert_force_regenerate: false
 ### Dead Letter Queue
 
 ```yaml
-# logstash_dead_letter_queue_enable: false
-# logstash_dead_letter_queue_retain_age: 7d
+logstash_dead_letter_queue_enable: false
+logstash_dead_letter_queue_retain_age: 7d
 ```
 
 `logstash_dead_letter_queue_enable`
-:   Enable the dead letter queue (DLQ). Events that fail processing (e.g. mapping errors in Elasticsearch) are written to the DLQ instead of being dropped. You can then replay or inspect them. Only written to `logstash.yml` when explicitly defined.
+:   Enable the dead letter queue (DLQ). Events that fail processing (e.g. mapping errors in Elasticsearch) are written to the DLQ instead of being dropped. You can then replay or inspect them. Disabled by default.
 
 `logstash_dead_letter_queue_retain_age`
 :   How long to retain entries in the dead letter queue before automatic deletion. Accepts Logstash duration notation (`7d`, `24h`, etc.). Only applies when `logstash_dead_letter_queue_enable` is `true`.
@@ -467,11 +467,11 @@ logstash_cert_force_regenerate: false
 ### Log Format
 
 ```yaml
-# logstash_log_format: plain
+logstash_log_format: plain
 ```
 
 `logstash_log_format`
-:   Controls the format of Logstash's own log output. Set to `plain` for human-readable logs (the default) or `json` for structured JSON logs that are easier to parse with log aggregation tools. Only written to `logstash.yml` when explicitly defined.
+:   Controls the format of Logstash's own log output. Set to `plain` for human-readable logs (the default) or `json` for structured JSON logs that are easier to parse with log aggregation tools.
 
 ### ECS Compatibility
 
@@ -489,7 +489,7 @@ logstash_cert_force_regenerate: false
 ```
 
 `logstash_pipeline_unsafe_shutdown`
-:   When `true`, Logstash forcefully shuts down even if there are still in-flight events in the pipeline. By default (`false`), Logstash waits for all events to be processed or drained before stopping, which can delay shutdown if an output is unresponsive. Only written to `logstash.yml` when explicitly defined.
+:   When `true`, Logstash forcefully shuts down even if there are still in-flight events in the pipeline. The role writes `false` by default, so Logstash waits for all events to be processed or drained before stopping, which can delay shutdown if an output is unresponsive.
 
 ### Monitoring
 
@@ -587,14 +587,14 @@ logstash_plugins:
 ### Internal Variables
 
 ```yaml
-logstash_freshstart:
+_logstash_freshstart:
   changed: false
 logstash_cert_will_expire_soon: false
 ```
 
 These are used internally by the role. Do not set them in your inventory.
 
-`logstash_freshstart`
+`_logstash_freshstart`
 :   Tracks whether this run is a fresh installation. When `true`, the restart handler is suppressed because the service start task already starts Logstash.
 
 `logstash_cert_will_expire_soon`
@@ -711,7 +711,7 @@ The role supports three deprecated variable names that map to current ones:
 
 Two restart handlers exist:
 
-- **"Restart Logstash"** — fires on config/cert changes, but NOT on fresh install (`logstash_freshstart.changed` guard)
+- **"Restart Logstash"** — fires on config/cert changes, but NOT on fresh install (`_logstash_freshstart.changed` guard)
 - **"Restart Logstash noauto"** — only fires when `logstash_config_autoreload` is disabled. Pipeline changes notify this handler, but if autoreload is enabled, Logstash picks up changes on its own and the handler is skipped.
 
 ### Elasticsearch host discovery

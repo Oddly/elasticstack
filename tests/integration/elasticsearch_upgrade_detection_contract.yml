@@ -5,6 +5,39 @@
   vars:
     elasticstack_version: latest
   tasks:
+    - name: Render the default rolling upgrade target when version is empty
+      ansible.builtin.set_fact:
+        _rolling_upgrade_target: >-
+          {{ elasticstack_version | default('latest ' ~ elasticstack_release ~ '.x', true) }}
+      vars:
+        elasticstack_release: 9
+        elasticstack_version: ""
+
+    - name: Assert the default rolling upgrade target includes the release line
+      ansible.builtin.assert:
+        that:
+          - _rolling_upgrade_target == 'latest 9.x'
+
+    - name: Detect no upgrade when version is explicitly empty
+      vars:
+        elasticstack_release: 9
+        elasticstack_version: ""
+      block:
+        - name: Set installed package facts for empty target version
+          ansible.builtin.set_fact:
+            ansible_facts:
+              packages:
+                elasticsearch:
+                  - version: 9.1.0
+
+        - name: Run upgrade detection for empty target version
+          ansible.builtin.include_tasks: ../../roles/elasticsearch/tasks/elasticsearch-upgrade-detection.yml
+
+        - name: Assert empty target version does not need rolling upgrade
+          ansible.builtin.assert:
+            that:
+              - not _elasticsearch_needs_rolling_upgrade | bool
+
     - name: Detect no upgrade when installed major matches release
       vars:
         elasticstack_release: 9

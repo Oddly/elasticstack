@@ -1,0 +1,11 @@
+---
+- name: logstash-role-permissions | Resolve index names
+  ansible.builtin.set_fact:
+    _logstash_role_indices_names: >-
+      {{ logstash_role_indices_names
+         if logstash_role_indices_names is defined
+         else logstash_role_indicies_names }}
+    _logstash_role_indices_privileges: >-
+      {{ logstash_role_indices_privileges
+         if logstash_role_indices_privileges is defined
+         else logstash_role_indicies_privileges }}

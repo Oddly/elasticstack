@@ -1,6 +1,8 @@
 ---
 - name: Verify Elasticsearch with external certificates
   hosts: elasticsearch
+  vars:
+    elasticsearch_certs_dir: /etc/elasticsearch/custom-certs
   tasks:
     - name: Fetch Elastic password
       ansible.builtin.shell: |
@@ -60,18 +62,19 @@
 
     - name: Verify transport cert file was deployed
       ansible.builtin.stat:
-        path: "/etc/elasticsearch/certs/{{ inventory_hostname }}-transport.crt"
+        path: "{{ elasticsearch_certs_dir }}/{{ inventory_hostname }}-transport.crt"
       register: transport_cert_stat
 
     - name: Assert transport cert exists
       ansible.builtin.assert:
         that:
+          - elasticsearch_certs_dir == '/etc/elasticsearch/custom-certs'
           - transport_cert_stat.stat.exists
         fail_msg: "Transport certificate file not found"
 
     - name: Verify HTTP cert file was deployed
       ansible.builtin.stat:
-        path: "/etc/elasticsearch/certs/{{ inventory_hostname }}-http.crt"
+        path: "{{ elasticsearch_certs_dir }}/{{ inventory_hostname }}-http.crt"
       register: http_cert_stat
 
     - name: Assert HTTP cert exists
@@ -82,7 +85,7 @@
 
     - name: Verify CA cert was deployed
       ansible.builtin.stat:
-        path: /etc/elasticsearch/certs/ca.crt
+        path: "{{ elasticsearch_certs_dir }}/ca.crt"
       register: ca_cert_stat
 
     - name: Assert CA cert exists
@@ -124,14 +127,14 @@
 
     - name: Verify cert paths in config match files on disk
       ansible.builtin.stat:
-        path: "/etc/elasticsearch/{{ item }}"
+        path: "{{ elasticsearch_certs_dir }}/{{ item }}"
       register: _cert_path_check
       loop:
-        - "certs/{{ inventory_hostname }}-transport.crt"
-        - "certs/{{ inventory_hostname }}-transport.key"
-        - "certs/{{ inventory_hostname }}-http.crt"
-        - "certs/{{ inventory_hostname }}-http.key"
-        - certs/ca.crt
+        - "{{ inventory_hostname }}-transport.crt"
+        - "{{ inventory_hostname }}-transport.key"
+        - "{{ inventory_hostname }}-http.crt"
+        - "{{ inventory_hostname }}-http.key"
+        - ca.crt
 
     - name: Assert all referenced cert files exist
       ansible.builtin.assert:
