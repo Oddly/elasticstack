@@ -64,7 +64,7 @@ content are suppressed from Ansible output.
 
 ## Fleet Server mode
 
-Set `elastic_agent_mode: fleet_server` and provide the Fleet Server policy, Elasticsearch service token, and Elasticsearch URL. Use the `servers` package flavor on 9.x; use the default `basic` package on 8.x, where Fleet Server is included. The role resolves the Elasticsearch URL from the collection's Elasticsearch inventory group when `elastic_agent_fleet_server_es` is empty, using `elasticsearch_http_publish_host` and `elasticsearch_http_publish_port` when configured and otherwise the inventory address and service port. The Fleet Server policy and service token are created in Kibana or through the Elasticsearch security APIs; this role installs and enrolls the host but does not create Fleet policies.
+Set `elastic_agent_mode: fleet_server` and provide the Fleet Server policy, Elasticsearch service token, and Elasticsearch URL. Use the `servers` package flavor on 9.x; use the default `basic` package on 8.x, where Fleet Server is included. The role resolves the Elasticsearch URL from the collection's Elasticsearch inventory group when `elastic_agent_fleet_server_es` is empty, using `elasticsearch_http_publish_host` and `elasticsearch_http_publish_port` when configured and otherwise the inventory address and service port. IPv6 literals are bracketed in the derived URL. The Fleet Server policy and service token are created in Kibana or through the Elasticsearch security APIs; this role installs and enrolls the host but does not create Fleet policies.
 
 ```yaml
 elastic_agent_manage: true
@@ -72,6 +72,7 @@ elastic_agent_mode: fleet_server
 elastic_agent_package_flavor: servers
 elastic_agent_fleet_server_url: https://fleet.example.test:8220
 elastic_agent_fleet_server_es: https://es.example.test:9200
+elastic_agent_fleet_server_es_insecure: false
 elastic_agent_fleet_server_service_token: "{{ vault_fleet_service_token }}"
 elastic_agent_fleet_server_service_token_file: /etc/elastic-agent/.fleet-server-service-token
 elastic_agent_fleet_server_policy: fleet-server-policy-id
@@ -82,7 +83,7 @@ elastic_agent_fleet_server_cert_file: /srv/pki/fleet-server.crt
 elastic_agent_fleet_server_cert_key_file: /srv/pki/fleet-server.key
 ```
 
-The service token is written to `elastic_agent_fleet_server_service_token_file` with root ownership and mode `0600`, then passed to Elastic Agent with `--fleet-server-service-token-path`. The enrollment token is currently passed through the Agent command because the supported Agent command has no enrollment-token file option; keep that token short-lived and limit access to the host process table during enrollment. An `http://` Elasticsearch URL adds `--fleet-server-es-insecure`; use TLS whenever possible.
+The service token is written to `elastic_agent_fleet_server_service_token_file` with root ownership and mode `0600`, then passed to Elastic Agent with `--fleet-server-service-token-path`. The enrollment token is currently passed through the Agent command because the supported Agent command has no enrollment-token file option; keep that token short-lived and limit access to the host process table during enrollment. Fleet Server rejects an `http://` Elasticsearch URL unless `elastic_agent_fleet_server_es_insecure: true`. When enabled, it adds `--fleet-server-es-insecure` and skips Elasticsearch certificate verification. This setting controls Fleet Server-to-Elasticsearch transport; `elastic_agent_fleet_server_insecure` separately controls Agent-to-Fleet Server TLS verification. Use TLS whenever possible.
 
 Certificate files can be read from the controller or the managed host with the matching `*_remote_src` variables. Inline PEM values are available for the CA, certificate, private key, and Elasticsearch CA. Set `elastic_agent_certificate_dir` to change the destination directory. Certificate changes notify the shared service restart lifecycle.
 

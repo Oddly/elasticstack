@@ -1,6 +1,6 @@
 # elastic_agent
 
-Ansible role for installing and managing Elastic Agent on Linux. It supports a complete standalone `elastic-agent.yml` policy, Fleet enrollment using a policy token, and a self-managed Fleet Server using the `servers` package flavor. The role covers Elastic Stack 8.x and 9.x and uses the shared repository and package-installation tasks.
+Ansible role for installing and managing Elastic Agent on Linux. It supports a complete standalone `elastic-agent.yml` policy, Fleet enrollment using an enrollment token, and a self-managed Fleet Server using the `servers` package flavor. The role covers Elastic Stack 8.x and 9.x and uses the shared repository and package-installation tasks.
 
 Elastic documents standalone mode as a locally managed policy with a default output and at least one input. Fleet mode is centrally managed by Kibana. The role follows those boundaries: it deploys the local policy or executes enrollment, but it does not invent Fleet policies or tokens. See [Elastic Agent installation](https://www.elastic.co/docs/reference/fleet/install-standalone-elastic-agent), [standalone configuration](https://www.elastic.co/docs/reference/fleet/configure-standalone-elastic-agents), and the [command reference](https://www.elastic.co/docs/reference/fleet/agent-command-reference).
 
@@ -84,6 +84,7 @@ Enrollment uses the package's `elastic-agent enroll` command with an argv list, 
 
 ```yaml
 elastic_agent_fleet_server_es: ""
+elastic_agent_fleet_server_es_insecure: false
 elastic_agent_fleet_server_service_token: "{{ vault_fleet_service_token }}"
 elastic_agent_fleet_server_service_token_file: "{{ elastic_agent_config_dir }}/.fleet-server-service-token"
 elastic_agent_fleet_server_policy: fleet-server-policy-id
@@ -91,7 +92,7 @@ elastic_agent_fleet_server_host: ""
 elastic_agent_fleet_server_port: 8220
 ```
 
-Use `elastic_agent_mode: fleet_server` and set `elastic_agent_package_flavor: servers` on 9.x. On 8.x, use `basic` because the regular package includes Fleet Server. `elastic_agent_fleet_server_es` is the Elasticsearch URL; when empty, the role derives it from the first host in `elasticstack_elasticsearch_group_name`, preferring `elasticsearch_http_publish_host` and `elasticsearch_http_publish_port` and falling back to the inventory address and shared HTTP port. `elastic_agent_fleet_server_service_token` is the Elasticsearch service token, while `elastic_agent_fleet_server_policy` is the Fleet Server policy ID. The service token is stored in the root-owned `0600` file at `elastic_agent_fleet_server_service_token_file` and passed with `--fleet-server-service-token-path`. An `http://` Elasticsearch URL also adds `--fleet-server-es-insecure`; TLS is preferred. The enrollment token remains a command argument because Elastic Agent does not provide an enrollment-token path option, so use a short-lived token and protect access to the host process table during enrollment. `elastic_agent_fleet_server_host` and `elastic_agent_fleet_server_port` add the corresponding Fleet Server command options.
+Use `elastic_agent_mode: fleet_server` and set `elastic_agent_package_flavor: servers` on 9.x. On 8.x, use `basic` because the regular package includes Fleet Server. `elastic_agent_fleet_server_es` is the Elasticsearch URL; when empty, the role derives it from the first host in `elasticstack_elasticsearch_group_name`, preferring `elasticsearch_http_publish_host` and `elasticsearch_http_publish_port` and falling back to the inventory address and shared HTTP port. IPv6 literals are bracketed in the derived URL. Fleet Server rejects an `http://` Elasticsearch URL unless `elastic_agent_fleet_server_es_insecure: true`; when enabled, the role adds `--fleet-server-es-insecure` and skips Elasticsearch certificate verification. Keep this opt-in setting separate from `elastic_agent_fleet_server_insecure`, which controls TLS verification between the Agent and Fleet Server. `elastic_agent_fleet_server_service_token` is the Elasticsearch service token, while `elastic_agent_fleet_server_policy` is the Fleet Server policy ID. The service token is stored in the root-owned `0600` file at `elastic_agent_fleet_server_service_token_file` and passed with `--fleet-server-service-token-path`. The enrollment token remains a command argument because Elastic Agent does not provide an enrollment-token path option, so use a short-lived token and protect access to the host process table during enrollment. `elastic_agent_fleet_server_host` and `elastic_agent_fleet_server_port` add the corresponding Fleet Server command options.
 
 The Fleet Server TLS inputs are:
 

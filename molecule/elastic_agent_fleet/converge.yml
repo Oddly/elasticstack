@@ -242,6 +242,13 @@
         elastic_agent_fleet_server_es_ca_file: /tmp/elasticsearch-ca.crt
         elastic_agent_fleet_server_es_ca_remote_src: true
 
+    - name: Preserve file-mode Fleet Server command
+      ansible.builtin.copy:
+        src: /tmp/elastic-agent-fleet-server-argv
+        dest: /tmp/elastic-agent-fleet-server-custom-argv
+        remote_src: true
+        mode: "0640"
+
     - name: Preserve file-mode Fleet Server certificate outputs
       ansible.builtin.copy:
         src: "{{ item.src }}"
@@ -342,6 +349,7 @@
         elastic_agent_fleet_server_url: https://fleet.example.test:8220
         elastic_agent_enrollment_token: ""
         elastic_agent_fleet_server_insecure: false
+        elastic_agent_fleet_server_es_insecure: true
         elasticstack_security: false
         elastic_agent_fleet_server_ca_source: none
         elastic_agent_fleet_server_ca_file: ""
@@ -366,6 +374,124 @@
       ansible.builtin.copy:
         src: /tmp/elastic-agent-fleet-server-argv
         dest: /tmp/elastic-agent-no-ca-argv
+        remote_src: true
+        mode: "0640"
+
+    - name: Confirm HTTP Fleet Server Elasticsearch URL requires opt-in
+      block:
+        - name: Include Elastic Agent with an insecure Elasticsearch URL
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elastic_agent
+          vars:
+            elastic_agent_manage: true
+            elastic_agent_enable: false
+            elastic_agent_mode: fleet_server
+            elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
+            elastic_agent_config_dir: /var/lib/elastic-agent-insecure-es
+            elastic_agent_config_file: /var/lib/elastic-agent-insecure-es/elastic-agent.yml
+            elastic_agent_binary_path: /usr/local/bin/elastic-agent-contract
+            elastic_agent_migrate_from_beats: false
+            elastic_agent_enrollment_state_file: /var/lib/elastic-agent-insecure-es/.enrollment.sha256
+            elastic_agent_fleet_server_url: https://fleet.example.test:8220
+            elastic_agent_fleet_server_es: http://elasticsearch.example.test:9200
+            elastic_agent_fleet_server_es_insecure: false
+            elastic_agent_fleet_server_insecure: false
+            elastic_agent_fleet_server_service_token: contract-insecure-es-service-token
+            elastic_agent_fleet_server_policy: contract-insecure-es-policy
+            elastic_agent_fleet_server_ca_source: none
+      rescue:
+        - name: Assert the insecure Elasticsearch URL guard caused the failure
+          ansible.builtin.assert:
+            that:
+              - >-
+                ansible_failed_task.name | default('') is search(
+                'Reject insecure Fleet Server Elasticsearch URL')
+        - name: Record expected insecure Elasticsearch URL rejection
+          ansible.builtin.set_fact:
+            insecure_fleet_server_es_rejected: true
+
+    - name: Exercise IPv6 Fleet Server Elasticsearch URL discovery
+      when: not fleet_contract_complete.stat.exists
+      block:
+        - name: Add an IPv6 Elasticsearch publish host
+          ansible.builtin.add_host:
+            name: elasticsearch-ipv6-publish-contract
+            groups: elasticsearch_ipv6_publish
+            elasticsearch_http_publish_host: '2001:db8::10'
+            elasticsearch_http_publish_port: 19299
+          changed_when: false
+
+        - name: Include Elastic Agent with an IPv6 publish host
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elastic_agent
+          vars:
+            elasticstack_elasticsearch_group_name: elasticsearch_ipv6_publish
+            elasticstack_security: true
+            elastic_agent_manage: true
+            elastic_agent_enable: false
+            elastic_agent_mode: fleet_server
+            elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
+            elastic_agent_config_dir: /var/lib/elastic-agent-ipv6-publish
+            elastic_agent_config_file: /var/lib/elastic-agent-ipv6-publish/elastic-agent.yml
+            elastic_agent_binary_path: /usr/local/bin/elastic-agent-contract
+            elastic_agent_migrate_from_beats: false
+            elastic_agent_enrollment_state_file: /var/lib/elastic-agent-ipv6-publish/.enrollment.sha256
+            elastic_agent_fleet_server_url: https://fleet.example.test:8220
+            elastic_agent_fleet_server_es: ""
+            elastic_agent_fleet_server_es_insecure: false
+            elastic_agent_fleet_server_insecure: false
+            elastic_agent_fleet_server_service_token: contract-ipv6-publish-service-token
+            elastic_agent_fleet_server_policy: contract-ipv6-publish-policy
+            elastic_agent_fleet_server_ca_source: none
+
+        - name: Preserve IPv6 publish host command
+          ansible.builtin.copy:
+            src: /tmp/elastic-agent-fleet-server-argv
+            dest: /tmp/elastic-agent-ipv6-publish-argv
+            remote_src: true
+            mode: "0640"
+
+        - name: Add an IPv6 Elasticsearch fallback host
+          ansible.builtin.add_host:
+            name: elasticsearch-ipv6-fallback-contract
+            groups: elasticsearch_ipv6_fallback
+            ansible_host: '2001:db8::20'
+          changed_when: false
+
+        - name: Include Elastic Agent with an IPv6 ansible_host fallback
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elastic_agent
+          vars:
+            elasticstack_elasticsearch_group_name: elasticsearch_ipv6_fallback
+            elasticstack_security: true
+            elastic_agent_manage: true
+            elastic_agent_enable: false
+            elastic_agent_mode: fleet_server
+            elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
+            elastic_agent_config_dir: /var/lib/elastic-agent-ipv6-fallback
+            elastic_agent_config_file: /var/lib/elastic-agent-ipv6-fallback/elastic-agent.yml
+            elastic_agent_binary_path: /usr/local/bin/elastic-agent-contract
+            elastic_agent_migrate_from_beats: false
+            elastic_agent_enrollment_state_file: /var/lib/elastic-agent-ipv6-fallback/.enrollment.sha256
+            elastic_agent_fleet_server_url: https://fleet.example.test:8220
+            elastic_agent_fleet_server_es: ""
+            elastic_agent_fleet_server_es_insecure: false
+            elastic_agent_fleet_server_insecure: false
+            elastic_agent_fleet_server_service_token: contract-ipv6-fallback-service-token
+            elastic_agent_fleet_server_policy: contract-ipv6-fallback-policy
+            elastic_agent_fleet_server_ca_source: none
+
+        - name: Preserve IPv6 ansible_host fallback command
+          ansible.builtin.copy:
+            src: /tmp/elastic-agent-fleet-server-argv
+            dest: /tmp/elastic-agent-ipv6-fallback-argv
+            remote_src: true
+            mode: "0640"
+
+    - name: Restore file-mode Fleet Server command for verification
+      ansible.builtin.copy:
+        src: /tmp/elastic-agent-fleet-server-custom-argv
+        dest: /tmp/elastic-agent-fleet-server-argv
         remote_src: true
         mode: "0640"
 
@@ -577,6 +703,7 @@
           - invalid_certificate_key_pair_failed | default(false)
           - (elasticstack_release | int < 9) or flavor_transition_coverage.stat.exists
           - existing_enrollment_rejected | default(false)
+          - insecure_fleet_server_es_rejected | default(false)
 
     - name: Mark Fleet enrollment contract coverage complete
       ansible.builtin.copy:

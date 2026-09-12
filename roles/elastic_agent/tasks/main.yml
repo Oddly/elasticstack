@@ -6,13 +6,38 @@
     - elastic_agent_manage | bool
     - not hostvars[inventory_hostname]._elasticstack_role_imported | default(false)
 
+- name: Resolve Fleet Server Elasticsearch host from inventory
+  ansible.builtin.set_fact:
+    _elastic_agent_fleet_server_es_host: >-
+      {{ hostvars[groups[elasticstack_elasticsearch_group_name][0]].elasticsearch_http_publish_host |
+         default(hostvars[groups[elasticstack_elasticsearch_group_name][0]].ansible_host |
+         default(groups[elasticstack_elasticsearch_group_name][0], true), true) }}
+  when:
+    - elastic_agent_manage | bool
+    - elastic_agent_mode == 'fleet_server'
+    - elastic_agent_fleet_server_es | default('') | length == 0
+    - groups[elasticstack_elasticsearch_group_name] is defined
+    - groups[elasticstack_elasticsearch_group_name] | length > 0
+
+- name: Bracket an IPv6 Fleet Server Elasticsearch host
+  ansible.builtin.set_fact:
+    _elastic_agent_fleet_server_es_host: >-
+      {{ ('[' ~ (_elastic_agent_fleet_server_es_host | string) ~ ']')
+         if (':' in (_elastic_agent_fleet_server_es_host | string) and
+             not ((_elastic_agent_fleet_server_es_host | string) is match('^\\[')))
+         else (_elastic_agent_fleet_server_es_host | string) }}
+  when:
+    - elastic_agent_manage | bool
+    - elastic_agent_mode == 'fleet_server'
+    - elastic_agent_fleet_server_es | default('') | length == 0
+    - groups[elasticstack_elasticsearch_group_name] is defined
+    - groups[elasticstack_elasticsearch_group_name] | length > 0
+
 - name: Resolve Fleet Server Elasticsearch URL from inventory
   ansible.builtin.set_fact:
     elastic_agent_fleet_server_es: >-
       {{ ('https' if elasticstack_security | bool else 'http') ~ '://' ~
-         (hostvars[groups[elasticstack_elasticsearch_group_name][0]].elasticsearch_http_publish_host |
-          default(hostvars[groups[elasticstack_elasticsearch_group_name][0]].ansible_host |
-          default(groups[elasticstack_elasticsearch_group_name][0], true), true)) ~ ':' ~
+         _elastic_agent_fleet_server_es_host ~ ':' ~
          (hostvars[groups[elasticstack_elasticsearch_group_name][0]].elasticsearch_http_publish_port |
           default(elasticstack_elasticsearch_http_port, true) | string) }}
   when:
@@ -60,6 +85,19 @@
       Elastic Agent configuration is invalid. Set a valid mode and provide a
       complete standalone policy, Fleet enrollment details, or Fleet Server
       details as required by elastic_agent_mode.
+  when: elastic_agent_manage | bool
+  no_log: true
+
+- name: Reject insecure Fleet Server Elasticsearch URL
+  ansible.builtin.assert:
+    that:
+      - >-
+        (elastic_agent_mode != 'fleet_server') or
+        (elastic_agent_fleet_server_es_insecure | bool) or
+        not ((elastic_agent_fleet_server_es | lower) is match('^http://'))
+    fail_msg: >-
+      Fleet Server requires an https:// Elasticsearch URL unless
+      elastic_agent_fleet_server_es_insecure is explicitly enabled.
   when: elastic_agent_manage | bool
   no_log: true
 
