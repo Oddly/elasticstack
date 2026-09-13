@@ -199,6 +199,10 @@ ROLE_METADATA = {
         "Install, configure, and manage Elastic Beats (filebeat, metricbeat, auditbeat)",
         "Handles package install, ECS-schema output configuration to Elasticsearch or Logstash, TLS certificate distribution, and systemd service management per beat.",
     ),
+    "elastic_agent": (
+        "Install, configure, and manage Elastic Agent",
+        "Handles package installation, standalone policy deployment, Fleet enrollment, self-managed Fleet Server setup, TLS certificate distribution, migration from Beats, and systemd service management.",
+    ),
     "elasticstack": (
         "Shared defaults and CA management for the oddly.elasticstack collection",
         "Provides collection-wide variables (inventory group names, ports, CA host, certificate settings) and the internal certificate authority workflow used by the elasticsearch, kibana, logstash, and beats roles.",

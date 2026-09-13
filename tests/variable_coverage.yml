@@ -5,6 +5,8 @@
 baselines:
   beats:
     - molecule/beats_default/converge.yml
+  elastic_agent:
+    - molecule/elastic_agent_default/converge.yml
   elasticsearch:
     - molecule/elasticsearch_default/converge.yml
   elasticstack:
@@ -1145,3 +1147,147 @@ rollouts:
       scenario: logstash_centralized_pipelines
       expected:
         - "agent-input-pipeline"
+  elastic_agent:
+    elastic_agent_manage:
+      scenario: elastic_agent_default
+      expected:
+        - "not unmanaged_agent_dir.stat.exists"
+    elastic_agent_mode:
+      scenario: elastic_agent_default
+      expected:
+        - "'logstash'"
+    elastic_agent_package_flavor:
+      scenario: elastic_agent_default
+      expected:
+        - "(elastic_agent_package_flavor_marker.content | b64decode | trim) == 'basic'"
+    elastic_agent_config_backup:
+      scenario: elastic_agent_default
+      expected:
+        - "config_backups.files | length > 0"
+    elastic_agent_standalone_config:
+      scenario: elastic_agent_default
+      expected:
+        - "contract-system-metrics"
+    elastic_agent_enable:
+      scenario: elastic_agent_fleet
+      expected:
+        - "agent_enabled.stdout == 'disabled'"
+    elastic_agent_binary_path:
+      scenario: elastic_agent_fleet
+      expected:
+        - "/usr/local/bin/elastic-agent-contract"
+    elastic_agent_config_dir:
+      scenario: elastic_agent_fleet
+      expected:
+        - "collection_config_dir.stat.exists"
+    elastic_agent_certificate_dir:
+      scenario: elastic_agent_fleet
+      expected:
+        - "fleet_ca.stat.exists"
+    elastic_agent_config_file:
+      scenario: elastic_agent_default
+      expected:
+        - "independent_config_stat.stat.exists"
+    elastic_agent_package_flavor_file:
+      scenario: elastic_agent_fleet
+      expected:
+        - "flavor_transition_marker.stat.exists"
+    elastic_agent_enrollment_state_file:
+      scenario: elastic_agent_fleet
+      expected:
+        - "(enrollment_marker.content | b64decode | trim) == enrollment_fingerprint"
+    elastic_agent_migrate_from_beats:
+      scenario: elastic_agent_fleet
+      expected:
+        - "migrated_beat_services.results | selectattr('stdout', 'equalto', 'disabled') | list | length == 3"
+    elastic_agent_fleet_server_url:
+      scenario: elastic_agent_fleet
+      expected:
+        - "fleet.example.test"
+    elastic_agent_enrollment_token:
+      scenario: elastic_agent_fleet
+      expected:
+        - "contract-enrollment-token"
+    elastic_agent_fleet_server_insecure:
+      scenario: elastic_agent_fleet
+      expected:
+        - "'--insecure'"
+    elastic_agent_fleet_server_ca_source:
+      scenario: elastic_agent_fleet
+      expected:
+        - "--certificate-authorities"
+    elastic_agent_fleet_server_ca_file:
+      scenario: elastic_agent_fleet
+      expected:
+        - "fleet-server-ca.crt"
+    elastic_agent_fleet_server_ca_content:
+      scenario: elastic_agent_fleet
+      expected:
+        - "'contract-ca' in (content_tls_files.results[0].content | b64decode)"
+    elastic_agent_fleet_server_ca_remote_src:
+      scenario: elastic_agent_fleet
+      expected:
+        - "fleet_tls_files"
+    elastic_agent_fleet_server_es:
+      scenario: elastic_agent_fleet
+      expected:
+        - "elasticsearch.example.test:9200"
+        - "'http://elasticsearch-http-only.example.test:19200' in (http_only_argv.content | b64decode)"
+        - "'https://[2001:db8::10]:19299' in (ipv6_publish_argv.content | b64decode)"
+        - "'https://[2001:db8::20]:9200' in (ipv6_fallback_argv.content | b64decode)"
+    elastic_agent_fleet_server_es_insecure:
+      scenario: elastic_agent_fleet
+      expected:
+        - "'--fleet-server-es-insecure' in (no_ca_argv.content | b64decode)"
+    elastic_agent_fleet_server_service_token:
+      scenario: elastic_agent_fleet
+      expected:
+        - "contract-service-token"
+    elastic_agent_fleet_server_service_token_file:
+      scenario: elastic_agent_fleet
+      expected:
+        - "fleet_service_token_file.stat.mode == '0600'"
+    elastic_agent_fleet_server_policy:
+      scenario: elastic_agent_fleet
+      expected:
+        - "contract-fleet-policy"
+    elastic_agent_fleet_server_host:
+      scenario: elastic_agent_fleet
+      expected:
+        - "0.0.0.0"
+    elastic_agent_fleet_server_port:
+      scenario: elastic_agent_fleet
+      expected:
+        - "--fleet-server-port"
+    elastic_agent_fleet_server_cert_file:
+      scenario: elastic_agent_fleet
+      expected:
+        - "fleet-server.crt"
+    elastic_agent_fleet_server_cert_content:
+      scenario: elastic_agent_fleet
+      expected:
+        - "contract-fleet-cert"
+    elastic_agent_fleet_server_cert_key_file:
+      scenario: elastic_agent_fleet
+      expected:
+        - "fleet-server.key"
+    elastic_agent_fleet_server_cert_key_content:
+      scenario: elastic_agent_fleet
+      expected:
+        - "contract-fleet-key"
+    elastic_agent_fleet_server_cert_remote_src:
+      scenario: elastic_agent_fleet
+      expected:
+        - "fleet_tls_files"
+    elastic_agent_fleet_server_es_ca_file:
+      scenario: elastic_agent_fleet
+      expected:
+        - "elasticsearch-ca.crt"
+    elastic_agent_fleet_server_es_ca_content:
+      scenario: elastic_agent_fleet
+      expected:
+        - "contract-es-ca"
+    elastic_agent_fleet_server_es_ca_remote_src:
+      scenario: elastic_agent_fleet
+      expected:
+        - "elasticsearch-ca.crt"

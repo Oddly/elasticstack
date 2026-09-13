@@ -1,0 +1,7 @@
+---
+- name: restart_and_verify_elastic_agent | Restart and verify Elastic Agent
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/restart_and_verify_service.yml"
+  vars:
+    _service_name: elastic-agent
+    _daemon_reload: true

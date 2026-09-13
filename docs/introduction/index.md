@@ -4,7 +4,7 @@ oddly.elasticstack is an Ansible collection for deploying and managing the Elast
 
 ## What this collection does
 
-The collection provides six roles that cover each layer of the stack. They work both independently (install just Elasticsearch, or just Beats) and as a coordinated full-stack deployment where roles auto-discover each other through inventory groups.
+The collection provides seven roles that cover each layer of the stack. They work both independently (install just Elasticsearch, Beats, or Elastic Agent) and as a coordinated full-stack deployment where roles auto-discover each other through inventory groups.
 
 | Role | Purpose |
 |------|---------|
@@ -13,6 +13,7 @@ The collection provides six roles that cover each layer of the stack. They work 
 | [**kibana**](../reference/kibana.md) | Web UI, Elasticsearch connection, optional HTTPS |
 | [**logstash**](../reference/logstash.md) | Pipeline management, queue config, ES user/role creation |
 | [**beats**](../reference/beats.md) | Filebeat, Metricbeat, Auditbeat collection agents |
+| [**elastic_agent**](../reference/elastic_agent.md) | Standalone and Fleet-managed Elastic Agent |
 | [**elasticstack**](../reference/elasticstack.md) | Shared defaults inherited by all roles |
 
 ## Supported platforms

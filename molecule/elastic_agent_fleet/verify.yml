@@ -1,0 +1,324 @@
+---
+- name: Verify Fleet enrollment orchestration
+  hosts: all
+  vars:
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+  tasks:
+    - name: Read enrollment command arguments
+      ansible.builtin.slurp:
+        src: /tmp/elastic-agent-enrollment-argv
+      register: enrollment_argv
+
+    - name: Read enrollment command path
+      ansible.builtin.slurp:
+        src: /tmp/elastic-agent-contract-path
+      register: contract_path
+
+    - name: Read Fleet Server command arguments
+      ansible.builtin.slurp:
+        src: /tmp/elastic-agent-fleet-server-argv
+      register: fleet_server_argv
+
+    - name: Decode Fleet Server command arguments
+      ansible.builtin.set_fact:
+        fleet_server_argv_lines: "{{ (fleet_server_argv.content | b64decode).splitlines() }}"
+
+    - name: Read collection CA command arguments
+      ansible.builtin.slurp:
+        src: /tmp/elastic-agent-collection-ca-argv
+      register: collection_ca_argv
+
+    - name: Read default CA Fleet Server command arguments
+      ansible.builtin.slurp:
+        src: /tmp/elastic-agent-no-ca-argv
+      register: no_ca_argv
+
+    - name: Read HTTP-only Elasticsearch Fleet Server command arguments
+      ansible.builtin.slurp:
+        src: /tmp/elastic-agent-http-only-argv
+      register: http_only_argv
+
+    - name: Read IPv6 publish host command arguments
+      ansible.builtin.slurp:
+        src: /tmp/elastic-agent-ipv6-publish-argv
+      register: ipv6_publish_argv
+
+    - name: Read IPv6 ansible_host fallback command arguments
+      ansible.builtin.slurp:
+        src: /tmp/elastic-agent-ipv6-fallback-argv
+      register: ipv6_fallback_argv
+
+    - name: Decode the final enrollment command contract
+      ansible.builtin.set_fact:
+        no_ca_argv_lines: "{{ (no_ca_argv.content | b64decode).splitlines() }}"
+
+    - name: Reconstruct the final enrollment command argv
+      ansible.builtin.set_fact:
+        no_ca_command_argv: "{{ [contract_path.content | b64decode | trim] + no_ca_argv_lines }}"
+
+    - name: Calculate the expected final enrollment fingerprint
+      ansible.builtin.set_fact:
+        enrollment_fingerprint: "{{ (no_ca_command_argv | join('|')) | hash('sha256') }}"
+
+    - name: Check Fleet Server service token file
+      ansible.builtin.stat:
+        path: /var/lib/elastic-agent-fleet-server/custom-service-token
+      register: fleet_service_token_file
+
+    - name: Read Fleet Server service token file
+      ansible.builtin.slurp:
+        src: /var/lib/elastic-agent-fleet-server/custom-service-token
+      register: fleet_service_token
+
+    - name: Check derived URL Fleet Server service token file
+      ansible.builtin.stat:
+        path: /var/lib/elastic-agent-no-ca/custom-service-token
+      register: no_ca_service_token_file
+
+    - name: Read derived URL Fleet Server service token file
+      ansible.builtin.slurp:
+        src: /var/lib/elastic-agent-no-ca/custom-service-token
+      register: no_ca_service_token
+
+    - name: Read enrollment state marker
+      ansible.builtin.slurp:
+        src: /var/lib/elastic-agent-no-ca/.enrollment.sha256
+      register: enrollment_marker
+
+    - name: Check package-managed Fleet state
+      ansible.builtin.stat:
+        path: /etc/elastic-agent/fleet.enc
+      register: fleet_state
+
+    - name: Read managed Elastic Agent mode
+      ansible.builtin.slurp:
+        src: /etc/elastic-agent/.elasticstack-mode
+      register: managed_agent_mode
+
+    - name: Read the rotated Fleet Server service token
+      ansible.builtin.slurp:
+        src: /var/lib/elastic-agent-token-rotation/rotating-service-token
+      register: rotated_service_token
+      no_log: true
+
+    - name: Read service activation timestamps from token rotation coverage
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - /tmp/elastic-agent-token-rotation-before
+        - /tmp/elastic-agent-token-rotation-after
+      register: rotation_timestamps
+
+    - name: Read enrollment command invocation audit
+      ansible.builtin.slurp:
+        src: /tmp/elastic-agent-contract-invocations
+      register: enrollment_invocations
+
+    - name: Check Fleet Server CA destination
+      ansible.builtin.stat:
+        path: /var/lib/elastic-agent-fleet-server-certs/fleet-server-ca.crt
+      register: fleet_ca
+
+    - name: Check Fleet Server certificate destinations
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /var/lib/elastic-agent-fleet-server-certs/fleet-server.crt
+        - /var/lib/elastic-agent-fleet-server-certs/fleet-server.key
+        - /var/lib/elastic-agent-fleet-server-certs/elasticsearch-ca.crt
+      register: fleet_tls_files
+
+    - name: Read content-mode certificate outputs
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - /tmp/content-fleet-server-ca.crt
+        - /tmp/content-fleet-server.crt
+        - /tmp/content-fleet-server.key
+        - /tmp/content-elasticsearch-ca.crt
+      register: content_tls_files
+
+    - name: Read file-mode certificate outputs
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - /tmp/file-fleet-server-ca.crt
+        - /tmp/file-fleet-server.crt
+        - /tmp/file-fleet-server.key
+        - /tmp/file-elasticsearch-ca.crt
+      register: file_tls_files
+
+    - name: Check content-mode certificate permissions
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /var/lib/elastic-agent-fleet-certs/fleet-server-ca.crt
+        - /var/lib/elastic-agent-fleet-certs/fleet-server.crt
+        - /var/lib/elastic-agent-fleet-certs/fleet-server.key
+        - /var/lib/elastic-agent-fleet-certs/elasticsearch-ca.crt
+      register: content_tls_stats
+
+    - name: Check file-mode certificate permissions
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /var/lib/elastic-agent-fleet-server-certs/fleet-server-ca.crt
+        - /var/lib/elastic-agent-fleet-server-certs/fleet-server.crt
+        - /var/lib/elastic-agent-fleet-server-certs/fleet-server.key
+        - /var/lib/elastic-agent-fleet-server-certs/elasticsearch-ca.crt
+      register: file_tls_stats
+
+    - name: Read collection CA output
+      ansible.builtin.slurp:
+        src: /tmp/collection-fleet-server-ca.crt
+      register: collection_ca
+
+    - name: Check configured collection CA directory exists
+      ansible.builtin.stat:
+        path: /var/lib/elastic-agent-collection-ca
+      register: collection_config_dir
+
+    - name: Check default CA path was not materialized
+      ansible.builtin.stat:
+        path: /var/lib/elastic-agent-no-ca-certs
+      register: no_ca_directory
+
+    - name: Check configured enrollment state directory exists
+      ansible.builtin.stat:
+        path: /var/lib/elastic-agent-no-ca
+      register: enrollment_state_dir
+
+    - name: Check flavor transition rejection marker
+      ansible.builtin.stat:
+        path: /tmp/elastic-agent-flavor-transition-rejected
+      register: flavor_transition_marker
+
+    - name: Check migrated Beat services are disabled
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-enabled
+          - "{{ item }}"
+      loop:
+        - filebeat
+        - metricbeat
+        - auditbeat
+      register: migrated_beat_services
+      changed_when: false
+      failed_when: false
+
+    - name: Check Elastic Agent service is disabled
+      ansible.builtin.service:
+        name: elastic-agent
+        state: stopped
+      check_mode: true
+      register: elastic_agent_service
+      failed_when: elastic_agent_service.changed
+
+    - name: Check Elastic Agent service is not enabled
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-enabled
+          - elastic-agent
+      register: agent_enabled
+      changed_when: false
+      failed_when: false
+
+    - name: Assert Fleet enrollment command and secret handling
+      ansible.builtin.assert:
+        that:
+          - "'https://fleet.example.test:8220' in (enrollment_argv.content | b64decode)"
+          - "'/usr/local/bin/elastic-agent-contract' in (contract_path.content | b64decode)"
+          - "'--enrollment-token' in (enrollment_argv.content | b64decode)"
+          - "'contract-enrollment-token' in (enrollment_argv.content | b64decode)"
+          - "'--fleet-server-es-insecure' not in (enrollment_argv.content | b64decode)"
+          - >-
+            (enrollment_invocations.content | b64decode).splitlines()
+            | select('equalto', 'contract-enrollment-token') | list | length == 2
+          - fleet_state.stat.exists
+          - (managed_agent_mode.content | b64decode | trim) == 'fleet'
+          - "'--certificate-authorities' in (enrollment_argv.content | b64decode)"
+          - "'--insecure' in (enrollment_argv.content | b64decode)"
+          - fleet_ca.stat.exists
+          - fleet_tls_files.results | selectattr('stat.exists', 'defined') | selectattr('stat.exists') | list | length == 3
+          - content_tls_stats.results[0].stat.mode == '0640'
+          - content_tls_stats.results[1].stat.mode == '0640'
+          - content_tls_stats.results[2].stat.mode == '0600'
+          - content_tls_stats.results[3].stat.mode == '0640'
+          - file_tls_stats.results[0].stat.mode == '0640'
+          - file_tls_stats.results[1].stat.mode == '0640'
+          - file_tls_stats.results[2].stat.mode == '0600'
+          - file_tls_stats.results[3].stat.mode == '0640'
+          - "'contract-ca' in (content_tls_files.results[0].content | b64decode)"
+          - "'contract-fleet-cert' in (content_tls_files.results[1].content | b64decode)"
+          - "'contract-fleet-key' in (content_tls_files.results[2].content | b64decode)"
+          - "'contract-es-ca' in (content_tls_files.results[3].content | b64decode)"
+          - "'fleet-server-ca' in (file_tls_files.results[0].content | b64decode)"
+          - "'fleet-server' in (file_tls_files.results[1].content | b64decode)"
+          - "'fleet-server-key' in (file_tls_files.results[2].content | b64decode)"
+          - "'elasticsearch-ca' in (file_tls_files.results[3].content | b64decode)"
+          - "'contract-collection-ca' in (collection_ca.content | b64decode)"
+          - collection_config_dir.stat.exists
+          - "(enrollment_marker.content | b64decode | trim) == enrollment_fingerprint"
+          - "'contract-enrollment-token' not in (enrollment_marker.content | b64decode)"
+          - "'contract-service-token' not in (enrollment_marker.content | b64decode)"
+          - "'contract-derived-service-token' not in (enrollment_marker.content | b64decode)"
+          - "'--fleet-server-es' in (fleet_server_argv.content | b64decode)"
+          - "'https://elasticsearch.example.test:9200' in (fleet_server_argv.content | b64decode)"
+          - "'--fleet-server-es-insecure' not in (fleet_server_argv.content | b64decode)"
+          - "'--fleet-server-service-token-path' in (fleet_server_argv.content | b64decode)"
+          - "'custom-service-token' in (fleet_server_argv.content | b64decode)"
+          - "'contract-service-token' not in (fleet_server_argv.content | b64decode)"
+          - fleet_service_token_file.stat.exists
+          - fleet_service_token_file.stat.mode == '0600'
+          - (fleet_service_token.content | b64decode) == 'contract-service-token'
+          - "'contract-fleet-policy' in (fleet_server_argv.content | b64decode)"
+          - "'fleet-server-ca.crt' in (fleet_server_argv.content | b64decode)"
+          - "'--fleet-server-host' in (fleet_server_argv.content | b64decode)"
+          - "'--fleet-server-port' in (fleet_server_argv.content | b64decode)"
+          - >-
+            fleet_server_argv_lines[fleet_server_argv_lines.index('--fleet-server-port') + 1]
+            == '8220'
+          - "'--fleet-server-cert' in (fleet_server_argv.content | b64decode)"
+          - "'fleet-server.crt' in (fleet_server_argv.content | b64decode)"
+          - "'--fleet-server-cert-key' in (fleet_server_argv.content | b64decode)"
+          - "'fleet-server.key' in (fleet_server_argv.content | b64decode)"
+          - "'--fleet-server-es-ca' in (fleet_server_argv.content | b64decode)"
+          - "'elasticsearch-ca.crt' in (fleet_server_argv.content | b64decode)"
+          - "'0.0.0.0' in (fleet_server_argv.content | b64decode)"
+          - "'8220' in (fleet_server_argv.content | b64decode)"
+          - "'--certificate-authorities' in (collection_ca_argv.content | b64decode)"
+          - "'fleet-server-ca.crt' in (collection_ca_argv.content | b64decode)"
+          - "'contract-collection-ca-token' in (collection_ca_argv.content | b64decode)"
+          - "'contract-enrollment-token' not in (collection_ca_argv.content | b64decode)"
+          - "'http://elasticsearch-derived.example.test:19299' in (no_ca_argv.content | b64decode)"
+          - "'--fleet-server-es-insecure' in (no_ca_argv.content | b64decode)"
+          - "'http://elasticsearch-http-only.example.test:19200' in (http_only_argv.content | b64decode)"
+          - "'--fleet-server-es-insecure' in (http_only_argv.content | b64decode)"
+          - "'https://[2001:db8::10]:19299' in (ipv6_publish_argv.content | b64decode)"
+          - "'https://[2001:db8::20]:9200' in (ipv6_fallback_argv.content | b64decode)"
+          - "'--fleet-server-es-insecure' not in (ipv6_publish_argv.content | b64decode)"
+          - "'--fleet-server-es-insecure' not in (ipv6_fallback_argv.content | b64decode)"
+          - "'https://2001:db8::10:19299' not in (ipv6_publish_argv.content | b64decode)"
+          - "'https://2001:db8::20:9200' not in (ipv6_fallback_argv.content | b64decode)"
+          - "'--fleet-server-service-token-path' in (no_ca_argv.content | b64decode)"
+          - "'custom-service-token' in (no_ca_argv.content | b64decode)"
+          - "'contract-derived-service-token' not in (no_ca_argv.content | b64decode)"
+          - no_ca_service_token_file.stat.exists
+          - no_ca_service_token_file.stat.mode == '0600'
+          - (no_ca_service_token.content | b64decode) == 'contract-derived-service-token'
+          - (rotated_service_token.content | b64decode) == 'contract-rotation-token-b'
+          - (rotation_timestamps.results[0].content | b64decode | trim) != (rotation_timestamps.results[1].content | b64decode | trim)
+          - "'contract-derived-fleet-policy' in (no_ca_argv.content | b64decode)"
+          - "'127.0.0.1' in (no_ca_argv.content | b64decode)"
+          - "'8221' in (no_ca_argv.content | b64decode)"
+          - "'--certificate-authorities' not in (no_ca_argv.content | b64decode)"
+          - "'--fleet-server-cert' not in (no_ca_argv.content | b64decode)"
+          - "'--fleet-server-es-ca' not in (no_ca_argv.content | b64decode)"
+          - "no_ca_directory.stat.exists == false"
+          - enrollment_state_dir.stat.exists
+          - (elasticstack_release | int < 9) or flavor_transition_marker.stat.exists
+          - "elastic_agent_service.changed == false"
+          - "agent_enabled.stdout == 'disabled'"
+          - "migrated_beat_services.results | selectattr('stdout', 'equalto', 'disabled') | list | length == 3"

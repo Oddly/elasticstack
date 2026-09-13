@@ -1,0 +1,980 @@
+---
+- name: Converge Fleet enrollment contract
+  hosts: all
+  vars:
+    elasticstack_full_stack: false
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    _elastic_agent_test_package_flavor: "{{ 'servers' if elasticstack_release | int >= 9 else 'basic' }}"
+    elastic_agent_manage: true
+    elastic_agent_enable: false
+    elastic_agent_mode: fleet
+    elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
+    elastic_agent_binary_path: /usr/local/bin/elastic-agent-contract
+    elastic_agent_migrate_from_beats: true
+    elastic_agent_certificate_dir: /var/lib/elastic-agent-fleet-certs
+    elastic_agent_enrollment_state_file: /var/lib/elastic-agent-fleet/.enrollment.sha256
+    elastic_agent_fleet_server_url: https://fleet.example.test:8220
+    elastic_agent_enrollment_token: contract-enrollment-token
+    elastic_agent_fleet_server_insecure: true
+    elastic_agent_fleet_server_ca_source: external
+    elastic_agent_fleet_server_ca_content: |-
+      -----BEGIN CERTIFICATE-----
+      contract-ca
+      -----END CERTIFICATE-----
+    elastic_agent_fleet_server_cert_content: |-
+      -----BEGIN CERTIFICATE-----
+      contract-fleet-cert
+      -----END CERTIFICATE-----
+    elastic_agent_fleet_server_cert_key_content: |-
+      -----BEGIN PRIVATE KEY-----
+      contract-fleet-key
+      -----END PRIVATE KEY-----
+    elastic_agent_fleet_server_es_ca_content: |-
+      -----BEGIN CERTIFICATE-----
+      contract-es-ca
+      -----END CERTIFICATE-----
+  tasks:
+    - name: Include Elastic repos role
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.repos
+
+    - name: Install enrollment command contract stub
+      ansible.builtin.copy:
+        dest: /usr/local/bin/elastic-agent-contract
+        mode: "0755"
+        content: |
+          #!/usr/bin/python3
+          from pathlib import Path
+          import sys
+
+          arguments = sys.argv[1:]
+          token = (
+              arguments[arguments.index("--enrollment-token") + 1]
+              if "--enrollment-token" in arguments
+              else ""
+          )
+          target = (
+              "/tmp/elastic-agent-fleet-server-argv"
+              if "--fleet-server-es" in arguments
+              else "/tmp/elastic-agent-enrollment-argv"
+          )
+          if token == "contract-collection-ca-token":
+              target = "/tmp/elastic-agent-collection-ca-raw-argv"
+          Path("/tmp/elastic-agent-contract-path").write_text(sys.argv[0] + "\n")
+          Path(target).write_text("\n".join(arguments) + "\n")
+          if token:
+              with Path("/tmp/elastic-agent-contract-invocations").open("a") as audit:
+                  audit.write(token + "\n")
+
+    - name: Check Beat migration fixture state
+      ansible.builtin.stat:
+        path: /tmp/elastic-agent-beat-fixtures-ready
+      register: beat_fixture_state
+
+    - name: Install Beat services for migration coverage
+      ansible.builtin.copy:
+        dest: "/etc/systemd/system/{{ item }}.service"
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Elastic Agent migration fixture for {{ item }}
+
+          [Service]
+          ExecStart=/usr/bin/sleep infinity
+
+          [Install]
+          WantedBy=multi-user.target
+      loop:
+        - filebeat
+        - metricbeat
+        - auditbeat
+      when: not beat_fixture_state.stat.exists
+
+    - name: Start Beat services for migration coverage
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        daemon_reload: true
+        enabled: true
+        state: started
+      loop:
+        - filebeat
+        - metricbeat
+        - auditbeat
+      when: not beat_fixture_state.stat.exists
+
+    - name: Mark Beat migration fixtures ready
+      ansible.builtin.file:
+        path: /tmp/elastic-agent-beat-fixtures-ready
+        state: touch
+        mode: "0644"
+      when: not beat_fixture_state.stat.exists
+
+    - name: Create Fleet Server certificate fixtures
+      ansible.builtin.copy:
+        dest: "{{ item.path }}"
+        content: "{{ item.content }}"
+        mode: "0644"
+      loop:
+        - path: /tmp/fleet-server-ca.crt
+          content: |-
+            -----BEGIN CERTIFICATE-----
+            fleet-server-ca
+            -----END CERTIFICATE-----
+        - path: /tmp/fleet-server.crt
+          content: |-
+            -----BEGIN CERTIFICATE-----
+            fleet-server
+            -----END CERTIFICATE-----
+        - path: /tmp/fleet-server.key
+          content: |-
+            -----BEGIN PRIVATE KEY-----
+            fleet-server-key
+            -----END PRIVATE KEY-----
+        - path: /tmp/elasticsearch-ca.crt
+          content: |-
+            -----BEGIN CERTIFICATE-----
+            elasticsearch-ca
+            -----END CERTIFICATE-----
+
+    - name: Check whether Fleet enrollment contract coverage is complete
+      ansible.builtin.stat:
+        path: /tmp/elastic-agent-fleet-contract-complete
+      register: fleet_contract_complete
+
+    - name: Include Elastic Agent
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elastic_agent
+
+    - name: Create package-managed Fleet state fixture after enrollment
+      ansible.builtin.copy:
+        dest: /etc/elastic-agent/fleet.enc
+        content: encrypted-fleet-state
+        mode: "0600"
+
+    - name: Reapply Elastic Agent to exercise enrollment state idempotency
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elastic_agent
+
+    - name: Confirm a Fleet to standalone mode transition is rejected
+      when: not fleet_contract_complete.stat.exists
+      block:
+        - name: Include Elastic Agent with a conflicting standalone mode
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elastic_agent
+          vars:
+            elastic_agent_mode: standalone
+            elastic_agent_enable: false
+            elastic_agent_standalone_config:
+              outputs:
+                default:
+                  type: logstash
+                  hosts:
+                    - 127.0.0.1:5044
+              inputs:
+                - type: system/metrics
+                  id: conflicting-standalone-policy
+                  streams: []
+      rescue:
+        - name: Assert the mode transition guard caused the failure
+          ansible.builtin.assert:
+            that:
+              - >-
+                ansible_failed_task.name | default('') is search(
+                'Refuse an Elastic Agent mode transition')
+        - name: Record expected Fleet to standalone rejection
+          ansible.builtin.set_fact:
+            fleet_to_standalone_rejected: true
+
+    - name: Assert the Fleet to standalone transition was rejected
+      ansible.builtin.assert:
+        that:
+          - fleet_to_standalone_rejected | default(false)
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Seed Fleet state without a managed mode marker
+      ansible.builtin.copy:
+        dest: /var/lib/elastic-agent-unmarked-fleet/fleet.enc
+        content: encrypted-fleet-state
+        owner: root
+        group: root
+        mode: "0600"
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Confirm unmarked Fleet state cannot be switched to standalone mode
+      when: not fleet_contract_complete.stat.exists
+      block:
+        - name: Include Elastic Agent with unmarked Fleet state
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elastic_agent
+          vars:
+            elastic_agent_enable: false
+            elastic_agent_mode: standalone
+            elastic_agent_config_dir: /var/lib/elastic-agent-unmarked-fleet
+            elastic_agent_config_file: /var/lib/elastic-agent-unmarked-fleet/elastic-agent.yml
+            elastic_agent_standalone_config:
+              outputs:
+                default:
+                  type: logstash
+                  hosts:
+                    - 127.0.0.1:5044
+              inputs:
+                - type: system/metrics
+                  id: unmarked-fleet-conflict
+                  streams: []
+      rescue:
+        - name: Assert the Fleet state guard caused the failure
+          ansible.builtin.assert:
+            that:
+              - >-
+                ansible_failed_task.name | default('') is search(
+                'Refuse Fleet state in standalone mode')
+        - name: Record expected unmarked Fleet state rejection
+          ansible.builtin.set_fact:
+            unmarked_fleet_to_standalone_rejected: true
+
+    - name: Assert unmarked Fleet state was rejected
+      ansible.builtin.assert:
+        that:
+          - unmarked_fleet_to_standalone_rejected | default(false)
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Install a harmless Elastic Agent service fixture for token rotation
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/elastic-agent.service
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Elastic Agent token rotation fixture
+
+          [Service]
+          ExecStart=/usr/bin/sleep infinity
+
+          [Install]
+          WantedBy=multi-user.target
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Reload systemd for the Elastic Agent token rotation fixture
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Enroll Fleet Server with the first service token
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elastic_agent
+      vars:
+        elastic_agent_enable: true
+        elastic_agent_mode: fleet_server
+        elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
+        elastic_agent_config_dir: /var/lib/elastic-agent-token-rotation
+        elastic_agent_config_file: /var/lib/elastic-agent-token-rotation/elastic-agent.yml
+        elastic_agent_binary_path: /usr/local/bin/elastic-agent-contract
+        elastic_agent_enrollment_state_file: /var/lib/elastic-agent-token-rotation/.enrollment.sha256
+        elastic_agent_fleet_server_url: https://fleet.example.test:8220
+        elastic_agent_fleet_server_es: https://elasticsearch.example.test:9200
+        elastic_agent_fleet_server_service_token: contract-rotation-token-a
+        elastic_agent_fleet_server_service_token_file: /var/lib/elastic-agent-token-rotation/rotating-service-token
+        elastic_agent_fleet_server_policy: contract-rotation-policy
+        elastic_agent_fleet_server_ca_source: none
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Create package-managed Fleet state for token rotation
+      ansible.builtin.copy:
+        dest: /var/lib/elastic-agent-token-rotation/fleet.enc
+        content: encrypted-fleet-state
+        owner: root
+        group: root
+        mode: "0600"
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Read service activation time after the first service token
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - --property=ActiveEnterTimestampMonotonic
+          - --value
+          - elastic-agent
+      register: elastic_agent_rotation_before
+      changed_when: false
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Enroll Fleet Server with the rotated service token
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elastic_agent
+      vars:
+        elastic_agent_enable: true
+        elastic_agent_mode: fleet_server
+        elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
+        elastic_agent_config_dir: /var/lib/elastic-agent-token-rotation
+        elastic_agent_config_file: /var/lib/elastic-agent-token-rotation/elastic-agent.yml
+        elastic_agent_binary_path: /usr/local/bin/elastic-agent-contract
+        elastic_agent_enrollment_state_file: /var/lib/elastic-agent-token-rotation/.enrollment.sha256
+        elastic_agent_fleet_server_url: https://fleet.example.test:8220
+        elastic_agent_fleet_server_es: https://elasticsearch.example.test:9200
+        elastic_agent_fleet_server_service_token: contract-rotation-token-b
+        elastic_agent_fleet_server_service_token_file: /var/lib/elastic-agent-token-rotation/rotating-service-token
+        elastic_agent_fleet_server_policy: contract-rotation-policy
+        elastic_agent_fleet_server_ca_source: none
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Read service activation time after the rotated service token
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - --property=ActiveEnterTimestampMonotonic
+          - --value
+          - elastic-agent
+      register: elastic_agent_rotation_after
+      changed_when: false
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Read the rotated Fleet Server service token
+      ansible.builtin.slurp:
+        src: /var/lib/elastic-agent-token-rotation/rotating-service-token
+      register: elastic_agent_rotation_token
+      no_log: true
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Assert service token rotation restarts Fleet Server and preserves exact content
+      ansible.builtin.assert:
+        that:
+          - (elastic_agent_rotation_token.content | b64decode) == 'contract-rotation-token-b'
+          - (elastic_agent_rotation_before.stdout | trim) != (elastic_agent_rotation_after.stdout | trim)
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Record service token rotation timestamps for verification
+      ansible.builtin.copy:
+        dest: "{{ item.dest }}"
+        content: "{{ item.content }}"
+        owner: root
+        group: root
+        mode: "0600"
+      loop:
+        - dest: /tmp/elastic-agent-token-rotation-before
+          content: "{{ elastic_agent_rotation_before.stdout | trim }}"
+        - dest: /tmp/elastic-agent-token-rotation-after
+          content: "{{ elastic_agent_rotation_after.stdout | trim }}"
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Stop the Elastic Agent token rotation fixture
+      ansible.builtin.systemd:
+        name: elastic-agent
+        state: stopped
+        enabled: false
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Remove the Elastic Agent token rotation service fixture
+      ansible.builtin.file:
+        path: /etc/systemd/system/elastic-agent.service
+        state: absent
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Reload systemd after removing the token rotation fixture
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Remove package-managed Fleet state to simulate state recreation
+      ansible.builtin.file:
+        path: /etc/elastic-agent/fleet.enc
+        state: absent
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Re-enroll after package-managed Fleet state recreation
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elastic_agent
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Restore package-managed Fleet state after recreation coverage
+      ansible.builtin.copy:
+        dest: /etc/elastic-agent/fleet.enc
+        content: encrypted-fleet-state
+        mode: "0600"
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Confirm an existing enrollment is not overwritten
+      block:
+        - name: Include Elastic Agent with a rotated enrollment token
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elastic_agent
+          vars:
+            elastic_agent_enrollment_token: contract-rotated-token
+      rescue:
+        - name: Assert the existing enrollment guard caused the failure
+          ansible.builtin.assert:
+            that:
+              - >-
+                ansible_failed_task.name | default('') is search(
+                'Refuse to overwrite an existing enrollment')
+        - name: Record expected existing enrollment rejection
+          ansible.builtin.set_fact:
+            existing_enrollment_rejected: true
+
+    - name: Preserve content-mode certificate outputs
+      ansible.builtin.copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        remote_src: true
+        mode: "0640"
+      loop:
+        - src: /var/lib/elastic-agent-fleet-certs/fleet-server-ca.crt
+          dest: /tmp/content-fleet-server-ca.crt
+        - src: /var/lib/elastic-agent-fleet-certs/fleet-server.crt
+          dest: /tmp/content-fleet-server.crt
+        - src: /var/lib/elastic-agent-fleet-certs/fleet-server.key
+          dest: /tmp/content-fleet-server.key
+        - src: /var/lib/elastic-agent-fleet-certs/elasticsearch-ca.crt
+          dest: /tmp/content-elasticsearch-ca.crt
+
+    - name: Include Elastic Agent as Fleet Server
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elastic_agent
+      vars:
+        elastic_agent_manage: true
+        elastic_agent_enable: false
+        elastic_agent_mode: fleet_server
+        elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
+        elastic_agent_config_dir: /var/lib/elastic-agent-fleet-server
+        elastic_agent_config_file: /var/lib/elastic-agent-fleet-server/elastic-agent.yml
+        elastic_agent_binary_path: /usr/local/bin/elastic-agent-contract
+        elastic_agent_migrate_from_beats: true
+        elastic_agent_certificate_dir: /var/lib/elastic-agent-fleet-server-certs
+        elastic_agent_enrollment_state_file: /var/lib/elastic-agent-fleet-server/.enrollment.sha256
+        elastic_agent_fleet_server_url: https://fleet.example.test:8220
+        elastic_agent_fleet_server_ca_source: external
+        elastic_agent_fleet_server_ca_content: ""
+        elastic_agent_fleet_server_ca_file: /tmp/fleet-server-ca.crt
+        elastic_agent_fleet_server_ca_remote_src: true
+        elastic_agent_fleet_server_insecure: false
+        elastic_agent_fleet_server_cert_content: ""
+        elastic_agent_fleet_server_cert_key_content: ""
+        elastic_agent_fleet_server_es_ca_content: ""
+        elastic_agent_fleet_server_es: https://elasticsearch.example.test:9200
+        elastic_agent_fleet_server_service_token: contract-service-token
+        elastic_agent_fleet_server_service_token_file: /var/lib/elastic-agent-fleet-server/custom-service-token
+        elastic_agent_fleet_server_policy: contract-fleet-policy
+        elastic_agent_fleet_server_host: 0.0.0.0
+        elastic_agent_fleet_server_port: 8220
+        elastic_agent_fleet_server_cert_file: /tmp/fleet-server.crt
+        elastic_agent_fleet_server_cert_key_file: /tmp/fleet-server.key
+        elastic_agent_fleet_server_cert_remote_src: true
+        elastic_agent_fleet_server_es_ca_file: /tmp/elasticsearch-ca.crt
+        elastic_agent_fleet_server_es_ca_remote_src: true
+
+    - name: Preserve file-mode Fleet Server command
+      ansible.builtin.copy:
+        src: /tmp/elastic-agent-fleet-server-argv
+        dest: /tmp/elastic-agent-fleet-server-custom-argv
+        remote_src: true
+        mode: "0640"
+
+    - name: Preserve file-mode Fleet Server certificate outputs
+      ansible.builtin.copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        remote_src: true
+        mode: "0640"
+      loop:
+        - src: /var/lib/elastic-agent-fleet-server-certs/fleet-server-ca.crt
+          dest: /tmp/file-fleet-server-ca.crt
+        - src: /var/lib/elastic-agent-fleet-server-certs/fleet-server.crt
+          dest: /tmp/file-fleet-server.crt
+        - src: /var/lib/elastic-agent-fleet-server-certs/fleet-server.key
+          dest: /tmp/file-fleet-server.key
+        - src: /var/lib/elastic-agent-fleet-server-certs/elasticsearch-ca.crt
+          dest: /tmp/file-elasticsearch-ca.crt
+
+    - name: Create collection CA directory for the shared CA branch
+      ansible.builtin.file:
+        path: /opt/es-ca
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Create collection CA fixture for the shared CA branch
+      ansible.builtin.copy:
+        dest: /opt/es-ca/ca.crt
+        owner: root
+        group: root
+        mode: "0644"
+        content: |-
+          -----BEGIN CERTIFICATE-----
+          contract-collection-ca
+          -----END CERTIFICATE-----
+
+    - name: Include Elastic Agent with the collection CA
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elastic_agent
+      vars:
+        elastic_agent_manage: true
+        elastic_agent_enable: false
+        elastic_agent_mode: fleet
+        elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
+        elastic_agent_config_dir: /var/lib/elastic-agent-collection-ca
+        elastic_agent_config_file: /var/lib/elastic-agent-collection-ca/elastic-agent.yml
+        elastic_agent_certificate_dir: /var/lib/elastic-agent-collection-ca-certs
+        elastic_agent_binary_path: /usr/local/bin/elastic-agent-contract
+        elastic_agent_migrate_from_beats: false
+        elastic_agent_enrollment_state_file: /var/lib/elastic-agent-collection-ca/.enrollment.sha256
+        elastic_agent_fleet_server_url: https://fleet.example.test:8220
+        elastic_agent_enrollment_token: contract-collection-ca-token
+        elastic_agent_fleet_server_insecure: false
+        elastic_agent_fleet_server_ca_source: elasticsearch_ca
+        elastic_agent_fleet_server_ca_file: ""
+        elastic_agent_fleet_server_ca_content: ""
+        elastic_agent_fleet_server_ca_remote_src: false
+        elastic_agent_fleet_server_cert_file: ""
+        elastic_agent_fleet_server_cert_content: ""
+        elastic_agent_fleet_server_cert_key_file: ""
+        elastic_agent_fleet_server_cert_key_content: ""
+        elastic_agent_fleet_server_es_ca_file: ""
+        elastic_agent_fleet_server_es_ca_content: ""
+
+    - name: Preserve collection CA output and command
+      ansible.builtin.copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        remote_src: true
+        mode: "0640"
+      loop:
+        - src: /var/lib/elastic-agent-collection-ca-certs/fleet-server-ca.crt
+          dest: /tmp/collection-fleet-server-ca.crt
+        - src: /tmp/elastic-agent-collection-ca-raw-argv
+          dest: /tmp/elastic-agent-collection-ca-argv
+
+    - name: Add an Elasticsearch host for URL discovery coverage
+      ansible.builtin.add_host:
+        name: elasticsearch-contract
+        groups: elasticsearch
+        elasticsearch_http_publish_host: elasticsearch-derived.example.test
+        elasticsearch_http_publish_port: 19299
+      changed_when: false
+
+    - name: Include Elastic Agent Fleet Server with default CA handling
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elastic_agent
+      vars:
+        elastic_agent_manage: true
+        elastic_agent_enable: false
+        elastic_agent_mode: fleet_server
+        elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
+        elastic_agent_config_dir: /var/lib/elastic-agent-no-ca
+        elastic_agent_config_file: /var/lib/elastic-agent-no-ca/elastic-agent.yml
+        elastic_agent_certificate_dir: /var/lib/elastic-agent-no-ca-certs
+        elastic_agent_binary_path: /usr/local/bin/elastic-agent-contract
+        elastic_agent_migrate_from_beats: false
+        elastic_agent_enrollment_state_file: /var/lib/elastic-agent-no-ca/.enrollment.sha256
+        elastic_agent_fleet_server_url: https://fleet.example.test:8220
+        elastic_agent_enrollment_token: ""
+        elastic_agent_fleet_server_insecure: false
+        elastic_agent_fleet_server_es_insecure: true
+        elasticstack_security: false
+        elastic_agent_fleet_server_ca_source: none
+        elastic_agent_fleet_server_ca_file: ""
+        elastic_agent_fleet_server_ca_content: ""
+        elastic_agent_fleet_server_ca_remote_src: false
+        elastic_agent_fleet_server_es: ""
+        elastic_agent_fleet_server_service_token: contract-derived-service-token
+        elastic_agent_fleet_server_service_token_file: /var/lib/elastic-agent-no-ca/custom-service-token
+        elastic_agent_fleet_server_policy: contract-derived-fleet-policy
+        elastic_agent_fleet_server_host: 127.0.0.1
+        elastic_agent_fleet_server_port: 8221
+        elastic_agent_fleet_server_cert_file: ""
+        elastic_agent_fleet_server_cert_content: ""
+        elastic_agent_fleet_server_cert_key_file: ""
+        elastic_agent_fleet_server_cert_key_content: ""
+        elastic_agent_fleet_server_cert_remote_src: false
+        elastic_agent_fleet_server_es_ca_file: ""
+        elastic_agent_fleet_server_es_ca_content: ""
+        elastic_agent_fleet_server_es_ca_remote_src: false
+
+    - name: Preserve default CA Fleet Server command
+      ansible.builtin.copy:
+        src: /tmp/elastic-agent-fleet-server-argv
+        dest: /tmp/elastic-agent-no-ca-argv
+        remote_src: true
+        mode: "0640"
+
+    - name: Add an HTTP-only Elasticsearch host for URL protocol coverage
+      ansible.builtin.add_host:
+        name: elasticsearch-http-only-contract
+        groups: elasticsearch_http_only
+        elasticsearch_http_publish_host: elasticsearch-http-only.example.test
+        elasticsearch_http_publish_port: 19200
+        elasticsearch_http_security: false
+        elasticsearch_http_protocol: http
+      changed_when: false
+
+    - name: Include Elastic Agent Fleet Server for an HTTP-only Elasticsearch target
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elastic_agent
+      vars:
+        elasticstack_elasticsearch_group_name: elasticsearch_http_only
+        elasticstack_security: true
+        elastic_agent_manage: true
+        elastic_agent_enable: false
+        elastic_agent_mode: fleet_server
+        elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
+        elastic_agent_config_dir: /var/lib/elastic-agent-http-only
+        elastic_agent_config_file: /var/lib/elastic-agent-http-only/elastic-agent.yml
+        elastic_agent_certificate_dir: /var/lib/elastic-agent-http-only-certs
+        elastic_agent_binary_path: /usr/local/bin/elastic-agent-contract
+        elastic_agent_enrollment_state_file: /var/lib/elastic-agent-http-only/.enrollment.sha256
+        elastic_agent_fleet_server_url: https://fleet.example.test:8220
+        elastic_agent_fleet_server_es: ""
+        elastic_agent_fleet_server_es_insecure: true
+        elastic_agent_fleet_server_service_token: contract-http-only-service-token
+        elastic_agent_fleet_server_service_token_file: /var/lib/elastic-agent-http-only/custom-service-token
+        elastic_agent_fleet_server_policy: contract-http-only-policy
+        elastic_agent_fleet_server_ca_source: none
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Preserve HTTP-only Elasticsearch Fleet Server command
+      ansible.builtin.copy:
+        src: /tmp/elastic-agent-fleet-server-argv
+        dest: /tmp/elastic-agent-http-only-argv
+        remote_src: true
+        mode: "0640"
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Confirm HTTP Fleet Server Elasticsearch URL requires opt-in
+      block:
+        - name: Include Elastic Agent with an insecure Elasticsearch URL
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elastic_agent
+          vars:
+            elastic_agent_manage: true
+            elastic_agent_enable: false
+            elastic_agent_mode: fleet_server
+            elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
+            elastic_agent_config_dir: /var/lib/elastic-agent-insecure-es
+            elastic_agent_config_file: /var/lib/elastic-agent-insecure-es/elastic-agent.yml
+            elastic_agent_binary_path: /usr/local/bin/elastic-agent-contract
+            elastic_agent_migrate_from_beats: false
+            elastic_agent_enrollment_state_file: /var/lib/elastic-agent-insecure-es/.enrollment.sha256
+            elastic_agent_fleet_server_url: https://fleet.example.test:8220
+            elastic_agent_fleet_server_es: http://elasticsearch.example.test:9200
+            elastic_agent_fleet_server_es_insecure: false
+            elastic_agent_fleet_server_insecure: false
+            elastic_agent_fleet_server_service_token: contract-insecure-es-service-token
+            elastic_agent_fleet_server_policy: contract-insecure-es-policy
+            elastic_agent_fleet_server_ca_source: none
+      rescue:
+        - name: Assert the insecure Elasticsearch URL guard caused the failure
+          ansible.builtin.assert:
+            that:
+              - >-
+                ansible_failed_task.name | default('') is search(
+                'Reject insecure Fleet Server Elasticsearch URL')
+        - name: Record expected insecure Elasticsearch URL rejection
+          ansible.builtin.set_fact:
+            insecure_fleet_server_es_rejected: true
+
+    - name: Exercise IPv6 Fleet Server Elasticsearch URL discovery
+      when: not fleet_contract_complete.stat.exists
+      block:
+        - name: Add an IPv6 Elasticsearch publish host
+          ansible.builtin.add_host:
+            name: elasticsearch-ipv6-publish-contract
+            groups: elasticsearch_ipv6_publish
+            elasticsearch_http_publish_host: '2001:db8::10'
+            elasticsearch_http_publish_port: 19299
+          changed_when: false
+
+        - name: Include Elastic Agent with an IPv6 publish host
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elastic_agent
+          vars:
+            elasticstack_elasticsearch_group_name: elasticsearch_ipv6_publish
+            elasticstack_security: true
+            elastic_agent_manage: true
+            elastic_agent_enable: false
+            elastic_agent_mode: fleet_server
+            elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
+            elastic_agent_config_dir: /var/lib/elastic-agent-ipv6-publish
+            elastic_agent_config_file: /var/lib/elastic-agent-ipv6-publish/elastic-agent.yml
+            elastic_agent_binary_path: /usr/local/bin/elastic-agent-contract
+            elastic_agent_migrate_from_beats: false
+            elastic_agent_enrollment_state_file: /var/lib/elastic-agent-ipv6-publish/.enrollment.sha256
+            elastic_agent_fleet_server_url: https://fleet.example.test:8220
+            elastic_agent_fleet_server_es: ""
+            elastic_agent_fleet_server_es_insecure: false
+            elastic_agent_fleet_server_insecure: false
+            elastic_agent_fleet_server_service_token: contract-ipv6-publish-service-token
+            elastic_agent_fleet_server_policy: contract-ipv6-publish-policy
+            elastic_agent_fleet_server_ca_source: none
+
+        - name: Preserve IPv6 publish host command
+          ansible.builtin.copy:
+            src: /tmp/elastic-agent-fleet-server-argv
+            dest: /tmp/elastic-agent-ipv6-publish-argv
+            remote_src: true
+            mode: "0640"
+
+        - name: Add an IPv6 Elasticsearch fallback host
+          ansible.builtin.add_host:
+            name: elasticsearch-ipv6-fallback-contract
+            groups: elasticsearch_ipv6_fallback
+            ansible_host: '2001:db8::20'
+          changed_when: false
+
+        - name: Include Elastic Agent with an IPv6 ansible_host fallback
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elastic_agent
+          vars:
+            elasticstack_elasticsearch_group_name: elasticsearch_ipv6_fallback
+            elasticstack_security: true
+            elastic_agent_manage: true
+            elastic_agent_enable: false
+            elastic_agent_mode: fleet_server
+            elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
+            elastic_agent_config_dir: /var/lib/elastic-agent-ipv6-fallback
+            elastic_agent_config_file: /var/lib/elastic-agent-ipv6-fallback/elastic-agent.yml
+            elastic_agent_binary_path: /usr/local/bin/elastic-agent-contract
+            elastic_agent_migrate_from_beats: false
+            elastic_agent_enrollment_state_file: /var/lib/elastic-agent-ipv6-fallback/.enrollment.sha256
+            elastic_agent_fleet_server_url: https://fleet.example.test:8220
+            elastic_agent_fleet_server_es: ""
+            elastic_agent_fleet_server_es_insecure: false
+            elastic_agent_fleet_server_insecure: false
+            elastic_agent_fleet_server_service_token: contract-ipv6-fallback-service-token
+            elastic_agent_fleet_server_policy: contract-ipv6-fallback-policy
+            elastic_agent_fleet_server_ca_source: none
+
+        - name: Preserve IPv6 ansible_host fallback command
+          ansible.builtin.copy:
+            src: /tmp/elastic-agent-fleet-server-argv
+            dest: /tmp/elastic-agent-ipv6-fallback-argv
+            remote_src: true
+            mode: "0640"
+
+    - name: Restore file-mode Fleet Server command for verification
+      ansible.builtin.copy:
+        src: /tmp/elastic-agent-fleet-server-custom-argv
+        dest: /tmp/elastic-agent-fleet-server-argv
+        remote_src: true
+        mode: "0640"
+
+    - name: Seed a basic Elastic Agent flavor marker for transition coverage
+      ansible.builtin.copy:
+        dest: /tmp/elastic-agent-package-flavor-transition
+        content: basic
+        mode: "0600"
+      when:
+        - elasticstack_release | int >= 9
+        - not fleet_contract_complete.stat.exists
+
+    - name: Confirm a basic to servers flavor transition is rejected
+      when:
+        - elasticstack_release | int >= 9
+        - not fleet_contract_complete.stat.exists
+      block:
+        - name: Include Elastic Agent with a mismatched installed flavor
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elastic_agent
+          vars:
+            elastic_agent_manage: true
+            elastic_agent_enable: false
+            elastic_agent_mode: fleet
+            elastic_agent_package_flavor: servers
+            elastic_agent_package_flavor_file: /tmp/elastic-agent-package-flavor-transition
+            elastic_agent_binary_path: /usr/local/bin/elastic-agent-contract
+            elastic_agent_config_dir: /var/lib/elastic-agent-flavor-transition
+            elastic_agent_config_file: /var/lib/elastic-agent-flavor-transition/elastic-agent.yml
+            elastic_agent_enrollment_state_file: /var/lib/elastic-agent-flavor-transition/.enrollment.sha256
+            elastic_agent_fleet_server_url: https://fleet.example.test:8220
+            elastic_agent_enrollment_token: contract-transition-token
+            elastic_agent_fleet_server_ca_source: none
+      rescue:
+        - name: Assert the package flavor guard caused the failure
+          ansible.builtin.assert:
+            that:
+              - >-
+                ansible_failed_task.name | default('') is search(
+                'Validate the installed Elastic Agent package flavor')
+        - name: Record expected flavor transition failure
+          ansible.builtin.set_fact:
+            flavor_transition_rejected: true
+    - name: Restore the requested Elastic Agent flavor marker
+      ansible.builtin.copy:
+        dest: /tmp/elastic-agent-package-flavor-transition
+        content: servers
+        mode: "0600"
+      when:
+        - elasticstack_release | int >= 9
+        - not fleet_contract_complete.stat.exists
+
+    - name: Record the rejected flavor transition for verify
+      ansible.builtin.copy:
+        dest: /tmp/elastic-agent-flavor-transition-rejected
+        content: rejected
+        mode: "0600"
+      when:
+        - not fleet_contract_complete.stat.exists
+        - flavor_transition_rejected | default(false)
+
+    - name: Check the recorded flavor transition coverage
+      ansible.builtin.stat:
+        path: /tmp/elastic-agent-flavor-transition-rejected
+      register: flavor_transition_coverage
+
+    - name: Confirm incomplete Fleet configuration is rejected
+      block:
+        - name: Include Elastic Agent with incomplete Fleet details
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elastic_agent
+          vars:
+            elastic_agent_manage: true
+            elastic_agent_mode: fleet
+            elastic_agent_fleet_server_url: ""
+            elastic_agent_enrollment_token: ""
+      rescue:
+        - name: Assert the configuration guard caused the failure
+          ansible.builtin.assert:
+            that:
+              - >-
+                ansible_failed_task.name | default('') is search(
+                'Validate Elastic Agent configuration')
+        - name: Record expected incomplete Fleet failure
+          ansible.builtin.set_fact:
+            invalid_agent_configuration_failed: true
+
+    - name: Confirm Fleet Server basic flavor is rejected
+      when: elasticstack_release | int >= 9
+      block:
+        - name: Include Elastic Agent Fleet Server with the basic flavor
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elastic_agent
+          vars:
+            elastic_agent_manage: true
+            elastic_agent_mode: fleet_server
+            elastic_agent_package_flavor: basic
+            elastic_agent_fleet_server_url: https://fleet.example.test:8220
+            elastic_agent_fleet_server_es: https://elasticsearch.example.test:9200
+            elastic_agent_fleet_server_service_token: contract-invalid-service-token
+            elastic_agent_fleet_server_policy: contract-invalid-fleet-policy
+            elastic_agent_fleet_server_ca_source: none
+            elastic_agent_config_dir: /var/lib/elastic-agent-invalid-fleet-flavor
+            elastic_agent_config_file: /var/lib/elastic-agent-invalid-fleet-flavor/elastic-agent.yml
+            elastic_agent_enrollment_state_file: /var/lib/elastic-agent-invalid-fleet-flavor/.enrollment.sha256
+            elastic_agent_fleet_server_cert_content: ""
+            elastic_agent_fleet_server_cert_key_content: ""
+            elastic_agent_fleet_server_es_ca_content: ""
+      rescue:
+        - name: Assert the configuration guard caused the failure
+          ansible.builtin.assert:
+            that:
+              - >-
+                ansible_failed_task.name | default('') is search(
+                'Validate Elastic Agent configuration')
+        - name: Record expected Fleet Server flavor failure
+          ansible.builtin.set_fact:
+            invalid_fleet_server_flavor_failed: true
+    - name: Confirm incomplete Fleet Server certificate pair is rejected
+      block:
+        - name: Include Elastic Agent with an incomplete certificate pair
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elastic_agent
+          vars:
+            elastic_agent_manage: true
+            elastic_agent_mode: fleet
+            elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
+            elastic_agent_fleet_server_url: https://fleet.example.test:8220
+            elastic_agent_enrollment_token: contract-invalid-enrollment-token
+            elastic_agent_fleet_server_ca_source: none
+            elastic_agent_fleet_server_cert_content: contract-incomplete-cert
+            elastic_agent_fleet_server_cert_key_content: ""
+            elastic_agent_fleet_server_es_ca_content: ""
+      rescue:
+        - name: Assert the configuration guard caused the failure
+          ansible.builtin.assert:
+            that:
+              - >-
+                ansible_failed_task.name | default('') is search(
+                'Validate Elastic Agent configuration')
+        - name: Record expected certificate pair failure
+          ansible.builtin.set_fact:
+            invalid_certificate_pair_failed: true
+
+    - name: Confirm certificate file without key is rejected
+      block:
+        - name: Include Elastic Agent with a certificate file without a key
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elastic_agent
+          vars:
+            elastic_agent_manage: true
+            elastic_agent_mode: fleet
+            elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
+            elastic_agent_fleet_server_url: https://fleet.example.test:8220
+            elastic_agent_enrollment_token: contract-file-only-enrollment-token
+            elastic_agent_fleet_server_ca_source: none
+            elastic_agent_fleet_server_ca_file: ""
+            elastic_agent_fleet_server_ca_content: ""
+            elastic_agent_fleet_server_cert_file: /tmp/fleet-server.crt
+            elastic_agent_fleet_server_cert_content: ""
+            elastic_agent_fleet_server_cert_key_file: ""
+            elastic_agent_fleet_server_cert_key_content: ""
+            elastic_agent_fleet_server_es_ca_content: ""
+      rescue:
+        - name: Assert the certificate pair guard caused the file-only failure
+          ansible.builtin.assert:
+            that:
+              - >-
+                ansible_failed_task.name | default('') is search(
+                'Validate Elastic Agent configuration')
+        - name: Record expected certificate file-only failure
+          ansible.builtin.set_fact:
+            invalid_certificate_file_pair_failed: true
+
+    - name: Confirm key file without certificate is rejected
+      block:
+        - name: Include Elastic Agent with a key file without a certificate
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elastic_agent
+          vars:
+            elastic_agent_manage: true
+            elastic_agent_mode: fleet
+            elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
+            elastic_agent_fleet_server_url: https://fleet.example.test:8220
+            elastic_agent_enrollment_token: contract-key-only-enrollment-token
+            elastic_agent_fleet_server_ca_source: none
+            elastic_agent_fleet_server_ca_file: ""
+            elastic_agent_fleet_server_ca_content: ""
+            elastic_agent_fleet_server_cert_file: ""
+            elastic_agent_fleet_server_cert_content: ""
+            elastic_agent_fleet_server_cert_key_file: /tmp/fleet-server.key
+            elastic_agent_fleet_server_cert_key_content: ""
+            elastic_agent_fleet_server_es_ca_content: ""
+      rescue:
+        - name: Assert the certificate pair guard caused the key-only failure
+          ansible.builtin.assert:
+            that:
+              - >-
+                ansible_failed_task.name | default('') is search(
+                'Validate Elastic Agent configuration')
+        - name: Record expected certificate key-only failure
+          ansible.builtin.set_fact:
+            invalid_certificate_key_pair_failed: true
+
+    - name: Assert invalid Elastic Agent configurations failed before deployment
+      ansible.builtin.assert:
+        that:
+          - invalid_agent_configuration_failed | default(false)
+          - (elasticstack_release | int < 9) or invalid_fleet_server_flavor_failed | default(false)
+          - invalid_certificate_pair_failed | default(false)
+          - invalid_certificate_file_pair_failed | default(false)
+          - invalid_certificate_key_pair_failed | default(false)
+          - (elasticstack_release | int < 9) or flavor_transition_coverage.stat.exists
+          - existing_enrollment_rejected | default(false)
+          - insecure_fleet_server_es_rejected | default(false)
+
+    - name: Mark Fleet enrollment contract coverage complete
+      ansible.builtin.copy:
+        dest: /tmp/elastic-agent-fleet-contract-complete
+        content: complete
+        mode: "0600"
+      when: not fleet_contract_complete.stat.exists
