@@ -43,7 +43,7 @@ jobs:
           python -m pip install --upgrade pip
           # Match the requirements-test.txt floor so contract tests exercise
           # the same ansible-core the molecule matrix does.
-          pip install 'ansible-core>=2.20,<2.21'
+          pip install 'ansible-core>=2.20,<2.21' 'pytest>=9.1.1,<10'
 
       - name: Install collection into ansible-galaxy path
         run: |
@@ -53,6 +53,11 @@ jobs:
             community.general:12.3.0 \
             community.crypto:3.1.1 \
             ansible.posix:2.1.0
+
+      - name: Run Python unit tests
+        run: |
+          export PYTHONPATH="$HOME/.ansible/collections${PYTHONPATH:+:$PYTHONPATH}"
+          python -m pytest -q tests/unit
 
       - name: Run contract tests
         run: |

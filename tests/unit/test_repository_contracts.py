@@ -290,12 +290,18 @@ class TestRepositoryContracts(unittest.TestCase):
     def test_test_dependency_changes_trigger_dependency_sensitive_ci(self):
         contracts_path = ROOT / ".github" / "workflows" / "test_contracts.yml"
         contracts = yaml.safe_load(contracts_path.read_text()) or {}
+        contracts_source = contracts_path.read_text()
         workflow_on = contracts.get("on", contracts.get(True, {}))
         contract_paths = workflow_on["pull_request"]["paths"]
         self.assertIn(
             "requirements-test.txt",
             contract_paths,
             f"{contracts_path} must test changes to test dependencies",
+        )
+        self.assertIn(
+            "python -m pytest -q tests/unit",
+            contracts_source,
+            f"{contracts_path} must run the Python unit suite",
         )
 
         full_stack_path = ROOT / ".github" / "workflows" / "test_full_stack.yml"
