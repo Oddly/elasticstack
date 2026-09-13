@@ -145,6 +145,21 @@
       ansible.builtin.include_role:
         name: oddly.elasticstack.elastic_agent
 
+    - name: Verify the installed Elastic Agent package executable
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/elastic-agent
+          - version
+      register: fleet_package_version
+      changed_when: false
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Assert the Fleet scenario installed a working Agent package
+      ansible.builtin.assert:
+        that:
+          - fleet_package_version.rc == 0
+      when: not fleet_contract_complete.stat.exists
+
     - name: Create package-managed Fleet state fixture after enrollment
       ansible.builtin.copy:
         dest: /etc/elastic-agent/fleet.enc
@@ -154,6 +169,120 @@
     - name: Reapply Elastic Agent to exercise enrollment state idempotency
       ansible.builtin.include_role:
         name: oddly.elasticstack.elastic_agent
+
+    - name: Start Beat services before migration rollback coverage
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+      loop:
+        - filebeat
+        - metricbeat
+        - auditbeat
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Install a failing Elastic Agent service for rollback coverage
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/elastic-agent.service
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Elastic Agent lifecycle failure fixture
+
+          [Service]
+          ExecStart=/bin/false
+
+          [Install]
+          WantedBy=multi-user.target
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Reload systemd for the failing Elastic Agent service
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Exercise migration rollback after an Elastic Agent lifecycle failure
+      when: not fleet_contract_complete.stat.exists
+      block:
+        - name: Include Elastic Agent with a failing service lifecycle
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elastic_agent
+          vars:
+            elastic_agent_enable: true
+            elastic_agent_mode: fleet
+            elastic_agent_migrate_from_beats: true
+      rescue:
+        - name: Assert the service lifecycle failure was caught
+          ansible.builtin.assert:
+            that:
+              - >-
+                ansible_failed_task.name | default('') is search(
+                'Manage Elastic Agent service')
+        - name: Record expected Elastic Agent lifecycle failure
+          ansible.builtin.set_fact:
+            migration_rollback_failed: true
+
+    - name: Check Elastic Agent state after migration rollback
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - "{{ item.command }}"
+          - "{{ item.service }}"
+      loop:
+        - command: is-enabled
+          service: elastic-agent
+        - command: is-active
+          service: elastic-agent
+        - command: is-enabled
+          service: filebeat
+        - command: is-active
+          service: filebeat
+        - command: is-enabled
+          service: metricbeat
+        - command: is-active
+          service: metricbeat
+        - command: is-enabled
+          service: auditbeat
+        - command: is-active
+          service: auditbeat
+      register: migration_rollback_services
+      changed_when: false
+      failed_when: false
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Assert migration rollback restores all service states
+      ansible.builtin.assert:
+        that:
+          - migration_rollback_failed | default(false)
+          - migration_rollback_services.results[0].stdout == 'disabled'
+          - migration_rollback_services.results[1].stdout == 'inactive'
+          - migration_rollback_services.results[2].stdout == 'enabled'
+          - migration_rollback_services.results[3].stdout == 'active'
+          - migration_rollback_services.results[4].stdout == 'enabled'
+          - migration_rollback_services.results[5].stdout == 'active'
+          - migration_rollback_services.results[6].stdout == 'enabled'
+          - migration_rollback_services.results[7].stdout == 'active'
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Mark migration rollback coverage complete
+      ansible.builtin.copy:
+        dest: /tmp/elastic-agent-migration-rollback-complete
+        content: complete
+        mode: "0600"
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Remove the failing Elastic Agent service override
+      ansible.builtin.file:
+        path: /etc/systemd/system/elastic-agent.service
+        state: absent
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Reload systemd after migration rollback coverage
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when: not fleet_contract_complete.stat.exists
 
     - name: Confirm a Fleet to standalone mode transition is rejected
       when: not fleet_contract_complete.stat.exists
@@ -395,6 +524,115 @@
         mode: "0600"
       when: not fleet_contract_complete.stat.exists
 
+    - name: Include an isolated Fleet Agent for state replacement coverage
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elastic_agent
+      vars:
+        elastic_agent_manage: true
+        elastic_agent_enable: false
+        elastic_agent_mode: fleet
+        elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
+        elastic_agent_binary_path: /usr/local/bin/elastic-agent-contract
+        elastic_agent_migrate_from_beats: false
+        elastic_agent_config_dir: /var/lib/elastic-agent-fleet-state-replacement
+        elastic_agent_config_file: /var/lib/elastic-agent-fleet-state-replacement/elastic-agent.yml
+        elastic_agent_enrollment_state_file: /var/lib/elastic-agent-fleet-state-replacement/.enrollment.sha256
+        elastic_agent_fleet_server_url: https://fleet.example.test:8220
+        elastic_agent_enrollment_token: contract-state-replacement-token
+        elastic_agent_fleet_server_insecure: true
+        elastic_agent_fleet_server_ca_source: none
+        elastic_agent_fleet_server_ca_file: ""
+        elastic_agent_fleet_server_ca_content: ""
+        elastic_agent_fleet_server_ca_remote_src: false
+        elastic_agent_fleet_server_es: ""
+        elastic_agent_fleet_server_es_insecure: false
+        elastic_agent_fleet_server_service_token: ""
+        elastic_agent_fleet_server_service_token_file: /var/lib/elastic-agent-fleet-state-replacement/service-token
+        elastic_agent_fleet_server_policy: ""
+        elastic_agent_fleet_server_host: ""
+        elastic_agent_fleet_server_port: 8220
+        elastic_agent_fleet_server_cert_file: ""
+        elastic_agent_fleet_server_cert_content: ""
+        elastic_agent_fleet_server_cert_key_file: ""
+        elastic_agent_fleet_server_cert_key_content: ""
+        elastic_agent_fleet_server_cert_remote_src: false
+        elastic_agent_fleet_server_es_ca_file: ""
+        elastic_agent_fleet_server_es_ca_content: ""
+        elastic_agent_fleet_server_es_ca_remote_src: false
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Seed the Fleet state before a simulated package reinstall
+      ansible.builtin.copy:
+        dest: /var/lib/elastic-agent-fleet-state-replacement/fleet.enc
+        content: original-encrypted-fleet-state
+        owner: root
+        group: root
+        mode: "0600"
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Capture Fleet state before the simulated package reinstall
+      ansible.builtin.stat:
+        path: /var/lib/elastic-agent-fleet-state-replacement/fleet.enc
+      register: replacement_state_before
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Simulate a package reinstall replacing Fleet state
+      ansible.builtin.copy:
+        dest: /var/lib/elastic-agent-fleet-state-replacement/fleet.enc
+        content: replacement-encrypted-fleet-state
+        owner: root
+        group: root
+        mode: "0600"
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Re-run enrollment after Fleet state replacement
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../roles/elastic_agent/tasks/enroll.yml"
+      vars:
+        _elastic_agent_fleet_state_before_install: "{{ replacement_state_before }}"
+        elastic_agent_manage: true
+        elastic_agent_enable: false
+        elastic_agent_mode: fleet
+        elastic_agent_binary_path: /usr/local/bin/elastic-agent-contract
+        elastic_agent_fleet_server_url: https://fleet.example.test:8220
+        elastic_agent_enrollment_token: contract-state-replacement-token
+        elastic_agent_fleet_server_insecure: true
+        elastic_agent_fleet_server_ca_source: none
+        elastic_agent_fleet_server_ca_file: ""
+        elastic_agent_fleet_server_ca_content: ""
+        elastic_agent_fleet_server_ca_remote_src: false
+        elastic_agent_fleet_server_es: ""
+        elastic_agent_fleet_server_es_insecure: false
+        elastic_agent_fleet_server_service_token: ""
+        elastic_agent_fleet_server_service_token_file: /var/lib/elastic-agent-fleet-state-replacement/service-token
+        elastic_agent_fleet_server_policy: ""
+        elastic_agent_fleet_server_host: ""
+        elastic_agent_fleet_server_port: 8220
+        elastic_agent_fleet_server_cert_file: ""
+        elastic_agent_fleet_server_cert_content: ""
+        elastic_agent_fleet_server_cert_key_file: ""
+        elastic_agent_fleet_server_cert_key_content: ""
+        elastic_agent_fleet_server_cert_remote_src: false
+        elastic_agent_fleet_server_es_ca_file: ""
+        elastic_agent_fleet_server_es_ca_content: ""
+        elastic_agent_fleet_server_es_ca_remote_src: false
+        elastic_agent_config_dir: /var/lib/elastic-agent-fleet-state-replacement
+        elastic_agent_enrollment_state_file: /var/lib/elastic-agent-fleet-state-replacement/.enrollment.sha256
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Assert Fleet state replacement forced enrollment
+      ansible.builtin.assert:
+        that:
+          - _elastic_agent_fleet_state_replaced | bool
+          - _elastic_agent_enrollment_required | bool
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Mark Fleet state replacement coverage complete
+      ansible.builtin.copy:
+        dest: /tmp/elastic-agent-fleet-state-replacement-complete
+        content: complete
+        mode: "0600"
+      when: not fleet_contract_complete.stat.exists
+
     - name: Confirm an existing enrollment is not overwritten
       block:
         - name: Include Elastic Agent with a rotated enrollment token
@@ -486,6 +724,68 @@
           dest: /tmp/file-fleet-server.key
         - src: /var/lib/elastic-agent-fleet-server-certs/elasticsearch-ca.crt
           dest: /tmp/file-elasticsearch-ca.crt
+
+    - name: Include Elastic Agent with controller-side Fleet certificate files
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elastic_agent
+      vars:
+        elastic_agent_manage: true
+        elastic_agent_enable: false
+        elastic_agent_mode: fleet_server
+        elastic_agent_package_flavor: "{{ _elastic_agent_test_package_flavor }}"
+        elastic_agent_config_dir: /var/lib/elastic-agent-controller-files
+        elastic_agent_config_file: /var/lib/elastic-agent-controller-files/elastic-agent.yml
+        elastic_agent_binary_path: /usr/local/bin/elastic-agent-contract
+        elastic_agent_migrate_from_beats: false
+        elastic_agent_certificate_dir: /var/lib/elastic-agent-controller-files-certs
+        elastic_agent_enrollment_state_file: /var/lib/elastic-agent-controller-files/.enrollment.sha256
+        elastic_agent_fleet_server_url: https://fleet.example.test:8220
+        elastic_agent_fleet_server_ca_source: external
+        elastic_agent_fleet_server_ca_file: "{{ molecule_scenario_directory }}/files/fleet-server-ca.crt"
+        elastic_agent_fleet_server_ca_content: ""
+        elastic_agent_fleet_server_ca_remote_src: false
+        elastic_agent_fleet_server_insecure: false
+        elastic_agent_fleet_server_es: https://elasticsearch.example.test:9200
+        elastic_agent_fleet_server_es_insecure: false
+        elastic_agent_fleet_server_service_token: contract-controller-files-token
+        elastic_agent_fleet_server_service_token_file: /var/lib/elastic-agent-controller-files/service-token
+        elastic_agent_fleet_server_policy: contract-controller-files-policy
+        elastic_agent_fleet_server_cert_file: "{{ molecule_scenario_directory }}/files/fleet-server.crt"
+        elastic_agent_fleet_server_cert_content: ""
+        elastic_agent_fleet_server_cert_key_file: "{{ molecule_scenario_directory }}/files/fleet-server.key"
+        elastic_agent_fleet_server_cert_key_content: ""
+        elastic_agent_fleet_server_cert_remote_src: false
+        elastic_agent_fleet_server_es_ca_file: "{{ molecule_scenario_directory }}/files/elasticsearch-ca.crt"
+        elastic_agent_fleet_server_es_ca_content: ""
+        elastic_agent_fleet_server_es_ca_remote_src: false
+        elastic_agent_fleet_server_host: 127.0.0.1
+        elastic_agent_fleet_server_port: 8223
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Preserve controller-side Fleet Server command
+      ansible.builtin.copy:
+        src: /tmp/elastic-agent-fleet-server-argv
+        dest: /tmp/elastic-agent-controller-files-argv
+        remote_src: true
+        mode: "0640"
+      when: not fleet_contract_complete.stat.exists
+
+    - name: Preserve controller-side Fleet certificate outputs
+      ansible.builtin.copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        remote_src: true
+        mode: "0640"
+      loop:
+        - src: /var/lib/elastic-agent-controller-files-certs/fleet-server-ca.crt
+          dest: /tmp/controller-fleet-server-ca.crt
+        - src: /var/lib/elastic-agent-controller-files-certs/fleet-server.crt
+          dest: /tmp/controller-fleet-server.crt
+        - src: /var/lib/elastic-agent-controller-files-certs/fleet-server.key
+          dest: /tmp/controller-fleet-server.key
+        - src: /var/lib/elastic-agent-controller-files-certs/elasticsearch-ca.crt
+          dest: /tmp/controller-elasticsearch-ca.crt
+      when: not fleet_contract_complete.stat.exists
 
     - name: Create collection CA directory for the shared CA branch
       ansible.builtin.file:
@@ -804,6 +1104,47 @@
         dest: /tmp/elastic-agent-package-flavor-transition
         content: servers
         mode: "0600"
+      when:
+        - elasticstack_release | int >= 9
+        - not fleet_contract_complete.stat.exists
+
+    - name: Seed a matching custom Elastic Agent flavor marker
+      ansible.builtin.copy:
+        dest: /tmp/elastic-agent-package-flavor-positive
+        content: servers
+        mode: "0600"
+      when:
+        - elasticstack_release | int >= 9
+        - not fleet_contract_complete.stat.exists
+
+    - name: Include Elastic Agent with a matching custom flavor marker
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elastic_agent
+      vars:
+        elastic_agent_manage: true
+        elastic_agent_enable: false
+        elastic_agent_mode: fleet
+        elastic_agent_package_flavor: servers
+        elastic_agent_package_flavor_file: /tmp/elastic-agent-package-flavor-positive
+        elastic_agent_binary_path: /usr/local/bin/elastic-agent-contract
+        elastic_agent_migrate_from_beats: false
+        elastic_agent_config_dir: /var/lib/elastic-agent-flavor-positive
+        elastic_agent_config_file: /var/lib/elastic-agent-flavor-positive/elastic-agent.yml
+        elastic_agent_enrollment_state_file: /var/lib/elastic-agent-flavor-positive/.enrollment.sha256
+        elastic_agent_fleet_server_url: https://fleet.example.test:8220
+        elastic_agent_enrollment_token: contract-positive-flavor-token
+        elastic_agent_fleet_server_insecure: true
+        elastic_agent_fleet_server_ca_source: none
+      when:
+        - elasticstack_release | int >= 9
+        - not fleet_contract_complete.stat.exists
+
+    - name: Preserve positive custom flavor enrollment command
+      ansible.builtin.copy:
+        src: /tmp/elastic-agent-enrollment-argv
+        dest: /tmp/elastic-agent-positive-flavor-argv
+        remote_src: true
+        mode: "0640"
       when:
         - elasticstack_release | int >= 9
         - not fleet_contract_complete.stat.exists

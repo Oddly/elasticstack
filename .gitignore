@@ -23,4 +23,5 @@ tests/integration/*
 !tests/integration/security_and_certificate_contract.yml
 !tests/integration/molecule_verification_contract.yml
 !tests/integration/wait_for_http_service_contract.yml
+!tests/integration/elastic_agent_tags_contract.yml
 site/

@@ -1212,6 +1212,7 @@ rollouts:
       scenario: elastic_agent_fleet
       expected:
         - "flavor_transition_marker.stat.exists"
+        - "(positive_flavor_marker.content | b64decode | trim) == 'servers'"
     elastic_agent_enrollment_state_file:
       scenario: elastic_agent_fleet
       expected:
@@ -1220,6 +1221,7 @@ rollouts:
       scenario: elastic_agent_fleet
       expected:
         - "migrated_beat_services.results | selectattr('stdout', 'equalto', 'disabled') | list | length == 3"
+        - "migration_rollback_marker.stat.exists"
     elastic_agent_fleet_server_url:
       scenario: elastic_agent_fleet
       expected:
@@ -1240,6 +1242,7 @@ rollouts:
       scenario: elastic_agent_fleet
       expected:
         - "fleet-server-ca.crt"
+        - "controller-fleet-server-ca"
     elastic_agent_fleet_server_ca_content:
       scenario: elastic_agent_fleet
       expected:
@@ -1299,6 +1302,7 @@ rollouts:
       scenario: elastic_agent_fleet
       expected:
         - "fleet_tls_files"
+        - "controller_tls_stats"
     elastic_agent_fleet_server_es_ca_file:
       scenario: elastic_agent_fleet
       expected:
@@ -1311,3 +1315,4 @@ rollouts:
       scenario: elastic_agent_fleet
       expected:
         - "elasticsearch-ca.crt"
+        - "controller_tls_stats"

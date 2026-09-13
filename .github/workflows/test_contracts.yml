@@ -68,6 +68,9 @@ jobs:
             else
               args=(-i 'localhost,')
             fi
+            if [ "$pb" = "elastic_agent_tags_contract.yml" ]; then
+              args+=(--tags configuration)
+            fi
             echo "::group::${pb}"
             if ! ansible-playbook "${args[@]}" -c local "$pb"; then
               echo "::error::contract test ${pb} failed"

@@ -128,6 +128,10 @@ The package version follows the shared `elasticstack_version` setting, so settin
 
 ## Tags
 
+The role propagates these tags into its dynamically included task files, so a
+tagged run reaches the underlying template or certificate tasks as well as the
+role entry point.
+
 | Tag | Effect |
 |---|---|
 | `configuration` | Run standalone policy configuration |

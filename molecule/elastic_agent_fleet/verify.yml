@@ -148,6 +148,21 @@
         - /tmp/file-elasticsearch-ca.crt
       register: file_tls_files
 
+    - name: Read controller-file Fleet Server command
+      ansible.builtin.slurp:
+        src: /tmp/elastic-agent-controller-files-argv
+      register: controller_files_argv
+
+    - name: Read controller-file certificate outputs
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - /tmp/controller-fleet-server-ca.crt
+        - /tmp/controller-fleet-server.crt
+        - /tmp/controller-fleet-server.key
+        - /tmp/controller-elasticsearch-ca.crt
+      register: controller_tls_files
+
     - name: Check content-mode certificate permissions
       ansible.builtin.stat:
         path: "{{ item }}"
@@ -167,6 +182,16 @@
         - /var/lib/elastic-agent-fleet-server-certs/fleet-server.key
         - /var/lib/elastic-agent-fleet-server-certs/elasticsearch-ca.crt
       register: file_tls_stats
+
+    - name: Check controller-file certificate permissions
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /var/lib/elastic-agent-controller-files-certs/fleet-server-ca.crt
+        - /var/lib/elastic-agent-controller-files-certs/fleet-server.crt
+        - /var/lib/elastic-agent-controller-files-certs/fleet-server.key
+        - /var/lib/elastic-agent-controller-files-certs/elasticsearch-ca.crt
+      register: controller_tls_stats
 
     - name: Read collection CA output
       ansible.builtin.slurp:
@@ -192,6 +217,28 @@
       ansible.builtin.stat:
         path: /tmp/elastic-agent-flavor-transition-rejected
       register: flavor_transition_marker
+
+    - name: Check migration rollback coverage marker
+      ansible.builtin.stat:
+        path: /tmp/elastic-agent-migration-rollback-complete
+      register: migration_rollback_marker
+
+    - name: Check Fleet state replacement coverage marker
+      ansible.builtin.stat:
+        path: /tmp/elastic-agent-fleet-state-replacement-complete
+      register: replacement_coverage_marker
+
+    - name: Read positive custom flavor enrollment command
+      ansible.builtin.slurp:
+        src: /tmp/elastic-agent-positive-flavor-argv
+      register: positive_flavor_argv
+      when: elasticstack_release | int >= 9
+
+    - name: Read positive custom flavor marker
+      ansible.builtin.slurp:
+        src: /tmp/elastic-agent-package-flavor-positive
+      register: positive_flavor_marker
+      when: elasticstack_release | int >= 9
 
     - name: Check migrated Beat services are disabled
       ansible.builtin.command:
@@ -250,6 +297,10 @@
           - file_tls_stats.results[1].stat.mode == '0640'
           - file_tls_stats.results[2].stat.mode == '0600'
           - file_tls_stats.results[3].stat.mode == '0640'
+          - controller_tls_stats.results[0].stat.mode == '0640'
+          - controller_tls_stats.results[1].stat.mode == '0640'
+          - controller_tls_stats.results[2].stat.mode == '0600'
+          - controller_tls_stats.results[3].stat.mode == '0640'
           - "'contract-ca' in (content_tls_files.results[0].content | b64decode)"
           - "'contract-fleet-cert' in (content_tls_files.results[1].content | b64decode)"
           - "'contract-fleet-key' in (content_tls_files.results[2].content | b64decode)"
@@ -258,6 +309,16 @@
           - "'fleet-server' in (file_tls_files.results[1].content | b64decode)"
           - "'fleet-server-key' in (file_tls_files.results[2].content | b64decode)"
           - "'elasticsearch-ca' in (file_tls_files.results[3].content | b64decode)"
+          - "'--fleet-server-cert' in (controller_files_argv.content | b64decode)"
+          - "'fleet-server.crt' in (controller_files_argv.content | b64decode)"
+          - "'--fleet-server-cert-key' in (controller_files_argv.content | b64decode)"
+          - "'fleet-server.key' in (controller_files_argv.content | b64decode)"
+          - "'--fleet-server-es-ca' in (controller_files_argv.content | b64decode)"
+          - "'elasticsearch-ca.crt' in (controller_files_argv.content | b64decode)"
+          - "'controller-fleet-server-ca' in (controller_tls_files.results[0].content | b64decode)"
+          - "'controller-fleet-server' in (controller_tls_files.results[1].content | b64decode)"
+          - "'controller-fleet-server-key' in (controller_tls_files.results[2].content | b64decode)"
+          - "'controller-elasticsearch-ca' in (controller_tls_files.results[3].content | b64decode)"
           - "'contract-collection-ca' in (collection_ca.content | b64decode)"
           - collection_config_dir.stat.exists
           - "(enrollment_marker.content | b64decode | trim) == enrollment_fingerprint"
@@ -319,6 +380,15 @@
           - "no_ca_directory.stat.exists == false"
           - enrollment_state_dir.stat.exists
           - (elasticstack_release | int < 9) or flavor_transition_marker.stat.exists
+          - migration_rollback_marker.stat.exists
+          - replacement_coverage_marker.stat.exists
           - "elastic_agent_service.changed == false"
           - "agent_enabled.stdout == 'disabled'"
           - "migrated_beat_services.results | selectattr('stdout', 'equalto', 'disabled') | list | length == 3"
+
+    - name: Assert positive custom flavor validation and enrollment
+      ansible.builtin.assert:
+        that:
+          - (positive_flavor_marker.content | b64decode | trim) == 'servers'
+          - "'contract-positive-flavor-token' in (positive_flavor_argv.content | b64decode)"
+      when: elasticstack_release | int >= 9

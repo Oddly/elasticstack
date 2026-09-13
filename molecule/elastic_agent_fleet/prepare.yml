@@ -23,6 +23,17 @@
         - /var/lib/elastic-agent-collection-ca/fleet.enc
         - /var/lib/elastic-agent-collection-ca/.elasticstack-mode
         - /var/lib/elastic-agent-collection-ca/.enrollment.sha256
+        - /var/lib/elastic-agent-controller-files/fleet.enc
+        - /var/lib/elastic-agent-controller-files/.elasticstack-mode
+        - /var/lib/elastic-agent-controller-files/.enrollment.sha256
+        - /var/lib/elastic-agent-controller-files/service-token
+        - /var/lib/elastic-agent-fleet-state-replacement/fleet.enc
+        - /var/lib/elastic-agent-fleet-state-replacement/.elasticstack-mode
+        - /var/lib/elastic-agent-fleet-state-replacement/.enrollment.sha256
+        - /var/lib/elastic-agent-fleet-state-replacement/service-token
+        - /var/lib/elastic-agent-flavor-positive/fleet.enc
+        - /var/lib/elastic-agent-flavor-positive/.elasticstack-mode
+        - /var/lib/elastic-agent-flavor-positive/.enrollment.sha256
         - /var/lib/elastic-agent-no-ca/fleet.enc
         - /var/lib/elastic-agent-no-ca/.elasticstack-mode
         - /var/lib/elastic-agent-no-ca/.enrollment.sha256
@@ -37,6 +48,18 @@
         - /var/lib/elastic-agent-insecure-es/.enrollment.sha256
         - /var/lib/elastic-agent-insecure-es/.fleet-server-service-token
         - /var/lib/elastic-agent-invalid-fleet-flavor
+        - /var/lib/elastic-agent-controller-files-certs
+        - /var/lib/elastic-agent-fleet-state-replacement
+        - /var/lib/elastic-agent-flavor-positive
+        - /tmp/elastic-agent-controller-files-argv
+        - /tmp/controller-fleet-server-ca.crt
+        - /tmp/controller-fleet-server.crt
+        - /tmp/controller-fleet-server.key
+        - /tmp/controller-elasticsearch-ca.crt
+        - /tmp/elastic-agent-migration-rollback-complete
+        - /tmp/elastic-agent-fleet-state-replacement-complete
+        - /tmp/elastic-agent-package-flavor-positive
+        - /tmp/elastic-agent-positive-flavor-argv
         - /var/lib/elastic-agent-ipv6-publish/fleet.enc
         - /var/lib/elastic-agent-ipv6-publish/.elasticstack-mode
         - /var/lib/elastic-agent-ipv6-publish/.enrollment.sha256
