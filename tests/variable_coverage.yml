@@ -1022,6 +1022,11 @@ rollouts:
       scenario: kibana_custom_certs
       expected:
         - "(kibana_certs_dir ~ '/' ~ inventory_hostname ~ '-kibana.crt') | to_json"
+    kibana_enable:
+      scenario: kibana_disabled
+      expected:
+        - "ansible_facts.services['kibana.service'].state in ['stopped', 'inactive']"
+        - "ansible_facts.services['kibana.service'].status == 'disabled'"
     kibana_elasticsearch_hosts:
       scenario: kibana_extras
       expected:

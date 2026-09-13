@@ -119,6 +119,7 @@
 - name: Wait for Kibana to be ready
   ansible.builtin.include_tasks:
     file: "{{ role_path }}/../elasticstack/tasks/wait_for_http_service.yml"
+  when: kibana_enable | bool
   vars:
     _wait_service_name: kibana
     _wait_url: >-
