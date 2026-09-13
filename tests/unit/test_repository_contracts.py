@@ -174,6 +174,7 @@ class TestRepositoryContracts(unittest.TestCase):
             )
 
     def test_ci_ssh_does_not_parse_shared_runner_known_hosts(self):
+        """Require CI SSH commands to use isolated, explicit connection state."""
         ssh_paths = [
             ROOT / ".github" / "actions" / "collect-diagnostics" / "action.yml",
             ROOT / ".github" / "workflows" / "cleanup_incus.yml",
