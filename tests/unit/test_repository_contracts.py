@@ -1341,6 +1341,10 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("_elastic_agent_fleet_server_es_host", main)
         self.assertIn("_elastic_agent_fleet_server_es:", main)
         self.assertIn("Bracket an IPv6 Fleet Server Elasticsearch host", main)
+        self.assertIn(
+            "not (_elastic_agent_fleet_server_es_host | string).startswith('[')",
+            main,
+        )
         self.assertIn("not ((_elastic_agent_fleet_server_es | lower) is match('^http://'))", main)
         self.assertNotIn("    elastic_agent_fleet_server_es: >-", main)
         self.assertNotIn(".elasticsearch_api_host", main)

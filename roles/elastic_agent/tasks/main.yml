@@ -31,7 +31,7 @@
     _elastic_agent_fleet_server_es_host: >-
       {{ ('[' ~ (_elastic_agent_fleet_server_es_host | string) ~ ']')
          if (':' in (_elastic_agent_fleet_server_es_host | string) and
-             not ((_elastic_agent_fleet_server_es_host | string) is match('^\\[')))
+             not (_elastic_agent_fleet_server_es_host | string).startswith('['))
          else (_elastic_agent_fleet_server_es_host | string) }}
   when:
     - elastic_agent_manage | bool
