@@ -91,12 +91,17 @@
           - "'127.0.0.1:5044' in (elastic_agent_config.content | b64decode)"
           - "'contract-system-metrics' in (elastic_agent_config.content | b64decode)"
           - "'agent.logging.to_stderr: true' in (elastic_agent_config.content | b64decode)"
+
+    - name: Assert the same-host 8.x to 9.x package upgrade
+      ansible.builtin.assert:
+        that:
           - package_upgrade_fixture.stat.exists
           - "'127.0.0.1:5044' in (package_upgrade_config.content | b64decode)"
           - "'elastic-agent' in ansible_facts.packages"
           - >-
             (ansible_facts.packages['elastic-agent'][0].version
             | regex_search('^[0-9]+') | int) == 9
+      when: elasticstack_release | int >= 9
 
     - name: Assert the 9.x package flavor marker is stored at the package top directory
       ansible.builtin.assert:

@@ -17,6 +17,7 @@ on:
     paths:
       - 'roles/elastic_agent/**'
       - 'roles/elasticstack/**'
+      - 'roles/repos/**'
       - 'molecule/elastic_agent_*/**'
       - 'molecule/shared/**'
       - '.github/workflows/test_role_elastic_agent.yml'

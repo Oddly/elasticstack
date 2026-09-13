@@ -344,16 +344,30 @@
     - elastic_agent_mode in ['fleet', 'fleet_server']
 
 - name: Configure standalone Elastic Agent policy
-  ansible.builtin.include_tasks: configure-standalone.yml
+  ansible.builtin.include_tasks:
+    file: configure-standalone.yml
+    apply:
+      tags:
+        - configuration
+        - elastic_agent_configuration
   when:
     - elastic_agent_manage | bool
     - elastic_agent_mode == 'standalone'
+  tags:
+    - configuration
+    - elastic_agent_configuration
 
 - name: Configure Elastic Agent Fleet TLS material
-  ansible.builtin.include_tasks: configure-fleet-tls.yml
+  ansible.builtin.include_tasks:
+    file: configure-fleet-tls.yml
+    apply:
+      tags:
+        - certificates
   when:
     - elastic_agent_manage | bool
     - elastic_agent_mode in ['fleet', 'fleet_server']
+  tags:
+    - certificates
 
 - name: Enroll Elastic Agent in Fleet
   ansible.builtin.include_tasks: enroll.yml
@@ -382,9 +396,30 @@
     - name: Initialize Beat migration state
       ansible.builtin.set_fact:
         _elastic_agent_beats_before_migration: []
+        _elastic_agent_before_migration: {}
       when:
         - elastic_agent_migrate_from_beats | bool
         - not ansible_check_mode
+
+    - name: Record Elastic Agent service state before migration
+      ansible.builtin.set_fact:
+        _elastic_agent_before_migration:
+          name: "{{ _elastic_agent_service_fact_key }}"
+          state: "{{ ansible_facts.services[_elastic_agent_service_fact_key].state }}"
+          enabled: >-
+            {{ ansible_facts.services[_elastic_agent_service_fact_key].status
+               in ['enabled', 'enabled-runtime'] }}
+      vars:
+        _elastic_agent_service_fact_key: >-
+          {{ 'elastic-agent'
+             if 'elastic-agent' in (ansible_facts.services | default({}))
+             else 'elastic-agent.service' }}
+      when:
+        - elastic_agent_migrate_from_beats | bool
+        - not ansible_check_mode
+        - >-
+          'elastic-agent' in (ansible_facts.services | default({})) or
+          'elastic-agent.service' in (ansible_facts.services | default({}))
 
     - name: Record Beat service state before migration
       ansible.builtin.set_fact:
@@ -444,6 +479,16 @@
         - not ansible_check_mode
 
   rescue:
+    - name: Restore Elastic Agent service after lifecycle failure
+      ansible.builtin.service:
+        name: "{{ _elastic_agent_before_migration.name }}"
+        state: "{{ 'started' if _elastic_agent_before_migration.state == 'running' else 'stopped' }}"
+        enabled: "{{ _elastic_agent_before_migration.enabled }}"
+      when:
+        - elastic_agent_migrate_from_beats | bool
+        - not ansible_check_mode
+        - _elastic_agent_before_migration.name | default('') | length > 0
+
     - name: Restore Beat services after Elastic Agent lifecycle failure
       ansible.builtin.service:
         name: "{{ item.name }}"

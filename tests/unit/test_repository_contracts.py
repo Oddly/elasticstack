@@ -393,6 +393,12 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertEqual(shared.count("ansible.builtin.package:"), 3)
         self.assertIn("state: \"{{ 'latest' if", shared)
         self.assertIn('enablerepo:', shared)
+        standalone_rpm = re.search(
+            r"(?ms)^- name: .*RPM \(standalone\).*?(?=^- name:|\Z)",
+            shared,
+        )
+        self.assertIsNotNone(standalone_rpm)
+        self.assertIn('enablerepo:', standalone_rpm.group(0))
         self.assertEqual(shared.count('notify: "{{ _package_notify | default([]) }}"'), 3)
 
         for role, package_var, package_base, package_notify, task_name in (
@@ -1278,11 +1284,14 @@ class TestRepositoryContracts(unittest.TestCase):
         )
         self.assertIn("Record Beat service state before migration", main)
         self.assertIn("Restore Beat services after Elastic Agent lifecycle failure", main)
+        self.assertIn("Record Elastic Agent service state before migration", main)
+        self.assertIn("Restore Elastic Agent service after lifecycle failure", main)
         self.assertIn("elastic_agent_fleet_server_cert_file | length > 0", main)
         self.assertIn("elastic_agent_fleet_server_cert_key_file | length > 0", main)
         self.assertIn("elastic_agent_config_file | dirname", main)
         self.assertIn("_elastic_agent_package_flavor_marker_content", main)
         self.assertIn("_elastic_agent_fleet_state_before_install", main)
+        self.assertIn("_elastic_agent_fleet_state_replaced", enroll)
         self.assertIn("_elastic_agent_installed_package_major", main)
         self.assertIn(".elasticstack-mode", main)
         self.assertIn("Refuse an Elastic Agent mode transition", main)
@@ -1313,6 +1322,25 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertNotIn("ansible.builtin.shell", "\n".join(
             path.read_text() for path in (ROOT / "roles" / "elastic_agent" / "tasks").glob("*.yml")
         ))
+        standalone_include = next(
+            task for task in main_tasks if task.get("name") == "Configure standalone Elastic Agent policy"
+        )
+        self.assertEqual(
+            set(standalone_include["tags"]),
+            {"configuration", "elastic_agent_configuration"},
+        )
+        self.assertEqual(
+            set(standalone_include["ansible.builtin.include_tasks"]["apply"]["tags"]),
+            {"configuration", "elastic_agent_configuration"},
+        )
+        certificate_include = next(
+            task for task in main_tasks if task.get("name") == "Configure Elastic Agent Fleet TLS material"
+        )
+        self.assertEqual(certificate_include["tags"], ["certificates"])
+        self.assertEqual(
+            certificate_include["ansible.builtin.include_tasks"]["apply"]["tags"],
+            ["certificates"],
+        )
         self.assertIn("argv: \"{{ _elastic_agent_enroll_argv }}\"", enroll)
         self.assertIn("'--fleet-server-es', _elastic_agent_fleet_server_es", enroll)
         self.assertIn("hash('sha256')", enroll)
@@ -1351,6 +1379,12 @@ class TestRepositoryContracts(unittest.TestCase):
         )
         self.assertEqual(enrollment_task.get("notify"), "Restart Elastic Agent")
         self.assertIn("to_nice_yaml", template)
+
+        default_verify = (ROOT / "molecule" / "elastic_agent_default" / "verify.yml").read_text()
+        self.assertIn("Assert the same-host 8.x to 9.x package upgrade", default_verify)
+        self.assertIn("when: elasticstack_release | int >= 9", default_verify)
+        workflow = (ROOT / ".github" / "workflows" / "test_role_elastic_agent.yml").read_text()
+        self.assertIn("'roles/repos/**'", workflow)
 
         fleet_converge = (ROOT / "molecule" / "elastic_agent_fleet" / "converge.yml").read_text()
         fleet_verify = (ROOT / "molecule" / "elastic_agent_fleet" / "verify.yml").read_text()
