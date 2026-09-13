@@ -1523,6 +1523,7 @@ class TestRepositoryContracts(unittest.TestCase):
             "Include Elastic Agent as Fleet Server",
             "Include Elastic Agent with the collection CA",
             "Include Elastic Agent Fleet Server with default CA handling",
+            "Preserve default CA Fleet Server command",
             "Restore file-mode Fleet Server command for verification",
         ):
             task = next(task for task in fleet_tasks if task.get("name") == task_name)

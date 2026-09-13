@@ -930,6 +930,7 @@
         dest: /tmp/elastic-agent-no-ca-argv
         remote_src: true
         mode: "0640"
+      when: not fleet_contract_complete.stat.exists
 
     - name: Add an HTTP-only Elasticsearch host for URL protocol coverage
       ansible.builtin.add_host:
