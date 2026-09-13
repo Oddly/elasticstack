@@ -5,7 +5,7 @@
       {{ [elastic_agent_binary_path, 'enroll', '--non-interactive', '--force', '--url', elastic_agent_fleet_server_url]
          + (['--enrollment-token', elastic_agent_enrollment_token]
             if elastic_agent_mode == 'fleet' else [])
-         + (['--fleet-server-es', elastic_agent_fleet_server_es,
+         + (['--fleet-server-es', _elastic_agent_fleet_server_es,
              '--fleet-server-service-token-path', elastic_agent_fleet_server_service_token_file,
              '--fleet-server-policy', elastic_agent_fleet_server_policy]
             if elastic_agent_mode == 'fleet_server' else [])

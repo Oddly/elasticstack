@@ -6,6 +6,13 @@
     - elastic_agent_manage | bool
     - not hostvars[inventory_hostname]._elasticstack_role_imported | default(false)
 
+- name: Initialize Fleet Server Elasticsearch URL
+  ansible.builtin.set_fact:
+    _elastic_agent_fleet_server_es: "{{ elastic_agent_fleet_server_es | default('') }}"
+  when:
+    - elastic_agent_manage | bool
+    - elastic_agent_mode == 'fleet_server'
+
 - name: Resolve Fleet Server Elasticsearch host from inventory
   ansible.builtin.set_fact:
     _elastic_agent_fleet_server_es_host: >-
@@ -35,7 +42,7 @@
 
 - name: Resolve Fleet Server Elasticsearch URL from inventory
   ansible.builtin.set_fact:
-    elastic_agent_fleet_server_es: >-
+    _elastic_agent_fleet_server_es: >-
       {{ ('https' if elasticstack_security | bool else 'http') ~ '://' ~
          _elastic_agent_fleet_server_es_host ~ ':' ~
          (hostvars[groups[elasticstack_elasticsearch_group_name][0]].elasticsearch_http_publish_port |
@@ -56,7 +63,7 @@
       - (elastic_agent_mode != 'fleet') or (elastic_agent_fleet_server_url | length > 0 and elastic_agent_enrollment_token | length > 0)
       - (elastic_agent_mode != 'fleet_server') or
         (elastic_agent_fleet_server_url | length > 0 and
-         elastic_agent_fleet_server_es | length > 0 and
+         _elastic_agent_fleet_server_es | length > 0 and
          elastic_agent_fleet_server_service_token | length > 0 and
          elastic_agent_fleet_server_policy | length > 0)
       - (elastic_agent_mode != 'fleet_server') or
@@ -94,7 +101,7 @@
       - >-
         (elastic_agent_mode != 'fleet_server') or
         (elastic_agent_fleet_server_es_insecure | bool) or
-        not ((elastic_agent_fleet_server_es | lower) is match('^http://'))
+        not ((_elastic_agent_fleet_server_es | lower) is match('^http://'))
     fail_msg: >-
       Fleet Server requires an https:// Elasticsearch URL unless
       elastic_agent_fleet_server_es_insecure is explicitly enabled.
