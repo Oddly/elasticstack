@@ -1465,6 +1465,14 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("package_generated_fleet_state.stat.exists", default_converge)
         self.assertIn("state: absent", default_converge)
         self.assertLess(
+            default_converge.index("Check for package-generated Fleet state before standalone installation"),
+            default_converge.index("Clear package-generated Fleet state before standalone installation"),
+        )
+        self.assertLess(
+            default_converge.index("Clear package-generated Fleet state before standalone installation"),
+            default_converge.index("Install and configure Elastic Agent before the backup fixture"),
+        )
+        self.assertLess(
             default_converge.index("Install and configure Elastic Agent before the backup fixture"),
             default_converge.index("Check for package-generated Fleet state before standalone coverage"),
         )
