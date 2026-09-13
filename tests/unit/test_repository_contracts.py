@@ -1506,6 +1506,7 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("elastic_agent_fleet_server_es_insecure: true", fleet_converge)
         self.assertIn("insecure_fleet_server_es_rejected", fleet_converge)
         self.assertIn("unmarked_fleet_to_standalone_rejected", fleet_converge)
+        self.assertIn("Create unmarked Fleet state fixture directory", fleet_converge)
         self.assertIn("fleet_to_standalone_rejected", fleet_converge)
         self.assertIn("contract-rotation-token-b", fleet_converge)
         self.assertIn("elasticsearch_http_publish_host: '2001:db8::10'", fleet_converge)

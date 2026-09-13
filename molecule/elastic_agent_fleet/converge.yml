@@ -332,6 +332,15 @@
           - fleet_to_standalone_rejected | default(false)
       when: not fleet_contract_complete.stat.exists
 
+    - name: Create unmarked Fleet state fixture directory
+      ansible.builtin.file:
+        path: /var/lib/elastic-agent-unmarked-fleet
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+      when: not fleet_contract_complete.stat.exists
+
     - name: Seed Fleet state without a managed mode marker
       ansible.builtin.copy:
         dest: /var/lib/elastic-agent-unmarked-fleet/fleet.enc
