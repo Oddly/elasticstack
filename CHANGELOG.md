@@ -31,6 +31,9 @@ First release of the `oddly.elasticstack` collection, forked from
 - Logstash `elastic_agent` input plugin support.
 - Elastic Agent role with standalone policies, Fleet enrollment, Fleet Server
   setup, TLS material handling, and migration from Beats.
+- Elastic Agent lifecycle safety: exact service-token files that restart on
+  rotation, explicit mode-transition guards, target-aware Fleet Server HTTP
+  protocol discovery, and safe 8.x-to-9.x package upgrades.
 - Elasticsearch `cluster_settings` for runtime cluster configuration via API.
 - Persistent cluster settings are applied before certificate-triggered rolling
   restarts on initialized Elasticsearch clusters.
