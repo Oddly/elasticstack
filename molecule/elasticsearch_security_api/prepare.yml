@@ -1,8 +1,6 @@
 ---
 - name: Prepare
   hosts: all
-  vars:
-    distro_cache_url: "{{ lookup('env', 'DISTRO_CACHE_URL') }}"
   tasks:
     - name: Wait for systemd to finish booting
       ansible.builtin.shell: |
@@ -29,5 +27,5 @@
       ansible.builtin.debug:
         var: systemd_wait.stdout_lines
 
-    - name: Common prepare tasks
-      ansible.builtin.include_tasks: ../shared/prepare_common.yml
+- name: Import shared Molecule preparation
+  import_playbook: ../shared/prepare.yml

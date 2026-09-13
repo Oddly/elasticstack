@@ -303,14 +303,20 @@ class TestRepositoryContracts(unittest.TestCase):
             r"^.*\s{{ item | regex_escape }}$",
         )
 
+        shared_prepare = (ROOT / "molecule" / "shared" / "prepare.yml").read_text()
+        self.assertIn("include_tasks: prepare_common.yml", shared_prepare)
+        self.assertIn("DISTRO_CACHE_URL", shared_prepare)
+
         prepare_files = sorted((ROOT / "molecule").glob("*/prepare.yml"))
         self.assertTrue(prepare_files)
         for path in prepare_files:
+            if path.parent.name == "shared":
+                continue
             source = path.read_text()
             self.assertIn(
-                "include_tasks: ../shared/prepare_common.yml",
+                "import_playbook: ../shared/prepare.yml",
                 source,
-                f"{path} must include the shared prepare tasks",
+                f"{path} must import the shared prepare play",
             )
             self.assertNotIn(
                 "Populate /etc/hosts with molecule instances",

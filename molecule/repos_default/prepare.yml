@@ -1,12 +1,10 @@
 ---
-- name: Prepare
-  hosts: all
-  vars:
-    distro_cache_url: "{{ lookup('env', 'DISTRO_CACHE_URL') }}"
-  tasks:
-    - name: Common prepare tasks
-      ansible.builtin.include_tasks: ../shared/prepare_common.yml
+- name: Import shared Molecule preparation
+  import_playbook: ../shared/prepare.yml
 
+- name: Prepare repository scenario extras
+  hosts: all
+  tasks:
     - name: Install apt-transport-https for Debian
       ansible.builtin.apt:
         name:

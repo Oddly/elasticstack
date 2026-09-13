@@ -1,11 +1,10 @@
 ---
-- name: Prepare
+- name: Import shared Molecule preparation
+  import_playbook: ../shared/prepare.yml
+
+- name: Prepare standalone Logstash certificate fixtures
   hosts: all
   tasks:
-
-    - name: Common prepare tasks
-      ansible.builtin.include_tasks: ../shared/prepare_common.yml
-
     # The standalone cert_source path in roles/logstash still distributes
     # a CA file from elasticstack_ca_host/elasticstack_ca_dir to the
     # Logstash node (line 434 of logstash-security.yml). This scenario

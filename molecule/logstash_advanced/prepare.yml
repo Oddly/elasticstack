@@ -1,12 +1,10 @@
 ---
-- name: Prepare
-  hosts: all
-  vars:
-    distro_cache_url: "{{ lookup('env', 'DISTRO_CACHE_URL') }}"
-  tasks:
-    - name: Common prepare tasks
-      ansible.builtin.include_tasks: ../shared/prepare_common.yml
+- name: Import shared Molecule preparation
+  import_playbook: ../shared/prepare.yml
 
+- name: Prepare Logstash custom filter files
+  hosts: all
+  tasks:
     - name: Create filter files directory on controller
       ansible.builtin.file:
         path: /tmp/logstash-filters
