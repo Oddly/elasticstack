@@ -12,5 +12,20 @@
   vars:
     _wait_service_name: kibana
     _wait_url: >-
-      {{ ('https' if kibana_tls | default(false) | bool else 'http') }}://localhost:{{ elasticstack_kibana_port }}/api/status
+      {{ ('https://' ~ (elasticstack_kibana_host | default(ansible_facts.hostname))
+          if kibana_tls | default(false) | bool
+          else 'http://localhost') }}:{{ elasticstack_kibana_port }}/api/status
     _wait_fatal_pattern: "FATAL|Unable to connect to Elasticsearch|Authentication.*failed|Kibana server is not ready.*fatal"
+    _wait_validate_certs: "{{ kibana_tls_validate_certs | bool }}"
+    _wait_ca_file: >-
+      {{ '/etc/kibana/certs/ca.crt'
+         if kibana_tls | default(false) | bool and
+            (kibana_cert_source | default('elasticsearch_ca') == 'elasticsearch_ca' or
+             kibana_tls_ca_file | default('', true) | length > 0 or
+             kibana_tls_ca_content | default('', true) | length > 0 or
+             _kibana_ca_extracted | default(false) | bool)
+         else '' }}
+    _wait_resolve: >-
+      {{ (elasticstack_kibana_host | default(ansible_facts.hostname)) ~ ':' ~
+         (elasticstack_kibana_port | string) ~ ':127.0.0.1'
+         if kibana_tls | default(false) | bool else '' }}

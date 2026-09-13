@@ -10,6 +10,11 @@
 #   _wait_success_statuses – HTTP status codes that mean the service is ready
 #   _wait_retries          – readiness retries (default: 60)
 #   _wait_delay            – seconds between readiness retries (default: 5)
+#   _wait_validate_certs   – validate HTTPS certificates (default: true)
+#   _wait_ca_file          – optional CA bundle for HTTPS validation
+#   _wait_resolve          – optional curl --resolve value for local HTTPS checks
+#   _wait_connect_timeout  – curl connection timeout in seconds (default: 5)
+#   _wait_max_time         – curl request timeout in seconds (default: 10)
 
 - name: "wait_for_http_service | Wait for {{ _wait_service_name }} HTTP readiness"  # noqa: name[template]
   when: not ansible_check_mode
@@ -25,9 +30,26 @@
               grep -Eq {{ _wait_fatal_pattern | default('FATAL') | quote }}; then
             exit 2
           fi
-          HTTP_CODE=$(curl -sk -o /dev/null -w '%{http_code}' {{ _wait_url | quote }} 2>/dev/null) || true
+          CURL_ARGS=(
+            --silent
+            --output /dev/null
+            --write-out '%{http_code}'
+            --connect-timeout {{ _wait_connect_timeout | default(5, true) | int }}
+            --max-time {{ _wait_max_time | default(10, true) | int }}
+          )
+          {% if not (_wait_validate_certs | default(true) | bool) %}
+          CURL_ARGS+=(--insecure)
+          {% endif %}
+          {% if _wait_ca_file | default('', true) | length > 0 %}
+          CURL_ARGS+=(--cacert {{ _wait_ca_file | quote }})
+          {% endif %}
+          {% if _wait_resolve | default('', true) | length > 0 %}
+          CURL_ARGS+=(--resolve {{ _wait_resolve | quote }})
+          {% endif %}
+          CURL_ARGS+=({{ _wait_url | quote }})
+          HTTP_CODE=$(curl "${CURL_ARGS[@]}" 2>/dev/null) || true
           {% for status in _wait_success_statuses | default([200, 401]) %}
-          if [ "$HTTP_CODE" = "{{ status }}" ]; then
+          if [ "$HTTP_CODE" = "{{ status | int }}" ]; then
             exit 0
           fi
           {% endfor %}

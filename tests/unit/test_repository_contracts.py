@@ -578,6 +578,17 @@ class TestRepositoryContracts(unittest.TestCase):
             main.index("import_tasks: packages.yml"),
         )
 
+    def test_shared_http_readiness_probe_is_bounded_and_validates_tls(self):
+        source = (
+            ROOT / "roles" / "elasticstack" / "tasks" / "wait_for_http_service.yml"
+        ).read_text()
+        self.assertIn("--connect-timeout", source)
+        self.assertIn("--max-time", source)
+        self.assertIn("_wait_validate_certs | default(true)", source)
+        self.assertIn("--cacert", source)
+        self.assertIn("status | int", source)
+        self.assertIn("_wait_resolve", source)
+
     def test_elasticsearch_logrotate_installs_runtime_package_when_enabled(self):
         tasks = yaml.safe_load(
             (ROOT / "roles" / "elasticsearch" / "tasks" / "main.yml").read_text()
@@ -650,6 +661,15 @@ class TestRepositoryContracts(unittest.TestCase):
 
         kibana_specs = yaml.safe_load(
             (ROOT / "roles" / "kibana" / "meta" / "argument_specs.yml").read_text()
+        )
+        kibana_defaults = yaml.safe_load(
+            (ROOT / "roles" / "kibana" / "defaults" / "main.yml").read_text()
+        )
+        self.assertTrue(kibana_defaults["kibana_tls_validate_certs"])
+        self.assertTrue(
+            kibana_specs["argument_specs"]["main"]["options"][
+                "kibana_tls_validate_certs"
+            ]["default"]
         )
         self.assertEqual(
             kibana_specs["argument_specs"]["main"]["options"]["kibana_system_password"]["default"],
@@ -1011,6 +1031,8 @@ class TestRepositoryContracts(unittest.TestCase):
                 relative_path,
             )
             self.assertIn("elasticstack_kibana_port", source, relative_path)
+            self.assertIn("_wait_validate_certs", source, relative_path)
+            self.assertIn("_wait_ca_file", source, relative_path)
 
     def test_kibana_port_is_managed_and_deployed_with_the_shared_variable(self):
         template = (ROOT / "roles/kibana/templates/kibana.yml.j2").read_text()

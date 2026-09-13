@@ -48,6 +48,8 @@ explicit:
   kibana:
     kibana_elasticsearch_hosts:
       - tests/integration/collection_variable_contract.yml
+    kibana_tls_validate_certs:
+      - tests/integration/collection_variable_contract.yml
     kibana_server_protocol:
       - tests/integration/collection_variable_contract.yml
     kibana_sniff_interval:

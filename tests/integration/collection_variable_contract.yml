@@ -121,6 +121,7 @@
       - es-contract-b
     kibana_security: true
     kibana_tls: false
+    kibana_tls_validate_certs: true
     kibana_certs_dir: /etc/kibana/contract-certs
     kibana_server_protocol: http1
     kibana_sniff_on_start: true
@@ -393,6 +394,7 @@
     - name: Assert Kibana optional variables render
       ansible.builtin.assert:
         that:
+          - kibana_tls_validate_certs | bool
           - "'server.port: 15601' in (_rendered_configs.results[3].content | b64decode)"
           - "'server.publicBaseUrl: \"http://kibana.example.test:15601\"' in (_rendered_configs.results[3].content | b64decode)"
           - "'server.protocol: \"http1\"' in (_rendered_configs.results[3].content | b64decode)"

@@ -21,8 +21,23 @@
       vars:
         _wait_service_name: kibana
         _wait_url: >-
-          {{ ('https' if hostvars[item].kibana_tls | default(false) | bool else 'http') }}://localhost:{{ hostvars[item].elasticstack_kibana_port | default(5601) }}/api/status
+          {{ ('https://' ~ (hostvars[item].elasticstack_kibana_host | default(hostvars[item].ansible_facts.hostname))
+              if hostvars[item].kibana_tls | default(false) | bool
+              else 'http://localhost') }}:{{ hostvars[item].elasticstack_kibana_port | default(5601) }}/api/status
         _wait_fatal_pattern: "FATAL|Unable to connect to Elasticsearch|Authentication.*failed|Kibana server is not ready.*fatal"
+        _wait_validate_certs: "{{ hostvars[item].kibana_tls_validate_certs | default(true) | bool }}"
+        _wait_ca_file: >-
+          {{ '/etc/kibana/certs/ca.crt'
+             if hostvars[item].kibana_tls | default(false) | bool and
+                (hostvars[item].kibana_cert_source | default('elasticsearch_ca') == 'elasticsearch_ca' or
+                 hostvars[item].kibana_tls_ca_file | default('', true) | length > 0 or
+                 hostvars[item].kibana_tls_ca_content | default('', true) | length > 0 or
+                 hostvars[item]._kibana_ca_extracted | default(false) | bool)
+             else '' }}
+        _wait_resolve: >-
+          {{ (hostvars[item].elasticstack_kibana_host | default(hostvars[item].ansible_facts.hostname)) ~ ':' ~
+             (hostvars[item].elasticstack_kibana_port | default(5601) | string) ~ ':127.0.0.1'
+             if hostvars[item].kibana_tls | default(false) | bool else '' }}
       delegate_to: "{{ item }}"
 
   rescue:

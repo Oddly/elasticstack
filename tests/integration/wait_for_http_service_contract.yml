@@ -11,12 +11,18 @@
   environment:
     PATH: "{{ _contract_bin }}:/usr/local/bin:/usr/bin:/bin"
     FAKE_DOWN_FILE: "{{ _contract_bin }}/service-down"
+    FAKE_CURL_ARGS_FILE: "{{ _contract_bin }}/curl-args"
   tasks:
     - name: Create fake command directory
       ansible.builtin.file:
         path: "{{ _contract_bin }}"
         state: directory
         mode: "0755"
+
+    - name: Remove any previous shell injection marker
+      ansible.builtin.file:
+        path: /tmp/elasticstack-http-readiness-injected
+        state: absent
 
     - name: Fake systemctl reports a running service unless asked otherwise
       ansible.builtin.copy:
@@ -43,6 +49,7 @@
         mode: "0755"
         content: |
           #!/bin/sh
+          printf '%s\n' "$@" > "$FAKE_CURL_ARGS_FILE"
           echo 200
 
     - name: Run the shared readiness task successfully
@@ -54,11 +61,51 @@
         _wait_fatal_pattern: FATAL
         _wait_retries: 1
         _wait_delay: 0
+        _wait_validate_certs: true
+        _wait_ca_file: /tmp/contract-ca.crt
+        _wait_resolve: fake-http:12345:127.0.0.1
+        _wait_connect_timeout: 3
+        _wait_max_time: 7
 
     - name: Assert the shared task accepts a ready endpoint
       ansible.builtin.assert:
         that:
           - _wait_http_probe.rc == 0
+
+    - name: Read the curl arguments from the validated probe
+      ansible.builtin.slurp:
+        src: "{{ _contract_bin }}/curl-args"
+      register: _validated_curl_args
+
+    - name: Assert the validated probe is bounded and does not disable TLS checks
+      ansible.builtin.assert:
+        that:
+          - "'--connect-timeout\\n3\\n' in (_validated_curl_args.content | b64decode)"
+          - "'--max-time\\n7\\n' in (_validated_curl_args.content | b64decode)"
+          - "'--cacert\\n/tmp/contract-ca.crt\\n' in (_validated_curl_args.content | b64decode)"
+          - "'--resolve\\nfake-http:12345:127.0.0.1\\n' in (_validated_curl_args.content | b64decode)"
+          - "'--insecure\\n' not in (_validated_curl_args.content | b64decode)"
+
+    - name: Run the shared readiness task with explicit TLS validation disabled
+      ansible.builtin.include_tasks:
+        file: ../../roles/elasticstack/tasks/wait_for_http_service.yml
+      vars:
+        _wait_service_name: fake-http
+        _wait_url: https://localhost:12345/health
+        _wait_fatal_pattern: FATAL
+        _wait_retries: 1
+        _wait_delay: 0
+        _wait_validate_certs: false
+
+    - name: Read the curl arguments from the insecure probe
+      ansible.builtin.slurp:
+        src: "{{ _contract_bin }}/curl-args"
+      register: _insecure_curl_args
+
+    - name: Assert the insecure probe uses an explicit opt-out
+      ansible.builtin.assert:
+        that:
+          - "'--insecure\\n' in (_insecure_curl_args.content | b64decode)"
 
     - name: Mark the fake service as stopped
       ansible.builtin.file:
@@ -87,10 +134,38 @@
             that:
               - ansible_failed_result.msg is search('service died while waiting for HTTP readiness')
 
-    - name: Remove fake service-down marker
+    - name: Remove fake service-down marker before status validation
       ansible.builtin.file:
         path: "{{ _contract_bin }}/service-down"
         state: absent
+
+    - name: Run the shared readiness task with an unsafe status value
+      block:
+        - name: Include shared readiness task with shell metacharacters in status
+          ansible.builtin.include_tasks:
+            file: ../../roles/elasticstack/tasks/wait_for_http_service.yml
+          vars:
+            _wait_service_name: fake-http
+            _wait_url: http://localhost:12345/health
+            _wait_fatal_pattern: FATAL
+            _wait_success_statuses:
+              - "$(touch /tmp/elasticstack-http-readiness-injected)"
+            _wait_retries: 1
+            _wait_delay: 0
+
+        - name: Fail if the unsafe status value unexpectedly passed
+          ansible.builtin.fail:
+            msg: "The shared readiness task accepted an invalid HTTP status"
+      rescue:
+        - name: Check whether the shell injection marker was created
+          ansible.builtin.stat:
+            path: /tmp/elasticstack-http-readiness-injected
+          register: _injection_marker
+
+        - name: Assert the status value was shell-quoted
+          ansible.builtin.assert:
+            that:
+              - not _injection_marker.stat.exists
 
     - name: Remove fake command directory
       ansible.builtin.file:
