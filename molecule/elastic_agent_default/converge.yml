@@ -137,6 +137,12 @@
             state: touch
             mode: "0644"
 
+    - name: Install and configure Elastic Agent before the backup fixture
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elastic_agent
+      vars:
+        elastic_agent_config_backup: false
+
     - name: Check for package-generated Fleet state before standalone coverage
       ansible.builtin.stat:
         path: /etc/elastic-agent/fleet.enc
@@ -147,12 +153,6 @@
         path: /etc/elastic-agent/fleet.enc
         state: absent
       when: package_generated_fleet_state.stat.exists
-
-    - name: Install and configure Elastic Agent before the backup fixture
-      ansible.builtin.include_role:
-        name: oddly.elasticstack.elastic_agent
-      vars:
-        elastic_agent_config_backup: false
 
     - name: Confirm a standalone to Fleet mode transition is rejected
       block:
