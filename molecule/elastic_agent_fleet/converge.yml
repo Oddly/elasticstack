@@ -221,6 +221,10 @@
               - >-
                 ansible_failed_task.name | default('') is search(
                 'Report Elastic Agent lifecycle failure after Beat restoration')
+            fail_msg: >-
+              Expected the Elastic Agent lifecycle report failure, got task={{
+              ansible_failed_task.name | default('') }} result={{
+              ansible_failed_result | default({}) }}
         - name: Record expected Elastic Agent lifecycle failure
           ansible.builtin.set_fact:
             migration_rollback_failed: true
