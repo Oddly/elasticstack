@@ -221,10 +221,6 @@
               - >-
                 ansible_failed_task.name | default('') is search(
                 'Report Elastic Agent lifecycle failure after Beat restoration')
-            fail_msg: >-
-              Expected the Elastic Agent lifecycle report failure, got task={{
-              ansible_failed_task.name | default('') }} result={{
-              ansible_failed_result | default({}) }}
         - name: Record expected Elastic Agent lifecycle failure
           ansible.builtin.set_fact:
             migration_rollback_failed: true
@@ -257,18 +253,29 @@
       failed_when: false
       when: not fleet_contract_complete.stat.exists
 
+    - name: Index migration rollback service states by service and command
+      ansible.builtin.set_fact:
+        migration_rollback_state: >-
+          {{ migration_rollback_state | default({}) | combine({
+            item.item.service ~ ':' ~ item.item.command: item.stdout | trim
+          }) }}
+      loop: "{{ migration_rollback_services.results }}"
+      loop_control:
+        label: "{{ item.item.service }} {{ item.item.command }}"
+      when: not fleet_contract_complete.stat.exists
+
     - name: Assert migration rollback restores all service states
       ansible.builtin.assert:
         that:
           - migration_rollback_failed | default(false)
-          - migration_rollback_services.results[0].stdout == 'disabled'
-          - migration_rollback_services.results[1].stdout == 'inactive'
-          - migration_rollback_services.results[2].stdout == 'enabled'
-          - migration_rollback_services.results[3].stdout == 'active'
-          - migration_rollback_services.results[4].stdout == 'enabled'
-          - migration_rollback_services.results[5].stdout == 'active'
-          - migration_rollback_services.results[6].stdout == 'enabled'
-          - migration_rollback_services.results[7].stdout == 'active'
+          - migration_rollback_state['elastic-agent:is-enabled'] == 'disabled'
+          - migration_rollback_state['elastic-agent:is-active'] == 'inactive'
+          - migration_rollback_state['filebeat:is-enabled'] == 'enabled'
+          - migration_rollback_state['filebeat:is-active'] == 'active'
+          - migration_rollback_state['metricbeat:is-enabled'] == 'enabled'
+          - migration_rollback_state['metricbeat:is-active'] == 'active'
+          - migration_rollback_state['auditbeat:is-enabled'] == 'enabled'
+          - migration_rollback_state['auditbeat:is-active'] == 'active'
       when: not fleet_contract_complete.stat.exists
 
     - name: Mark migration rollback coverage complete

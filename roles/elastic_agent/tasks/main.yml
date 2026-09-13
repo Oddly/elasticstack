@@ -499,6 +499,20 @@
         - not ansible_check_mode
         - _elastic_agent_before_migration.name | default('') | length > 0
 
+    - name: Reset Elastic Agent failed state after lifecycle failure
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - reset-failed
+          - "{{ _elastic_agent_before_migration.name }}"
+      register: _elastic_agent_reset_failed
+      changed_when: false
+      failed_when: _elastic_agent_reset_failed.rc not in [0, 5]
+      when:
+        - elastic_agent_migrate_from_beats | bool
+        - not ansible_check_mode
+        - _elastic_agent_before_migration.name | default('') | length > 0
+
     - name: Restore Beat services after Elastic Agent lifecycle failure
       ansible.builtin.service:
         name: "{{ item.name }}"
