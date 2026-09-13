@@ -36,9 +36,10 @@ custom path when needed. On 9.x, the package flavor marker is configured with
 the active package's top directory. The active package binary is stored under
 the versioned `/var/lib/elastic-agent/data` directory, so the default marker is
 `/var/lib/elastic-agent/.flavor`; set an explicit path for a custom package
-layout. 8.x packages do not use a flavor marker. An installed 8.x package is
-allowed to proceed through the package manager when `elasticstack_release: 9`
-is requested; the 9.x flavor check is applied after that upgrade.
+layout. 8.x packages do not use a flavor marker. When
+`elasticstack_release: 9` is requested with an 8.x package already installed,
+the role removes the old package while retaining its package-managed state,
+then installs 9.x so the requested flavor is initialized and checked.
 The enrollment state file contains only a SHA-256 fingerprint and can be moved
 to a separate persistent path when the configuration directory is ephemeral.
 The role also records the managed mode in

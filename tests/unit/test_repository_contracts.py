@@ -1293,6 +1293,7 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("_elastic_agent_fleet_state_before_install", main)
         self.assertIn("_elastic_agent_fleet_state_replaced", enroll)
         self.assertIn("_elastic_agent_installed_package_major", main)
+        self.assertIn("Remove pre-9 Elastic Agent package before 9.x installation", main)
         self.assertIn(".elasticstack-mode", main)
         self.assertIn("Refuse an Elastic Agent mode transition", main)
         self.assertIn("Refuse Fleet state in standalone mode", main)
@@ -1317,6 +1318,10 @@ class TestRepositoryContracts(unittest.TestCase):
         )
         self.assertLess(
             main.index("Validate Elastic Agent configuration"),
+            main.index("Install Elastic Agent package"),
+        )
+        self.assertLess(
+            main.index("Remove pre-9 Elastic Agent package before 9.x installation"),
             main.index("Install Elastic Agent package"),
         )
         self.assertNotIn("ansible.builtin.shell", "\n".join(

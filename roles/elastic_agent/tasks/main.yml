@@ -253,6 +253,16 @@
     - elastic_agent_manage | bool
     - elasticstack_release | int >= 9
 
+- name: Remove pre-9 Elastic Agent package before 9.x installation
+  ansible.builtin.package:
+    name: elastic-agent
+    state: absent
+  when:
+    - elastic_agent_manage | bool
+    - elasticstack_release | int >= 9
+    - _elastic_agent_installed_package_major | int > 0
+    - _elastic_agent_installed_package_major | int < 9
+
 - name: Install Elastic Agent package
   ansible.builtin.include_tasks: "{{ role_path }}/../elasticstack/tasks/install_elastic_package.yml"
   vars:

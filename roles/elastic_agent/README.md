@@ -36,9 +36,10 @@ custom package layout. The role stops with a clear error when an existing 9.x
 package's flavor differs from the requested flavor; purge and reinstall the
 package to change between `basic` and `servers`. Elastic Stack 8.x uses the
 `basic` package and does not use a flavor marker; its regular package includes
-Fleet Server. An installed 8.x package is allowed to proceed through the
-package manager when `elasticstack_release: 9` is requested; the 9.x flavor
-check is applied after that upgrade.
+Fleet Server. When `elasticstack_release: 9` is requested with an 8.x package
+already installed, the role removes the old package while retaining its
+package-managed state, then installs 9.x so the requested flavor is initialized
+and checked.
 
 ## Fleet mode
 
