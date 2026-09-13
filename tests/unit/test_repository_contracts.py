@@ -1383,6 +1383,9 @@ class TestRepositoryContracts(unittest.TestCase):
         default_verify = (ROOT / "molecule" / "elastic_agent_default" / "verify.yml").read_text()
         self.assertIn("Assert the same-host 8.x to 9.x package upgrade", default_verify)
         self.assertIn("when: elasticstack_release | int >= 9", default_verify)
+        default_converge = (ROOT / "molecule" / "elastic_agent_default" / "converge.yml").read_text()
+        self.assertIn("_elastic_agent_package_upgrade_needed", default_converge)
+        self.assertIn("state: absent", default_converge)
         workflow = (ROOT / ".github" / "workflows" / "test_role_elastic_agent.yml").read_text()
         self.assertIn("'roles/repos/**'", workflow)
 
@@ -2116,6 +2119,8 @@ class TestRepositoryContracts(unittest.TestCase):
         )
         self.assertEqual(action.count(f"diag={diagnostic_dir}"), 2)
         self.assertEqual(action.count("DIAGNOSTIC_ARTIFACT_NAME: ${{ inputs.artifact-name }}"), 2)
+        self.assertIn("DIAGNOSTIC_SSH_TIMEOUT_SECONDS", action)
+        self.assertIn("timeout --signal=TERM", action)
         self.assertIn(
             "path: /tmp/molecule-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact-name }}/",
             action,

@@ -54,14 +54,24 @@
         path: /tmp/elastic-agent-package-upgrade-complete
       register: package_upgrade_fixture
 
+    - name: Decide whether to exercise the Elastic Agent package upgrade
+      ansible.builtin.set_fact:
+        _elastic_agent_package_upgrade_needed: >-
+          {{ (elasticstack_release | int >= 9) and
+             (not package_upgrade_fixture.stat.exists) }}
+
     - name: Exercise an Elastic Agent 8.x to 9.x package upgrade on one host
       when:
-        - elasticstack_release | int >= 9
-        - not package_upgrade_fixture.stat.exists
+        - _elastic_agent_package_upgrade_needed | bool
       block:
         - name: Reset the shared role guard before the 8.x installation
           ansible.builtin.set_fact:
             _elasticstack_role_imported: false
+
+        - name: Remove the current Elastic Agent package before the 8.x installation
+          ansible.builtin.package:
+            name: elastic-agent
+            state: absent
 
         - name: Install the Elastic Agent 8.x package
           ansible.builtin.include_role:
