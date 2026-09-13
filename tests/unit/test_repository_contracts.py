@@ -1472,6 +1472,10 @@ class TestRepositoryContracts(unittest.TestCase):
             default_converge.index("Check for package-generated Fleet state before standalone coverage"),
             default_converge.index("Clear package-generated Fleet state before standalone coverage"),
         )
+        self.assertLess(
+            default_converge.index("Include Elastic Agent with an independent standalone policy path"),
+            default_converge.index("Clear package-generated Fleet state after standalone coverage"),
+        )
         workflow = (ROOT / ".github" / "workflows" / "test_role_elastic_agent.yml").read_text()
         self.assertIn("'roles/repos/**'", workflow)
 

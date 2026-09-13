@@ -232,3 +232,8 @@
         elastic_agent_config_dir: /var/lib/elastic-agent-independent
         elastic_agent_config_file: /var/lib/elastic-agent-independent-policy/nested/elastic-agent.yml
         elastic_agent_config_backup: false
+
+    - name: Clear package-generated Fleet state after standalone coverage
+      ansible.builtin.file:
+        path: /etc/elastic-agent/fleet.enc
+        state: absent
