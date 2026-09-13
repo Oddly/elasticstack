@@ -66,7 +66,7 @@ argument_specs:
         type: str
         default: ''
       elasticstack_enable_repos:
-        description: Let the repos role manage Elastic APT/YUM repositories
+        description: Let the shared role manage Elastic APT/YUM repositories before service installation
         type: bool
         default: true
       elasticstack_full_stack:

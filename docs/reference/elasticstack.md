@@ -89,7 +89,7 @@ elasticstack_beats_port: 5044
 :   The HTTP API port that Elasticsearch listens on. All roles use this when constructing URLs to reach Elasticsearch (health checks, password setup, index operations). Change this if you run Elasticsearch on a non-standard port.
 
 `elasticstack_kibana_port`
-:   The port Kibana's web interface listens on. Used by Beats templates when configuring `setup.kibana.host`.
+:   The port Kibana's web interface listens on. The Kibana role writes it to `server.port`, its readiness probe uses it, and Beats templates use it when configuring `setup.kibana.host`.
 
 `elasticstack_beats_port`
 :   The port Logstash opens for incoming Beats connections (Beats input plugin). Filebeat, Metricbeat, and Auditbeat connect to this port when their output is set to `logstash`.
@@ -145,7 +145,7 @@ elasticstack_rpm_workaround: false
 ```
 
 `elasticstack_enable_repos`
-:   Let the `repos` role manage Elastic APT/YUM repositories. Set to `false` if you manage package repositories through another mechanism (Satellite, Pulp, Foreman, or manual repo files).
+:   Let the shared `elasticstack` role manage Elastic APT/YUM repositories before service installation. Set to `false` if you manage package repositories through another mechanism (Satellite, Pulp, Foreman, or manual repo files). The standalone `repos` role uses the same setting.
 
 <!-- markdownlint-disable MD046 -->
 `elasticstack_repo_base_url`

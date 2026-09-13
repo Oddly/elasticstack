@@ -1,59 +1,37 @@
 ---
 
-- name: restart_and_verify_kibana | Restart and verify Kibana
+- name: restart_and_verify_kibana | Restart and verify Kibana service
   ansible.builtin.include_tasks:
     file: "{{ role_path }}/../elasticstack/tasks/restart_and_verify_service.yml"
   vars:
     _service_name: kibana
 
 - name: restart_and_verify_kibana | Wait for Kibana readiness
-  block:
-    - name: restart_and_verify_kibana | Wait for Kibana readiness ({{ 'HTTPS' if kibana_tls | default(false) | bool else 'HTTP' }})
-      ansible.builtin.shell:
-        # Exit codes:
-        #   0  ready (200 or 401)
-        #   1  transient — still starting up, keep retrying
-        #   2  permanent — service died or a fatal log line already surfaced,
-        #      no point in waiting the remaining retries
-        cmd: |
-          set -o pipefail
-          if ! systemctl is-active --quiet kibana; then
-            exit 2
-          fi
-          if journalctl -u kibana --no-pager -n 100 --since '2 minutes ago' 2>/dev/null | \
-              grep -Eq 'FATAL|Unable to connect to Elasticsearch|Authentication.*failed|Kibana server is not ready.*fatal'; then
-            exit 2
-          fi
-          HTTP_CODE=$(curl -sk -o /dev/null -w '%{http_code}' {{ 'https' if kibana_tls | default(false) | bool else 'http' }}://localhost:5601/api/status 2>/dev/null) || true
-          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
-            exit 0
-          fi
-          exit 1
-        executable: /bin/bash
-      register: _kibana_http_check
-      until: _kibana_http_check.rc == 0
-      retries: 60
-      delay: 5
-      changed_when: false
-      failed_when: _kibana_http_check.rc == 2
-
-  rescue:
-    - name: restart_and_verify_kibana | Get recent Kibana journal output
-      ansible.builtin.command:
-        argv:
-          - journalctl
-          - -u
-          - kibana
-          - --no-pager
-          - -n
-          - "50"
-      register: _kibana_journal
-      changed_when: false
-
-    - name: restart_and_verify_kibana | Fail with Kibana startup diagnostics
-      ansible.builtin.fail:
-        msg: |
-          Kibana failed to become ready{% if _kibana_http_check.rc | default(0) == 2 %} (permanent error detected — see log){% else %} (HTTP did not become ready within 300s){% endif %}.
-
-          Recent log output:
-          {{ _kibana_journal.stdout }}
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/wait_for_http_service.yml"
+  vars:
+    _wait_service_name: kibana
+    _wait_url: >-
+      {{ ('https://' ~ (elasticstack_kibana_host | default(ansible_facts.hostname))
+          if kibana_tls | default(false) | bool
+          else 'http://localhost') }}:{{ elasticstack_kibana_port }}/api/status
+    # Match the initial Kibana readiness check. Standalone Kibana 9 can stay
+    # in interactive preboot and return 503 until it is enrolled; full-stack
+    # restarts must still wait for a normal ready or authenticated response.
+    _wait_success_statuses: >-
+      {{ [200, 401, 503] if not (elasticstack_full_stack | default(false) | bool)
+         else [200, 401] }}
+    _wait_fatal_pattern: "FATAL|Unable to connect to Elasticsearch|Authentication.*failed|Kibana server is not ready.*fatal"
+    _wait_validate_certs: "{{ kibana_tls_validate_certs | bool }}"
+    _wait_ca_file: >-
+      {{ (kibana_certs_dir | default('/etc/kibana/certs', true)) ~ '/ca.crt'
+         if kibana_tls | default(false) | bool and
+            (kibana_cert_source | default('elasticsearch_ca') == 'elasticsearch_ca' or
+             kibana_tls_ca_file | default('', true) | length > 0 or
+             kibana_tls_ca_content | default('', true) | length > 0 or
+             _kibana_ca_extracted | default(false) | bool)
+         else '' }}
+    _wait_resolve: >-
+      {{ (elasticstack_kibana_host | default(ansible_facts.hostname)) ~ ':' ~
+         (elasticstack_kibana_port | string) ~ ':127.0.0.1'
+         if kibana_tls | default(false) | bool else '' }}

@@ -44,6 +44,10 @@ argument_specs:
         description: Enable TLS on the Kibana web interface itself (serve Kibana over HTTPS)
         type: bool
         default: false
+      kibana_tls_validate_certs:
+        description: Validate the Kibana HTTPS certificate during local readiness checks. Set false only when the certificate cannot be trusted by the managed node
+        type: bool
+        default: true
       kibana_tls_key_passphrase:
         description: Passphrase for the Kibana TLS private key
         type: str

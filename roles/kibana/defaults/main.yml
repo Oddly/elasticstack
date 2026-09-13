@@ -44,6 +44,8 @@ kibana_system_password: ""
 kibana_security: true
 # @var kibana_tls:description: Enable TLS on the Kibana web interface itself (serve Kibana over HTTPS)
 kibana_tls: false
+# @var kibana_tls_validate_certs:description: Validate the Kibana HTTPS certificate during local readiness checks. Set false only when the certificate cannot be trusted by the managed node
+kibana_tls_validate_certs: true
 # @var kibana_tls_key_passphrase:description: Passphrase for the Kibana TLS private key
 kibana_tls_key_passphrase: PleaseChangeMe
 # @var kibana_keystore_password:description: Password to encrypt the Kibana keystore file. Empty means no encryption (same as ES default)

@@ -86,10 +86,13 @@ These settings control HTTPS on the Kibana frontend itself (what users access in
 
 ```yaml
 kibana_tls: false
+kibana_tls_validate_certs: true
 kibana_tls_key_passphrase: PleaseChangeMe
 ```
 
 `kibana_tls` enables TLS on the Kibana web interface. When `false` (the default), Kibana serves over plain HTTP on port 5601. Most deployments terminate TLS at a reverse proxy instead of enabling this.
+
+`kibana_tls_validate_certs` controls certificate validation in the local HTTPS readiness check. It defaults to `true`; the role uses the deployed CA when one is available and otherwise uses the managed node's trust store. Set it to `false` only when the certificate is intentionally not trusted by that node.
 
 !!! warning
     `kibana_tls_key_passphrase` defaults to `PleaseChangeMe`. If you enable `kibana_tls` with the default CA-generated certificates, change this passphrase. It protects the PKCS12 keystore that holds Kibana's TLS private key. If `elasticstack_cert_pass` is defined globally, the role uses that instead of this per-role default.

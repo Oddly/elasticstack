@@ -1,0 +1,28 @@
+---
+- name: Verify Kibana can be installed without starting it
+  hosts: all
+  tasks:
+    - name: Gather service facts
+      ansible.builtin.service_facts:
+
+    - name: Assert Kibana was installed but remains stopped
+      ansible.builtin.assert:
+        that:
+          - "'kibana.service' in ansible_facts.services"
+          - ansible_facts.services['kibana.service'].state in ['stopped', 'inactive']
+          - ansible_facts.services['kibana.service'].status == 'disabled'
+        fail_msg: >-
+          kibana_enable=false must leave Kibana installed and stopped, got
+          {{ ansible_facts.services.get('kibana.service', {}) }}
+
+    - name: Check managed Kibana configuration exists
+      ansible.builtin.stat:
+        path: /etc/kibana/kibana.yml
+      register: kibana_config
+
+    - name: Assert managed Kibana configuration was rendered
+      ansible.builtin.assert:
+        that:
+          - kibana_config.stat.exists
+          - kibana_config.stat.mode == '0640'
+        fail_msg: "Kibana configuration was not rendered while the service was disabled"

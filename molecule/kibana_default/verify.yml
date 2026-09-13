@@ -11,6 +11,9 @@
           - ansible_facts.services['kibana.service'].state == 'running'
         fail_msg: "Kibana service is not running"
 
+    # Kibana 9 remains in interactive preboot without an Elasticsearch backend
+    # and reports 503 from /api/status. The role accepts that response only for
+    # standalone mode; full-stack readiness still requires 200 or 401.
     - name: Connect to Kibana API
       ansible.builtin.uri:
         url: "http://localhost:5601/api/status"

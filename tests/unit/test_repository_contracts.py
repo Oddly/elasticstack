@@ -524,12 +524,25 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertNotIn("elasticsearch_certs_dir:", converge)
 
     def test_debian_package_bootstrap_retries_apt_lock_contention(self):
-        tasks = yaml.safe_load(
-            (ROOT / "roles" / "elasticstack" / "tasks" / "packages.yml").read_text()
+        bootstrap_tasks = yaml.safe_load(
+            (
+                ROOT
+                / "roles"
+                / "elasticstack"
+                / "tasks"
+                / "package_manager_bootstrap.yml"
+            ).read_text()
         )
+        legacy_cleanup = bootstrap_tasks[0]
+        self.assertEqual(
+            legacy_cleanup["ansible.builtin.raw"],
+            "for source in /etc/apt/sources.list.d/artifacts_elastic_co_packages_7_x_apt.list /etc/apt/sources.list.d/artifacts_elastic_co_packages_8_x_apt.list /etc/apt/sources.list.d/artifacts_elastic_co_packages_9_x_apt.list; do rm -f -- \"$source\"; done",
+        )
+        self.assertIn("elasticstack_enable_repos | bool", legacy_cleanup["when"])
+
         bootstrap = next(
             task
-            for task in tasks
+            for task in bootstrap_tasks
             if task.get("name") == "packages | Bootstrap python3-apt for Ansible apt module"
         )
         self.assertEqual(
@@ -543,6 +556,9 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertEqual(bootstrap["retries"], 3)
         self.assertEqual(bootstrap["delay"], 10)
 
+        tasks = yaml.safe_load(
+            (ROOT / "roles" / "elasticstack" / "tasks" / "packages.yml").read_text()
+        )
         apt_update = next(
             task for task in tasks if task.get("name") == "packages | Update apt cache."
         )
@@ -552,6 +568,40 @@ class TestRepositoryContracts(unittest.TestCase):
         )
         self.assertEqual(apt_update["retries"], 3)
         self.assertEqual(apt_update["delay"], 10)
+
+        main = (ROOT / "roles" / "elasticstack" / "tasks" / "main.yml").read_text()
+        self.assertLess(
+            main.index("package_manager_bootstrap.yml"),
+            main.index("configure_repositories.yml"),
+        )
+        self.assertLess(
+            main.index("configure_repositories.yml"),
+            main.index("import_tasks: packages.yml"),
+        )
+
+    def test_shared_http_readiness_probe_is_bounded_and_validates_tls(self):
+        source = (
+            ROOT / "roles" / "elasticstack" / "tasks" / "wait_for_http_service.yml"
+        ).read_text()
+        self.assertIn("--connect-timeout", source)
+        self.assertIn("--max-time", source)
+        self.assertIn("_wait_validate_certs | default(true)", source)
+        self.assertIn("--cacert", source)
+        self.assertIn("status | int", source)
+        self.assertIn("_wait_resolve", source)
+        self.assertIn("_wait_attempt_limit", source)
+        self.assertIn("_wait_http_probe.attempts", source)
+        self.assertIn("until: _wait_http_probe.rc in [0, 2]", source)
+
+    def test_http_readiness_contract_uses_isolated_temporary_state(self):
+        source = (
+            ROOT / "tests" / "integration" / "wait_for_http_service_contract.yml"
+        ).read_text()
+        self.assertIn("ansible.builtin.tempfile", source)
+        self.assertIn("_contract_workspace.path", source)
+        self.assertIn("_contract_injection_marker", source)
+        self.assertNotIn("/tmp/elasticstack-http-readiness-contract", source)
+        self.assertNotIn("/tmp/elasticstack-http-readiness-injected", source)
 
     def test_elasticsearch_logrotate_installs_runtime_package_when_enabled(self):
         tasks = yaml.safe_load(
@@ -625,6 +675,15 @@ class TestRepositoryContracts(unittest.TestCase):
 
         kibana_specs = yaml.safe_load(
             (ROOT / "roles" / "kibana" / "meta" / "argument_specs.yml").read_text()
+        )
+        kibana_defaults = yaml.safe_load(
+            (ROOT / "roles" / "kibana" / "defaults" / "main.yml").read_text()
+        )
+        self.assertTrue(kibana_defaults["kibana_tls_validate_certs"])
+        self.assertTrue(
+            kibana_specs["argument_specs"]["main"]["options"][
+                "kibana_tls_validate_certs"
+            ]["default"]
         )
         self.assertEqual(
             kibana_specs["argument_specs"]["main"]["options"]["kibana_system_password"]["default"],
@@ -949,32 +1008,103 @@ class TestRepositoryContracts(unittest.TestCase):
         )
 
     def test_kibana_readiness_commands_are_safe_on_dash(self):
-        """The readiness probes must not silently fall back to /bin/sh."""
+        """The shared readiness probe must not silently fall back to /bin/sh."""
+        relative_path = "roles/elasticstack/tasks/wait_for_http_service.yml"
+        document = yaml.safe_load((ROOT / relative_path).read_text()) or []
+        readiness_tasks = []
+
+        def visit(node):
+            if isinstance(node, dict):
+                shell = node.get("ansible.builtin.shell")
+                command = shell.get("cmd", "") if isinstance(shell, dict) else ""
+                if "HTTP_CODE" in command and "systemctl is-active" in command:
+                    readiness_tasks.append(shell)
+                for value in node.values():
+                    visit(value)
+            elif isinstance(node, list):
+                for item in node:
+                    visit(item)
+
+        visit(document)
+        self.assertEqual(len(readiness_tasks), 1, relative_path)
+        shell = readiness_tasks[0]
+        self.assertEqual(shell.get("executable"), "/bin/bash", relative_path)
+        self.assertIn("set -o pipefail", shell["cmd"], relative_path)
+        self.assertIn("journalctl", shell["cmd"], relative_path)
+        self.assertIn("| quote", shell["cmd"], relative_path)
+
         for relative_path in (
             "roles/kibana/tasks/main.yml",
             "roles/kibana/tasks/restart_and_verify_kibana.yml",
+            "roles/elasticsearch/handlers/restart_kibana.yml",
         ):
-            document = yaml.safe_load((ROOT / relative_path).read_text()) or []
-            readiness_tasks = []
+            source = (ROOT / relative_path).read_text()
+            self.assertIn(
+                "../elasticstack/tasks/wait_for_http_service.yml",
+                source,
+                relative_path,
+            )
+            self.assertIn("elasticstack_kibana_port", source, relative_path)
+            self.assertIn("_wait_validate_certs", source, relative_path)
+            self.assertIn("_wait_ca_file", source, relative_path)
+            self.assertIn("kibana_certs_dir", source, relative_path)
 
-            def visit(node):
-                if isinstance(node, dict):
-                    shell = node.get("ansible.builtin.shell")
-                    command = shell.get("cmd", "") if isinstance(shell, dict) else ""
-                    if "HTTP_CODE" in command and "api/status" in command:
-                        readiness_tasks.append(shell)
-                    for value in node.values():
-                        visit(value)
-                elif isinstance(node, list):
-                    for item in node:
-                        visit(item)
+        handler_source = (
+            ROOT / "roles/elasticsearch/handlers/restart_kibana.yml"
+        ).read_text()
+        self.assertIn("kibana_tls is defined", handler_source)
+        self.assertIn("_elasticsearch_kibana_tls_enabled", handler_source)
+        self.assertIn("if _elasticsearch_kibana_tls_enabled", handler_source)
+        self.assertIn("https://' ~ _elasticsearch_kibana_host", handler_source)
+        self.assertIn("kibana_tls_validate_certs is defined", handler_source)
+        self.assertIn(
+            "else hostvars[item].kibana_tls_validate_certs | default(true)",
+            handler_source,
+        )
 
-            visit(document)
-            self.assertEqual(len(readiness_tasks), 1, relative_path)
-            shell = readiness_tasks[0]
-            self.assertEqual(shell.get("executable"), "/bin/bash", relative_path)
-            self.assertIn("set -o pipefail", shell["cmd"], relative_path)
-            self.assertIn("systemctl is-active", shell["cmd"], relative_path)
+        handler = yaml.safe_load(
+            (ROOT / "roles/elasticsearch/handlers/restart_kibana.yml").read_text()
+        )
+        delegated_includes = []
+
+        def collect_includes(node):
+            if isinstance(node, dict):
+                include = node.get("ansible.builtin.include_tasks")
+                if isinstance(include, dict) and "apply" in include:
+                    delegated_includes.append((node, include))
+                for value in node.values():
+                    collect_includes(value)
+            elif isinstance(node, list):
+                for item in node:
+                    collect_includes(item)
+
+        collect_includes(handler)
+        self.assertEqual(len(delegated_includes), 2)
+        for task, include in delegated_includes:
+            self.assertNotIn("delegate_to", task)
+            self.assertEqual(include["apply"]["delegate_to"], "{{ item }}")
+
+    def test_kibana_port_is_managed_and_deployed_with_the_shared_variable(self):
+        template = (ROOT / "roles/kibana/templates/kibana.yml.j2").read_text()
+        self.assertIn("server.port: {{ elasticstack_kibana_port }}", template)
+        self.assertIn("'server.port'", template)
+
+        converge = (ROOT / "molecule/kibana_custom/converge.yml").read_text()
+        verify = (ROOT / "molecule/kibana_custom/verify.yml").read_text()
+        self.assertIn("elasticstack_kibana_port: 15601", converge)
+        self.assertIn("elasticstack_kibana_port: 15601", verify)
+        self.assertIn("server.port: 15601", verify)
+
+    def test_kibana_disabled_scenario_checks_stopped_and_disabled(self):
+        verify = (ROOT / "molecule/kibana_disabled/verify.yml").read_text()
+        self.assertIn(
+            "ansible_facts.services['kibana.service'].state in ['stopped', 'inactive']",
+            verify,
+        )
+        self.assertIn(
+            "ansible_facts.services['kibana.service'].status == 'disabled'",
+            verify,
+        )
 
     def test_service_restart_wrappers_use_shared_lifecycle_tasks(self):
         expected = {
@@ -1001,6 +1131,75 @@ class TestRepositoryContracts(unittest.TestCase):
                 relative_path,
             )
             self.assertEqual(includes[0].get("vars", {}).get("_service_name"), service_name)
+
+    def test_service_roles_configure_repositories_through_shared_role(self):
+        shared = (ROOT / "roles/elasticstack/tasks/main.yml").read_text()
+        repository_tasks = (ROOT / "roles/elasticstack/tasks/configure_repositories.yml").read_text()
+        self.assertIn("../repos/tasks/redhat.yml", repository_tasks)
+        self.assertIn("../repos/tasks/debian.yml", repository_tasks)
+        self.assertIn("elasticstack_enable_repos", repository_tasks)
+        self.assertIn("_elasticstack_repositories_configured_release", repository_tasks)
+        self.assertIn("elasticstack_release | int", repository_tasks)
+        self.assertIn("configure_repositories.yml", shared)
+
+        for role in ("elasticsearch", "kibana", "logstash", "beats"):
+            service = (ROOT / f"roles/{role}/tasks/main.yml").read_text()
+            self.assertIn("configure_repositories.yml", service)
+
+        repos = (ROOT / "roles/repos/tasks/main.yml").read_text()
+        self.assertIn("oddly.elasticstack.elasticstack", repos)
+        self.assertIn("../elasticstack/tasks/configure_repositories.yml", repos)
+
+        redhat = yaml.safe_load((ROOT / "roles/repos/tasks/redhat.yml").read_text())
+        stale_releases = next(
+            task
+            for task in redhat
+            if task.get("name") == "redhat | Remove stale Elastic repository releases"
+        )
+        self.assertEqual(stale_releases["ansible.builtin.yum_repository"]["state"], "absent")
+        self.assertEqual(stale_releases["loop"], [7, 8, 9])
+        self.assertIn("elasticstack_release", stale_releases["when"])
+
+        debian = yaml.safe_load((ROOT / "roles/repos/tasks/debian.yml").read_text())
+        stale_releases = next(
+            task
+            for task in debian
+            if task.get("name") == "debian | Remove stale Elastic repository releases"
+        )
+        self.assertEqual(
+            stale_releases["ansible.builtin.apt_repository"]["state"], "absent"
+        )
+        self.assertEqual(stale_releases["loop"], [7, 8, 9])
+        self.assertEqual(
+            stale_releases["ansible.builtin.apt_repository"]["filename"],
+            "elasticstack",
+        )
+        self.assertIn("elasticstack_release", stale_releases["when"])
+
+        default_converge = (ROOT / "molecule/elasticsearch_default/converge.yml").read_text()
+        self.assertNotIn(
+            "name: oddly.elasticstack.repos",
+            default_converge,
+            "the Elasticsearch baseline must prove repository setup is automatic",
+        )
+        default_verify = (ROOT / "molecule/elasticsearch_default/verify.yml").read_text()
+        self.assertIn("_shared_repo_file.stat.exists", default_verify)
+
+    def test_release_only_upgrade_scenarios_verify_repository_switch(self):
+        for relative_path in (
+            "molecule/elasticsearch_upgrade_8to9/converge.yml",
+            "molecule/elasticsearch_upgrade_8to9_single/converge.yml",
+        ):
+            source = (ROOT / relative_path).read_text()
+            self.assertIn("elasticstack_release: 8", source)
+            self.assertIn("elasticstack_release: 9", source)
+            self.assertIn(
+                "Verify the 9.x repository is selected before package upgrade",
+                source,
+            )
+            self.assertIn("'/packages/9.x/' in", source)
+            self.assertIn("'[elastic-8.x]' not in", source)
+            self.assertIn("'/packages/8.x/' not in", source)
 
     def test_beats_templates_share_common_setup_fragment(self):
         template_paths = (
@@ -1331,6 +1530,22 @@ class TestRepositoryContracts(unittest.TestCase):
                 source,
                 scenario,
             )
+
+    def test_memory_gate_release_runs_only_after_an_unsuccessful_molecule_step(self):
+        release_block = re.compile(
+            r"(?ms)^\s+- name: Release memory slot\n.*?(?=^\s+- name:|\Z)"
+        )
+        for relative_path in (
+            ".github/workflows/molecule.yml",
+            ".github/workflows/test_full_stack.yml",
+            ".github/workflows/test_elasticsearch_upgrade.yml",
+        ):
+            source = (ROOT / relative_path).read_text()
+            matches = release_block.findall(source)
+            self.assertTrue(matches, relative_path)
+            for block in matches:
+                self.assertIn("if: ${{ !success() }}", block, relative_path)
+                self.assertNotIn("if: always()", block, relative_path)
 
     def test_logstash_role_permission_variables_use_corrected_spelling(self):
         defaults = (ROOT / "roles" / "logstash" / "defaults" / "main.yml").read_text()

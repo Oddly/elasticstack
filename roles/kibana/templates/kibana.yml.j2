@@ -1,6 +1,7 @@
 {{ ansible_managed | comment }}
 
 server.host: "0.0.0.0"
+server.port: {{ elasticstack_kibana_port }}
 server.publicBaseUrl: "{{ kibana_public_base_url }}"
 {% if kibana_server_protocol is defined and kibana_server_protocol | length > 0 %}
 server.protocol: "{{ kibana_server_protocol }}"
@@ -45,7 +46,7 @@ server.ssl.keystore.path: "{{ kibana_certs_dir }}/{{ inventory_hostname }}-kiban
 {# Sleutels die dit template zelf schrijft. kibana_extra_config mag ze niet nogmaals    #}
 {# zetten: Kibana weigert te starten bij een dubbele sleutel. De condities hieronder     #}
 {# volgen exact de blokken hierboven, zodat alleen gefilterd wordt wat echt gerenderd is. #}
-{% set _managed = ['server.host', 'server.publicBaseUrl'] %}
+{% set _managed = ['server.host', 'server.port', 'server.publicBaseUrl'] %}
 {% if kibana_server_protocol is defined and kibana_server_protocol | length > 0 %}
 {% set _managed = _managed + ['server.protocol'] %}
 {% endif %}

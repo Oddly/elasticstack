@@ -21,6 +21,19 @@
         fail_msg: "Expected {{ groups['elasticsearch'] | length }} nodes, got {{ health.json.number_of_nodes }}"
       run_once: true  # noqa: run-once[task]
 
+    - name: Check the shared role configured the package repository
+      ansible.builtin.stat:
+        path: "{{ '/etc/apt/sources.list.d/elasticstack.list' if ansible_facts.os_family == 'Debian' else '/etc/yum.repos.d/elastic-release.repo' }}"
+      register: _shared_repo_file
+
+    - name: Assert the service role configured the package repository
+      ansible.builtin.assert:
+        that:
+          - _shared_repo_file.stat.exists
+        fail_msg: >-
+          The Elasticsearch role did not configure its package repository
+          through the shared elasticstack role.
+
     - name: Verify auto-generated password no longer works  # noqa: run-once[task]
       block:
         - name: Read auto-generated password from file  # noqa: run-once[task]

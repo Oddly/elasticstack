@@ -55,9 +55,26 @@
     - name: Fetch passwords if passwords are initialized
       ansible.builtin.import_tasks: elasticstack-passwords.yml
 
+    - name: Bootstrap package manager
+      ansible.builtin.import_tasks: package_manager_bootstrap.yml
+
+    # Service roles all import this shared role before installing packages.
+    # Configure the package source here so callers do not need a separate,
+    # order-sensitive repos role task in every service play. The bootstrap
+    # above installs python3-apt after removing legacy Elastic sources, so the
+    # repository tasks can safely use Ansible's apt modules.
+    - name: Configure Elastic repositories for selected release
+      ansible.builtin.include_tasks: configure_repositories.yml
+
     - name: Install common packages and dependencies
       ansible.builtin.import_tasks: packages.yml
 
     - name: Register elasticstack role has run for that host
       ansible.builtin.set_fact:
         _elasticstack_role_imported: true
+
+# A service role may call the shared role again after its import guard has been
+# set, for example when a single playbook changes from Elastic 8.x to 9.x.
+# Keep repository refresh reachable on those calls as well.
+- name: Refresh Elastic repositories for selected release
+  ansible.builtin.include_tasks: configure_repositories.yml
