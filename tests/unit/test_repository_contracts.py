@@ -1060,6 +1060,9 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("elasticsearch_http_publish_host", main)
         self.assertIn("ansible_host", main)
         self.assertIn("elasticsearch_http_publish_port", main)
+        self.assertIn("elasticsearch_http_protocol", main)
+        self.assertIn("elasticsearch_http_security", main)
+        self.assertIn("_elastic_agent_fleet_server_es_protocol", main)
         self.assertIn("_elastic_agent_fleet_server_es_host", main)
         self.assertIn("_elastic_agent_fleet_server_es:", main)
         self.assertIn("Bracket an IPv6 Fleet Server Elasticsearch host", main)
@@ -1081,6 +1084,11 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("elastic_agent_config_file | dirname", main)
         self.assertIn("_elastic_agent_package_flavor_marker_content", main)
         self.assertIn("_elastic_agent_fleet_state_before_install", main)
+        self.assertIn("_elastic_agent_installed_package_major", main)
+        self.assertIn(".elasticstack-mode", main)
+        self.assertIn("Refuse an Elastic Agent mode transition", main)
+        self.assertIn("Refuse Fleet state in standalone mode", main)
+        self.assertIn("Record Elastic Agent managed mode", main)
         main_tasks = yaml.safe_load(main)
         visible_validation_tasks = {
             "Validate Elastic Agent configuration",
@@ -1123,6 +1131,26 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("Refuse to overwrite an existing enrollment", enroll)
         self.assertIn("not _elastic_agent_fleet_state.stat.exists", enroll)
         self.assertIn("Persist enrollment state without storing credentials", enroll)
+        self.assertNotIn(
+            'content: "{{ elastic_agent_fleet_server_service_token }}\\n"',
+            enroll,
+        )
+        enroll_tasks = yaml.safe_load(enroll)
+        token_block = next(
+            task
+            for task in enroll_tasks
+            if task.get("name") == "enroll | Write Fleet Server service token to a protected file"
+        )
+        token_task = next(
+            task
+            for task in token_block["block"]
+            if task.get("name") == "enroll | Write Fleet Server service token to a protected file"
+        )
+        self.assertEqual(token_task.get("notify"), "Restart Elastic Agent")
+        enrollment_task = next(
+            task for task in enroll_tasks if task.get("name") == "enroll | Enroll Elastic Agent in Fleet"
+        )
+        self.assertEqual(enrollment_task.get("notify"), "Restart Elastic Agent")
         self.assertIn("to_nice_yaml", template)
 
         fleet_converge = (ROOT / "molecule" / "elastic_agent_fleet" / "converge.yml").read_text()
@@ -1133,6 +1161,9 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("elastic-agent-collection-ca-raw-argv", fleet_converge)
         self.assertIn("elastic_agent_fleet_server_es_insecure: true", fleet_converge)
         self.assertIn("insecure_fleet_server_es_rejected", fleet_converge)
+        self.assertIn("unmarked_fleet_to_standalone_rejected", fleet_converge)
+        self.assertIn("fleet_to_standalone_rejected", fleet_converge)
+        self.assertIn("contract-rotation-token-b", fleet_converge)
         self.assertIn("elasticsearch_http_publish_host: '2001:db8::10'", fleet_converge)
         self.assertIn("ansible_host: '2001:db8::20'", fleet_converge)
         self.assertIn("elasticstack_elasticsearch_group_name: elasticsearch_ipv6_publish", fleet_converge)
@@ -1155,9 +1186,13 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("length == 2", fleet_verify)
         self.assertIn("enrollment_fingerprint", fleet_verify)
         self.assertIn("fleet_service_token_file.stat.mode == '0600'", fleet_verify)
+        self.assertIn("(fleet_service_token.content | b64decode) == 'contract-service-token'", fleet_verify)
+        self.assertIn("(rotated_service_token.content | b64decode) == 'contract-rotation-token-b'", fleet_verify)
         self.assertIn("--fleet-server-es-insecure", fleet_verify)
         self.assertIn("https://[2001:db8::10]:19299", fleet_verify)
         self.assertIn("https://[2001:db8::20]:9200", fleet_verify)
+        self.assertIn("http://elasticsearch-http-only.example.test:19200", fleet_verify)
+        self.assertIn(".elasticstack-mode", fleet_verify)
 
         readme = (ROOT / "roles" / "elastic_agent" / "README.md").read_text()
         reference = (ROOT / "docs" / "reference" / "elastic_agent.md").read_text()

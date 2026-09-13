@@ -1232,6 +1232,7 @@ rollouts:
       scenario: elastic_agent_fleet
       expected:
         - "elasticsearch.example.test:9200"
+        - "'http://elasticsearch-http-only.example.test:19200' in (http_only_argv.content | b64decode)"
         - "'https://[2001:db8::10]:19299' in (ipv6_publish_argv.content | b64decode)"
         - "'https://[2001:db8::20]:9200' in (ipv6_fallback_argv.content | b64decode)"
     elastic_agent_fleet_server_es_insecure:
