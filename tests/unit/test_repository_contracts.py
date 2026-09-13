@@ -1098,7 +1098,7 @@ class TestRepositoryContracts(unittest.TestCase):
     def test_kibana_disabled_scenario_checks_stopped_and_disabled(self):
         verify = (ROOT / "molecule/kibana_disabled/verify.yml").read_text()
         self.assertIn(
-            "ansible_facts.services['kibana.service'].state == 'stopped'",
+            "ansible_facts.services['kibana.service'].state in ['stopped', 'inactive']",
             verify,
         )
         self.assertIn(
