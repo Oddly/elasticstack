@@ -9,7 +9,8 @@
       ansible.builtin.assert:
         that:
           - "'kibana.service' in ansible_facts.services"
-          - ansible_facts.services['kibana.service'].state != 'running'
+          - ansible_facts.services['kibana.service'].state == 'stopped'
+          - ansible_facts.services['kibana.service'].status == 'disabled'
         fail_msg: >-
           kibana_enable=false must leave Kibana installed and stopped, got
           {{ ansible_facts.services.get('kibana.service', {}) }}

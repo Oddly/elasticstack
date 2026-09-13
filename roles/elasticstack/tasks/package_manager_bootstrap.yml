@@ -11,6 +11,7 @@
   when:
     - ansible_facts.os_family == 'Debian'
     - ansible_facts.pkg_mgr == 'apt'
+    - elasticstack_enable_repos | bool
 
 - name: packages | Bootstrap python3-apt for Ansible apt module
   ansible.builtin.raw: >-

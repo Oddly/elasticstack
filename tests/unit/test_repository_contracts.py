@@ -538,6 +538,7 @@ class TestRepositoryContracts(unittest.TestCase):
             legacy_cleanup["ansible.builtin.raw"],
             "for source in /etc/apt/sources.list.d/artifacts_elastic_co_packages_7_x_apt.list /etc/apt/sources.list.d/artifacts_elastic_co_packages_8_x_apt.list /etc/apt/sources.list.d/artifacts_elastic_co_packages_9_x_apt.list; do rm -f -- \"$source\"; done",
         )
+        self.assertIn("elasticstack_enable_repos | bool", legacy_cleanup["when"])
 
         bootstrap = next(
             task
@@ -590,6 +591,17 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("_wait_resolve", source)
         self.assertIn("_wait_attempt_limit", source)
         self.assertIn("_wait_http_probe.attempts", source)
+        self.assertIn("until: _wait_http_probe.rc in [0, 2]", source)
+
+    def test_http_readiness_contract_uses_isolated_temporary_state(self):
+        source = (
+            ROOT / "tests" / "integration" / "wait_for_http_service_contract.yml"
+        ).read_text()
+        self.assertIn("ansible.builtin.tempfile", source)
+        self.assertIn("_contract_workspace.path", source)
+        self.assertIn("_contract_injection_marker", source)
+        self.assertNotIn("/tmp/elasticstack-http-readiness-contract", source)
+        self.assertNotIn("/tmp/elasticstack-http-readiness-injected", source)
 
     def test_elasticsearch_logrotate_installs_runtime_package_when_enabled(self):
         tasks = yaml.safe_load(
@@ -1044,6 +1056,11 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("_elasticsearch_kibana_tls_enabled", handler_source)
         self.assertIn("if _elasticsearch_kibana_tls_enabled", handler_source)
         self.assertIn("https://' ~ _elasticsearch_kibana_host", handler_source)
+        self.assertIn("kibana_tls_validate_certs is defined", handler_source)
+        self.assertIn(
+            "else hostvars[item].kibana_tls_validate_certs | default(true)",
+            handler_source,
+        )
 
         handler = yaml.safe_load(
             (ROOT / "roles/elasticsearch/handlers/restart_kibana.yml").read_text()
@@ -1077,6 +1094,17 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("elasticstack_kibana_port: 15601", converge)
         self.assertIn("elasticstack_kibana_port: 15601", verify)
         self.assertIn("server.port: 15601", verify)
+
+    def test_kibana_disabled_scenario_checks_stopped_and_disabled(self):
+        verify = (ROOT / "molecule/kibana_disabled/verify.yml").read_text()
+        self.assertIn(
+            "ansible_facts.services['kibana.service'].state == 'stopped'",
+            verify,
+        )
+        self.assertIn(
+            "ansible_facts.services['kibana.service'].status == 'disabled'",
+            verify,
+        )
 
     def test_service_restart_wrappers_use_shared_lifecycle_tasks(self):
         expected = {

@@ -52,8 +52,9 @@
               else 'http://localhost') }}:{{ _elasticsearch_kibana_port }}/api/status
         _wait_fatal_pattern: "FATAL|Unable to connect to Elasticsearch|Authentication.*failed|Kibana server is not ready.*fatal"
         _wait_validate_certs: >-
-          {{ kibana_tls_validate_certs | default(
-               hostvars[item].kibana_tls_validate_certs | default(true), true) | bool }}
+          {{ (kibana_tls_validate_certs
+               if kibana_tls_validate_certs is defined
+               else hostvars[item].kibana_tls_validate_certs | default(true)) | bool }}
         _wait_ca_file: >-
           {{ _elasticsearch_kibana_certs_dir ~ '/ca.crt'
              if _elasticsearch_kibana_tls_enabled and

@@ -6,14 +6,18 @@
   hosts: localhost
   connection: local
   gather_facts: false
-  vars:
-    _contract_bin: /tmp/elasticstack-http-readiness-contract
-  environment:
-    PATH: "{{ _contract_bin }}:/usr/local/bin:/usr/bin:/bin"
-    FAKE_DOWN_FILE: "{{ _contract_bin }}/service-down"
-    FAKE_CURL_TRANSIENT_FILE: "{{ _contract_bin }}/curl-transient"
-    FAKE_CURL_ARGS_FILE: "{{ _contract_bin }}/curl-args"
   tasks:
+    - name: Create an isolated contract workspace
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: elasticstack-http-readiness-
+      register: _contract_workspace
+
+    - name: Set contract workspace paths
+      ansible.builtin.set_fact:
+        _contract_bin: "{{ _contract_workspace.path }}/bin"
+        _contract_injection_marker: "{{ _contract_workspace.path }}/injected"
+
     - name: Create fake command directory
       ansible.builtin.file:
         path: "{{ _contract_bin }}"
@@ -22,7 +26,7 @@
 
     - name: Remove any previous shell injection marker
       ansible.builtin.file:
-        path: /tmp/elasticstack-http-readiness-injected
+        path: "{{ _contract_injection_marker }}"
         state: absent
 
     - name: Fake systemctl reports a running service unless asked otherwise
@@ -31,7 +35,7 @@
         mode: "0755"
         content: |
           #!/bin/sh
-          if [ -e "$FAKE_DOWN_FILE" ]; then
+          if [ -e "{{ _contract_bin }}/service-down" ]; then
             exit 3
           fi
           exit 0
@@ -50,26 +54,30 @@
         mode: "0755"
         content: |
           #!/bin/sh
-          printf '%s\n' "$@" > "$FAKE_CURL_ARGS_FILE"
-          if [ -e "$FAKE_CURL_TRANSIENT_FILE" ]; then
+          printf '%s\n' "$@" > "{{ _contract_bin }}/curl-args"
+          if [ -e "{{ _contract_bin }}/curl-transient" ]; then
             exit 7
           fi
           echo 200
 
     - name: Run the shared readiness task successfully
-      ansible.builtin.include_tasks:
-        file: ../../roles/elasticstack/tasks/wait_for_http_service.yml
-      vars:
-        _wait_service_name: fake-http
-        _wait_url: http://localhost:12345/health
-        _wait_fatal_pattern: FATAL
-        _wait_retries: 1
-        _wait_delay: 0
-        _wait_validate_certs: true
-        _wait_ca_file: /tmp/contract-ca.crt
-        _wait_resolve: fake-http:12345:127.0.0.1
-        _wait_connect_timeout: 3
-        _wait_max_time: 7
+      environment:
+        PATH: "{{ _contract_bin }}:/usr/local/bin:/usr/bin:/bin"
+      block:
+        - name: Include shared readiness task for the success path
+          ansible.builtin.include_tasks:
+            file: ../../roles/elasticstack/tasks/wait_for_http_service.yml
+          vars:
+            _wait_service_name: fake-http
+            _wait_url: http://localhost:12345/health
+            _wait_fatal_pattern: FATAL
+            _wait_retries: 1
+            _wait_delay: 0
+            _wait_validate_certs: true
+            _wait_ca_file: /tmp/contract-ca.crt
+            _wait_resolve: fake-http:12345:127.0.0.1
+            _wait_connect_timeout: 3
+            _wait_max_time: 7
 
     - name: Assert the shared task accepts a ready endpoint
       ansible.builtin.assert:
@@ -91,15 +99,19 @@
           - "'--insecure\\n' not in (_validated_curl_args.content | b64decode)"
 
     - name: Run the shared readiness task with explicit TLS validation disabled
-      ansible.builtin.include_tasks:
-        file: ../../roles/elasticstack/tasks/wait_for_http_service.yml
-      vars:
-        _wait_service_name: fake-http
-        _wait_url: https://localhost:12345/health
-        _wait_fatal_pattern: FATAL
-        _wait_retries: 1
-        _wait_delay: 0
-        _wait_validate_certs: false
+      environment:
+        PATH: "{{ _contract_bin }}:/usr/local/bin:/usr/bin:/bin"
+      block:
+        - name: Include shared readiness task for the insecure path
+          ansible.builtin.include_tasks:
+            file: ../../roles/elasticstack/tasks/wait_for_http_service.yml
+          vars:
+            _wait_service_name: fake-http
+            _wait_url: https://localhost:12345/health
+            _wait_fatal_pattern: FATAL
+            _wait_retries: 1
+            _wait_delay: 0
+            _wait_validate_certs: false
 
     - name: Read the curl arguments from the insecure probe
       ansible.builtin.slurp:
@@ -118,6 +130,8 @@
         mode: "0644"
 
     - name: Run the shared readiness task against a stopped service
+      environment:
+        PATH: "{{ _contract_bin }}:/usr/local/bin:/usr/bin:/bin"
       block:
         - name: Include shared readiness task for the failure path
           ansible.builtin.include_tasks:
@@ -128,7 +142,6 @@
             _wait_fatal_pattern: FATAL
             _wait_retries: 1
             _wait_delay: 0
-
         - name: Fail if the stopped-service task unexpectedly passed
           ansible.builtin.fail:
             msg: "The shared readiness task unexpectedly accepted a stopped service"
@@ -150,6 +163,8 @@
         mode: "0644"
 
     - name: Run the shared readiness task through its transient timeout path
+      environment:
+        PATH: "{{ _contract_bin }}:/usr/local/bin:/usr/bin:/bin"
       block:
         - name: Include shared readiness task for the timeout path
           ansible.builtin.include_tasks:
@@ -160,7 +175,6 @@
             _wait_fatal_pattern: FATAL
             _wait_retries: 2
             _wait_delay: 0
-
         - name: Fail if the transient timeout unexpectedly passed
           ansible.builtin.fail:
             msg: "The shared readiness task unexpectedly accepted a transient timeout"
@@ -176,6 +190,8 @@
         state: absent
 
     - name: Run the shared readiness task with an unsafe status value
+      environment:
+        PATH: "{{ _contract_bin }}:/usr/local/bin:/usr/bin:/bin"
       block:
         - name: Include shared readiness task with shell metacharacters in status
           ansible.builtin.include_tasks:
@@ -185,17 +201,16 @@
             _wait_url: http://localhost:12345/health
             _wait_fatal_pattern: FATAL
             _wait_success_statuses:
-              - "$(touch /tmp/elasticstack-http-readiness-injected)"
+              - "$(touch {{ _contract_injection_marker }})"
             _wait_retries: 1
             _wait_delay: 0
-
         - name: Fail if the unsafe status value unexpectedly passed
           ansible.builtin.fail:
             msg: "The shared readiness task accepted an invalid HTTP status"
       rescue:
         - name: Check whether the shell injection marker was created
           ansible.builtin.stat:
-            path: /tmp/elasticstack-http-readiness-injected
+            path: "{{ _contract_injection_marker }}"
           register: _injection_marker
 
         - name: Assert the status value was shell-quoted
@@ -205,5 +220,5 @@
 
     - name: Remove fake command directory
       ansible.builtin.file:
-        path: "{{ _contract_bin }}"
+        path: "{{ _contract_workspace.path }}"
         state: absent

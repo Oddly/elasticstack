@@ -58,7 +58,7 @@
       vars:
         _wait_attempt_limit: "{{ _wait_retries | default(60) | int }}"
       register: _wait_http_probe
-      until: _wait_http_probe.rc == 0
+      until: _wait_http_probe.rc in [0, 2]
       retries: "{{ _wait_attempt_limit }}"
       delay: "{{ _wait_delay | default(5) }}"
       changed_when: false
