@@ -58,6 +58,23 @@
       register: elastic_agent_package_flavor_marker
       when: elasticstack_release | int >= 9
 
+    - name: Check the same-host package upgrade fixture
+      ansible.builtin.stat:
+        path: /tmp/elastic-agent-package-upgrade-complete
+      register: package_upgrade_fixture
+      when: elasticstack_release | int >= 9
+
+    - name: Gather package facts for the same-host upgrade
+      ansible.builtin.package_facts:
+        manager: auto
+      when: elasticstack_release | int >= 9
+
+    - name: Read the same-host upgrade policy
+      ansible.builtin.slurp:
+        src: /var/lib/elastic-agent-package-upgrade/elastic-agent.yml
+      register: package_upgrade_config
+      when: elasticstack_release | int >= 9
+
     - name: Assert standalone policy and service
       ansible.builtin.assert:
         that:
@@ -74,9 +91,16 @@
           - "'127.0.0.1:5044' in (elastic_agent_config.content | b64decode)"
           - "'contract-system-metrics' in (elastic_agent_config.content | b64decode)"
           - "'agent.logging.to_stderr: true' in (elastic_agent_config.content | b64decode)"
+          - package_upgrade_fixture.stat.exists
+          - "'127.0.0.1:5044' in (package_upgrade_config.content | b64decode)"
+          - "'elastic-agent' in ansible_facts.packages"
+          - >-
+            (ansible_facts.packages['elastic-agent'][0].version
+            | regex_search('^[0-9]+') | int) == 9
 
     - name: Assert the 9.x package flavor marker is stored at the package top directory
       ansible.builtin.assert:
         that:
           - (elastic_agent_package_flavor_marker.content | b64decode | trim) == 'basic'
+          - package_upgrade_fixture.stat.exists
       when: elasticstack_release | int >= 9
