@@ -1081,6 +1081,20 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("elastic_agent_config_file | dirname", main)
         self.assertIn("_elastic_agent_package_flavor_marker_content", main)
         self.assertIn("_elastic_agent_fleet_state_before_install", main)
+        main_tasks = yaml.safe_load(main)
+        visible_validation_tasks = {
+            "Validate Elastic Agent configuration",
+            "Reject insecure Fleet Server Elasticsearch URL",
+            "Validate the installed Elastic Agent package flavor",
+            "Assert the installed Elastic Agent package flavor matches the requested flavor",
+        }
+        for task in main_tasks:
+            if task.get("name") in visible_validation_tasks:
+                self.assertNotIn("no_log", task, task["name"])
+        self.assertEqual(
+            {task["name"] for task in main_tasks if task.get("name") in visible_validation_tasks},
+            visible_validation_tasks,
+        )
         self.assertLess(
             main.index("Check package-managed Fleet state before package installation"),
             main.index("Install Elastic Agent package"),

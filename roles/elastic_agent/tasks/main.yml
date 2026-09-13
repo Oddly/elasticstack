@@ -93,7 +93,6 @@
       complete standalone policy, Fleet enrollment details, or Fleet Server
       details as required by elastic_agent_mode.
   when: elastic_agent_manage | bool
-  no_log: true
 
 - name: Reject insecure Fleet Server Elasticsearch URL
   ansible.builtin.assert:
@@ -106,7 +105,6 @@
       Fleet Server requires an https:// Elasticsearch URL unless
       elastic_agent_fleet_server_es_insecure is explicitly enabled.
   when: elastic_agent_manage | bool
-  no_log: true
 
 - name: Construct exact Elastic Agent package name
   ansible.builtin.set_fact:
@@ -187,7 +185,6 @@
   when:
     - elastic_agent_manage | bool
     - elasticstack_release | int >= 9
-  no_log: true
 
 - name: Install Elastic Agent package
   ansible.builtin.include_tasks: "{{ role_path }}/../elasticstack/tasks/install_elastic_package.yml"
@@ -247,7 +244,6 @@
     - elastic_agent_manage | bool
     - elasticstack_release | int >= 9
     - not ansible_check_mode
-  no_log: true
 
 - name: Ensure Elastic Agent configuration directory exists
   ansible.builtin.file:
