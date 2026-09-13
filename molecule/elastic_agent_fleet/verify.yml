@@ -6,7 +6,7 @@
   tasks:
     - name: Read enrollment command arguments
       ansible.builtin.slurp:
-        src: /tmp/elastic-agent-enrollment-argv
+        src: /tmp/elastic-agent-initial-enrollment-argv
       register: enrollment_argv
 
     - name: Read enrollment command path

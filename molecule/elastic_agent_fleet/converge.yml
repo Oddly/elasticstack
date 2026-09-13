@@ -161,6 +161,14 @@
           - fleet_package_version.rc == 0
       when: not fleet_contract_complete.stat.exists
 
+    - name: Preserve initial Fleet enrollment command
+      ansible.builtin.copy:
+        src: /tmp/elastic-agent-enrollment-argv
+        dest: /tmp/elastic-agent-initial-enrollment-argv
+        remote_src: true
+        mode: "0640"
+      when: not fleet_contract_complete.stat.exists
+
     - name: Create package-managed Fleet state fixture after enrollment
       ansible.builtin.copy:
         dest: /etc/elastic-agent/fleet.enc
