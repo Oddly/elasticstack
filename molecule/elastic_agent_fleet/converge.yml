@@ -150,6 +150,7 @@
         argv:
           - /usr/bin/elastic-agent
           - version
+          - --binary-only
       register: fleet_package_version
       changed_when: false
       when: not fleet_contract_complete.stat.exists

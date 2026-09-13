@@ -1495,6 +1495,7 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("become: true", tag_contract)
         self.assertIn("args+=(--tags configuration)", contracts_workflow)
         self.assertIn("fleet_package_version.rc", fleet_converge)
+        self.assertIn("- --binary-only", fleet_converge)
         self.assertIn("_elastic_agent_test_package_flavor", fleet_converge)
         self.assertIn("elasticstack_release | int >= 9", fleet_converge)
         self.assertIn("elasticstack_release | int < 9", fleet_converge)
