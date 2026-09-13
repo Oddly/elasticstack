@@ -23,12 +23,13 @@ runs:
         mkdir -p "$diag"/service-logs
 
         INCUS_HOST="${INCUS_HOST:?INCUS_HOST secret must be set}"
-        SSH_KEY="${MOLECULE_SSH_KEY:-~/.ssh/molecule_id_ed25519}"
+        SSH_KEY="${MOLECULE_SSH_KEY:-${HOME}/.ssh/molecule_id_ed25519}"
         SSH_TIMEOUT="${DIAGNOSTIC_SSH_TIMEOUT_SECONDS:-10}s"
 
         ssh_host() {
-          timeout --signal=TERM --kill-after=2s "$SSH_TIMEOUT" \
-            ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 \
+            timeout --signal=TERM --kill-after=2s "$SSH_TIMEOUT" \
+            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=5 \
               -o ServerAliveInterval=3 -o ServerAliveCountMax=1 \
               -i "$SSH_KEY" "root@${INCUS_HOST}" "$@" 2>/dev/null || true
         }

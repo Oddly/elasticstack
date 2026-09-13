@@ -173,6 +173,47 @@ class TestRepositoryContracts(unittest.TestCase):
                 f"{path}:{line_number} must use a full commit SHA",
             )
 
+    def test_ci_ssh_does_not_parse_shared_runner_known_hosts(self):
+        ssh_paths = [
+            ROOT / ".github" / "actions" / "collect-diagnostics" / "action.yml",
+            ROOT / ".github" / "workflows" / "cleanup_incus.yml",
+            ROOT / ".github" / "workflows" / "molecule.yml",
+            ROOT / ".github" / "workflows" / "test_elasticsearch_upgrade.yml",
+            ROOT / ".github" / "workflows" / "test_full_stack.yml",
+            ROOT / "molecule" / "shared" / "create.yml",
+            ROOT / "molecule" / "shared" / "destroy.yml",
+            ROOT / "molecule" / "kibana_disabled" / "create.yml",
+            ROOT / "molecule" / "kibana_disabled" / "destroy.yml",
+        ]
+        ssh_paths += sorted((ROOT / "molecule").glob("*/molecule.yml"))
+
+        for path in ssh_paths:
+            source = path.read_text()
+            self.assertNotIn("ssh-keyscan", source, path)
+            if any(
+                marker in source
+                for marker in ("ssh -o ", "ProxyCommand=ssh", "ssh_args=(")
+            ):
+                self.assertIn("UserKnownHostsFile=/dev/null", source, path)
+
+        for path in (
+            ROOT / ".github" / "workflows" / "molecule.yml",
+            ROOT / ".github" / "workflows" / "test_elasticsearch_upgrade.yml",
+            ROOT / ".github" / "workflows" / "test_full_stack.yml",
+            ROOT / ".github" / "workflows" / "cleanup_incus.yml",
+        ):
+            source = path.read_text()
+            self.assertIn(
+                "printf '%s\\n' \"$MOLECULE_SSH_PRIVATE_KEY\"",
+                source,
+                path,
+            )
+            self.assertNotIn(
+                'echo "${{ secrets.MOLECULE_SSH_PRIVATE_KEY }}"',
+                source,
+                path,
+            )
+
     def test_kics_scan_is_independent_of_docker_and_checksum_pinned(self):
         source = (ROOT / ".github" / "workflows" / "kics.yml").read_text()
         self.assertNotIn("docker run", source)

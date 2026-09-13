@@ -21,7 +21,7 @@ provisioner:
   connection_options:
     ansible_connection: ssh
     ansible_user: root
-    ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
   inventory:
     group_vars:
       all:

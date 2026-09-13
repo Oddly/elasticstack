@@ -114,11 +114,11 @@ jobs:
           fi
 
       - name: Set up SSH key for molecule
+        env:
+          MOLECULE_SSH_PRIVATE_KEY: ${{ secrets.MOLECULE_SSH_PRIVATE_KEY }}
         run: |
-          echo "${{ secrets.MOLECULE_SSH_PRIVATE_KEY }}" > ${{ runner.temp }}/molecule_id_ed25519
-          chmod 600 ${{ runner.temp }}/molecule_id_ed25519
-          mkdir -p ~/.ssh
-          ssh-keyscan -t ed25519 ${{ secrets.INCUS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          printf '%s\n' "$MOLECULE_SSH_PRIVATE_KEY" > "$RUNNER_TEMP/molecule_id_ed25519"
+          chmod 600 "$RUNNER_TEMP/molecule_id_ed25519"
 
       - name: Compute gate deadline
         # Keep a useful execution window after admission while allowing a
@@ -139,7 +139,7 @@ jobs:
         # limits.memory − pending reservations, FIFO with bounded
         # overtakes. create.yml converts the reservation into committed
         # capacity right after the containers launch.
-        uses: Oddly/incus-memory-gate@54fb1036cce8ab32e68104f9896e72322723dae2  # v1.0.3
+        uses: Oddly/incus-memory-gate@4c8832dfa306acf74f8eda0b15b9ddbe9f20141a  # v1.0.4
         with:
           mode: acquire
           molecule-scenario: ${{ matrix.scenario }}
@@ -189,7 +189,7 @@ jobs:
         # Release after an unsuccessful step, when create.yml may have left a
         # reservation behind. Successful creates remove it at launch.
         if: ${{ !success() }}
-        uses: Oddly/incus-memory-gate@54fb1036cce8ab32e68104f9896e72322723dae2  # v1.0.3
+        uses: Oddly/incus-memory-gate@4c8832dfa306acf74f8eda0b15b9ddbe9f20141a  # v1.0.4
         with:
           mode: release
 
