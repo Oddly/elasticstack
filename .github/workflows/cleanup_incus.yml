@@ -34,7 +34,7 @@ jobs:
             -i "$RUNNER_TEMP/molecule_id_ed25519"
             "root@${INCUS_HOST}"
           )
-          "${ssh_args[@]}" /usr/local/bin/cleanup-molecule-containers.sh
+          ssh "${ssh_args[@]}" /usr/local/bin/cleanup-molecule-containers.sh
         env:
           INCUS_HOST: ${{ secrets.INCUS_HOST }}
 

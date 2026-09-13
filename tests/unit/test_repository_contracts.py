@@ -214,6 +214,14 @@ class TestRepositoryContracts(unittest.TestCase):
                 path,
             )
 
+        cleanup_source = (
+            ROOT / ".github" / "workflows" / "cleanup_incus.yml"
+        ).read_text()
+        self.assertIn(
+            'ssh "${ssh_args[@]}" /usr/local/bin/cleanup-molecule-containers.sh',
+            cleanup_source,
+        )
+
     def test_kics_scan_is_independent_of_docker_and_checksum_pinned(self):
         source = (ROOT / ".github" / "workflows" / "kics.yml").read_text()
         self.assertNotIn("docker run", source)
