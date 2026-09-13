@@ -1522,6 +1522,7 @@ class TestRepositoryContracts(unittest.TestCase):
             fleet_converge,
         )
         self.assertIn("ansible_failed_task.name", fleet_converge)
+        self.assertIn("Verify .*elastic-agent .*running", fleet_converge)
         self.assertIn("fleet_server_argv_lines.index('--fleet-server-port')", fleet_verify)
         self.assertIn("fleet_state.stat.exists", fleet_verify)
         self.assertIn("length == 2", fleet_verify)

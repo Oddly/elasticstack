@@ -220,7 +220,7 @@
             that:
               - >-
                 ansible_failed_task.name | default('') is search(
-                'Manage Elastic Agent service')
+                'Verify .*elastic-agent .*running')
         - name: Record expected Elastic Agent lifecycle failure
           ansible.builtin.set_fact:
             migration_rollback_failed: true
