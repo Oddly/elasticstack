@@ -192,7 +192,7 @@ jobs:
         # limits.memory − pending reservations, FIFO with bounded
         # overtakes. The 120-minute deadline leaves a 120-minute rollout
         # window inside this job's 240-minute timeout.
-        uses: Oddly/incus-memory-gate@a4be4db5ffc59c8ee77c8fd7ff589612eb16be61  # v1.0.2
+        uses: Oddly/incus-memory-gate@54fb1036cce8ab32e68104f9896e72322723dae2  # v1.0.3
         with:
           mode: acquire
           molecule-scenario: ${{ matrix.scenario }}
@@ -242,7 +242,7 @@ jobs:
         # Release after an unsuccessful step, when create.yml may have left a
         # reservation behind. Successful creates remove it at launch.
         if: ${{ !success() }}
-        uses: Oddly/incus-memory-gate@a4be4db5ffc59c8ee77c8fd7ff589612eb16be61  # v1.0.2
+        uses: Oddly/incus-memory-gate@54fb1036cce8ab32e68104f9896e72322723dae2  # v1.0.3
         with:
           mode: release
 

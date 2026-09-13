@@ -150,6 +150,29 @@ class TestRepositoryContracts(unittest.TestCase):
                 f"{path}:{line_number} should retain the upstream version comment",
             )
 
+    def test_memory_gate_references_use_one_consistent_pinned_release(self):
+        references = []
+        for path in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+            for line_number, line in enumerate(path.read_text().splitlines(), 1):
+                match = re.match(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)", line)
+                if match and match.group(1).startswith("Oddly/incus-memory-gate@"):
+                    references.append(
+                        (path, line_number, match.group(1).rsplit("@", 1)[1])
+                    )
+
+        self.assertTrue(references)
+        self.assertEqual(
+            len({reference for _, _, reference in references}),
+            1,
+            "all memory gate calls must use the same tested release",
+        )
+        for path, line_number, reference in references:
+            self.assertRegex(
+                reference,
+                ACTION_SHA,
+                f"{path}:{line_number} must use a full commit SHA",
+            )
+
     def test_kics_scan_is_independent_of_docker_and_checksum_pinned(self):
         source = (ROOT / ".github" / "workflows" / "kics.yml").read_text()
         self.assertNotIn("docker run", source)
