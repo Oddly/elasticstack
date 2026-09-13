@@ -151,7 +151,7 @@ behaviors:
       - oddly.elasticstack.elasticsearch
     expected:
       - "'CN = Test CA' in es_http_cert_issuer.stdout or 'CN=Test CA' in es_http_cert_issuer.stdout"
-      - "'transport.ssl.certificate_authorities' in _es_config"
+      - "('xpack.security.transport.ssl.certificate_authorities: ' ~ ([elasticsearch_certs_dir ~ '/ca.crt'] | to_json)) in _es_config"
   - name: elasticsearch_external_certificate_content
     role: elasticsearch
     variables:
@@ -211,7 +211,7 @@ behaviors:
     expected:
       - "'certificateAuthorities' not in (kibana_yml.content | b64decode)"
       - "'server.ssl.enabled: true' in (kibana_yml.content | b64decode)"
-      - "'server.ssl.certificate:' in (kibana_yml.content | b64decode)"
+      - "('server.ssl.certificate: ' ~ ((kibana_certs_dir ~ '/' ~ inventory_hostname ~ '-kibana.crt') | to_json)) in (kibana_yml.content | b64decode)"
   - name: kibana_external_certificate_content
     role: kibana
     variables:
@@ -953,7 +953,7 @@ rollouts:
     elasticsearch_certs_dir:
       scenario: elasticsearch_custom_certs
       expected:
-        - "elasticsearch_certs_dir == '/etc/elasticsearch/custom-certs'"
+        - "(elasticsearch_certs_dir ~ '/' ~ inventory_hostname ~ '-transport.crt') | to_json"
     elasticsearch_security_enrollment:
       scenario: elasticsearch_custom
       expected:
@@ -1008,7 +1008,7 @@ rollouts:
     kibana_certs_dir:
       scenario: kibana_custom_certs
       expected:
-        - "kibana_certs_dir == '/etc/kibana/custom-certs'"
+        - "(kibana_certs_dir ~ '/' ~ inventory_hostname ~ '-kibana.crt') | to_json"
     kibana_elasticsearch_hosts:
       scenario: kibana_extras
       expected:

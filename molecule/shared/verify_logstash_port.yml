@@ -1,0 +1,97 @@
+---
+# Verify the Logstash beats/Elastic Agent input, collect useful diagnostics if
+# it is unavailable, and validate the rendered pipeline with Logstash itself.
+# Optional variables:
+#   _verify_logstash_port: input port (default: 5044)
+#   _verify_logstash_port_timeout: wait timeout in seconds (default: 120)
+#   _verify_logstash_config_path: pipeline path (default: main pipeline dir)
+- name: Check Logstash is listening on port {{ _verify_logstash_port | default(5044) }}
+  ansible.builtin.wait_for:
+    port: "{{ _verify_logstash_port | default(5044) }}"
+    timeout: "{{ _verify_logstash_port_timeout | default(120) }}"
+    state: started
+  register: logstash_port_check
+  ignore_errors: true
+
+- name: Show diagnostics on Logstash port check failure
+  when: logstash_port_check is failed
+  block:
+    - name: Show recent Logstash log
+      ansible.builtin.shell: |
+        set -o pipefail
+        if command -v journalctl >/dev/null 2>&1 && journalctl -u logstash --no-pager -n 100 2>/dev/null; then
+          exit 0
+        fi
+        if [ -f /var/log/logstash/logstash-plain.log ]; then
+          tail -100 /var/log/logstash/logstash-plain.log
+          exit 0
+        fi
+        echo "No Logstash logs found"
+      args:
+        executable: /bin/bash
+      register: logstash_log
+      changed_when: false
+
+    - name: Display Logstash failure log  # noqa: no-handler
+      ansible.builtin.debug:
+        var: logstash_log.stdout_lines
+
+    - name: Show listening ports when available
+      ansible.builtin.shell: |
+        set -o pipefail
+        if command -v ss >/dev/null 2>&1; then
+          ss -tlnp | grep -E '5044|logstash|java' || true
+        else
+          echo "ss is not installed"
+        fi
+      args:
+        executable: /bin/bash
+      register: listening_ports
+      changed_when: false
+
+    - name: Display listening ports  # noqa: no-handler
+      ansible.builtin.debug:
+        var: listening_ports.stdout_lines
+
+    - name: Fail with Logstash port context
+      ansible.builtin.fail:
+        msg: >-
+          Logstash port {{ _verify_logstash_port | default(5044) }} did not
+          open within {{ _verify_logstash_port_timeout | default(120) }} seconds.
+
+- name: Get installed Logstash version
+  ansible.builtin.shell: |
+    set -euo pipefail
+    if command -v dpkg-query >/dev/null 2>&1; then
+      deb_version="$(dpkg-query -W -f='${Version}' logstash 2>/dev/null || true)"
+      if [ -n "$deb_version" ]; then
+        printf '%s\n' "$deb_version" | sed 's/^[0-9]*://;s/-.*$//'
+        exit 0
+      fi
+    fi
+    if command -v rpm >/dev/null 2>&1; then
+      rpm -q --qf '%{VERSION}' logstash
+      exit 0
+    fi
+    echo "Unable to determine the installed Logstash version" >&2
+    exit 1
+  args:
+    executable: /bin/bash
+  register: logstash_version
+  changed_when: false
+
+- name: Verify Logstash config syntax
+  ansible.builtin.command:
+    argv:
+      - /usr/share/logstash/bin/logstash
+      - --path.settings=/etc/logstash
+      - --config.test_and_exit
+      - -f
+      - "{{ _verify_logstash_config_path | default('/etc/logstash/conf.d/main/') }}"
+  become: "{{ logstash_version.stdout is version('9.0.0', '>=', version_type='loose') }}"
+  become_method: ansible.builtin.su
+  become_user: "{{ 'logstash' if logstash_version.stdout is version('9.0.0', '>=', version_type='loose') else omit }}"
+  become_flags: '-s /bin/sh'
+  register: config_test
+  changed_when: false
+  failed_when: config_test.rc != 0

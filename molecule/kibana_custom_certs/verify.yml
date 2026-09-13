@@ -12,55 +12,26 @@
       when: elasticsearch_ca is undefined
 
     - name: Fetch Elastic password
-      ansible.builtin.shell: |
-        set -o pipefail
-        grep "PASSWORD elastic " /usr/share/elasticsearch/initial_passwords |
-        awk {' print $4 '}
-      args:
-        executable: /bin/bash
-      register: elastic_pass
-      changed_when: false
-      delegate_to: "{{ elasticsearch_ca }}"
+      ansible.builtin.include_tasks: ../shared/verify_fetch_password.yml
+      vars:
+        _verify_delegate_to: "{{ elasticsearch_ca }}"
 
     - name: Elasticsearch health check
-      ansible.builtin.uri:
-        url: "https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health?wait_for_status=yellow&timeout=30s"
-        method: GET
-        force_basic_auth: true
-        user: elastic
-        password: "{{ elastic_pass.stdout }}"
-        return_content: true
-        status_code: 200
-        validate_certs: false
-      register: result
-      until: result.json.status | default('red') in ['green', 'yellow']
-      retries: 6
-      delay: 10
-      when: "'elasticsearch' in group_names"
+      ansible.builtin.include_tasks: ../shared/verify_es_health.yml
+      vars:
+        _verify_es_health_query: "?wait_for_status=yellow&timeout=30s"
+        _verify_es_statuses: [green, yellow]
+        _verify_when: "{{ 'elasticsearch' in group_names }}"
 
     - name: Run Kibana checks
       when: "'kibana' in group_names"
       block:
-        - name: Connect to Kibana (HTTPS — kibana_tls enabled)
-          ansible.builtin.uri:
-            url: "https://localhost:5601/api/status"
-            method: GET
-            force_basic_auth: true
-            user: elastic
-            password: "{{ elastic_pass.stdout }}"
-            return_content: true
-            status_code: [200, 503]
-            validate_certs: false
-          register: kibana_status
-          retries: 18
-          delay: 10
-          until: (kibana_status.json.status.overall.level | default('')) == 'available'
-
-        - name: Verify Kibana is available
-          ansible.builtin.assert:
-            that:
-              - kibana_status.json.status.overall.level == 'available'
-            fail_msg: "Kibana status: {{ kibana_status.json.status.overall.level | default('unknown') }}"
+        - name: Check Kibana availability
+          ansible.builtin.include_tasks: ../shared/verify_kibana_available.yml
+          vars:
+            _verify_kibana_url: "https://localhost:5601/api/status"
+            _verify_kibana_retries: 18
+            _verify_kibana_validate_certs: false
 
         - name: Read kibana.yml
           ansible.builtin.slurp:
@@ -87,9 +58,14 @@
         - name: Verify server.ssl.certificate and server.ssl.key paths are rendered
           ansible.builtin.assert:
             that:
-              - kibana_certs_dir == '/etc/kibana/custom-certs'
-              - "'server.ssl.certificate:' in (kibana_yml.content | b64decode)"
-              - "'server.ssl.key:' in (kibana_yml.content | b64decode)"
+              - >-
+                ('server.ssl.certificate: ' ~
+                ((kibana_certs_dir ~ '/' ~ inventory_hostname ~ '-kibana.crt') | to_json))
+                in (kibana_yml.content | b64decode)
+              - >-
+                ('server.ssl.key: ' ~
+                ((kibana_certs_dir ~ '/' ~ inventory_hostname ~ '-kibana.key') | to_json))
+                in (kibana_yml.content | b64decode)
               - "'keystore.path' not in (kibana_yml.content | b64decode)"
               - "'elasticsearch.ssl.verificationMode: none' in (kibana_yml.content | b64decode)"
             fail_msg: |

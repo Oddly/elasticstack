@@ -3,12 +3,7 @@
   hosts: all
   tasks:
     - name: Check Logstash service is running
-      ansible.builtin.service:
-        name: logstash
-        state: started
-      check_mode: true
-      register: _ls_svc
-      failed_when: _ls_svc.changed
+      ansible.builtin.include_tasks: ../shared/verify_logstash_service.yml
 
     # --- Standalone-generated files exist ---
 
@@ -119,15 +114,10 @@
           keystore.pfx accepted a wrong passphrase — the role generated
           an unencrypted (or null-password) keystore.
 
-    # --- Listening + TLS handshake ---
-
-    - name: Wait for Logstash beats input on 5044
-      ansible.builtin.wait_for:
-        port: 5044
-        timeout: 180
-        state: started
-      register: _port_check
-      ignore_errors: true
+    - name: Verify Logstash port and configuration syntax
+      ansible.builtin.include_tasks: ../shared/verify_logstash_port.yml
+      vars:
+        _verify_logstash_port_timeout: 180
 
     - name: TLS handshake against Logstash 5044 (signed by standalone CA)
       ansible.builtin.shell:
@@ -142,20 +132,4 @@
         executable: /bin/bash
       register: _ls_tls_probe
       changed_when: false
-      when: _port_check is not failed
-
-    - name: Show diagnostics if port did not open
-      when: _port_check is failed
-      block:
-        - name: Show recent Logstash log
-          ansible.builtin.shell:
-            cmd: >-
-              journalctl -u logstash --no-pager -n 100 2>/dev/null
-              || tail -100 /var/log/logstash/logstash-plain.log 2>/dev/null
-              || echo "no logs"
-            executable: /bin/bash
-          register: _ls_log
-          changed_when: false
-        - name: Fail with log context
-          ansible.builtin.fail:
-            msg: "Port 5044 did not open. Recent log:\n{{ _ls_log.stdout }}"
+      when: logstash_port_check is not failed

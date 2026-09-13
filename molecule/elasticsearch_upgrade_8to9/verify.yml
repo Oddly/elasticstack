@@ -23,15 +23,10 @@
       when: elasticsearch_ca is undefined
 
     - name: Fetch Elastic password
-      ansible.builtin.shell: |
-        set -o pipefail
-        grep "PASSWORD elastic " {{ elasticstack_initial_passwords }} |
-        awk {' print $4 '}
-      args:
-        executable: /bin/bash
-      register: elastic_pass
-      changed_when: false
-      delegate_to: "{{ elasticsearch_ca }}"
+      ansible.builtin.include_tasks: ../shared/verify_fetch_password.yml
+      vars:
+        _verify_delegate_to: "{{ elasticsearch_ca }}"
+        _verify_initial_passwords_path: "{{ elasticstack_initial_passwords }}"
 
     - name: Check ES version is 9.x
       ansible.builtin.uri:
@@ -56,31 +51,23 @@
         success_msg: "ES 9.x ({{ es_info.json.version.number }}) is running - upgrade successful!"
 
     - name: Wait for cluster to be healthy (green or yellow acceptable post-upgrade)
-      ansible.builtin.uri:
-        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health
-        method: GET
-        force_basic_auth: true
-        user: elastic
-        password: "{{ elastic_pass.stdout }}"
-        return_content: true
-        status_code: 200
-        validate_certs: false
-      register: cluster_health
-      retries: 12
-      delay: 10
-      until: cluster_health.json.status in ['green', 'yellow']
+      ansible.builtin.include_tasks: ../shared/verify_es_health.yml
+      vars:
+        _verify_es_statuses: [green, yellow]
+        _verify_es_retries: 12
+        _verify_es_delay: 10
 
     - name: Display cluster health
       ansible.builtin.debug:
-        var: cluster_health.json
+        var: health.json
 
     - name: Verify cluster is healthy
       ansible.builtin.assert:
         that:
-          - cluster_health.json.status in ['green', 'yellow']
-          - cluster_health.json.number_of_nodes >= 2
-        fail_msg: "Cluster is unhealthy: {{ cluster_health.json.status }}"
-        success_msg: "Cluster is {{ cluster_health.json.status }} with {{ cluster_health.json.number_of_nodes }} nodes"
+          - health.json.status in ['green', 'yellow']
+          - health.json.number_of_nodes >= 2
+        fail_msg: "Cluster is unhealthy: {{ health.json.status }}"
+        success_msg: "Cluster is {{ health.json.status }} with {{ health.json.number_of_nodes }} nodes"
 
     - name: Check all nodes are visible
       # Default _cat/nodes columns don't include version — must specify h=
@@ -180,8 +167,8 @@
           UPGRADE VERIFICATION COMPLETE
           ===========================================
           ES Version: {{ es_info.json.version.number }}
-          Cluster Status: {{ cluster_health.json.status }}
-          Number of Nodes: {{ cluster_health.json.number_of_nodes }}
+          Cluster Status: {{ health.json.status }}
+          Number of Nodes: {{ health.json.number_of_nodes }}
           Data Preserved: YES
           Config Applied: YES (custom JVM param)
           ===========================================

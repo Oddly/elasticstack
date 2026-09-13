@@ -16,15 +16,8 @@
     elasticsearch_heap: "1"
     elasticstack_no_log: false
   tasks:
-    - name: Include Elastic repos role (8.x)
-      ansible.builtin.include_role:
-        name: oddly.elasticstack.repos
-
-    - name: Include Elasticsearch role (8.x)
-      ansible.builtin.include_role:
-        name: oddly.elasticstack.elasticsearch
-    - name: CI — set lenient disk watermarks
-      ansible.builtin.include_tasks: ../shared/set_ci_watermarks.yml
+    - name: Deploy Elasticsearch 8.x fixture
+      ansible.builtin.include_tasks: ../shared/converge_elasticsearch.yml
 
 - name: Verify ES 8.x cluster is healthy and index test data
   hosts: elasticsearch[0]
@@ -33,33 +26,20 @@
     elasticstack_initial_passwords: /usr/share/elasticsearch/initial_passwords
   tasks:
     - name: Fetch Elastic password
-      ansible.builtin.shell: |
-        set -o pipefail
-        grep "PASSWORD elastic " {{ elasticstack_initial_passwords }} |
-        awk {' print $4 '}
-      args:
-        executable: /bin/bash
-      register: elastic_pass
-      changed_when: false
+      ansible.builtin.include_tasks: ../shared/verify_fetch_password.yml
+      vars:
+        _verify_initial_passwords_path: "{{ elasticstack_initial_passwords }}"
 
     - name: Wait for ES cluster to be healthy
-      ansible.builtin.uri:
-        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/_cluster/health
-        method: GET
-        force_basic_auth: true
-        user: elastic
-        password: "{{ elastic_pass.stdout }}"
-        return_content: true
-        status_code: 200
-        validate_certs: false
-      register: cluster_health
-      retries: 12
-      delay: 10
-      until: cluster_health.json.status | default('') in ['green', 'yellow']
+      ansible.builtin.include_tasks: ../shared/verify_es_health.yml
+      vars:
+        _verify_es_statuses: [green, yellow]
+        _verify_es_retries: 12
+        _verify_es_delay: 10
 
     - name: Display ES 8.x cluster health
       ansible.builtin.debug:
-        var: cluster_health.json
+        var: health.json
 
     - name: Check ES version is 8.x
       ansible.builtin.uri:

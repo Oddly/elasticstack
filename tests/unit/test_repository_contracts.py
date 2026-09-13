@@ -21,6 +21,9 @@ from gen_argspecs import (  # noqa: E402
 )
 
 ACTION_SHA = re.compile(r"^[0-9a-f]{40}$")
+STATIC_TASK_INCLUDE = re.compile(
+    r"(?m)^\s*(?:ansible\.builtin\.)?include_tasks:\s*['\"]?([^'\"\s#]+)"
+)
 COLLECTION_CONSTRAINTS = {
     "community.general": ">=12.3.0,<13.0.0",
     "community.crypto": ">=3.1.1,<4.0.0",
@@ -39,8 +42,15 @@ def _run(command, cwd):
     )
 
 
-def _assertion_text(path):
-    """Return the expressions under every Ansible assert task's ``that`` key."""
+def _assertion_text(path, seen=None):
+    """Return assert expressions from a playbook and its static task includes."""
+    path = path.resolve()
+    if seen is None:
+        seen = set()
+    if path in seen:
+        return ""
+    seen.add(path)
+
     document = yaml.safe_load(path.read_text()) or {}
     expressions = []
 
@@ -50,6 +60,11 @@ def _assertion_text(path):
                 if key == "that":
                     values = value if isinstance(value, list) else [value]
                     expressions.extend(str(item) for item in values)
+                if key in {"include_tasks", "ansible.builtin.include_tasks"}:
+                    if isinstance(value, str) and "{{" not in value:
+                        included = (path.parent / value).resolve()
+                        if included.is_file():
+                            expressions.append(_assertion_text(included, seen))
                 visit(value)
         elif isinstance(node, list):
             for item in node:
@@ -57,6 +72,24 @@ def _assertion_text(path):
 
     visit(document)
     return "\n".join(expressions)
+
+
+def _source_with_static_includes(path, seen=None):
+    """Return a playbook source plus the task files it statically includes."""
+    path = path.resolve()
+    if seen is None:
+        seen = set()
+    if path in seen or not path.is_file():
+        return ""
+    seen.add(path)
+
+    source = path.read_text()
+    for include in STATIC_TASK_INCLUDE.findall(source):
+        if "{{" in include:
+            continue
+        included = (path.parent / include).resolve()
+        source += _source_with_static_includes(included, seen)
+    return source
 
 
 class TestRepositoryContracts(unittest.TestCase):
@@ -1032,6 +1065,273 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("- test", verify)
         self.assertIn("- config", verify)
 
+    def test_molecule_reuses_shared_service_and_readiness_checks(self):
+        kibana_shared = (
+            ROOT / "molecule" / "shared" / "verify_kibana_available.yml"
+        ).read_text()
+        self.assertIn("ansible.builtin.uri:", kibana_shared)
+        self.assertIn("register: kibana_status", kibana_shared)
+        self.assertIn("overall.level", kibana_shared)
+        self.assertIn("_kibana_is_https", kibana_shared)
+        self.assertIn("_kibana_use_auth", kibana_shared)
+        self.assertIn("_verify_kibana_auth_http", kibana_shared)
+        self.assertIn("follow_redirects: none", kibana_shared)
+        self.assertIn("else omit", kibana_shared)
+        self.assertIn("_verify_kibana_validate_certs | default(true)", kibana_shared)
+
+        verification_contract = yaml.safe_load(
+            (ROOT / "tests" / "integration" / "molecule_verification_contract.yml").read_text()
+        )
+        lifecycle = next(
+            task
+            for task in verification_contract[0]["tasks"]
+            if task.get("name") == "Run the Kibana verification lifecycle contract"
+        )
+        lifecycle_names = [task.get("name") for task in lifecycle["block"]]
+        cleanup_names = [task.get("name") for task in lifecycle["always"]]
+        self.assertIn("Start the local Kibana status endpoint", lifecycle_names)
+        self.assertIn("Run the shared Kibana verifier over HTTP", lifecycle_names)
+        self.assertIn("Stop the local Kibana status endpoint", cleanup_names)
+        self.assertIn("Remove contract workspace", cleanup_names)
+
+        for scenario in ("cert_renewal", "kibana_custom_certs"):
+            source = (ROOT / "molecule" / scenario / "verify.yml").read_text()
+            self.assertIn(
+                "_verify_kibana_validate_certs: false",
+                source,
+                f"{scenario} uses a self-signed Kibana certificate",
+            )
+
+        for scenario in (
+            "cert_renewal",
+            "elasticstack_default",
+            "es_kibana",
+            "kibana_custom",
+            "kibana_custom_certs",
+        ):
+            source = (ROOT / "molecule" / scenario / "verify.yml").read_text()
+            self.assertIn(
+                "include_tasks: ../shared/verify_kibana_available.yml",
+                source,
+                scenario,
+            )
+
+        custom_kibana_verify = (ROOT / "molecule" / "kibana_custom" / "verify.yml").read_text()
+        self.assertIn("_verify_kibana_auth_http: true", custom_kibana_verify)
+
+        logstash_service_shared = (
+            ROOT / "molecule" / "shared" / "verify_logstash_service.yml"
+        ).read_text()
+        self.assertIn("register: logstash_service", logstash_service_shared)
+        self.assertIn("logstash_service.failed", logstash_service_shared)
+        self.assertIn("logstash_service.changed", logstash_service_shared)
+
+        logstash_shared = (
+            ROOT / "molecule" / "shared" / "verify_logstash_port.yml"
+        ).read_text()
+        self.assertIn("ansible.builtin.wait_for:", logstash_shared)
+        self.assertIn("register: logstash_port_check", logstash_shared)
+        self.assertIn("Get installed Logstash version", logstash_shared)
+        self.assertIn("--config.test_and_exit", logstash_shared)
+
+        for scenario in (
+            "logstash_advanced",
+            "logstash_external_certs",
+            "logstash_ssl",
+            "logstash_standalone_certs",
+        ):
+            source = (ROOT / "molecule" / scenario / "verify.yml").read_text()
+            self.assertIn(
+                "include_tasks: ../shared/verify_logstash_service.yml",
+                source,
+                scenario,
+            )
+            self.assertIn(
+                "include_tasks: ../shared/verify_logstash_port.yml",
+                source,
+                scenario,
+            )
+            self.assertNotIn(
+                "Get installed Logstash version",
+                source,
+                f"{scenario} must use the shared Logstash version check",
+            )
+
+        cert_shared = (
+            ROOT / "molecule" / "shared" / "generate_test_certs_openssl.yml"
+        ).read_text()
+        for marker in (
+            "transport.cnf",
+            "transport.crt",
+            "http.cnf",
+            "http.crt",
+            "-CAcreateserial",
+        ):
+            self.assertIn(marker, cert_shared)
+
+        for scenario in (
+            "elasticsearch_cert_content",
+            "elasticsearch_custom_certs",
+            "kibana_custom_certs",
+        ):
+            source = (ROOT / "molecule" / scenario / "converge.yml").read_text()
+            self.assertIn(
+                "include_tasks: ../shared/generate_test_certs_openssl.yml",
+                source,
+                scenario,
+            )
+            self.assertNotIn(
+                "openssl genrsa",
+                source,
+                f"{scenario} must use the shared OpenSSL fixture",
+            )
+
+    def test_molecule_password_checks_use_shared_safe_fetch(self):
+        shared = (ROOT / "molecule" / "shared" / "verify_fetch_password.yml").read_text()
+        self.assertIn("ansible.builtin.command:", shared)
+        self.assertIn("- awk", shared)
+        self.assertIn("$1 == \"PASSWORD\" && $2 == user", shared)
+        self.assertIn("_verify_initial_passwords_path", shared)
+        self.assertIn("failed_when:", shared)
+        self.assertIn("no_log:", shared)
+
+        watermarks = (ROOT / "molecule" / "shared" / "set_ci_watermarks.yml").read_text()
+        self.assertIn("ansible.builtin.command:", watermarks)
+        self.assertIn("check_mode: false", watermarks)
+        self.assertIn("$1 == \"PASSWORD\" && $2 == \"elastic\"", watermarks)
+        self.assertIn("failed_when:", watermarks)
+
+        for scenario in (
+            "cert_renewal",
+            "elasticsearch_cert_content",
+            "elasticsearch_custom_certs",
+            "elasticsearch_custom_certs_minimal",
+            "elasticsearch_diagnostics",
+            "elasticsearch_upgrade_8to9",
+            "elasticsearch_upgrade_8to9_single",
+            "beats_security",
+            "elasticstack_default",
+            "es_kibana",
+            "kibana_custom",
+            "kibana_custom_certs",
+            "logstash_elasticsearch",
+        ):
+            source = (ROOT / "molecule" / scenario / "verify.yml").read_text()
+            self.assertIn(
+                "include_tasks: ../shared/verify_fetch_password.yml",
+                source,
+                scenario,
+            )
+            self.assertNotIn(
+                'grep "PASSWORD elastic "',
+                source,
+                f"{scenario} must use the shared password reader",
+            )
+
+        for scenario in ("elasticsearch_upgrade_8to9", "elasticsearch_upgrade_8to9_single"):
+            source = (ROOT / "molecule" / scenario / "verify.yml").read_text()
+            self.assertIn("_verify_initial_passwords_path:", source, scenario)
+
+            converge = (ROOT / "molecule" / scenario / "converge.yml").read_text()
+            self.assertIn(
+                "include_tasks: ../shared/verify_fetch_password.yml",
+                converge,
+                f"{scenario} converge",
+            )
+            self.assertIn("_verify_initial_passwords_path:", converge, scenario)
+
+        old_password_guard = (ROOT / "molecule" / "elasticsearch_default" / "verify.yml").read_text()
+        self.assertIn("ansible.builtin.command:", old_password_guard)
+        self.assertIn("no_log: true", old_password_guard)
+        self.assertNotIn('grep "PASSWORD elastic "', old_password_guard)
+
+    def test_molecule_reuses_shared_elasticsearch_health_checks(self):
+        shared = (ROOT / "molecule" / "shared" / "verify_es_health.yml").read_text()
+        self.assertIn("_verify_es_statuses", shared)
+        self.assertIn("_verify_es_health_query", shared)
+        self.assertIn("_verify_es_retries", shared)
+        self.assertIn("_verify_es_delay", shared)
+        self.assertIn("in _health_statuses", shared)
+
+        scenarios = (
+            "cert_renewal",
+            "elasticsearch_cert_content",
+            "elasticsearch_custom_certs",
+            "elasticsearch_custom_certs_minimal",
+            "elasticsearch_diagnostics",
+            "beats_security",
+            "elasticstack_default",
+            "es_kibana",
+            "kibana_custom",
+            "kibana_custom_certs",
+            "logstash_elasticsearch",
+        )
+        for scenario in scenarios:
+            source = (ROOT / "molecule" / scenario / "verify.yml").read_text()
+            self.assertIn(
+                "include_tasks: ../shared/verify_es_health.yml",
+                source,
+                scenario,
+            )
+
+        for scenario in scenarios:
+            source = (ROOT / "molecule" / scenario / "verify.yml").read_text()
+            self.assertNotIn(
+                "_cluster/health",
+                source,
+                f"{scenario} must use the shared Elasticsearch health check",
+            )
+
+        beats_security = (ROOT / "molecule" / "beats_security" / "verify.yml").read_text()
+        self.assertIn(
+            "_verify_es_statuses: [green, yellow]",
+            beats_security,
+            "beats_security must allow yellow health for its single-node cluster",
+        )
+
+        for relative_path in (
+            "molecule/elasticsearch_upgrade_8to9/converge.yml",
+            "molecule/elasticsearch_upgrade_8to9/verify.yml",
+            "molecule/elasticsearch_upgrade_8to9_single/converge.yml",
+            "molecule/elasticsearch_upgrade_8to9_single/verify.yml",
+        ):
+            source = (ROOT / relative_path).read_text()
+            self.assertIn(
+                "include_tasks: ../shared/verify_es_health.yml",
+                source,
+                relative_path,
+            )
+            self.assertNotIn("_cluster/health", source, relative_path)
+
+    def test_molecule_reuses_shared_elasticsearch_converge_sequence(self):
+        shared = (ROOT / "molecule" / "shared" / "converge_elasticsearch.yml").read_text()
+        self.assertIn("oddly.elasticstack.repos", shared)
+        self.assertIn("oddly.elasticstack.elasticsearch", shared)
+        self.assertIn("cleanup_cache.yml", shared)
+        self.assertIn("set_ci_watermarks.yml", shared)
+        self.assertIn("_converge_cleanup_cache", shared)
+        self.assertIn("_converge_set_watermarks", shared)
+
+        scenarios = (
+            "elasticsearch_cert_content",
+            "elasticsearch_custom",
+            "elasticsearch_custom_certs",
+            "elasticsearch_custom_certs_minimal",
+            "elasticsearch_default",
+            "elasticsearch_diagnostics",
+            "elasticsearch_no-security",
+            "elasticsearch_roles_calculation",
+            "elasticsearch_upgrade_8to9",
+            "elasticsearch_upgrade_8to9_single",
+        )
+        for scenario in scenarios:
+            source = (ROOT / "molecule" / scenario / "converge.yml").read_text()
+            self.assertIn(
+                "include_tasks: ../shared/converge_elasticsearch.yml",
+                source,
+                scenario,
+            )
+
     def test_logstash_role_permission_variables_use_corrected_spelling(self):
         defaults = (ROOT / "roles" / "logstash" / "defaults" / "main.yml").read_text()
         specs = yaml.safe_load(
@@ -1124,6 +1424,7 @@ class TestRepositoryContracts(unittest.TestCase):
                 path = ROOT / relative_path
                 self.assertTrue(path.exists(), f"Missing baseline scenario: {relative_path}")
                 source = path.read_text()
+                execution_source = _source_with_static_includes(path)
                 scenario = path.parent.name
                 self.assertTrue(
                     (path.parent / "verify.yml").exists(),
@@ -1137,7 +1438,7 @@ class TestRepositoryContracts(unittest.TestCase):
                 if role != "elasticstack":
                     self.assertIn(
                         f"oddly.elasticstack.{role}",
-                        source,
+                        execution_source,
                         f"{relative_path} does not execute the {role} role",
                     )
 
@@ -1155,7 +1456,7 @@ class TestRepositoryContracts(unittest.TestCase):
                 if role != "elasticstack":
                     self.assertIn(
                         f"oddly.elasticstack.{role}",
-                        converge.read_text(),
+                        _source_with_static_includes(converge),
                         f"{scenario} rollout does not execute the {role} role",
                     )
                 assignment = re.compile(
@@ -1237,7 +1538,7 @@ class TestRepositoryContracts(unittest.TestCase):
                 verify = ROOT / "molecule" / scenario / "verify.yml"
                 self.assertTrue(converge.exists(), f"Missing behavior converge: {converge}")
                 self.assertTrue(verify.exists(), f"Missing behavior verify: {verify}")
-                execution_source = converge.read_text()
+                execution_source = _source_with_static_includes(converge)
                 self.assertIn(
                     scenario,
                     workflow_sources,
