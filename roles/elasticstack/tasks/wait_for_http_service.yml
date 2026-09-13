@@ -1,0 +1,102 @@
+---
+# Shared readiness probe for services that expose an HTTP health endpoint.
+#
+# Required variables:
+#   _wait_service_name – systemd unit name without the .service suffix
+#   _wait_url          – URL to probe
+#
+# Optional variables:
+#   _wait_fatal_pattern    – journal pattern that makes the failure permanent
+#   _wait_success_statuses – HTTP status codes that mean the service is ready
+#   _wait_retries          – readiness retries (default: 60)
+#   _wait_delay            – seconds between readiness retries (default: 5)
+#   _wait_validate_certs   – validate HTTPS certificates (default: true)
+#   _wait_ca_file          – optional CA bundle for HTTPS validation
+#   _wait_resolve          – optional curl --resolve value for local HTTPS checks
+#   _wait_connect_timeout  – curl connection timeout in seconds (default: 5)
+#   _wait_max_time         – curl request timeout in seconds (default: 10)
+
+- name: "wait_for_http_service | Wait for {{ _wait_service_name }} HTTP readiness"  # noqa: name[template]
+  when: not ansible_check_mode
+  block:
+    - name: "wait_for_http_service | Probe {{ _wait_service_name }} service and HTTP endpoint"  # noqa: name[template] var-naming[no-role-prefix]
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          if ! systemctl is-active --quiet {{ _wait_service_name | quote }}; then
+            exit 2
+          fi
+          if journalctl -u {{ _wait_service_name | quote }} --no-pager -n 100 --since '2 minutes ago' 2>/dev/null | \
+              grep -Eq {{ _wait_fatal_pattern | default('FATAL') | quote }}; then
+            exit 2
+          fi
+          CURL_ARGS=(
+            --silent
+            --output /dev/null
+            --write-out '%{http_code}'
+            --connect-timeout {{ _wait_connect_timeout | default(5, true) | int }}
+            --max-time {{ _wait_max_time | default(10, true) | int }}
+          )
+          {% if not (_wait_validate_certs | default(true) | bool) %}
+          CURL_ARGS+=(--insecure)
+          {% endif %}
+          {% if _wait_ca_file | default('', true) | length > 0 %}
+          CURL_ARGS+=(--cacert {{ _wait_ca_file | quote }})
+          {% endif %}
+          {% if _wait_resolve | default('', true) | length > 0 %}
+          CURL_ARGS+=(--resolve {{ _wait_resolve | quote }})
+          {% endif %}
+          CURL_ARGS+=({{ _wait_url | quote }})
+          HTTP_CODE=$(curl "${CURL_ARGS[@]}" 2>/dev/null) || true
+          {% for status in _wait_success_statuses | default([200, 401]) %}
+          if [ "$HTTP_CODE" = "{{ status | int }}" ]; then
+            exit 0
+          fi
+          {% endfor %}
+          exit 1
+        executable: /bin/bash
+      vars:
+        _wait_attempt_limit: "{{ _wait_retries | default(60) | int }}"
+      register: _wait_http_probe
+      until: _wait_http_probe.rc in [0, 2]
+      retries: "{{ _wait_attempt_limit }}"
+      delay: "{{ _wait_delay | default(5) }}"
+      changed_when: false
+      failed_when:
+        - >-
+          _wait_http_probe.rc == 2 or
+          ((_wait_http_probe.attempts | default(0) | int) >= (_wait_attempt_limit | int)
+          and _wait_http_probe.rc != 0)
+
+  rescue:
+    - name: "wait_for_http_service | Get recent {{ _wait_service_name }} journal output"  # noqa: name[template] var-naming[no-role-prefix]
+      ansible.builtin.command:
+        argv:
+          - journalctl
+          - -u
+          - "{{ _wait_service_name }}"
+          - --no-pager
+          - -n
+          - "50"
+      register: _wait_http_journal
+      changed_when: false
+
+    - name: "wait_for_http_service | Fail with {{ _wait_service_name }} startup diagnostics"  # noqa: name[template]
+      ansible.builtin.fail:
+        msg: |
+          {{ _wait_service_name }} service died while waiting for HTTP readiness.
+
+          Recent log output:
+          {{ _wait_http_journal.stdout }}
+      when: _wait_http_probe.rc | default(0) == 2
+
+    - name: "wait_for_http_service | Fail with {{ _wait_service_name }} HTTP timeout"  # noqa: name[template]
+      ansible.builtin.fail:
+        msg: |
+          {{ _wait_service_name }} HTTP endpoint {{ _wait_url }} did not become ready within
+          {{ (_wait_retries | default(60) | int) * (_wait_delay | default(5) | int) }}s.
+          Service state: {{ _wait_http_probe.stdout | default('unknown') }}
+
+          Recent log output:
+          {{ _wait_http_journal.stdout }}
+      when: _wait_http_probe.rc | default(0) != 2

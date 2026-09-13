@@ -1,0 +1,200 @@
+---
+# Molecule delegated driver: create containers on Incus.
+# Runs on localhost (the CI runner or developer machine).
+# Connects to the Incus host via SSH to run incus commands.
+# Containers use pre-baked images (molecule-*) with SSH, python3,
+# python3-cryptography, and the molecule SSH key already installed.
+#
+# Memory admission:
+#   In CI, admission happens in the workflow's "Acquire memory slot" step
+#   (the Oddly/incus-memory-gate action), which leaves a reservation file
+#   in /tmp/molecule-gate. When that file exists we launch unconditionally
+#   and delete it right after `incus launch` — from then on the job is
+#   counted via committed limits.memory, so nothing is double-counted.
+#   Runs without a reservation (local development) get a capacity check
+#   against the same ledger here, so a laptop run cannot stampede CI.
+- name: Create containers on Incus
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    incus_host: "{{ lookup('env', 'INCUS_HOST') | default('172.30.0.172', true) }}"
+    molecule_ssh_key: "{{ lookup('env', 'MOLECULE_SSH_KEY') | default(lookup('env', 'HOME') ~ '/.ssh/molecule_id_ed25519', true) }}"
+    # Resolve ${VAR:-default} shell substitutions in raw molecule.yml
+    _resolve_envsubst: >-
+      python3 -c 'import re,os,sys;
+      c=open(sys.argv[1]).read();
+      print(re.sub(r"\$\{(\w+)(?::-([^}]*))?\}",lambda m:os.environ.get(m.group(1),m.group(2) or ""),c),end="")'
+    molecule_yml: "{{ lookup('pipe', _resolve_envsubst ~ ' ' ~ molecule_scenario_directory ~ '/molecule.yml') | from_yaml }}"
+    ci_run_id: "{{ lookup('env', 'GITHUB_RUN_ID') | default('', true) }}"
+    ci_repository: "{{ lookup('env', 'GITHUB_REPOSITORY') | default('', true) }}"
+    _ssh_cmd: >-
+      ssh -o StrictHostKeyChecking=no -o BatchMode=yes
+      -i {{ molecule_ssh_key }} root@{{ incus_host }}
+    # Default memory per container in MB.  Most scenarios now set
+    # memory_mb explicitly; this default covers mixed ES+KB containers
+    # like kibana_default that don't specify their own limit.
+    incus_default_memory_mb: "{{ lookup('env', 'INCUS_DEFAULT_MEMORY_MB') | default(4096, true) | int }}"
+    # Memory reserved for host OS, Incus daemon, runners, and overhead (MB).
+    # 12 GB accounts for ~20 runner processes, dnsmasq, sshd, LVM, and
+    # kernel page cache that isn't reclaimable under cgroup pressure.
+    incus_reserve_mb: "{{ lookup('env', 'INCUS_RESERVE_MB') | default(12288, true) | int }}"
+    # Set by GitHub Actions; empty for local development runs.
+    runner_name: "{{ lookup('env', 'RUNNER_NAME') | default('', true) }}"
+    molecule_gate_dir: "{{ lookup('env', 'MOLECULE_GATE_DIR') | default('/tmp/molecule-gate', true) }}"
+    # Total memory this batch of containers needs (MB).
+    _needed_mb: "{{ molecule_yml.platforms | map(attribute='memory_mb', default=incus_default_memory_mb) | map('int') | sum }}"
+    # Incus storage pool for containers.  LVM thin on NVMe gives CoW
+    # snapshots for instant cloning.  Falls back to "default" (dir) pool.
+    incus_storage_pool: "{{ lookup('env', 'INCUS_STORAGE_POOL') | default('lvm-pool', true) }}"
+    # Pre-baked local images with SSH + python3 + authorized_keys ready.
+    incus_images:
+      debian13: "molecule-debian-13"
+      rockylinux9: "molecule-rockylinux-9"
+      rockylinux10: "molecule-rockylinux-10"
+      ubuntu2204: "molecule-ubuntu-22.04"
+      ubuntu2404: "molecule-ubuntu-24.04"
+      ubuntu2604: "molecule-ubuntu-26.04"
+
+  tasks:
+    - name: Delete any existing containers with same names
+      ansible.builtin.command:
+        cmd: "{{ _ssh_cmd }} incus delete {{ item.name }} --force"
+      loop: "{{ molecule_yml.platforms }}"
+      loop_control:
+        label: "{{ item.name }}"
+      failed_when: false
+      changed_when: false
+
+    # Launch under the host-side lock. CI jobs arrive holding a gate
+    # reservation and launch unconditionally; the reservation is deleted
+    # right after the launches, converting it into committed limits.memory.
+    # Dev runs (no reservation) check the shared ledger first.
+    - name: Wait for capacity and launch containers (locked)  # noqa: risky-shell-pipe
+      ansible.builtin.shell: |
+        {{ _ssh_cmd }} bash -s << 'REMOTE_SCRIPT'
+        set -o pipefail
+        exec 9>/var/lock/molecule-create.lock
+        flock -x -w 60 9 || exit 1
+
+        gate_dir={{ molecule_gate_dir }}
+        my_resv="$gate_dir/r.{{ runner_name }}"
+
+        if [ -n "{{ runner_name }}" ] && [ -f "$my_resv" ]; then
+          echo "Gate reservation present for {{ runner_name }} — admission already granted."
+        else
+          total_mb=$(free -m | awk '/Mem:/{print $2}')
+          reserve_mb={{ incus_reserve_mb }}
+          committed_mb=$(incus list -f json --project default < /dev/null | \
+            python3 -c '
+        import json, re, sys
+        total = 0
+        for c in json.load(sys.stdin):
+            if c.get("status") != "Running":
+                continue
+            mem = (c.get("config") or {}).get("limits.memory") or "0"
+            m = re.match(r"(\d+)\s*(GB|GiB|MB|MiB)?", mem)
+            if m:
+                val = int(m.group(1))
+                if (m.group(2) or "MB").upper() in ("GB", "GIB"):
+                    val *= 1024
+                total += val
+        print(total)
+        ')
+          reserved_mb=0
+          for f in "$gate_dir"/r.*; do
+            [ -f "$f" ] || continue
+            mb=$(awk '{print $1+0; exit}' "$f")
+            reserved_mb=$(( reserved_mb + mb ))
+          done
+          needed_mb={{ _needed_mb }}
+          available_mb=$(( total_mb - reserve_mb - committed_mb - reserved_mb ))
+          if [ "$available_mb" -lt "$needed_mb" ]; then
+            echo "No capacity: ${committed_mb}MB committed + ${reserved_mb}MB reserved + ${needed_mb}MB needed > ${total_mb}MB total - ${reserve_mb}MB reserve"
+            exit 1
+          fi
+          echo "Memory OK: ${committed_mb}MB committed, ${reserved_mb}MB reserved, ${needed_mb}MB needed, ${available_mb}MB available"
+        fi
+
+        {% for item in molecule_yml.platforms %}
+        {% set mem_mb = item.memory_mb | default(incus_default_memory_mb) | int %}
+        incus delete {{ item.name }} --force 2>/dev/null || true
+        incus launch {{ incus_images[item.distro | default("debian13")] }} {{ item.name }} \
+          --storage {{ incus_storage_pool | default("default") }} \
+          -c limits.memory={{ mem_mb }}MB \
+          -c security.nesting=true \
+          -c security.privileged=true \
+          -c user.managed-by=molecule \
+          -c user.created-at={{ now(utc=true).strftime("%Y-%m-%dT%H:%M:%SZ") }} \
+          {{ "-c user.ci-run-id=" ~ ci_run_id if ci_run_id else "" }} \
+          {{ "-c user.ci-repository=" ~ ci_repository if ci_repository else "" }} < /dev/null || exit 1
+        {% endfor %}
+
+        # Conversion: the containers are Running and therefore counted as
+        # committed limits.memory by every ledger reader, so the
+        # reservation must go now.
+        if [ -n "{{ runner_name }}" ]; then
+          rm -f "$my_resv"
+        fi
+        REMOTE_SCRIPT
+      changed_when: true
+      register: _launch_result
+      # Dev-path capacity retries: 10 × 30s keeps a laptop run patient for
+      # five minutes. CI jobs (reservation present) only land here on
+      # genuine incus launch errors, where a retry is also the right call.
+      # CI queueing happens in the workflow's acquire step now, before any
+      # converge work is done — not in this loop.
+      retries: 10
+      delay: 30
+      until: _launch_result.rc == 0
+
+    - name: Wait for containers to get IPv4 address
+      ansible.builtin.command:
+        cmd: "{{ _ssh_cmd }} incus list {{ item.name }} -f csv -c 4"
+      loop: "{{ molecule_yml.platforms }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: _ip_check
+      until: (_ip_check.stdout | default('')) is search('\\d+\\.\\d+\\.\\d+\\.\\d+')
+      retries: 30
+      delay: 2
+      changed_when: false
+
+    - name: Build instance address map
+      ansible.builtin.set_fact:
+        _instance_addresses: >-
+          {{ _instance_addresses | default({}) | combine({
+               item.item.name: item.stdout | regex_search('(\d+\.\d+\.\d+\.\d+)', '\1') | first
+             }) }}
+      loop: "{{ _ip_check.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+
+    - name: Wait for SSH to become available
+      ansible.builtin.command:
+        cmd: >-
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes
+          -i {{ molecule_ssh_key }}
+          root@{{ _instance_addresses[item.name] }} true
+      loop: "{{ molecule_yml.platforms }}"
+      loop_control:
+        label: "{{ item.name }} ({{ _instance_addresses[item.name] }})"
+      register: _ssh_check
+      until: _ssh_check.rc == 0
+      retries: 30
+      delay: 2
+      changed_when: false
+
+    - name: Write molecule instance config
+      ansible.builtin.copy:
+        content: |
+          {% for platform in molecule_yml.platforms %}
+          - address: "{{ _instance_addresses[platform.name] }}"
+            identity_file: "{{ molecule_ssh_key }}"
+            instance: "{{ platform.name }}"
+            port: 22
+            user: root
+          {% endfor %}
+        dest: "{{ molecule_ephemeral_directory }}/instance_config.yml"
+        mode: "0600"

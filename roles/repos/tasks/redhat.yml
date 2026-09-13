@@ -46,6 +46,19 @@
           changed_when: true
           when: _repos_crypto_policy.stdout != 'LEGACY'
 
+- name: redhat | Remove stale Elastic repository releases
+  ansible.builtin.yum_repository:
+    name: "elastic-{{ item }}.x"
+    file: elastic-release
+    state: absent
+  loop:
+    - 7
+    - 8
+    - 9
+  loop_control:
+    label: "elastic-{{ item }}.x"
+  when: item | int != elasticstack_release | int
+
 - name: redhat | Ensure Elastic repository key is available (RedHat)
   ansible.builtin.rpm_key:
     key: "{{ elasticstack_repo_key }}"

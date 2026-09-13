@@ -1,0 +1,12 @@
+---
+- name: Install Kibana without starting it
+  hosts: all
+  vars:
+    elasticstack_full_stack: false
+    elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
+    elasticstack_no_log: false
+    kibana_enable: false
+  tasks:
+    - name: Deploy Kibana
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.kibana

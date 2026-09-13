@@ -7,6 +7,9 @@
     elasticstack_release: "{{ lookup('env', 'ELASTIC_RELEASE') | default('9', true) | int }}"
     elasticstack_full_stack: true
     elasticstack_no_log: false
+    # Use a nondefault port so the role, readiness probe, and public URL all
+    # have to honor elasticstack_kibana_port.
+    elasticstack_kibana_port: 15601
     elasticsearch_heap: "1"
 
     # Kibana custom settings
@@ -21,6 +24,7 @@
     kibana_extra_config: |-
       ops.interval: 10000
       logging.root.level: warn
+      server.port: 9999
       server.publicBaseUrl: "https://duplicate.example.com"
       "server.host": "0.0.0.0"
       elasticsearch.hosts:

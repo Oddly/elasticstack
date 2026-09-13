@@ -5,6 +5,9 @@
     name: oddly.elasticstack.elasticstack
   when: not hostvars[inventory_hostname]._elasticstack_role_imported | default(false)
 
+- name: Refresh Elastic repositories for selected release
+  ansible.builtin.include_tasks: "{{ role_path }}/../elasticstack/tasks/configure_repositories.yml"
+
 - name: Main | Propagate stack-level security setting
   ansible.builtin.set_fact:
     kibana_security: "{{ elasticstack_security | bool }}"
@@ -117,58 +120,33 @@
   ansible.builtin.meta: flush_handlers
 
 - name: Wait for Kibana to be ready
-  when: not ansible_check_mode
-  block:
-    - name: Wait for Kibana readiness ({{ 'HTTPS' if kibana_tls | default(false) | bool else 'HTTP' }})
-      ansible.builtin.shell:
-        # Exit codes:
-        #   0  ready (200 or 401)
-        #   1  transient — still starting up, keep retrying
-        #   2  permanent — service dead or a fatal log line already surfaced
-        cmd: |
-          set -o pipefail
-          if ! systemctl is-active --quiet kibana; then
-            exit 2
-          fi
-          if journalctl -u kibana --no-pager -n 100 --since '2 minutes ago' 2>/dev/null | \
-              grep -Eq 'FATAL|Unable to connect to Elasticsearch|Authentication.*failed|Kibana server is not ready.*fatal'; then
-            exit 2
-          fi
-          HTTP_CODE=$(curl -sk -o /dev/null -w '%{http_code}' {{ 'https' if kibana_tls | default(false) | bool else 'http' }}://localhost:5601/api/status 2>/dev/null) || true
-          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
-            exit 0
-          fi
-          exit 1
-        executable: /bin/bash
-      register: _kibana_wait_result
-      until: _kibana_wait_result.rc == 0
-      retries: 60
-      delay: 5
-      changed_when: false
-      failed_when: _kibana_wait_result.rc == 2
-
-  rescue:
-    - name: Get recent Kibana journal output
-      ansible.builtin.command:
-        cmd: journalctl -u kibana --no-pager -n 50
-      register: _kibana_wait_journal
-      changed_when: false
-
-    - name: Fail with Kibana diagnostics (service crashed)
-      ansible.builtin.fail:
-        msg: |
-          Kibana service died while waiting for HTTP readiness.
-
-          Recent log output:
-          {{ _kibana_wait_journal.stdout }}
-      when: _kibana_wait_result.rc | default(0) == 2
-
-    - name: Fail with Kibana diagnostics (HTTP timeout)
-      ansible.builtin.fail:
-        msg: |
-          Kibana HTTP did not become ready within 300s.
-          Service state: {{ _kibana_wait_result.stdout | default('unknown') }}
-
-          Recent log output:
-          {{ _kibana_wait_journal.stdout }}
-      when: _kibana_wait_result.rc | default(0) != 2
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/wait_for_http_service.yml"
+  when: kibana_enable | bool
+  vars:
+    _wait_service_name: kibana
+    _wait_url: >-
+      {{ ('https://' ~ (elasticstack_kibana_host | default(ansible_facts.hostname))
+          if kibana_tls | default(false) | bool
+          else 'http://localhost') }}:{{ elasticstack_kibana_port }}/api/status
+    # Kibana 9's standalone interactive setup deliberately remains in preboot
+    # until an Elasticsearch enrollment is completed and reports HTTP 503.
+    # Keep full-stack readiness strict: a 503 is acceptable only when this
+    # role is being used without the stack-managed Elasticsearch backend.
+    _wait_success_statuses: >-
+      {{ [200, 401, 503] if not (elasticstack_full_stack | default(false) | bool)
+         else [200, 401] }}
+    _wait_fatal_pattern: "FATAL|Unable to connect to Elasticsearch|Authentication.*failed|Kibana server is not ready.*fatal"
+    _wait_validate_certs: "{{ kibana_tls_validate_certs | bool }}"
+    _wait_ca_file: >-
+      {{ (kibana_certs_dir | default('/etc/kibana/certs', true)) ~ '/ca.crt'
+         if kibana_tls | default(false) | bool and
+            (kibana_cert_source | default('elasticsearch_ca') == 'elasticsearch_ca' or
+             kibana_tls_ca_file | default('', true) | length > 0 or
+             kibana_tls_ca_content | default('', true) | length > 0 or
+             _kibana_ca_extracted | default(false) | bool)
+         else '' }}
+    _wait_resolve: >-
+      {{ (elasticstack_kibana_host | default(ansible_facts.hostname)) ~ ':' ~
+         (elasticstack_kibana_port | string) ~ ':127.0.0.1'
+         if kibana_tls | default(false) | bool else '' }}

@@ -48,6 +48,8 @@ explicit:
   kibana:
     kibana_elasticsearch_hosts:
       - tests/integration/collection_variable_contract.yml
+    kibana_tls_validate_certs:
+      - tests/integration/collection_variable_contract.yml
     kibana_server_protocol:
       - tests/integration/collection_variable_contract.yml
     kibana_sniff_interval:
@@ -378,6 +380,15 @@ behaviors:
       - "_fake_api_log.stdout is search('\"path\": \"/_flush\", \"port\": 19200')"
       - "_fake_api_log.stdout is not search('\"path\": \"/_flush\"')"
       - "ansible_failed_result.msg is search('elastic user password is unavailable')"
+  - name: shared_http_readiness_probe
+    role: elasticstack
+    variables: []
+    contract: tests/integration/wait_for_http_service_contract.yml
+    roles:
+      - ../../roles/elasticstack/tasks/wait_for_http_service.yml
+    expected:
+      - "_wait_http_probe.rc == 0"
+      - "ansible_failed_result.msg is search('service died while waiting for HTTP readiness')"
   - name: shared_certificate_passphrase
     role: elasticstack
     variables:
@@ -991,6 +1002,10 @@ rollouts:
       expected:
         - "initial_passwords.stat.exists"
   elasticstack:
+    elasticstack_kibana_port:
+      scenario: kibana_custom
+      expected:
+        - "server.port: 15601"
     elasticstack_version:
       scenario: elasticsearch_upgrade_8to9_single
       assertions_file: molecule/elasticsearch_upgrade_8to9_single/converge.yml
@@ -1009,6 +1024,11 @@ rollouts:
       scenario: kibana_custom_certs
       expected:
         - "(kibana_certs_dir ~ '/' ~ inventory_hostname ~ '-kibana.crt') | to_json"
+    kibana_enable:
+      scenario: kibana_disabled
+      expected:
+        - "ansible_facts.services['kibana.service'].state in ['stopped', 'inactive']"
+        - "ansible_facts.services['kibana.service'].status == 'disabled'"
     kibana_elasticsearch_hosts:
       scenario: kibana_extras
       expected:

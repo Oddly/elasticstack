@@ -8,37 +8,64 @@
 - name: Restart and wait for Kibana
   when: "'kibana' in hostvars[item].ansible_facts.packages | default({})"
   block:
-    - name: Reset Kibana failed state before restart
-      ansible.builtin.command:
-        cmd: systemctl reset-failed kibana.service
-      delegate_to: "{{ item }}"
-      changed_when: false
-      failed_when: false
-
     - name: Restart Kibana service
-      ansible.builtin.service:
-        name: kibana
-        state: restarted
-      delegate_to: "{{ item }}"
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/restart_and_verify_service.yml"
+        apply:
+          delegate_to: "{{ item }}"
+      vars:
+        _service_name: kibana
 
     - name: Wait for Kibana HTTP readiness after restart
-      ansible.builtin.shell:
-        cmd: |
-          if ! systemctl is-active --quiet kibana; then
-            exit 2
-          fi
-          HTTP_CODE=$(curl -sk -o /dev/null -w '%{http_code}' http://localhost:5601/api/status 2>/dev/null) || true
-          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
-            exit 0
-          fi
-          exit 1
-      delegate_to: "{{ item }}"
-      register: _elasticsearch_kibana_handler_wait
-      until: _elasticsearch_kibana_handler_wait.rc == 0
-      retries: 60
-      delay: 5
-      changed_when: false
-      failed_when: _elasticsearch_kibana_handler_wait.rc == 2
+      ansible.builtin.include_tasks:
+        file: "{{ role_path }}/../elasticstack/tasks/wait_for_http_service.yml"
+        apply:
+          delegate_to: "{{ item }}"
+      vars:
+        # Play vars are not guaranteed to be present in hostvars[item].  The
+        # Elasticsearch certificate handler must still follow the Kibana
+        # protocol selected by the play that invoked it.
+        _elasticsearch_kibana_tls_enabled: >-
+          {{
+            (kibana_tls
+             if kibana_tls is defined
+             else hostvars[item].kibana_tls | default(false))
+            | bool
+          }}
+        _elasticsearch_kibana_host: >-
+          {{ elasticstack_kibana_host | default(
+               hostvars[item].elasticstack_kibana_host
+               | default(hostvars[item].ansible_facts.hostname), true) }}
+        _elasticsearch_kibana_port: >-
+          {{ elasticstack_kibana_port | default(
+               hostvars[item].elasticstack_kibana_port | default(5601), true) }}
+        _elasticsearch_kibana_certs_dir: >-
+          {{ kibana_certs_dir | default(
+               hostvars[item].kibana_certs_dir | default('/etc/kibana/certs', true), true) }}
+        _elasticsearch_kibana_cert_source: >-
+          {{ kibana_cert_source | default(
+               hostvars[item].kibana_cert_source | default('elasticsearch_ca'), true) }}
+        _wait_service_name: kibana
+        _wait_url: >-
+          {{ ('https://' ~ _elasticsearch_kibana_host
+              if _elasticsearch_kibana_tls_enabled
+              else 'http://localhost') }}:{{ _elasticsearch_kibana_port }}/api/status
+        _wait_fatal_pattern: "FATAL|Unable to connect to Elasticsearch|Authentication.*failed|Kibana server is not ready.*fatal"
+        _wait_validate_certs: >-
+          {{ (kibana_tls_validate_certs
+               if kibana_tls_validate_certs is defined
+               else hostvars[item].kibana_tls_validate_certs | default(true)) | bool }}
+        _wait_ca_file: >-
+          {{ _elasticsearch_kibana_certs_dir ~ '/ca.crt'
+             if _elasticsearch_kibana_tls_enabled and
+                (_elasticsearch_kibana_cert_source == 'elasticsearch_ca' or
+                 kibana_tls_ca_file | default(hostvars[item].kibana_tls_ca_file | default(''), true) | length > 0 or
+                 kibana_tls_ca_content | default(hostvars[item].kibana_tls_ca_content | default(''), true) | length > 0 or
+                 hostvars[item]._kibana_ca_extracted | default(false) | bool)
+             else '' }}
+        _wait_resolve: >-
+          {{ _elasticsearch_kibana_host ~ ':' ~ (_elasticsearch_kibana_port | string) ~ ':127.0.0.1'
+             if _elasticsearch_kibana_tls_enabled else '' }}
 
   rescue:
     - name: Get recent Kibana journal output

@@ -1,6 +1,6 @@
 # repos
 
-Ansible role for configuring Elastic Stack package repositories. Sets up APT or YUM repositories and imports the Elastic GPG signing key. This role must run before any other role in the collection so that packages are available for installation.
+Ansible role for configuring Elastic Stack package repositories. Sets up APT or YUM repositories and imports the Elastic GPG signing key. The service roles call the same repository tasks through the shared `elasticstack` role before package installation, so a separate `repos` task is only needed when configuring repositories without installing a service.
 
 The role has no service to manage — it only configures the package manager. It delegates to the shared `elasticstack` role for defaults (base URL, release version, GPG key URL).
 
@@ -93,7 +93,7 @@ elasticstack_rpm_workaround: false
 :   GPG key URL for package verification. Derived from the base URL by default.
 
 `elasticstack_enable_repos`
-:   Whether the YUM repo is marked `enabled`. APT repos are always present once added. Set to `false` if you manage repositories externally.
+:   Whether the collection manages the repository. Set to `false` if you manage repositories externally; both the standalone `repos` role and service roles honor this setting.
 
 `elasticstack_rpm_workaround`
 :   Apply the EL 9+ crypto-policy workaround described above.
