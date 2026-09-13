@@ -137,6 +137,17 @@
             state: touch
             mode: "0644"
 
+    - name: Check for package-generated Fleet state before standalone coverage
+      ansible.builtin.stat:
+        path: /etc/elastic-agent/fleet.enc
+      register: package_generated_fleet_state
+
+    - name: Clear package-generated Fleet state before standalone coverage
+      ansible.builtin.file:
+        path: /etc/elastic-agent/fleet.enc
+        state: absent
+      when: package_generated_fleet_state.stat.exists
+
     - name: Install and configure Elastic Agent before the backup fixture
       ansible.builtin.include_role:
         name: oddly.elasticstack.elastic_agent
