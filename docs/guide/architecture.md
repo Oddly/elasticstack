@@ -2,7 +2,7 @@
 
 ## Overview
 
-The collection deploys four Elastic Stack services — Elasticsearch, Logstash, Kibana, and Beats — each managed by its own Ansible role. A fifth shared role (`elasticstack`) provides common defaults that all roles inherit. A sixth role (`repos`) manages Elastic APT/YUM package repositories.
+The collection deploys Elasticsearch, Logstash, Kibana, Beats, and Elastic Agent, each managed by its own Ansible role. A shared role (`elasticstack`) provides common defaults that all roles inherit, while `repos` manages Elastic APT/YUM package repositories.
 
 When `elasticstack_full_stack: true` (the default), roles auto-discover hosts and connections through Ansible inventory groups. Each role looks up the other services' hosts using configurable group names (`elasticstack_elasticsearch_group_name`, `elasticstack_logstash_group_name`, etc.), so you don't need to hard-code addresses between services.
 
@@ -25,11 +25,18 @@ graph LR
         KB[Kibana :5601]
     end
 
+    subgraph Fleet
+        EA[Elastic Agent]
+        FS[Fleet Server :8220]
+    end
+
     FB -- "Beats protocol<br/>TLS" --> LS
     MB -- "Beats protocol<br/>TLS" --> LS
     AB -- "Beats protocol<br/>TLS" --> LS
     LS -- "HTTPS" --> ES
     KB -- "HTTPS" --> ES
+    EA -- "HTTPS" --> FS
+    FS -- "HTTPS" --> ES
 
     FB -. "direct output<br/>(optional)" .-> ES
     MB -. "direct output<br/>(optional)" .-> ES
@@ -39,6 +46,13 @@ graph LR
 Beats collect logs, metrics, and audit data from hosts and forward them to Logstash over port 5044. Logstash processes and enriches events through its pipeline (input → filter → output) and writes them to Elasticsearch. Kibana reads from Elasticsearch to provide the web UI. All connections use TLS when security is enabled.
 
 Beats can also output directly to Elasticsearch (bypassing Logstash) by setting `beats_filebeat_output: elasticsearch`.
+
+Elastic Agent is deployed separately from Beats. In standalone mode it reads a
+local policy rendered by the role. In Fleet mode it enrolls against an existing
+Fleet Server, and in Fleet Server mode it runs the server component under the
+`servers` package flavor. Fleet policies, enrollment tokens, service tokens, and
+the Elasticsearch security objects they depend on are created outside this
+collection and supplied through variables or a secrets manager.
 
 ## Role execution order
 
@@ -51,6 +65,7 @@ graph TD
     E -->|"CA + passwords available"| L[logstash]
     L -->|"Logstash listening :5044"| B[beats]
     E -->|"CA available"| B
+    E -->|"Fleet Server mode: CA + service token"| A[elastic_agent]
 
     style R fill:#f5f5f5,stroke:#333
     style E fill:#005571,stroke:#333,color:#fff
@@ -59,11 +74,19 @@ graph TD
     style B fill:#f04e98,stroke:#333,color:#fff
 ```
 
+Elastic Agent prerequisites depend on its mode: standalone uses
+`elastic_agent_standalone_config`, Fleet enrollment uses
+`elastic_agent_enrollment_token`, and Fleet Server uses its CA plus
+`elastic_agent_fleet_server_service_token`. Fleet Server service tokens are
+passed through the root-owned
+`elastic_agent_fleet_server_service_token_file`.
+
 1. **repos** — Adds Elastic package repositories (APT/YUM). Must run first so packages are available.
 2. **elasticsearch** — Installs ES, forms the cluster, initializes security (generates passwords, CA, certificates). Other roles need the CA and passwords.
 3. **kibana** — Connects to Elasticsearch using the `kibana_system` password, gets its TLS certificate from the ES CA.
 4. **logstash** — Creates its `logstash_writer` user and role in Elasticsearch, fetches TLS certificates from the ES CA, configures the pipeline.
 5. **beats** — Installs Filebeat/Metricbeat/Auditbeat, fetches TLS certificates, configures output to Logstash or Elasticsearch.
+6. **elastic_agent** — Installs the package and either renders a standalone policy, enrolls an agent in Fleet, or starts a self-managed Fleet Server.
 
 In a full-stack playbook, all roles run on all relevant hosts. Each role internally checks `group_names` or uses `delegate_to` to only act on the correct hosts.
 
@@ -79,6 +102,7 @@ graph TD
     CA --> KB_CERT["Kibana cert<br/>ES connection<br/>+ optional HTTPS frontend"]
     CA --> LS_CERT["Logstash cert<br/>Beats input TLS<br/>+ ES output TLS"]
     CA --> BT_CERT["Beats certs<br/>(one per host)<br/>Logstash output TLS"]
+    CA --> EA_CERT["Elastic Agent TLS<br/>Fleet Server CA, cert, key"]
 
     style CA fill:#ffd700,stroke:#333,color:#000
     style ES_CERT fill:#005571,stroke:#333,color:#fff
@@ -121,7 +145,7 @@ sequenceDiagram
     Note over Role,Disk: Subsequent roles read elastic password<br/>from initial_passwords via delegate_to
 ```
 
-The marker file (`cluster_initialized`) prevents re-initialization on subsequent runs. Other roles (Kibana, Logstash, Beats) delegate to the CA host to read the elastic password before making API calls.
+The marker file (`cluster_initialized`) prevents re-initialization on subsequent runs. Other roles (Kibana, Logstash, Beats) delegate to the CA host to read the elastic password before making API calls. Elastic Agent does not consume that password; its Fleet enrollment token and Fleet Server service token are deployment inputs.
 
 ## Rolling upgrades (8.x to 9.x)
 
@@ -175,7 +199,7 @@ LogsDB uses synthetic `_source`, which reorders fields, deduplicates arrays, and
 
 | Default group name | Used by | Override variable |
 |----|----|----|
-| `elasticsearch` | All roles that need ES hosts | `elasticstack_elasticsearch_group_name` |
+| `elasticsearch` | All roles that need ES hosts, including Elastic Agent Fleet Server | `elasticstack_elasticsearch_group_name` |
 | `logstash` | Beats (output target), Logstash | `elasticstack_logstash_group_name` |
 | `kibana` | Kibana role | `elasticstack_kibana_group_name` |
 

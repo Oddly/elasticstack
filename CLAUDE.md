@@ -95,7 +95,7 @@ When fixing a bug:
 
 ## Architecture
 
-Six roles — one meta-role plus five siblings that import it:
+Seven roles — one meta-role plus six siblings that import it:
 
 ```text
 roles/
@@ -119,6 +119,8 @@ roles/
                   management against ES.
   beats/          Installs + configures Metricbeat/Filebeat/etc. Owns
                   module enablement, output config.
+  elastic_agent/  Installs and configures standalone Elastic Agent, Fleet
+                  enrollment, Fleet Server, and migration from Beats; opt-in.
 ```
 
 Each service role's `tasks/main.yml` pulls in the meta-role with

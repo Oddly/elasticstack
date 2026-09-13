@@ -150,6 +150,70 @@ class TestRepositoryContracts(unittest.TestCase):
                 f"{path}:{line_number} should retain the upstream version comment",
             )
 
+    def test_memory_gate_references_use_one_consistent_pinned_release(self):
+        references = []
+        for path in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+            for line_number, line in enumerate(path.read_text().splitlines(), 1):
+                match = re.match(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)", line)
+                if match and match.group(1).startswith("Oddly/incus-memory-gate@"):
+                    references.append(
+                        (path, line_number, match.group(1).rsplit("@", 1)[1])
+                    )
+
+        self.assertTrue(references)
+        self.assertEqual(
+            len({reference for _, _, reference in references}),
+            1,
+            "all memory gate calls must use the same tested release",
+        )
+        for path, line_number, reference in references:
+            self.assertRegex(
+                reference,
+                ACTION_SHA,
+                f"{path}:{line_number} must use a full commit SHA",
+            )
+
+    def test_ci_ssh_does_not_parse_shared_runner_known_hosts(self):
+        ssh_paths = [
+            ROOT / ".github" / "actions" / "collect-diagnostics" / "action.yml",
+            ROOT / ".github" / "workflows" / "cleanup_incus.yml",
+            ROOT / ".github" / "workflows" / "molecule.yml",
+            ROOT / ".github" / "workflows" / "test_elasticsearch_upgrade.yml",
+            ROOT / ".github" / "workflows" / "test_full_stack.yml",
+            ROOT / "molecule" / "shared" / "create.yml",
+            ROOT / "molecule" / "shared" / "destroy.yml",
+            ROOT / "molecule" / "kibana_disabled" / "create.yml",
+            ROOT / "molecule" / "kibana_disabled" / "destroy.yml",
+        ]
+        ssh_paths += sorted((ROOT / "molecule").glob("*/molecule.yml"))
+
+        for path in ssh_paths:
+            source = path.read_text()
+            self.assertNotIn("ssh-keyscan", source, path)
+            if any(
+                marker in source
+                for marker in ("ssh -o ", "ProxyCommand=ssh", "ssh_args=(")
+            ):
+                self.assertIn("UserKnownHostsFile=/dev/null", source, path)
+
+        for path in (
+            ROOT / ".github" / "workflows" / "molecule.yml",
+            ROOT / ".github" / "workflows" / "test_elasticsearch_upgrade.yml",
+            ROOT / ".github" / "workflows" / "test_full_stack.yml",
+            ROOT / ".github" / "workflows" / "cleanup_incus.yml",
+        ):
+            source = path.read_text()
+            self.assertIn(
+                "printf '%s\\n' \"$MOLECULE_SSH_PRIVATE_KEY\"",
+                source,
+                path,
+            )
+            self.assertNotIn(
+                'echo "${{ secrets.MOLECULE_SSH_PRIVATE_KEY }}"',
+                source,
+                path,
+            )
+
     def test_kics_scan_is_independent_of_docker_and_checksum_pinned(self):
         source = (ROOT / ".github" / "workflows" / "kics.yml").read_text()
         self.assertNotIn("docker run", source)
@@ -290,12 +354,18 @@ class TestRepositoryContracts(unittest.TestCase):
     def test_test_dependency_changes_trigger_dependency_sensitive_ci(self):
         contracts_path = ROOT / ".github" / "workflows" / "test_contracts.yml"
         contracts = yaml.safe_load(contracts_path.read_text()) or {}
+        contracts_source = contracts_path.read_text()
         workflow_on = contracts.get("on", contracts.get(True, {}))
         contract_paths = workflow_on["pull_request"]["paths"]
         self.assertIn(
             "requirements-test.txt",
             contract_paths,
             f"{contracts_path} must test changes to test dependencies",
+        )
+        self.assertIn(
+            "python -m pytest -q tests/unit",
+            contracts_source,
+            f"{contracts_path} must run the Python unit suite",
         )
 
         full_stack_path = ROOT / ".github" / "workflows" / "test_full_stack.yml"
@@ -393,16 +463,23 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertEqual(shared.count("ansible.builtin.package:"), 3)
         self.assertIn("state: \"{{ 'latest' if", shared)
         self.assertIn('enablerepo:', shared)
+        standalone_rpm = re.search(
+            r"(?ms)^- name: .*RPM \(standalone\).*?(?=^- name:|\Z)",
+            shared,
+        )
+        self.assertIsNotNone(standalone_rpm)
+        self.assertIn('enablerepo:', standalone_rpm.group(0))
         self.assertEqual(shared.count('notify: "{{ _package_notify | default([]) }}"'), 3)
 
-        for role, package_var, package_base, package_notify in (
-            ("elasticsearch", "elasticsearch_package", "elasticsearch", "[]"),
-            ("kibana", "kibana_package", "kibana", "- Restart Kibana"),
-            ("logstash", "logstash_package", "logstash", "- Restart Logstash"),
+        for role, package_var, package_base, package_notify, task_name in (
+            ("elasticsearch", "elasticsearch_package", "elasticsearch", "[]", "Install Elasticsearch package"),
+            ("kibana", "kibana_package", "kibana", "- Restart Kibana", "Install Kibana package"),
+            ("logstash", "logstash_package", "logstash", "- Restart Logstash", "Install Logstash package"),
+            ("elastic_agent", "elastic_agent_package", "elastic-agent", "- Restart Elastic Agent", "Install Elastic Agent package"),
         ):
             source = (ROOT / "roles" / role / "tasks" / "main.yml").read_text()
             include_block = re.search(
-                rf"(?ms)^- name: Install {package_base.capitalize()} package\n.*?(?=^- name:|\Z)",
+                rf"(?ms)^- name: {re.escape(task_name)}\n.*?(?=^- name:|\Z)",
                 source,
             )
             self.assertIsNotNone(include_block, f"{role} does not include the shared installer")
@@ -1112,6 +1189,7 @@ class TestRepositoryContracts(unittest.TestCase):
             "roles/kibana/tasks/restart_and_verify_kibana.yml": "kibana",
             "roles/logstash/tasks/restart_and_verify_logstash.yml": "logstash",
             "roles/beats/tasks/restart_and_verify_beat.yml": "{{ _beat_service_name }}",
+            "roles/elastic_agent/tasks/restart_and_verify_elastic_agent.yml": "elastic-agent",
         }
 
         for relative_path, service_name in expected.items():
@@ -1200,6 +1278,310 @@ class TestRepositoryContracts(unittest.TestCase):
             self.assertIn("'/packages/9.x/' in", source)
             self.assertIn("'[elastic-8.x]' not in", source)
             self.assertIn("'/packages/8.x/' not in", source)
+
+    def test_elastic_agent_role_uses_safe_mode_and_enrollment_contracts(self):
+        defaults = yaml.safe_load(
+            (ROOT / "roles" / "elastic_agent" / "defaults" / "main.yml").read_text()
+        )
+        specs = yaml.safe_load(
+            (ROOT / "roles" / "elastic_agent" / "meta" / "argument_specs.yml").read_text()
+        )["argument_specs"]["main"]["options"]
+        main = (ROOT / "roles" / "elastic_agent" / "tasks" / "main.yml").read_text()
+        enroll = (ROOT / "roles" / "elastic_agent" / "tasks" / "enroll.yml").read_text()
+        template = (ROOT / "roles" / "elastic_agent" / "templates" / "elastic-agent.yml.j2").read_text()
+
+        self.assertEqual(defaults["elastic_agent_manage"], False)
+        self.assertEqual(defaults["elastic_agent_mode"], "standalone")
+        self.assertEqual(
+            defaults["elastic_agent_enrollment_state_file"],
+            "{{ elastic_agent_config_dir }}/.enrollment.sha256",
+        )
+        self.assertEqual(
+            defaults["elastic_agent_package_flavor_file"],
+            "",
+        )
+        self.assertEqual(
+            defaults["elastic_agent_fleet_server_service_token_file"],
+            "{{ elastic_agent_config_dir }}/.fleet-server-service-token",
+        )
+        self.assertFalse(defaults["elastic_agent_fleet_server_es_insecure"])
+        self.assertEqual(specs["elastic_agent_mode"]["choices"], ["standalone", "fleet", "fleet_server"])
+        self.assertEqual(specs["elastic_agent_package_flavor"]["choices"], ["basic", "servers"])
+        self.assertEqual(specs["elastic_agent_package_flavor_file"]["default"], "")
+        self.assertEqual(specs["elastic_agent_fleet_server_es_insecure"]["type"], "bool")
+        self.assertFalse(specs["elastic_agent_fleet_server_es_insecure"]["default"])
+        self.assertEqual(
+            specs["elastic_agent_fleet_server_service_token_file"]["default"],
+            "{{ elastic_agent_config_dir }}/.fleet-server-service-token",
+        )
+        for secret in (
+            "elastic_agent_standalone_config",
+            "elastic_agent_enrollment_token",
+            "elastic_agent_fleet_server_ca_content",
+            "elastic_agent_fleet_server_service_token",
+            "elastic_agent_fleet_server_cert_content",
+            "elastic_agent_fleet_server_cert_key_content",
+            "elastic_agent_fleet_server_es_ca_content",
+        ):
+            self.assertTrue(specs[secret]["no_log"], secret)
+
+        self.assertIn("_package_environment", main)
+        self.assertIn("ELASTIC_AGENT_FLAVOR", main)
+        self.assertIn("/usr/share/elastic-agent/bin/elastic-agent", main)
+        self.assertIn("_elastic_agent_resolved_package_flavor_file", main)
+        self.assertIn("lnk_target | dirname | dirname | dirname", main)
+        self.assertIn("elasticstack_release | int >= 9", main)
+        self.assertIn("elasticstack_release | int < 9", main)
+        self.assertIn("elasticsearch_http_publish_host", main)
+        self.assertIn("ansible_host", main)
+        self.assertIn("elasticsearch_http_publish_port", main)
+        self.assertIn("elasticsearch_http_protocol", main)
+        self.assertIn("elasticsearch_http_security", main)
+        self.assertIn("_elastic_agent_fleet_server_es_protocol", main)
+        self.assertIn("_elastic_agent_fleet_server_es_host", main)
+        self.assertIn("_elastic_agent_fleet_server_es:", main)
+        self.assertIn("Bracket an IPv6 Fleet Server Elasticsearch host", main)
+        self.assertIn(
+            "not (_elastic_agent_fleet_server_es_host | string).startswith('[')",
+            main,
+        )
+        self.assertIn("not ((_elastic_agent_fleet_server_es | lower) is match('^http://'))", main)
+        self.assertNotIn("    elastic_agent_fleet_server_es: >-", main)
+        self.assertNotIn(".elasticsearch_api_host", main)
+        self.assertIn("Gather service facts for Beat migration", main)
+        migration_block = main[main.index("Stop Beats services") :]
+        self.assertNotIn("failed_when: false", migration_block)
+        self.assertIn("item ~ '.service'", main)
+        self.assertLess(
+            main.index("Enroll Elastic Agent in Fleet"),
+            main.index("Stop Beats services"),
+        )
+        self.assertIn("Record Beat service state before migration", main)
+        self.assertIn("Restore Beat services after Elastic Agent lifecycle failure", main)
+        self.assertIn("Record Elastic Agent service state before migration", main)
+        self.assertIn("Restore Elastic Agent service after lifecycle failure", main)
+        self.assertIn("Reset Elastic Agent failed state after lifecycle failure", main)
+        self.assertIn("systemctl", main)
+        self.assertIn("reset-failed", main)
+        self.assertIn("elastic_agent_fleet_server_cert_file | length > 0", main)
+        self.assertIn("elastic_agent_fleet_server_cert_key_file | length > 0", main)
+        self.assertIn("elastic_agent_config_file | dirname", main)
+        self.assertIn("_elastic_agent_package_flavor_marker_content", main)
+        self.assertIn("_elastic_agent_fleet_state_before_install", main)
+        self.assertIn("_elastic_agent_fleet_state_replaced", enroll)
+        self.assertIn("_elastic_agent_installed_package_major", main)
+        self.assertIn("Remove pre-9 Elastic Agent package before 9.x installation", main)
+        self.assertIn(".elasticstack-mode", main)
+        self.assertIn("Refuse an Elastic Agent mode transition", main)
+        self.assertIn("Refuse Fleet state in standalone mode", main)
+        self.assertIn("Record Elastic Agent managed mode", main)
+        main_tasks = yaml.safe_load(main)
+        visible_validation_tasks = {
+            "Validate Elastic Agent configuration",
+            "Reject insecure Fleet Server Elasticsearch URL",
+            "Validate the installed Elastic Agent package flavor",
+            "Assert the installed Elastic Agent package flavor matches the requested flavor",
+        }
+        for task in main_tasks:
+            if task.get("name") in visible_validation_tasks:
+                self.assertNotIn("no_log", task, task["name"])
+        self.assertEqual(
+            {task["name"] for task in main_tasks if task.get("name") in visible_validation_tasks},
+            visible_validation_tasks,
+        )
+        self.assertLess(
+            main.index("Check package-managed Fleet state before package installation"),
+            main.index("Install Elastic Agent package"),
+        )
+        self.assertLess(
+            main.index("Validate Elastic Agent configuration"),
+            main.index("Install Elastic Agent package"),
+        )
+        self.assertLess(
+            main.index("Remove pre-9 Elastic Agent package before 9.x installation"),
+            main.index("Install Elastic Agent package"),
+        )
+        self.assertNotIn("ansible.builtin.shell", "\n".join(
+            path.read_text() for path in (ROOT / "roles" / "elastic_agent" / "tasks").glob("*.yml")
+        ))
+        standalone_include = next(
+            task for task in main_tasks if task.get("name") == "Configure standalone Elastic Agent policy"
+        )
+        self.assertEqual(
+            set(standalone_include["tags"]),
+            {"configuration", "elastic_agent_configuration"},
+        )
+        self.assertEqual(
+            set(standalone_include["ansible.builtin.include_tasks"]["apply"]["tags"]),
+            {"configuration", "elastic_agent_configuration"},
+        )
+        certificate_include = next(
+            task for task in main_tasks if task.get("name") == "Configure Elastic Agent Fleet TLS material"
+        )
+        self.assertEqual(certificate_include["tags"], ["certificates"])
+        self.assertEqual(
+            certificate_include["ansible.builtin.include_tasks"]["apply"]["tags"],
+            ["certificates"],
+        )
+        self.assertIn("argv: \"{{ _elastic_agent_enroll_argv }}\"", enroll)
+        self.assertIn("'--fleet-server-es', _elastic_agent_fleet_server_es", enroll)
+        self.assertIn("hash('sha256')", enroll)
+        self.assertIn("--fleet-server-service-token-path", enroll)
+        self.assertIn("elastic_agent_fleet_server_service_token_file", enroll)
+        self.assertIn("--fleet-server-es-insecure", enroll)
+        self.assertIn("elastic_agent_fleet_server_es_insecure | bool", enroll)
+        self.assertIn("elastic_agent_fleet_server_insecure | bool", enroll)
+        self.assertNotIn("(elastic_agent_fleet_server_es | lower) is match('^http://')", enroll)
+        self.assertIn("Write Fleet Server service token to a protected file", enroll)
+        self.assertIn("{{ elastic_agent_config_dir }}/fleet.enc", enroll)
+        self.assertIn("_elastic_agent_fleet_state", enroll)
+        self.assertIn("_elastic_agent_fleet_state_before_install.stat.exists", enroll)
+        self.assertIn("not _elastic_agent_fleet_state_before_install.stat.exists", enroll)
+        self.assertIn("Refuse to overwrite an existing enrollment", enroll)
+        self.assertIn("not _elastic_agent_fleet_state.stat.exists", enroll)
+        self.assertIn("Persist enrollment state without storing credentials", enroll)
+        self.assertNotIn(
+            'content: "{{ elastic_agent_fleet_server_service_token }}\\n"',
+            enroll,
+        )
+        enroll_tasks = yaml.safe_load(enroll)
+        token_block = next(
+            task
+            for task in enroll_tasks
+            if task.get("name") == "enroll | Write Fleet Server service token to a protected file"
+        )
+        token_task = next(
+            task
+            for task in token_block["block"]
+            if task.get("name") == "enroll | Write Fleet Server service token to a protected file"
+        )
+        self.assertEqual(token_task.get("notify"), "Restart Elastic Agent")
+        enrollment_task = next(
+            task for task in enroll_tasks if task.get("name") == "enroll | Enroll Elastic Agent in Fleet"
+        )
+        self.assertEqual(enrollment_task.get("notify"), "Restart Elastic Agent")
+        self.assertIn("to_nice_yaml", template)
+
+        default_verify = (ROOT / "molecule" / "elastic_agent_default" / "verify.yml").read_text()
+        self.assertIn("Assert the same-host 8.x to 9.x package upgrade", default_verify)
+        self.assertIn("when: elasticstack_release | int >= 9", default_verify)
+        default_converge = (ROOT / "molecule" / "elastic_agent_default" / "converge.yml").read_text()
+        self.assertIn("_elastic_agent_package_upgrade_needed", default_converge)
+        self.assertIn("Check for package-generated Fleet state before standalone coverage", default_converge)
+        self.assertIn("Clear package-generated Fleet state before standalone coverage", default_converge)
+        self.assertIn("package_generated_fleet_state.stat.exists", default_converge)
+        self.assertIn("state: absent", default_converge)
+        self.assertLess(
+            default_converge.index("Check for package-generated Fleet state before standalone installation"),
+            default_converge.index("Clear package-generated Fleet state before standalone installation"),
+        )
+        self.assertLess(
+            default_converge.index("Clear package-generated Fleet state before standalone installation"),
+            default_converge.index("Install and configure Elastic Agent before the backup fixture"),
+        )
+        self.assertLess(
+            default_converge.index("Install and configure Elastic Agent before the backup fixture"),
+            default_converge.index("Check for package-generated Fleet state before standalone coverage"),
+        )
+        self.assertLess(
+            default_converge.index("Check for package-generated Fleet state before standalone coverage"),
+            default_converge.index("Clear package-generated Fleet state before standalone coverage"),
+        )
+        self.assertLess(
+            default_converge.index("Include Elastic Agent with an independent standalone policy path"),
+            default_converge.index("Clear package-generated Fleet state after standalone coverage"),
+        )
+        workflow = (ROOT / ".github" / "workflows" / "test_role_elastic_agent.yml").read_text()
+        self.assertIn("'roles/repos/**'", workflow)
+
+        fleet_converge = (ROOT / "molecule" / "elastic_agent_fleet" / "converge.yml").read_text()
+        fleet_verify = (ROOT / "molecule" / "elastic_agent_fleet" / "verify.yml").read_text()
+        tag_contract = (ROOT / "tests" / "integration" / "elastic_agent_tags_contract.yml").read_text()
+        contracts_workflow = (ROOT / ".github" / "workflows" / "test_contracts.yml").read_text()
+        self.assertIn("tasks_from: main.yml", tag_contract)
+        self.assertIn("become: true", tag_contract)
+        self.assertIn("args+=(--tags configuration)", contracts_workflow)
+        self.assertIn("fleet_package_version.rc", fleet_converge)
+        self.assertIn("- --binary-only", fleet_converge)
+        self.assertIn("_elastic_agent_test_package_flavor", fleet_converge)
+        self.assertIn("elasticstack_release | int >= 9", fleet_converge)
+        self.assertIn("elasticstack_release | int < 9", fleet_converge)
+        self.assertIn("elastic-agent-collection-ca-raw-argv", fleet_converge)
+        self.assertIn("elastic_agent_fleet_server_es_insecure: true", fleet_converge)
+        self.assertIn("Preserve initial Fleet enrollment command", fleet_converge)
+        self.assertIn("insecure_fleet_server_es_rejected", fleet_converge)
+        self.assertIn("unmarked_fleet_to_standalone_rejected", fleet_converge)
+        self.assertIn("Create unmarked Fleet state fixture directory", fleet_converge)
+        self.assertIn("fleet_to_standalone_rejected", fleet_converge)
+        self.assertIn("contract-rotation-token-b", fleet_converge)
+        self.assertIn("elasticsearch_http_publish_host: '2001:db8::10'", fleet_converge)
+        self.assertIn("ansible_host: '2001:db8::20'", fleet_converge)
+        self.assertIn("elasticstack_elasticsearch_group_name: elasticsearch_ipv6_publish", fleet_converge)
+        self.assertIn("elasticstack_elasticsearch_group_name: elasticsearch_ipv6_fallback", fleet_converge)
+        fleet_tasks = yaml.safe_load(fleet_converge)[0]["tasks"]
+        for task_name in (
+            "Include Elastic Agent as Fleet Server",
+            "Include Elastic Agent with the collection CA",
+            "Include Elastic Agent Fleet Server with default CA handling",
+            "Preserve default CA Fleet Server command",
+            "Restore file-mode Fleet Server command for verification",
+        ):
+            task = next(task for task in fleet_tasks if task.get("name") == task_name)
+            self.assertEqual(task.get("when"), "not fleet_contract_complete.stat.exists")
+        self.assertIn(
+            "elastic_agent_certificate_dir: /var/lib/elastic-agent-collection-ca-certs",
+            fleet_converge,
+        )
+        self.assertIn(
+            "src: /var/lib/elastic-agent-collection-ca-certs/fleet-server-ca.crt",
+            fleet_converge,
+        )
+        self.assertNotIn(
+            "src: /var/lib/elastic-agent-collection-ca/certs/fleet-server-ca.crt",
+            fleet_converge,
+        )
+        self.assertIn("ansible_failed_task.name", fleet_converge)
+        self.assertIn(
+            "Report Elastic Agent lifecycle failure after Beat restoration",
+            fleet_converge,
+        )
+        self.assertIn("fleet_server_argv_lines.index('--fleet-server-port')", fleet_verify)
+        self.assertIn("fleet_state.stat.exists", fleet_verify)
+        self.assertIn("length == 2", fleet_verify)
+        self.assertIn("enrollment_fingerprint", fleet_verify)
+        self.assertIn("/tmp/elastic-agent-initial-enrollment-argv", fleet_verify)
+        self.assertIn("fleet_service_token_file.stat.mode == '0600'", fleet_verify)
+        self.assertIn("(fleet_service_token.content | b64decode) == 'contract-service-token'", fleet_verify)
+        self.assertIn("(rotated_service_token.content | b64decode) == 'contract-rotation-token-b'", fleet_verify)
+        self.assertIn("--fleet-server-es-insecure", fleet_verify)
+        self.assertIn("https://[2001:db8::10]:19299", fleet_verify)
+        self.assertIn("https://[2001:db8::20]:9200", fleet_verify)
+        self.assertIn("http://elasticsearch-http-only.example.test:19200", fleet_verify)
+        self.assertIn(".elasticstack-mode", fleet_verify)
+        reference = (ROOT / "docs" / "reference" / "elastic_agent.md").read_text()
+        self.assertIn("propagates these tags into its dynamically included task files", reference)
+
+        readme = (ROOT / "roles" / "elastic_agent" / "README.md").read_text()
+        self.assertIn("elasticstack_full_stack: false", readme)
+        self.assertIn("elasticstack_full_stack: false", reference)
+        self.assertIn("elastic_agent_package_flavor_file", readme)
+        self.assertIn("elastic_agent_package_flavor_file", reference)
+        default_verify = (ROOT / "molecule" / "elastic_agent_default" / "verify.yml").read_text()
+        self.assertIn("/var/lib/elastic-agent/.flavor", default_verify)
+        self.assertIn("Assert the 9.x package flavor marker", default_verify)
+        self.assertIn("elasticsearch_http_publish_host", readme)
+        self.assertIn("elasticsearch_http_publish_host", reference)
+        self.assertIn("elastic_agent_fleet_server_es_insecure", readme)
+        self.assertIn("elastic_agent_fleet_server_es_insecure", reference)
+        self.assertIn("elastic_agent_fleet_server_insecure", readme)
+        self.assertIn("elastic_agent_fleet_server_insecure", reference)
+        self.assertIn("fleet.enc", reference)
+        self.assertIn("Fleet enrollment using an enrollment token", reference)
+        self.assertNotIn("Fleet enrollment using a policy token", reference)
+        architecture = (ROOT / "docs" / "guide" / "architecture.md").read_text()
+        self.assertIn("Fleet Server mode: CA + service token", architecture)
+        self.assertIn("elastic_agent_standalone_config", architecture)
+        self.assertIn("elastic_agent_enrollment_token", architecture)
 
     def test_beats_templates_share_common_setup_fragment(self):
         template_paths = (
@@ -1822,7 +2204,7 @@ class TestRepositoryContracts(unittest.TestCase):
         documentation = "\n".join(
             path.read_text() for path in (ROOT / "docs").rglob("*.md")
         )
-        for role in ("beats", "elasticsearch", "elasticstack", "kibana", "logstash"):
+        for role in ("beats", "elasticsearch", "elasticstack", "elastic_agent", "kibana", "logstash"):
             readme = ROOT / "roles" / role / "README.md"
             if readme.exists():
                 documentation += "\n" + readme.read_text()
@@ -1860,6 +2242,8 @@ class TestRepositoryContracts(unittest.TestCase):
         )
         self.assertEqual(action.count(f"diag={diagnostic_dir}"), 2)
         self.assertEqual(action.count("DIAGNOSTIC_ARTIFACT_NAME: ${{ inputs.artifact-name }}"), 2)
+        self.assertIn("DIAGNOSTIC_SSH_TIMEOUT_SECONDS", action)
+        self.assertIn("timeout --signal=TERM", action)
         self.assertIn(
             "path: /tmp/molecule-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact-name }}/",
             action,

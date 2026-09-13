@@ -1,6 +1,6 @@
 # elasticstack (shared defaults)
 
-Shared defaults for the `oddly.elasticstack` collection. These variables are used across all roles (elasticsearch, kibana, logstash, beats, repos) to provide consistent configuration for inventory group names, ports, TLS certificate authority settings, and repository configuration.
+Shared defaults for the `oddly.elasticstack` collection. These variables are used across all service roles (elasticsearch, kibana, logstash, beats, Elastic Agent, and repos) to provide consistent configuration for inventory group names, ports, TLS certificate authority settings, and repository configuration.
 
 You typically set these in `group_vars/all.yml` so they apply to every host in your inventory.
 

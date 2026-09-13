@@ -1,0 +1,132 @@
+---
+- name: configure-fleet-tls | Create certificate directory
+  ansible.builtin.file:
+    path: "{{ elastic_agent_certificate_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when:
+    - (elastic_agent_fleet_server_ca_source != 'none') or
+      (elastic_agent_fleet_server_cert_file | length > 0) or
+      (elastic_agent_fleet_server_cert_content | length > 0) or
+      (elastic_agent_fleet_server_cert_key_file | length > 0) or
+      (elastic_agent_fleet_server_cert_key_content | length > 0) or
+      (elastic_agent_fleet_server_es_ca_file | length > 0) or
+      (elastic_agent_fleet_server_es_ca_content | length > 0)
+
+- name: configure-fleet-tls | Reuse the collection CA for Fleet Server verification
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../elasticstack/tasks/certs/cert_distribute.yml"
+  vars:
+    _cert_src: "{{ elasticstack_ca_dir }}/ca.crt"
+    _cert_dest: "{{ elastic_agent_fleet_server_ca_path }}"
+    _cert_owner: root
+    _cert_group: root
+    _cert_mode: "0640"
+    _cert_notify:
+      - Restart Elastic Agent
+  when: elastic_agent_fleet_server_ca_source == 'elasticsearch_ca'
+
+- name: configure-fleet-tls | Write external Fleet Server CA content
+  ansible.builtin.copy:
+    content: "{{ elastic_agent_fleet_server_ca_content }}"
+    dest: "{{ elastic_agent_fleet_server_ca_path }}"
+    owner: root
+    group: root
+    mode: "0640"
+  when:
+    - elastic_agent_fleet_server_ca_source == 'external'
+    - elastic_agent_fleet_server_ca_content | length > 0
+  notify: Restart Elastic Agent
+  no_log: true
+
+- name: configure-fleet-tls | Copy external Fleet Server CA file
+  ansible.builtin.copy:
+    src: "{{ elastic_agent_fleet_server_ca_file }}"
+    dest: "{{ elastic_agent_fleet_server_ca_path }}"
+    owner: root
+    group: root
+    mode: "0640"
+    remote_src: "{{ elastic_agent_fleet_server_ca_remote_src }}"
+  when:
+    - elastic_agent_fleet_server_ca_source == 'external'
+    - elastic_agent_fleet_server_ca_content | length == 0
+    - elastic_agent_fleet_server_ca_file | length > 0
+  notify: Restart Elastic Agent
+  no_log: true
+
+- name: configure-fleet-tls | Write Fleet Server certificate content
+  ansible.builtin.copy:
+    content: "{{ elastic_agent_fleet_server_cert_content }}"
+    dest: "{{ elastic_agent_fleet_server_cert_path }}"
+    owner: root
+    group: root
+    mode: "0640"
+  when: elastic_agent_fleet_server_cert_content | length > 0
+  notify: Restart Elastic Agent
+  no_log: true
+
+- name: configure-fleet-tls | Copy Fleet Server certificate file
+  ansible.builtin.copy:
+    src: "{{ elastic_agent_fleet_server_cert_file }}"
+    dest: "{{ elastic_agent_fleet_server_cert_path }}"
+    owner: root
+    group: root
+    mode: "0640"
+    remote_src: "{{ elastic_agent_fleet_server_cert_remote_src }}"
+  when:
+    - elastic_agent_fleet_server_cert_content | length == 0
+    - elastic_agent_fleet_server_cert_file | length > 0
+  notify: Restart Elastic Agent
+  no_log: true
+
+- name: configure-fleet-tls | Write Fleet Server private key content
+  ansible.builtin.copy:
+    content: "{{ elastic_agent_fleet_server_cert_key_content }}"
+    dest: "{{ elastic_agent_fleet_server_cert_key_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  when: elastic_agent_fleet_server_cert_key_content | length > 0
+  notify: Restart Elastic Agent
+  no_log: true
+
+- name: configure-fleet-tls | Copy Fleet Server private key file
+  ansible.builtin.copy:
+    src: "{{ elastic_agent_fleet_server_cert_key_file }}"
+    dest: "{{ elastic_agent_fleet_server_cert_key_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+    remote_src: "{{ elastic_agent_fleet_server_cert_remote_src }}"
+  when:
+    - elastic_agent_fleet_server_cert_key_content | length == 0
+    - elastic_agent_fleet_server_cert_key_file | length > 0
+  notify: Restart Elastic Agent
+  no_log: true
+
+- name: configure-fleet-tls | Write Fleet Server Elasticsearch CA content
+  ansible.builtin.copy:
+    content: "{{ elastic_agent_fleet_server_es_ca_content }}"
+    dest: "{{ elastic_agent_fleet_server_es_ca_path }}"
+    owner: root
+    group: root
+    mode: "0640"
+  when: elastic_agent_fleet_server_es_ca_content | length > 0
+  notify: Restart Elastic Agent
+  no_log: true
+
+- name: configure-fleet-tls | Copy Fleet Server Elasticsearch CA file
+  ansible.builtin.copy:
+    src: "{{ elastic_agent_fleet_server_es_ca_file }}"
+    dest: "{{ elastic_agent_fleet_server_es_ca_path }}"
+    owner: root
+    group: root
+    mode: "0640"
+    remote_src: "{{ elastic_agent_fleet_server_es_ca_remote_src }}"
+  when:
+    - elastic_agent_fleet_server_es_ca_content | length == 0
+    - elastic_agent_fleet_server_es_ca_file | length > 0
+  notify: Restart Elastic Agent
+  no_log: true

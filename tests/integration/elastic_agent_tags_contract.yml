@@ -1,0 +1,70 @@
+---
+- name: Elastic Agent tag execution contract
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: true
+  vars:
+    ansible_managed: Ansible managed
+    elasticstack_full_stack: false
+    elasticstack_release: 9
+    _elasticstack_role_imported: true
+    elastic_agent_manage: true
+    elastic_agent_enable: false
+    elastic_agent_mode: standalone
+    elastic_agent_config_backup: false
+    elastic_agent_config_dir: /tmp/elastic-agent-tag-contract
+    elastic_agent_config_file: /tmp/elastic-agent-tag-contract/elastic-agent.yml
+    elastic_agent_standalone_config:
+      outputs:
+        default:
+          type: logstash
+          hosts:
+            - 127.0.0.1:5044
+      inputs:
+        - type: system/metrics
+          id: tag-contract-system-metrics
+          data_stream.namespace: default
+          streams:
+            - metricsets:
+                - cpu
+              data_stream.dataset: system.cpu
+  tasks:
+    - name: Remove stale Elastic Agent tag contract directory
+      ansible.builtin.file:
+        path: /tmp/elastic-agent-tag-contract
+        state: absent
+      tags: always
+
+    - name: Create Elastic Agent tag contract directory
+      ansible.builtin.file:
+        path: /tmp/elastic-agent-tag-contract
+        state: directory
+        mode: "0750"
+      tags: always
+
+    - name: Include Elastic Agent for configuration tag execution
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elastic_agent
+        tasks_from: main.yml
+      tags:
+        - configuration
+
+    - name: Read the configuration rendered by the selected tag
+      ansible.builtin.slurp:
+        src: /tmp/elastic-agent-tag-contract/elastic-agent.yml
+      register: tag_contract_config
+      tags: always
+
+    - name: Assert configuration tag reaches dynamically included tasks
+      ansible.builtin.assert:
+        that:
+          - tag_contract_config.content | b64decode is search('tag-contract-system-metrics')
+          - tag_contract_config.content | b64decode is search('127.0.0.1:5044')
+      tags: always
+
+    - name: Remove Elastic Agent tag contract directory
+      ansible.builtin.file:
+        path: /tmp/elastic-agent-tag-contract
+        state: absent
+      tags: always

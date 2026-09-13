@@ -1,0 +1,7 @@
+---
+- name: Restart Elastic Agent
+  ansible.builtin.include_tasks: restart_and_verify_elastic_agent.yml
+  when:
+    - not ansible_check_mode
+    - elastic_agent_manage | bool
+    - elastic_agent_enable | bool

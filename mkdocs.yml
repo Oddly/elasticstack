@@ -104,6 +104,7 @@ nav:
       - Kibana: reference/kibana.md
       - Logstash: reference/logstash.md
       - Beats: reference/beats.md
+      - Elastic Agent: reference/elastic_agent.md
   - "How To":
       - how-to/index.md
       - Deployment: how-to/deployment.md
