@@ -99,17 +99,19 @@
 
     - name: enroll | Write Fleet Server service token to a protected file
       ansible.builtin.copy:
-        content: "{{ elastic_agent_fleet_server_service_token }}\n"
+        content: "{{ elastic_agent_fleet_server_service_token }}"
         dest: "{{ elastic_agent_fleet_server_service_token_file }}"
         owner: root
         group: root
         mode: "0600"
+      notify: Restart Elastic Agent
 
 - name: enroll | Enroll Elastic Agent in Fleet
   ansible.builtin.command:
     argv: "{{ _elastic_agent_enroll_argv }}"
   register: _elastic_agent_enrollment_result
   changed_when: true
+  notify: Restart Elastic Agent
   when: _elastic_agent_enrollment_required | bool
   no_log: true
 

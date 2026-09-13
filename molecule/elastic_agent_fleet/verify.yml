@@ -33,6 +33,11 @@
         src: /tmp/elastic-agent-no-ca-argv
       register: no_ca_argv
 
+    - name: Read HTTP-only Elasticsearch Fleet Server command arguments
+      ansible.builtin.slurp:
+        src: /tmp/elastic-agent-http-only-argv
+      register: http_only_argv
+
     - name: Read IPv6 publish host command arguments
       ansible.builtin.slurp:
         src: /tmp/elastic-agent-ipv6-publish-argv
@@ -84,6 +89,25 @@
       ansible.builtin.stat:
         path: /etc/elastic-agent/fleet.enc
       register: fleet_state
+
+    - name: Read managed Elastic Agent mode
+      ansible.builtin.slurp:
+        src: /etc/elastic-agent/.elasticstack-mode
+      register: managed_agent_mode
+
+    - name: Read the rotated Fleet Server service token
+      ansible.builtin.slurp:
+        src: /var/lib/elastic-agent-token-rotation/rotating-service-token
+      register: rotated_service_token
+      no_log: true
+
+    - name: Read service activation timestamps from token rotation coverage
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - /tmp/elastic-agent-token-rotation-before
+        - /tmp/elastic-agent-token-rotation-after
+      register: rotation_timestamps
 
     - name: Read enrollment command invocation audit
       ansible.builtin.slurp:
@@ -213,6 +237,7 @@
             (enrollment_invocations.content | b64decode).splitlines()
             | select('equalto', 'contract-enrollment-token') | list | length == 2
           - fleet_state.stat.exists
+          - (managed_agent_mode.content | b64decode | trim) == 'fleet'
           - "'--certificate-authorities' in (enrollment_argv.content | b64decode)"
           - "'--insecure' in (enrollment_argv.content | b64decode)"
           - fleet_ca.stat.exists
@@ -247,7 +272,7 @@
           - "'contract-service-token' not in (fleet_server_argv.content | b64decode)"
           - fleet_service_token_file.stat.exists
           - fleet_service_token_file.stat.mode == '0600'
-          - "'contract-service-token' in (fleet_service_token.content | b64decode)"
+          - (fleet_service_token.content | b64decode) == 'contract-service-token'
           - "'contract-fleet-policy' in (fleet_server_argv.content | b64decode)"
           - "'fleet-server-ca.crt' in (fleet_server_argv.content | b64decode)"
           - "'--fleet-server-host' in (fleet_server_argv.content | b64decode)"
@@ -269,6 +294,8 @@
           - "'contract-enrollment-token' not in (collection_ca_argv.content | b64decode)"
           - "'http://elasticsearch-derived.example.test:19299' in (no_ca_argv.content | b64decode)"
           - "'--fleet-server-es-insecure' in (no_ca_argv.content | b64decode)"
+          - "'http://elasticsearch-http-only.example.test:19200' in (http_only_argv.content | b64decode)"
+          - "'--fleet-server-es-insecure' in (http_only_argv.content | b64decode)"
           - "'https://[2001:db8::10]:19299' in (ipv6_publish_argv.content | b64decode)"
           - "'https://[2001:db8::20]:9200' in (ipv6_fallback_argv.content | b64decode)"
           - "'--fleet-server-es-insecure' not in (ipv6_publish_argv.content | b64decode)"
@@ -280,7 +307,9 @@
           - "'contract-derived-service-token' not in (no_ca_argv.content | b64decode)"
           - no_ca_service_token_file.stat.exists
           - no_ca_service_token_file.stat.mode == '0600'
-          - "'contract-derived-service-token' in (no_ca_service_token.content | b64decode)"
+          - (no_ca_service_token.content | b64decode) == 'contract-derived-service-token'
+          - (rotated_service_token.content | b64decode) == 'contract-rotation-token-b'
+          - (rotation_timestamps.results[0].content | b64decode | trim) != (rotation_timestamps.results[1].content | b64decode | trim)
           - "'contract-derived-fleet-policy' in (no_ca_argv.content | b64decode)"
           - "'127.0.0.1' in (no_ca_argv.content | b64decode)"
           - "'8221' in (no_ca_argv.content | b64decode)"

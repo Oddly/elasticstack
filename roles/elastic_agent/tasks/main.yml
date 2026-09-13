@@ -40,10 +40,28 @@
     - groups[elasticstack_elasticsearch_group_name] is defined
     - groups[elasticstack_elasticsearch_group_name] | length > 0
 
+- name: Resolve Fleet Server Elasticsearch HTTP protocol from inventory
+  ansible.builtin.set_fact:
+    _elastic_agent_fleet_server_es_protocol: >-
+      {{ hostvars[groups[elasticstack_elasticsearch_group_name][0]].elasticsearch_http_protocol
+         | default(
+             ('https'
+              if (hostvars[groups[elasticstack_elasticsearch_group_name][0]].elasticsearch_http_security
+                  | default(elasticstack_security, true) | bool)
+              else 'http'),
+             true
+           ) }}
+  when:
+    - elastic_agent_manage | bool
+    - elastic_agent_mode == 'fleet_server'
+    - elastic_agent_fleet_server_es | default('') | length == 0
+    - groups[elasticstack_elasticsearch_group_name] is defined
+    - groups[elasticstack_elasticsearch_group_name] | length > 0
+
 - name: Resolve Fleet Server Elasticsearch URL from inventory
   ansible.builtin.set_fact:
     _elastic_agent_fleet_server_es: >-
-      {{ ('https' if elasticstack_security | bool else 'http') ~ '://' ~
+      {{ _elastic_agent_fleet_server_es_protocol ~ '://' ~
          _elastic_agent_fleet_server_es_host ~ ':' ~
          (hostvars[groups[elasticstack_elasticsearch_group_name][0]].elasticsearch_http_publish_port |
           default(elasticstack_elasticsearch_http_port, true) | string) }}
@@ -121,6 +139,44 @@
   register: _elastic_agent_fleet_state_before_install
   when: elastic_agent_manage | bool
 
+- name: Check Elastic Agent managed mode before package installation
+  ansible.builtin.stat:
+    path: "{{ elastic_agent_config_dir }}/.elasticstack-mode"
+  register: _elastic_agent_mode_state_before_install
+  when: elastic_agent_manage | bool
+
+- name: Read Elastic Agent managed mode before package installation
+  ansible.builtin.slurp:
+    src: "{{ elastic_agent_config_dir }}/.elasticstack-mode"
+  register: _elastic_agent_mode_state_content
+  when:
+    - elastic_agent_manage | bool
+    - _elastic_agent_mode_state_before_install.stat.exists
+
+- name: Refuse an Elastic Agent mode transition
+  ansible.builtin.fail:
+    msg: >-
+      Elastic Agent at {{ elastic_agent_config_dir }} is managed in mode
+      {{ _elastic_agent_mode_state_content.content | b64decode | trim }}, but
+      elastic_agent_mode={{ elastic_agent_mode }} was requested. Remove the
+      previous mode's state and .elasticstack-mode only as part of an intentional
+      mode transition.
+  when:
+    - elastic_agent_manage | bool
+    - _elastic_agent_mode_state_before_install.stat.exists
+    - (_elastic_agent_mode_state_content.content | b64decode | trim) != elastic_agent_mode
+
+- name: Refuse Fleet state in standalone mode
+  ansible.builtin.fail:
+    msg: >-
+      Elastic Agent has existing Fleet state at {{ elastic_agent_config_dir }}/fleet.enc,
+      so it cannot be switched to standalone mode automatically. Remove the Fleet state
+      only as part of an intentional mode transition.
+  when:
+    - elastic_agent_manage | bool
+    - elastic_agent_mode == 'standalone'
+    - _elastic_agent_fleet_state_before_install.stat.exists
+
 - name: Locate the active Elastic Agent package binary
   ansible.builtin.stat:
     path: /usr/share/elastic-agent/bin/elastic-agent
@@ -149,6 +205,16 @@
     - elastic_agent_manage | bool
     - elasticstack_release | int >= 9
 
+- name: Resolve the installed Elastic Agent package major version
+  ansible.builtin.set_fact:
+    _elastic_agent_installed_package_major: >-
+      {{ (ansible_facts.packages['elastic-agent'][0].version
+          | regex_search('^[0-9]+') | int)
+         if 'elastic-agent' in (ansible_facts.packages | default({})) else 0 }}
+  when:
+    - elastic_agent_manage | bool
+    - elasticstack_release | int >= 9
+
 - name: Check the installed Elastic Agent flavor marker
   ansible.builtin.stat:
     path: "{{ _elastic_agent_resolved_package_flavor_file }}"
@@ -173,6 +239,7 @@
     that:
       - >-
         ('elastic-agent' not in (ansible_facts.packages | default({}))) or
+        (_elastic_agent_installed_package_major | int < 9) or
         (_elastic_agent_resolved_package_flavor_file | length > 0 and
         _elastic_agent_package_flavor_marker.stat.exists and
         ((_elastic_agent_package_flavor_marker_content.content | b64decode | trim) == elastic_agent_package_flavor))
@@ -293,6 +360,15 @@
   when:
     - elastic_agent_manage | bool
     - elastic_agent_mode in ['fleet', 'fleet_server']
+
+- name: Record Elastic Agent managed mode
+  ansible.builtin.copy:
+    content: "{{ elastic_agent_mode }}\n"
+    dest: "{{ elastic_agent_config_dir }}/.elasticstack-mode"
+    owner: root
+    group: root
+    mode: "0600"
+  when: elastic_agent_manage | bool
 
 - name: Manage Elastic Agent lifecycle and migrate from Beats
   when: elastic_agent_manage | bool

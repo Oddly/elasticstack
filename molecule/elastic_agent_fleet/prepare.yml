@@ -11,26 +11,48 @@
         state: absent
       loop:
         - /etc/elastic-agent/fleet.enc
+        - /etc/elastic-agent/.elasticstack-mode
         - /etc/elastic-agent/.fleet-server-service-token
         - /var/lib/elastic-agent-fleet/.enrollment.sha256
+        - /var/lib/elastic-agent-fleet/.elasticstack-mode
         - /var/lib/elastic-agent-fleet-server/fleet.enc
+        - /var/lib/elastic-agent-fleet-server/.elasticstack-mode
         - /var/lib/elastic-agent-fleet-server/.enrollment.sha256
         - /var/lib/elastic-agent-fleet-server/.fleet-server-service-token
         - /var/lib/elastic-agent-fleet-server/custom-service-token
         - /var/lib/elastic-agent-collection-ca/fleet.enc
+        - /var/lib/elastic-agent-collection-ca/.elasticstack-mode
         - /var/lib/elastic-agent-collection-ca/.enrollment.sha256
         - /var/lib/elastic-agent-no-ca/fleet.enc
+        - /var/lib/elastic-agent-no-ca/.elasticstack-mode
         - /var/lib/elastic-agent-no-ca/.enrollment.sha256
         - /var/lib/elastic-agent-no-ca/.fleet-server-service-token
         - /var/lib/elastic-agent-no-ca/custom-service-token
+        - /var/lib/elastic-agent-http-only/fleet.enc
+        - /var/lib/elastic-agent-http-only/.elasticstack-mode
+        - /var/lib/elastic-agent-http-only/.enrollment.sha256
+        - /var/lib/elastic-agent-http-only/custom-service-token
         - /var/lib/elastic-agent-insecure-es/fleet.enc
+        - /var/lib/elastic-agent-insecure-es/.elasticstack-mode
         - /var/lib/elastic-agent-insecure-es/.enrollment.sha256
         - /var/lib/elastic-agent-insecure-es/.fleet-server-service-token
+        - /var/lib/elastic-agent-invalid-fleet-flavor
         - /var/lib/elastic-agent-ipv6-publish/fleet.enc
+        - /var/lib/elastic-agent-ipv6-publish/.elasticstack-mode
         - /var/lib/elastic-agent-ipv6-publish/.enrollment.sha256
         - /var/lib/elastic-agent-ipv6-publish/.fleet-server-service-token
         - /var/lib/elastic-agent-ipv6-fallback/fleet.enc
+        - /var/lib/elastic-agent-ipv6-fallback/.elasticstack-mode
         - /var/lib/elastic-agent-ipv6-fallback/.enrollment.sha256
+        - /var/lib/elastic-agent-token-rotation/fleet.enc
+        - /var/lib/elastic-agent-token-rotation/.elasticstack-mode
+        - /var/lib/elastic-agent-token-rotation/.enrollment.sha256
+        - /var/lib/elastic-agent-token-rotation/rotating-service-token
+        - /var/lib/elastic-agent-unmarked-fleet
+        - /etc/systemd/system/elastic-agent.service
+        - /tmp/elastic-agent-token-rotation-before
+        - /tmp/elastic-agent-token-rotation-after
+        - /tmp/elastic-agent-token-rotation-complete
         - /var/lib/elastic-agent-ipv6-fallback/.fleet-server-service-token
         - /tmp/elastic-agent-beat-fixtures-ready
         - /tmp/elastic-agent-contract-invocations
@@ -40,6 +62,7 @@
         - /tmp/elastic-agent-collection-ca-raw-argv
         - /tmp/elastic-agent-collection-ca-argv
         - /tmp/elastic-agent-no-ca-argv
+        - /tmp/elastic-agent-http-only-argv
         - /tmp/elastic-agent-ipv6-publish-argv
         - /tmp/elastic-agent-ipv6-fallback-argv
         - /tmp/elastic-agent-fleet-contract-complete

@@ -55,6 +55,34 @@
       vars:
         elastic_agent_config_backup: false
 
+    - name: Confirm a standalone to Fleet mode transition is rejected
+      block:
+        - name: Include Elastic Agent with a conflicting Fleet mode
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elastic_agent
+          vars:
+            elastic_agent_enable: false
+            elastic_agent_mode: fleet
+            elastic_agent_package_flavor: "{{ 'servers' if elasticstack_release | int >= 9 else 'basic' }}"
+            elastic_agent_fleet_server_url: https://fleet.example.test:8220
+            elastic_agent_enrollment_token: contract-transition-enrollment-token
+            elastic_agent_fleet_server_ca_source: none
+      rescue:
+        - name: Assert the mode transition guard caused the failure
+          ansible.builtin.assert:
+            that:
+              - >-
+                ansible_failed_task.name | default('') is search(
+                'Refuse an Elastic Agent mode transition')
+        - name: Record expected standalone to Fleet rejection
+          ansible.builtin.set_fact:
+            standalone_to_fleet_rejected: true
+
+    - name: Assert the standalone to Fleet transition was rejected
+      ansible.builtin.assert:
+        that:
+          - standalone_to_fleet_rejected | default(false)
+
     - name: Check whether the standalone backup fixture was seeded
       ansible.builtin.stat:
         path: /tmp/elastic-agent-standalone-seeded
