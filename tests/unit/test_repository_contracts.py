@@ -1531,6 +1531,22 @@ class TestRepositoryContracts(unittest.TestCase):
                 scenario,
             )
 
+    def test_memory_gate_release_only_runs_after_a_failed_molecule_step(self):
+        release_block = re.compile(
+            r"(?ms)^\s+- name: Release memory slot\n.*?(?=^\s+- name:|\Z)"
+        )
+        for relative_path in (
+            ".github/workflows/molecule.yml",
+            ".github/workflows/test_full_stack.yml",
+            ".github/workflows/test_elasticsearch_upgrade.yml",
+        ):
+            source = (ROOT / relative_path).read_text()
+            matches = release_block.findall(source)
+            self.assertTrue(matches, relative_path)
+            for block in matches:
+                self.assertIn("if: failure()", block, relative_path)
+                self.assertNotIn("if: always()", block, relative_path)
+
     def test_logstash_role_permission_variables_use_corrected_spelling(self):
         defaults = (ROOT / "roles" / "logstash" / "defaults" / "main.yml").read_text()
         specs = yaml.safe_load(

@@ -239,10 +239,9 @@ jobs:
           DISTRO_CACHE_URL: http://${{ secrets.REGISTRY_HOST }}:8081
 
       - name: Release memory slot
-        # Runs whether converge/verify/idempotence passed or failed, so
-        # the reservation is freed promptly. Normally a no-op: create.yml
-        # already converted the reservation at container launch.
-        if: always()
+        # Release only after a failed step, when create.yml may have left a
+        # reservation behind. Successful creates remove it at launch.
+        if: failure()
         uses: Oddly/incus-memory-gate@a4be4db5ffc59c8ee77c8fd7ff589612eb16be61  # v1.0.2
         with:
           mode: release
