@@ -1518,6 +1518,15 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("ansible_host: '2001:db8::20'", fleet_converge)
         self.assertIn("elasticstack_elasticsearch_group_name: elasticsearch_ipv6_publish", fleet_converge)
         self.assertIn("elasticstack_elasticsearch_group_name: elasticsearch_ipv6_fallback", fleet_converge)
+        fleet_tasks = yaml.safe_load(fleet_converge)[0]["tasks"]
+        for task_name in (
+            "Include Elastic Agent as Fleet Server",
+            "Include Elastic Agent with the collection CA",
+            "Include Elastic Agent Fleet Server with default CA handling",
+            "Restore file-mode Fleet Server command for verification",
+        ):
+            task = next(task for task in fleet_tasks if task.get("name") == task_name)
+            self.assertEqual(task.get("when"), "not fleet_contract_complete.stat.exists")
         self.assertIn(
             "elastic_agent_certificate_dir: /var/lib/elastic-agent-collection-ca-certs",
             fleet_converge,

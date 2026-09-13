@@ -730,6 +730,7 @@
         elastic_agent_fleet_server_cert_remote_src: true
         elastic_agent_fleet_server_es_ca_file: /tmp/elasticsearch-ca.crt
         elastic_agent_fleet_server_es_ca_remote_src: true
+      when: not fleet_contract_complete.stat.exists
 
     - name: Preserve file-mode Fleet Server command
       ansible.builtin.copy:
@@ -862,6 +863,7 @@
         elastic_agent_fleet_server_cert_key_content: ""
         elastic_agent_fleet_server_es_ca_file: ""
         elastic_agent_fleet_server_es_ca_content: ""
+      when: not fleet_contract_complete.stat.exists
 
     - name: Preserve collection CA output and command
       ansible.builtin.copy:
@@ -920,6 +922,7 @@
         elastic_agent_fleet_server_es_ca_file: ""
         elastic_agent_fleet_server_es_ca_content: ""
         elastic_agent_fleet_server_es_ca_remote_src: false
+      when: not fleet_contract_complete.stat.exists
 
     - name: Preserve default CA Fleet Server command
       ansible.builtin.copy:
@@ -1087,6 +1090,7 @@
         dest: /tmp/elastic-agent-fleet-server-argv
         remote_src: true
         mode: "0640"
+      when: not fleet_contract_complete.stat.exists
 
     - name: Seed a basic Elastic Agent flavor marker for transition coverage
       ansible.builtin.copy:
