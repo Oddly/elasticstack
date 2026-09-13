@@ -1531,7 +1531,7 @@ class TestRepositoryContracts(unittest.TestCase):
                 scenario,
             )
 
-    def test_memory_gate_release_only_runs_after_a_failed_molecule_step(self):
+    def test_memory_gate_release_runs_only_after_an_unsuccessful_molecule_step(self):
         release_block = re.compile(
             r"(?ms)^\s+- name: Release memory slot\n.*?(?=^\s+- name:|\Z)"
         )
@@ -1544,7 +1544,7 @@ class TestRepositoryContracts(unittest.TestCase):
             matches = release_block.findall(source)
             self.assertTrue(matches, relative_path)
             for block in matches:
-                self.assertIn("if: failure()", block, relative_path)
+                self.assertIn("if: ${{ !success() }}", block, relative_path)
                 self.assertNotIn("if: always()", block, relative_path)
 
     def test_logstash_role_permission_variables_use_corrected_spelling(self):
