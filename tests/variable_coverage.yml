@@ -1084,6 +1084,7 @@ rollouts:
       scenario: logstash_external_certs
       expected:
         - "ssl_client_authentication => optional"
+        - "ssl_verify_mode => force_peer"
     logstash_input_beats_timeout:
       scenario: logstash_external_certs
       expected:

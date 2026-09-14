@@ -84,6 +84,11 @@
 
     # --- Input SSL verification ---
 
+    - name: Verify Logstash port and configuration syntax
+      ansible.builtin.include_tasks: ../shared/verify_logstash_port.yml
+      vars:
+        _verify_logstash_port_timeout: 120
+
     - name: Read input configuration
       ansible.builtin.slurp:
         src: /etc/logstash/conf.d/main/10-input.conf
@@ -97,14 +102,16 @@
           - "'ssl_enabled' in (input_content.content | b64decode) or 'ssl => true' in (input_content.content | b64decode)"
           - "'client_inactivity_timeout => 45' in (input_content.content | b64decode)"
           - >-
-            (ansible_facts.distribution_major_version | int < 9) or
-            ('ssl_client_authentication => optional' in (input_content.content | b64decode))
-        fail_msg: "Beats input with SSL not properly configured"
-
-    - name: Verify Logstash port and configuration syntax
-      ansible.builtin.include_tasks: ../shared/verify_logstash_port.yml
-      vars:
-        _verify_logstash_port_timeout: 120
+            (
+              logstash_version.stdout is version('9.0.0', '>=', version_type='loose') and
+              'ssl_client_authentication => optional' in (input_content.content | b64decode)
+            ) or (
+              logstash_version.stdout is version('9.0.0', '<', version_type='loose') and
+              'ssl_verify_mode => force_peer' in (input_content.content | b64decode)
+            )
+        fail_msg: >-
+          Beats input with SSL not properly configured for the installed
+          Logstash release.
 
     # An open socket doesn't prove TLS — Logstash could be serving plain text
     # on 5044 if the SSL block silently failed to load. Run an actual TLS

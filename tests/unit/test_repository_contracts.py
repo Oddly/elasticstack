@@ -1656,6 +1656,7 @@ class TestRepositoryContracts(unittest.TestCase):
         self.assertIn("- config", verify)
 
     def test_molecule_reuses_shared_service_and_readiness_checks(self):
+        """Ensure Molecule scenarios share readiness checks and version branches."""
         kibana_shared = (
             ROOT / "molecule" / "shared" / "verify_kibana_available.yml"
         ).read_text()
@@ -1746,6 +1747,31 @@ class TestRepositoryContracts(unittest.TestCase):
                 source,
                 f"{scenario} must use the shared Logstash version check",
             )
+            if scenario == "logstash_external_certs":
+                version_check = source.index(
+                    "include_tasks: ../shared/verify_logstash_port.yml"
+                )
+                input_check = source.index(
+                    "- name: Verify beats input with SSL is configured"
+                )
+                input_block = source[input_check : source.index(
+                    "# An open socket doesn't prove TLS", input_check
+                )]
+                self.assertLess(version_check, input_check)
+                self.assertNotIn("distribution_major_version", input_block)
+                self.assertIn(
+                    "logstash_version.stdout is version('9.0.0', '>=', version_type='loose')",
+                    input_block,
+                )
+                self.assertIn(
+                    "'ssl_client_authentication => optional'",
+                    input_block,
+                )
+                self.assertIn(
+                    "logstash_version.stdout is version('9.0.0', '<', version_type='loose')",
+                    input_block,
+                )
+                self.assertIn("'ssl_verify_mode => force_peer'", input_block)
 
         cert_shared = (
             ROOT / "molecule" / "shared" / "generate_test_certs_openssl.yml"
