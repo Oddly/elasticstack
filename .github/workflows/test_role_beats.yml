@@ -22,7 +22,7 @@ on:
       - '.github/workflows/test_role_beats.yml'
       - '.github/workflows/molecule.yml'
   schedule:
-    - cron: "30 5 * * 2,4,6"  # Tue/Thu/Sat — 48 jobs, alternate with logstash
+    - cron: "30 5 * * 2,4,6"  # Tue/Thu/Sat — 60 jobs, alternate with logstash
 
 permissions:
   contents: read

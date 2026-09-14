@@ -20,7 +20,7 @@ on:
     types: [labeled]
   merge_group:
   schedule:
-    - cron: "0 4 * * 2,4,6"  # Tue/Thu/Sat — 48 jobs, alternate with ES/logstash
+    - cron: "0 4 * * 2,4,6"  # Tue/Thu/Sat — 50 jobs, alternate with ES/logstash
 
 permissions:
   contents: read
