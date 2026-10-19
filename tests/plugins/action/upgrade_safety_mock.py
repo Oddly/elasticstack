@@ -54,7 +54,12 @@ class ActionModule(ActionBase):
             event['name'] = name
             event['enablerepo'] = args.get('enablerepo')
             if name.startswith('elasticsearch'):
-                result['changed'] = state.get('candidate', True)
+                if self._task.check_mode and state.get('repository_failure'):
+                    return {'changed': False, 'failed': True, 'msg': 'simulated unavailable repository'}
+                if state.get('candidate_requires_repository') and args.get('state') == 'latest':
+                    result['changed'] = args.get('enablerepo') == ['elastic-9.x']
+                else:
+                    result['changed'] = state.get('candidate', True)
                 if args.get('state') == 'present' and name == 'elasticsearch' and state['installed']:
                     result['changed'] = False
                 if self._task.check_mode and state.get('candidate_changes_after_preview'):
@@ -113,6 +118,13 @@ class ActionModule(ActionBase):
                     'number_of_nodes': state.get('node_count', len(state['nodes'])),
                 }, 'changed': False}
             if path == '/_cat/nodes':
+                if 'Wait for this node to rejoin' in event['task']:
+                    attempts = state.setdefault('rejoin_attempts', {})
+                    attempts[event['host']] = attempts.get(event['host'], 0) + 1
+                    statuses = state.get('rejoin_statuses', [200])
+                    status = statuses[min(attempts[event['host']] - 1, len(statuses) - 1)]
+                    if status != 200:
+                        return {'changed': False, 'failed': True, 'status': status, 'msg': 'simulated startup API failure'}
                 nodes = [] if state.get('missing_node') else state['nodes']
                 if state.get('rejoin_failure') and state['package_writes']:
                     nodes = []

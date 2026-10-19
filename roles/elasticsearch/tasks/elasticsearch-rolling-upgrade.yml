@@ -130,7 +130,7 @@
         status_code: [200, 409, 503]
       register: _elasticsearch_upgrade_flush
       failed_when: >-
-        (_elasticsearch_upgrade_flush.status | default(0)) not in [200, 409, 503]
+        (_elasticsearch_upgrade_flush.status | default(0)) not in [-1, 200, 409, 503]
       changed_when: false
       no_log: "{{ elasticstack_no_log }}"
 
@@ -157,7 +157,7 @@
       ansible.builtin.package:
         name: "{{ elasticsearch_package }}"
         state: "{{ 'latest' if (elasticstack_version | default('')) in ['', 'latest'] else 'present' }}"
-        enablerepo: "{{ ['elastic-' ~ elasticstack_release ~ '.x'] if ansible_facts.os_family == 'RedHat' and elasticstack_full_stack | bool else omit }}"
+        enablerepo: "{{ ['elastic-' ~ elasticstack_release ~ '.x'] if ansible_facts.os_family == 'RedHat' else omit }}"
 
     - name: elasticsearch-rolling-upgrade | Start Elasticsearch
       ansible.builtin.service:
@@ -185,8 +185,8 @@
         return_content: true
       register: _elasticsearch_upgrade_rejoined
       until: >-
-        (_elasticsearch_upgrade_rejoined.status | default(0)) != 200
-        or elasticsearch_nodename | default(ansible_facts.hostname | default(inventory_hostname))
+        (_elasticsearch_upgrade_rejoined.status | default(0)) == 200
+        and elasticsearch_nodename | default(ansible_facts.hostname | default(inventory_hostname))
            in (_elasticsearch_upgrade_rejoined.content | default('')).split()
       retries: "{{ elasticsearch_upgrade_health_retries | int }}"
       delay: "{{ elasticsearch_upgrade_health_delay | int }}"

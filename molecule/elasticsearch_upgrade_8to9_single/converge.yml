@@ -211,6 +211,7 @@
     # Only change the release — don't pin elasticstack_version.
     # This exercises the real-world upgrade path.
     elasticstack_release: 9
+    elasticsearch_upgrade_wait_status: yellow
     elasticsearch_heap: "1"
     elasticstack_no_log: false
     elasticsearch_seed_hosts: []

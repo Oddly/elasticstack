@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from urllib.parse import urlsplit
 
 import yaml
 
@@ -180,10 +181,102 @@ class TestUpgradeSafety(unittest.TestCase):
         self.assertFalse(state['ml_mode'])
         self.assertFalse(any(e['action'] == 'service' for e in state['events']))
 
-    def test_optional_flush_conflict_does_not_block_upgrade(self):
-        completed, state = self.run_case({'flush_status': 409}, count=1)
+    def test_optional_flush_failures_do_not_block_upgrade(self):
+        for status in (-1, 409, 503):
+            with self.subTest(status=status):
+                completed, state = self.run_case({'flush_status': status}, count=1)
+                self.assert_ok(completed)
+                self.assertEqual(state['package_writes'], ['node-alpha'])
+                self.assertEqual(state['persistent'], {})
+                self.assertFalse(state['ml_mode'])
+                self.assertIn('proceeding without this optional', completed.stdout)
+
+    def test_other_flush_errors_remain_fatal_before_package_changes(self):
+        for status in (401, 403, 500):
+            with self.subTest(status=status):
+                completed, state = self.run_case({'flush_status': status}, count=1)
+                self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+                self.assertEqual(state['package_writes'], [])
+                self.assertEqual(state['persistent'], {})
+                self.assertFalse(state['ml_mode'])
+                self.assertFalse(any(e['action'] == 'service' for e in state['events']))
+
+    def test_startup_api_failures_are_retried_until_the_node_rejoins(self):
+        for status in (-1, 503):
+            for count in (1, 2):
+                with self.subTest(status=status, count=count):
+                    completed, state = self.run_case({'rejoin_statuses': [status, 200]}, count=count)
+                    self.assert_ok(completed)
+                    self.assertEqual(state['package_writes'], state['nodes'])
+                    self.assertEqual(state['rejoin_attempts'], dict.fromkeys(state['nodes'], 2))
+                    self.assertEqual(state['persistent'], {})
+                    self.assertFalse(state['ml_mode'])
+
+    def test_persistent_startup_api_failures_exhaust_retries_and_stop_the_batch(self):
+        for status in (-1, 503):
+            with self.subTest(status=status):
+                completed, state = self.run_case({'rejoin_statuses': [status]}, variables={
+                    'elasticsearch_upgrade_health_retries': 2,
+                })
+                self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+                self.assertEqual(state['rejoin_attempts'], {'node-alpha': 3})
+                self.assertEqual(state['package_writes'], ['node-alpha'])
+                self.assertEqual(state['persistent'], {})
+                self.assertFalse(state['ml_mode'])
+                self.assertFalse(any(e['host'] == 'node-beta' for e in state['events']))
+
+    def test_singleton_molecule_explicitly_allows_yellow_without_changing_the_default(self):
+        completed, state = self.run_case({'health': 'yellow'}, count=1)
+        self.assert_stopped_before_writes(completed, state)
+        scenario = yaml.safe_load((ROOT / 'molecule/elasticsearch_upgrade_8to9_single/converge.yml').read_text())
+        upgrade = next(play for play in scenario if play.get('vars', {}).get('elasticstack_release') == 9)
+        completed, state = self.run_case({'health': 'yellow', 'post_health': 'yellow'}, count=1, variables={
+            'elasticsearch_upgrade_wait_status': upgrade['vars'].get('elasticsearch_upgrade_wait_status', 'green'),
+        })
         self.assert_ok(completed)
-        self.assertEqual(len(state['package_writes']), 1)
+        self.assertEqual(state['package_writes'], ['node-alpha'])
+        self.assertEqual(state['persistent'], {})
+        self.assertFalse(state['ml_mode'])
+
+    def test_rpm_preview_and_rolling_install_match_the_shared_installer(self):
+        for full_stack, manage_repositories in ((True, True), (True, False), (False, True), (False, False)):
+            with self.subTest(full_stack=full_stack, manage_repositories=manage_repositories):
+                variables = {
+                    'elasticstack_version': 'latest', 'elasticstack_full_stack': full_stack,
+                    'elasticstack_enable_repos': manage_repositories,
+                }
+                completed, state = self.run_case({'os_family': 'RedHat', 'candidate_requires_repository': True},
+                                                 entry='main', count=1, variables=variables)
+                self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+                self.assertTrue(any(e.get('boundary') for e in state['events']), completed.stdout + completed.stderr)
+                self.assertEqual(state['package_writes'], ['node-alpha'])
+                packages = [e for e in state['events'] if e['action'] == 'package' and e['name'] == 'elasticsearch']
+                self.assertEqual([e['check_mode'] for e in packages], [True, False])
+                self.assertTrue(all(e['enablerepo'] == ['elastic-9.x'] for e in packages))
+        completed, state = self.run_case({'os_family': 'RedHat', 'installed': ''}, entry='main', count=1, variables={
+            'elasticstack_version': 'latest', 'elasticstack_full_stack': False, 'elasticstack_enable_repos': False,
+        })
+        self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+        self.assertTrue(any(e.get('boundary') for e in state['events']), completed.stdout + completed.stderr)
+        package = next(e for e in state['events'] if e['action'] == 'package' and e['name'] == 'elasticsearch')
+        self.assertEqual(package['enablerepo'], ['elastic-9.x'])
+        self.assertFalse(package['check_mode'])
+
+    def test_bad_rpm_repository_fails_preview_before_elasticsearch_changes(self):
+        for failure in ('missing', 'unusable'):
+            with self.subTest(failure=failure):
+                completed, state = self.run_case({'os_family': 'RedHat', 'repository_failure': failure},
+                                                 entry='main', count=1, variables={
+                    'elasticstack_version': 'latest', 'elasticstack_full_stack': False, 'elasticstack_enable_repos': False,
+                })
+                self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+                self.assertIn('simulated unavailable repository', completed.stdout)
+                self.assertEqual(state['package_writes'], [])
+                self.assertEqual(state['api_writes'], [])
+                self.assertFalse(any(e['action'] == 'service' for e in state['events']))
+                self.assertFalse(any(e['action'] == 'template' for e in state['events']))
+                self.assertFalse(any(e.get('boundary') for e in state['events']))
+                self.assertTrue(any(e['action'] == 'package' and e.get('name') == 'openssl' for e in state['other_writes']))
 
     def test_failed_upgrade_does_not_continue_to_the_second_node(self):
         completed, state = self.run_case({'package_failure': True})
@@ -276,7 +369,11 @@ class TestUpgradeSafety(unittest.TestCase):
             'elasticsearch_maintenance_api_url': 'https://observer.fixture.invalid:29443',
         })
         self.assert_ok(completed)
-        self.assertTrue(all(e['url'].startswith('https://observer.fixture.invalid:29443/') for e in state['events'] if e['action'] == 'uri'))
+        urls = [urlsplit(e['url']) for e in state['events'] if e['action'] == 'uri']
+        self.assertTrue(urls)
+        for url in urls:
+            self.assertEqual(url.scheme, 'https')
+            self.assertEqual(url.netloc, 'observer.fixture.invalid:29443')
         packages = [e for e in state['events'] if e['action'] == 'package']
         self.assertEqual(packages[0]['enablerepo'], ['elastic-9.x'])
 
