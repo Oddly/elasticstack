@@ -442,9 +442,9 @@
 - name: Rolling upgrade completed
   ansible.builtin.debug:
     msg: >-
-      A rolling upgrade was performed. Config files were written before the
-      upgrade so the restart picked up new config. The handler restart is
-      suppressed to prevent a second uncontrolled restart.
+      A rolling upgrade was performed. Multi-node handler restarts remain
+      suppressed to prevent a second uncontrolled restart. Singleton handlers
+      activate any configuration changed after the upgrade restart.
   when: _elasticsearch_rolling_upgrade_performed | default(false) | bool
 
 - name: Create elasticsearch systemd override directory

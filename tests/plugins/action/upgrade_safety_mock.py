@@ -44,7 +44,11 @@ class ActionModule(ActionBase):
         elif action == 'service':
             event['state'] = args['state']
             if not self._task.check_mode:
+                if args['state'] == 'restarted' and state.get('handler_restart_failure'):
+                    return {'changed': False, 'failed': True, 'msg': 'simulated handler restart failure'}
                 state['services'][host] = 'inactive' if args['state'] == 'stopped' else 'active'
+                if args['state'] in {'started', 'restarted'}:
+                    state['running_logging'] = state.get('logging_config', 0)
                 result['changed'] = True
         elif action == 'package_facts':
             packages = {'elasticsearch': [{'version': state['installed']}]} if state['installed'] else {}
@@ -80,6 +84,19 @@ class ActionModule(ActionBase):
                 ca_path=args.get('ca_path'),
                 body=args.get('body'),
             )
+            observer = event['delegate_to'] or host
+            if 'elasticsearch-upgrade-restore |' in event['task']:
+                if observer in state.get('cleanup_unreachable_hosts', []):
+                    return {'changed': False, 'unreachable': True, 'msg': 'simulated unavailable management connection'}
+                if any(name in event['task'] for name in state.get('cleanup_unreachable_tasks', [])):
+                    return {'changed': False, 'unreachable': True, 'msg': 'simulated unavailable cleanup connection'}
+                if event['method'] == 'GET' and (
+                    state.get('cleanup_api_down') or (
+                        urlsplit(event['url']).hostname in {'localhost', '127.0.0.1', observer}
+                        and state['services'][observer] != 'active'
+                    )
+                ):
+                    return {'changed': False, 'failed': True, 'status': -1, 'msg': 'simulated unavailable cleanup API'}
             return self.api(state, event)
         elif action == 'stat':
             result['stat'] = {'exists': True, 'isreg': True, 'isdir': False, 'mode': '0600'}
@@ -90,7 +107,11 @@ class ActionModule(ActionBase):
             state['other_writes'].append(event)
         elif action == 'pause':
             pass
-        elif action == 'template' and self._task.name == 'Configure Elasticsearch':
+        elif action == 'template' and self._task.name == 'Configure Elasticsearch logging':
+            result['changed'] = state.get('logging_changed', False) and not self._task.check_mode
+            if result['changed']:
+                state['logging_config'] = state.get('logging_config', 0) + 1
+        elif action == 'template' and self._task.name == 'Configure Elasticsearch' and not state.get('main_through_logging'):
             event['boundary'] = True
             result.update(failed=True, msg='fixture stops after the real main package graph')
         elif self._task.check_mode:

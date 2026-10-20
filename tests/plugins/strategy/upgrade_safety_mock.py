@@ -8,6 +8,7 @@ class StrategyModule(LinearStrategy):
         real_actions = {
             'ansible.builtin.assert',
             'ansible.builtin.debug',
+            'ansible.builtin.fail',
             'ansible.builtin.include_role',
             'ansible.builtin.include_tasks',
             'ansible.builtin.include_vars',

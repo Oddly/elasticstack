@@ -21,7 +21,13 @@ class TestUpgradeSafety(unittest.TestCase):
             directory = Path(directory)
             collection = directory / 'collections/ansible_collections/oddly/elasticstack'
             collection.parent.mkdir(parents=True)
-            collection.symlink_to(ROOT, target_is_directory=True)
+            if (changes or {}).get('main_through_logging'):
+                collection.mkdir()
+                shutil.copytree(ROOT / 'roles', collection / 'roles')
+                main = collection / 'roles/elasticsearch/tasks/main.yml'
+                main.write_text(main.read_text().split('- name: Install logrotate package for Elasticsearch', 1)[0])
+            else:
+                collection.symlink_to(ROOT, target_is_directory=True)
             names = ['node-alpha', 'node-beta', 'node-gamma'][:count]
             state = {
                 'events': [], 'api_writes': [], 'package_writes': [], 'other_writes': [],
@@ -39,8 +45,10 @@ class TestUpgradeSafety(unittest.TestCase):
                 'elasticstack_release': 9, 'elasticstack_version': '9.1.2',
                 'elasticstack_full_stack': False, 'elasticstack_security': True,
                 'elasticstack_password': {'stdout': 'fixture-only'}, 'elasticstack_no_log': True,
-                'elasticstack_versionseparator': '-', 'elasticsearch_clustername': 'fixture-cluster',
+                'elasticstack_versionseparator': '-' if state.get('os_family') == 'RedHat' else '=',
+                'elasticsearch_clustername': 'fixture-cluster',
                 'elasticsearch_api_host': 'api.fixture.invalid', 'elasticsearch_validate_api_certs': True,
+                'elasticsearch_nodename': '{{ inventory_hostname }}',
                 'elasticsearch_upgrade_health_retries': 1, 'elasticsearch_upgrade_health_delay': 0,
                 'elasticsearch_upgrade_countdown': 0, 'elasticsearch_heap': '1',
                 'elasticsearch_os_tuning': False, 'elasticsearch_pamlimits': False,
@@ -48,7 +56,7 @@ class TestUpgradeSafety(unittest.TestCase):
                 'upgrade_fixture_state': str(state_path),
             })
             if entry != 'main':
-                defaults['elasticsearch_package'] = 'elasticsearch-9.1.2'
+                defaults['elasticsearch_package'] = 'elasticsearch' + defaults['elasticstack_versionseparator'] + '9.1.2'
             defaults.update(variables or {})
             if defaults['elasticsearch_api_host'] is None:
                 del defaults['elasticsearch_api_host']
@@ -123,6 +131,46 @@ class TestUpgradeSafety(unittest.TestCase):
         self.assert_ok(completed)
         self.assertEqual(state['package_writes'], ['node-alpha'])
         self.assertEqual(state['persistent'], {})
+
+    def test_singleton_activates_logging_written_after_upgrade(self):
+        completed, state = self.run_case({'main_through_logging': True, 'logging_changed': True},
+                                         entry='main', count=1, variables={'elasticsearch_manage_logging': True})
+        self.assert_ok(completed)
+        self.assertEqual(state['logging_config'], 1)
+        self.assertEqual(state['running_logging'], state['logging_config'])
+        events = state['events']
+        logging = next(i for i, event in enumerate(events) if event['task'] == 'Configure Elasticsearch logging')
+        restart = next(i for i, event in enumerate(events) if event['action'] == 'service' and event['state'] == 'restarted')
+        self.assertLess(logging, restart)
+        self.assertEqual([e['state'] for e in events if e['action'] == 'service'], ['stopped', 'started', 'restarted'])
+        self.assertEqual(state['persistent'], {})
+        self.assertFalse(state['ml_mode'])
+
+    def test_unchanged_singleton_logging_does_not_restart_again(self):
+        completed, state = self.run_case({'main_through_logging': True}, entry='main', count=1,
+                                         variables={'elasticsearch_manage_logging': True})
+        self.assert_ok(completed)
+        self.assertEqual([e['state'] for e in state['events'] if e['action'] == 'service'], ['stopped', 'started'])
+        self.assertEqual(state['running_logging'], 0)
+
+    def test_singleton_post_upgrade_handler_failure_remains_fatal(self):
+        completed, state = self.run_case({
+            'main_through_logging': True, 'logging_changed': True, 'handler_restart_failure': True,
+        }, entry='main', count=1, variables={'elasticsearch_manage_logging': True})
+        self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+        self.assertIn('simulated handler restart failure', completed.stdout)
+        self.assertEqual(state['running_logging'], 0)
+        self.assertEqual(state['logging_config'], 1)
+        self.assertEqual(state['persistent'], {})
+        self.assertFalse(state['ml_mode'])
+
+    def test_multinode_post_upgrade_handler_suppression_is_unchanged(self):
+        completed, state = self.run_case({'main_through_logging': True, 'logging_changed': True},
+                                         entry='main', count=2, limit='node-alpha',
+                                         variables={'elasticsearch_manage_logging': True})
+        self.assert_ok(completed)
+        self.assertEqual([e['state'] for e in state['events'] if e['action'] == 'service'], ['stopped', 'started'])
+        self.assertEqual(state['package_writes'], ['node-alpha'])
 
     def test_unexpectedly_stopped_node_is_not_upgraded(self):
         completed, state = self.run_case({'services': {'node-alpha': 'inactive', 'node-beta': 'active'}})
@@ -377,13 +425,61 @@ class TestUpgradeSafety(unittest.TestCase):
         packages = [e for e in state['events'] if e['action'] == 'package']
         self.assertEqual(packages[0]['enablerepo'], ['elastic-9.x'])
 
+    def test_healthy_local_cleanup_does_not_connect_to_an_unreachable_peer(self):
+        completed, state = self.run_case({'cleanup_unreachable_hosts': ['node-beta']}, limit='node-alpha')
+        self.assert_ok(completed)
+        self.assertEqual(state['package_writes'], ['node-alpha'])
+        self.assertEqual(state['persistent'], {})
+        self.assertFalse(state['ml_mode'])
+        cleanup = [e for e in state['events'] if 'elasticsearch-upgrade-restore |' in e['task']]
+        self.assertEqual(len(cleanup), 3)
+        self.assertTrue(all(e['delegate_to'] == 'node-alpha' for e in cleanup))
+
+    def test_unreachable_local_cleanup_can_fall_back_to_a_peer(self):
+        completed, state = self.run_case({'cleanup_unreachable_hosts': ['node-alpha']}, limit='node-alpha')
+        self.assert_ok(completed)
+        self.assertEqual(state['persistent'], {})
+        self.assertFalse(state['ml_mode'])
+        identities = [e for e in state['events'] if 'cleanup cluster identity' in e['task']]
+        self.assertEqual([e['delegate_to'] for e in identities], ['node-alpha', 'node-beta'])
+        restores = [e for e in state['api_writes'] if 'Restore ' in e['task']]
+        self.assertEqual([e['delegate_to'] for e in restores], ['node-beta', 'node-beta'])
+
+    def test_failed_cleanup_peer_remains_fatal_with_original_upgrade_failure(self):
+        for failure in ('unreachable', 'api'):
+            with self.subTest(failure=failure):
+                changes = {'package_failure': True}
+                changes.update({'cleanup_unreachable_hosts': ['node-beta']} if failure == 'unreachable' else {'cleanup_api_down': True})
+                completed, state = self.run_case(changes, variables={'elasticsearch_api_host': None})
+                self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+                self.assertIn('Temporary cluster settings could not be restored', completed.stdout)
+                self.assertIn('elasticsearch-rolling-upgrade | Update Elasticsearch', completed.stdout)
+                self.assertEqual(state['persistent'], {'cluster.routing.allocation.enable': 'primaries'})
+                self.assertTrue(state['ml_mode'])
+                self.assertFalse(any('Restore ' in e['task'] for e in state['api_writes']))
+                self.assertFalse(any(e['host'] == 'node-beta' for e in state['events']))
+                identities = [e for e in state['events'] if 'cleanup cluster identity' in e['task']]
+                self.assertEqual([e['delegate_to'] for e in identities], ['node-alpha', 'node-beta'])
+
+    def test_unreachable_allocation_cleanup_does_not_skip_ml_cleanup(self):
+        completed, state = self.run_case({'cleanup_unreachable_tasks': ['Restore allocation setting']})
+        self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+        self.assertIn('Temporary cluster settings could not be restored', completed.stdout)
+        self.assertEqual(state['persistent'], {'cluster.routing.allocation.enable': 'primaries'})
+        self.assertFalse(state['ml_mode'])
+        restore_tasks = [e['task'] for e in state['events'] if 'Restore ' in e['task']]
+        self.assertEqual(restore_tasks, [
+            'elasticsearch-upgrade-restore | Restore allocation setting',
+            'elasticsearch-upgrade-restore | Restore ML upgrade mode',
+        ])
+        self.assertFalse(any(e['host'] == 'node-beta' for e in state['events']))
+
     def test_default_cleanup_api_uses_another_configured_cluster_member(self):
         completed, state = self.run_case({'package_failure': True}, variables={'elasticsearch_api_host': None})
         self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
         cleanup = [e for e in state['events'] if e['action'] == 'uri' and 'cleanup cluster identity' in e['task']]
-        self.assertEqual(len(cleanup), 1)
-        self.assertEqual(cleanup[0]['url'], 'https://localhost:9200/_cluster/health')
-        self.assertEqual(cleanup[0]['delegate_to'], 'node-beta')
+        self.assertEqual([event['delegate_to'] for event in cleanup], ['node-alpha', 'node-beta'])
+        self.assertTrue(all(event['url'] == 'https://localhost:9200/_cluster/health' for event in cleanup))
         self.assertEqual(state['persistent'], {})
         self.assertFalse(state['ml_mode'])
 
