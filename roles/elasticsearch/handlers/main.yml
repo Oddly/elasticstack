@@ -9,7 +9,9 @@
     - elasticsearch_enable | bool
     - not (_elasticsearch_freshstart.changed | default(false) | bool)
     - not (_elasticsearch_freshstart_security.changed | default(false) | bool)
-    - not _elasticsearch_rolling_upgrade_performed | default(false) | bool
+    - >-
+      not (_elasticsearch_rolling_upgrade_performed | default(false) | bool)
+      or groups[elasticstack_elasticsearch_group_name] | default([]) | length <= 1
 
 - name: Restart Elasticsearch directly
   ansible.builtin.include_tasks: restart_and_verify_elasticsearch.yml
@@ -22,7 +24,9 @@
       or groups[elasticstack_elasticsearch_group_name] | default([]) | length <= 1
     - not (_elasticsearch_freshstart.changed | default(false) | bool)
     - not (_elasticsearch_freshstart_security.changed | default(false) | bool)
-    - not _elasticsearch_rolling_upgrade_performed | default(false) | bool
+    - >-
+      not (_elasticsearch_rolling_upgrade_performed | default(false) | bool)
+      or groups[elasticstack_elasticsearch_group_name] | default([]) | length <= 1
 
 - name: Clear direct Elasticsearch restart request
   ansible.builtin.set_fact:
@@ -36,7 +40,9 @@
       or groups[elasticstack_elasticsearch_group_name] | default([]) | length <= 1
     - not (_elasticsearch_freshstart.changed | default(false) | bool)
     - not (_elasticsearch_freshstart_security.changed | default(false) | bool)
-    - not _elasticsearch_rolling_upgrade_performed | default(false) | bool
+    - >-
+      not (_elasticsearch_rolling_upgrade_performed | default(false) | bool)
+      or groups[elasticstack_elasticsearch_group_name] | default([]) | length <= 1
 
 - name: Restart Elasticsearch rolling
   ansible.builtin.include_tasks: restart_and_verify_elasticsearch_rolling.yml
@@ -49,7 +55,9 @@
     - groups[elasticstack_elasticsearch_group_name] | default([]) | length > 1
     - not (_elasticsearch_freshstart.changed | default(false) | bool)
     - not (_elasticsearch_freshstart_security.changed | default(false) | bool)
-    - not _elasticsearch_rolling_upgrade_performed | default(false) | bool
+    - >-
+      not (_elasticsearch_rolling_upgrade_performed | default(false) | bool)
+      or groups[elasticstack_elasticsearch_group_name] | default([]) | length <= 1
 
 - name: Restart kibana if available for elasticsearch certificates
   ansible.builtin.include_tasks: handlers/restart_kibana.yml

@@ -1,0 +1,59 @@
+---
+- name: verify_upgrade_preflight | Record package version before the rejected upgrade
+  ansible.builtin.package_facts:
+    manager: auto
+
+- name: verify_upgrade_preflight | Record service state before the rejected upgrade
+  ansible.builtin.systemd:
+    name: elasticsearch
+  register: _upgrade_rejection_service_before
+
+- name: verify_upgrade_preflight | Record configuration checksum before the rejected upgrade
+  ansible.builtin.stat:
+    path: /etc/elasticsearch/elasticsearch.yml
+  register: _upgrade_rejection_config_before
+
+- name: verify_upgrade_preflight | Record installed version before the rejected upgrade
+  ansible.builtin.set_fact:
+    _upgrade_rejection_version_before: "{{ ansible_facts.packages['elasticsearch'][0].version }}"
+    _upgrade_rejection_observed: false
+
+- name: verify_upgrade_preflight | Require the upgrade role to reject an unreachable API
+  block:
+    - name: verify_upgrade_preflight | Attempt an upgrade with an unavailable cluster API
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elasticsearch
+      vars:
+        elasticsearch_maintenance_api_url: https://127.0.0.1:1
+        elasticsearch_upgrade_health_retries: 1
+        elasticsearch_upgrade_health_delay: 0
+
+  rescue:
+    - name: verify_upgrade_preflight | Record the rejected upgrade
+      ansible.builtin.set_fact:
+        _upgrade_rejection_observed: >-
+          {{ ansible_failed_task.name == 'elasticsearch-upgrade-preflight | Wait for the expected cluster'
+             and (ansible_failed_result.status | default(0)) == -1 }}
+
+- name: verify_upgrade_preflight | Read package version after the rejected upgrade
+  ansible.builtin.package_facts:
+    manager: auto
+
+- name: verify_upgrade_preflight | Read service state after the rejected upgrade
+  ansible.builtin.systemd:
+    name: elasticsearch
+  register: _upgrade_rejection_service_after
+
+- name: verify_upgrade_preflight | Read configuration checksum after the rejected upgrade
+  ansible.builtin.stat:
+    path: /etc/elasticsearch/elasticsearch.yml
+  register: _upgrade_rejection_config_after
+
+- name: verify_upgrade_preflight | Verify an API failure stopped before package configuration or service changes
+  ansible.builtin.assert:
+    that:
+      - _upgrade_rejection_observed | bool
+      - ansible_facts.packages['elasticsearch'][0].version == _upgrade_rejection_version_before
+      - _upgrade_rejection_service_before.status.MainPID == _upgrade_rejection_service_after.status.MainPID
+      - _upgrade_rejection_service_after.status.ActiveState == 'active'
+      - _upgrade_rejection_config_before.stat.checksum == _upgrade_rejection_config_after.stat.checksum

@@ -180,6 +180,9 @@
       register: _es_pid_before_upgrade
       changed_when: false
 
+    - name: Verify upgrade rejection before package configuration or service changes
+      ansible.builtin.include_tasks: ../shared/verify_upgrade_preflight.yml
+
     - name: Include Elasticsearch role (upgrade to 9.x)
       ansible.builtin.include_role:
         name: oddly.elasticstack.elasticsearch
@@ -219,7 +222,7 @@
           Handler suppression OK: ES restarted exactly once during upgrade
           (PID {{ _es_pid_before_upgrade.stdout }} → {{ _es_pid_after_upgrade.stdout }}).
 
-# Re-run with elasticstack_version: "latest" to exercise the post-install
+# Re-run with elasticstack_version: "latest" to exercise the pre-install
 # detection path. Since we're already on the latest 9.x, the package should
 # NOT change and the rolling restart should NOT trigger. This verifies that
 # the "latest" mode doesn't cause unnecessary restarts.

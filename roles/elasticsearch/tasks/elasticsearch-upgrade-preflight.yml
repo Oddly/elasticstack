@@ -1,0 +1,103 @@
+---
+- name: elasticsearch-upgrade-preflight | Resolve effective security
+  ansible.builtin.set_fact:
+    _elasticsearch_upgrade_security: >-
+      {{ elasticsearch_security | bool and
+         (not (elasticstack_full_stack | bool) or elasticstack_security | bool) }}
+
+- name: elasticsearch-upgrade-preflight | Validate upgrade prerequisites
+  ansible.builtin.assert:
+    that:
+      - elasticsearch_upgrade_wait_status in ['green', 'yellow']
+      - not (_elasticsearch_needs_rolling_upgrade | default(false) | bool) or _elasticsearch_upgrade_security | bool
+      - groups[elasticstack_elasticsearch_group_name] | default([]) | length > 0
+      - inventory_hostname in groups[elasticstack_elasticsearch_group_name] | default([])
+      - >-
+        not (_elasticsearch_needs_rolling_upgrade | default(false) | bool)
+        or ansible_play_batch | intersect(groups[elasticstack_elasticsearch_group_name] | default([])) | length == 1
+    fail_msg: >-
+      Upgrading an existing installation requires security, a nonempty Elasticsearch
+      group containing this host, one Elasticsearch host per play batch, and
+      elasticsearch_upgrade_wait_status set to green or yellow.
+
+- name: elasticsearch-upgrade-preflight | Read Elasticsearch service state
+  ansible.builtin.systemd:
+    name: elasticsearch
+  register: _elasticsearch_upgrade_service
+
+- name: elasticsearch-upgrade-preflight | Require a running Elasticsearch service
+  ansible.builtin.assert:
+    that:
+      - (_elasticsearch_upgrade_service.status | default({})).ActiveState | default('unknown') == 'active'
+    fail_msg: >-
+      Elasticsearch is not active. Recover the existing installation before
+      requesting an upgrade.
+
+- name: elasticsearch-upgrade-preflight | Read existing credentials
+  ansible.builtin.include_tasks: "{{ role_path }}/../elasticstack/tasks/elasticstack-passwords.yml"
+  when:
+    - _elasticsearch_upgrade_security | bool
+    - (elasticstack_password | default({})).stdout | default('') | trim | length == 0
+
+- name: elasticsearch-upgrade-preflight | Require credentials
+  ansible.builtin.assert:
+    that:
+      - (elasticstack_password | default({})).stdout | default('') | trim | length > 0
+    fail_msg: The elastic user password is unavailable; the upgrade cannot be validated.
+    quiet: true
+  no_log: "{{ elasticstack_no_log }}"
+  when: _elasticsearch_upgrade_security | bool
+
+- name: elasticsearch-upgrade-preflight | Resolve cluster API
+  ansible.builtin.set_fact:
+    _elasticsearch_upgrade_api_url: >-
+      {{ elasticsearch_maintenance_api_url
+         | default(('https' if _elasticsearch_upgrade_security | bool and elasticsearch_http_security | bool else elasticsearch_http_protocol)
+                   ~ '://' ~ elasticsearch_api_host ~ ':' ~ elasticstack_elasticsearch_http_port) }}
+
+- name: elasticsearch-upgrade-preflight | Wait for the expected cluster
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_upgrade_api_url }}/_cluster/health"
+    method: GET
+    user: "{{ 'elastic' if _elasticsearch_upgrade_security | bool else omit }}"
+    password: "{{ elasticstack_password.stdout if _elasticsearch_upgrade_security | bool else omit }}"
+    force_basic_auth: "{{ _elasticsearch_upgrade_security | bool }}"
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+    timeout: 20
+  register: _elasticsearch_upgrade_health
+  until: >-
+    (_elasticsearch_upgrade_health.status | default(0)) != 200
+    or
+    (((_elasticsearch_upgrade_health.json | default({})).status | default(''))
+      in (['green'] if elasticsearch_upgrade_wait_status == 'green' else ['green', 'yellow'])
+     and ((_elasticsearch_upgrade_health.json | default({})).number_of_nodes | default(0) | int)
+         >= (groups[elasticstack_elasticsearch_group_name] | length)
+     and ((_elasticsearch_upgrade_health.json | default({})).cluster_name | default('')) == elasticsearch_clustername)
+  retries: "{{ elasticsearch_upgrade_health_retries | int }}"
+  delay: "{{ elasticsearch_upgrade_health_delay | int }}"
+  changed_when: false
+  check_mode: false
+  no_log: "{{ elasticstack_no_log }}"
+
+- name: elasticsearch-upgrade-preflight | Read cluster membership
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_upgrade_api_url }}/_cat/nodes?h=name"
+    method: GET
+    user: "{{ 'elastic' if _elasticsearch_upgrade_security | bool else omit }}"
+    password: "{{ elasticstack_password.stdout if _elasticsearch_upgrade_security | bool else omit }}"
+    force_basic_auth: "{{ _elasticsearch_upgrade_security | bool }}"
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+    timeout: 20
+    return_content: true
+  register: _elasticsearch_upgrade_members
+  changed_when: false
+  check_mode: false
+  no_log: "{{ elasticstack_no_log }}"
+
+- name: elasticsearch-upgrade-preflight | Require this node in the cluster
+  ansible.builtin.assert:
+    that:
+      - >-
+        elasticsearch_nodename | default(ansible_facts.hostname | default(inventory_hostname))
+        in (_elasticsearch_upgrade_members.content | default('')).split()
+    fail_msg: The node is absent from the expected cluster; the upgrade cannot proceed.

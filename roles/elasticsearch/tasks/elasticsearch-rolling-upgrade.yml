@@ -8,357 +8,243 @@
 # The play must use serial: 1 so nodes upgrade one at a time.
 
 ---
-
-# For now we support upgrade only for clusters with security enabled
-# If you positively need support for safely upgrading clusters without security,
-# feel free to open an issue at https://github.com/Oddly/ansible-collection-elasticstack/issues
-# A typo here silently degraded the gate to ['green', 'yellow'] before the
-# ternary got tightened — reject early with a clear message so the operator
-# can spot 'Green'/'red' before any node comes down.
-- name: elasticsearch-rolling-upgrade | Validate elasticsearch_upgrade_wait_status
+- name: elasticsearch-rolling-upgrade | Require a secured serial upgrade
   ansible.builtin.assert:
     that:
-      - elasticsearch_upgrade_wait_status in ['green', 'yellow']
+      - elasticsearch_security | bool
+      - not (elasticstack_full_stack | bool) or elasticstack_security | bool
+      - ansible_play_batch | intersect(groups[elasticstack_elasticsearch_group_name] | default([])) | length == 1
+    fail_msg: Rolling upgrades require security and one Elasticsearch host per play batch.
+
+- name: elasticsearch-rolling-upgrade | Validate the existing installation
+  ansible.builtin.include_tasks: elasticsearch-upgrade-preflight.yml
+
+- name: elasticsearch-rolling-upgrade | Read allocation settings
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_upgrade_api_url }}/_cluster/settings?flat_settings=true"
+    method: GET
+    user: elastic
+    password: "{{ elasticstack_password.stdout }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+    timeout: 20
+  register: _elasticsearch_upgrade_settings
+  changed_when: false
+  check_mode: false
+  no_log: "{{ elasticstack_no_log }}"
+
+- name: elasticsearch-rolling-upgrade | Read ML upgrade mode
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_upgrade_api_url }}/_ml/info?filter_path=upgrade_mode"
+    method: GET
+    user: elastic
+    password: "{{ elasticstack_password.stdout }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+    timeout: 20
+  register: _elasticsearch_upgrade_ml_info
+  changed_when: false
+  check_mode: false
+  no_log: "{{ elasticstack_no_log }}"
+  when: elasticsearch_ml_enabled | bool
+
+- name: elasticsearch-rolling-upgrade | Validate recorded cluster settings
+  ansible.builtin.assert:
+    that:
+      - (_elasticsearch_upgrade_settings.json | default({})).persistent is mapping
+      - >-
+        ((_elasticsearch_upgrade_settings.json.transient | default({})).get('cluster.routing.allocation.enable', none)) is none
+      - >-
+        not (elasticsearch_ml_enabled | bool)
+        or ((_elasticsearch_upgrade_ml_info.json | default({})).upgrade_mode | default(none)) is boolean
     fail_msg: >-
-      elasticsearch_upgrade_wait_status must be 'green' or 'yellow',
-      got '{{ elasticsearch_upgrade_wait_status }}'.
+      The current allocation or ML upgrade-mode settings could not be recorded,
+      or a transient allocation override prevents safe temporary configuration.
 
-- name: elasticsearch-rolling-upgrade | Set connection protocol to https
+- name: elasticsearch-rolling-upgrade | Record original cluster settings
   ansible.builtin.set_fact:
-    elasticsearch_http_protocol: "https"
+    _elasticsearch_upgrade_previous_allocation: >-
+      {{ _elasticsearch_upgrade_settings.json.persistent.get('cluster.routing.allocation.enable', none) }}
+    _elasticsearch_upgrade_allocation_attempted: false
+    _elasticsearch_upgrade_ml_attempted: false
+    _elasticsearch_upgrade_failed_task: ""
 
-- name: elasticsearch-rolling-upgrade | Check for running Elasticsearch service
-  ansible.builtin.systemd:
-    name: elasticsearch
-  register: elasticsearch_running
-
-- name: elasticsearch-rolling-upgrade | Update stopped services right away
-  when:
-    - elasticsearch_running.status.ActiveState == "inactive"
+- name: elasticsearch-rolling-upgrade | Upgrade one Elasticsearch node
+  when: not ansible_check_mode
   block:
-    - name: elasticsearch-rolling-upgrade | Update stopped Elasticsearch - rpm with managed repositories
-      ansible.builtin.package:
-        name: "{{ elasticsearch_package }}"
-        state: latest  # noqa: package-latest
-        enablerepo:
-          - 'elastic-{{ elasticstack_release }}.x'
-      when:
-        - ansible_facts.os_family == "RedHat"
-        - elasticstack_full_stack | bool
-
-    - name: elasticsearch-rolling-upgrade | Update stopped Elasticsearch - deb or unmanaged repositories rpm
-      ansible.builtin.package:
-        name: "{{ elasticsearch_package }}"
-        state: latest  # noqa: package-latest
-      when:
-        - ansible_facts.os_family == "Debian" or
-          not elasticstack_full_stack | bool
-
-- name: elasticsearch-rolling-upgrade | Update single instances without extra caution
-  when:
-    - groups[elasticstack_elasticsearch_group_name] | length == 1
-  block:
-    - name: elasticsearch-rolling-upgrade | Update single instances without extra caution - deb or unmanaged repositories rpm
-      ansible.builtin.package:
-        name: "{{ elasticsearch_package }}"
-        state: latest  # noqa: package-latest
-      when:
-        - ansible_facts.os_family == "Debian" or
-          not elasticstack_full_stack | bool
-      notify:
-        - Restart Elasticsearch
-
-    - name: elasticsearch-rolling-upgrade | Update single instances without extra caution - rpm with managed repositories
-      ansible.builtin.package:
-        name: "{{ elasticsearch_package }}"
-        state: latest  # noqa: package-latest
-        enablerepo:
-          - 'elastic-{{ elasticstack_release }}.x'
-      when:
-        - ansible_facts.os_family == "RedHat"
-        - elasticstack_full_stack | bool
-      notify:
-        - Restart Elasticsearch
-
-
-- name: elasticsearch-rolling-upgrade | Be careful about upgrade when Elasticsearch is running
-  when:
-    - elasticsearch_running.status.ActiveState == "active"
-    - groups[elasticstack_elasticsearch_group_name] | length > 1
-  block:
-
-    # After a previous node's upgrade, the local ES instance may need time to
-    # re-discover the master (e.g. during 8.x→9.x rolling upgrades). Wait for
-    # the cluster API to respond with 200 before attempting any cluster operations.
-    # During cross-major-version rolling upgrades (8→9), an old-version node may
-    # be permanently unable to reach the new master — that's OK, we'll skip the
-    # pre-upgrade cluster operations and proceed directly to stop/upgrade/start.
-    - name: elasticsearch-rolling-upgrade | Wait for Elasticsearch cluster API to be responsive
-      ansible.builtin.uri:
-        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/health"
-        method: GET
-        user: elastic
-        password: "{{ elasticstack_password.stdout }}"
-        validate_certs: "{{ elasticsearch_validate_api_certs }}"
-        force_basic_auth: true
-        status_code: [200, 503]
-      register: elasticsearch_responsive
-      until: (elasticsearch_responsive.status | default(0)) == 200
-      retries: 12
-      delay: 10
-      ignore_errors: true
-      no_log: "{{ elasticstack_no_log }}"
-      changed_when: false
-
-    - name: elasticsearch-rolling-upgrade | Set cluster reachability flag
+    - name: elasticsearch-rolling-upgrade | Record allocation change attempt
       ansible.builtin.set_fact:
-        _elasticsearch_cluster_reachable: "{{ (elasticsearch_responsive.status | default(0)) == 200 }}"
+        _elasticsearch_upgrade_allocation_attempted: true
 
-    - name: elasticsearch-rolling-upgrade | Warn if cluster API is unreachable (cross-major upgrade)
-      ansible.builtin.debug:
-        msg: >-
-          Cluster API returned {{ elasticsearch_responsive.status | default('unknown') }}
-          after retries — skipping pre-upgrade cluster operations.
-          This is expected during cross-major rolling upgrades (e.g. 8.x→9.x).
-      when: not _elasticsearch_cluster_reachable | bool
-
-    # Usually we should not need this step. It's only there to recover from broken upgrade plays
-    # Without this step the cluster would never recover and the play would always fail
-    - name: elasticsearch-rolling-upgrade | Enable shard allocation for the cluster
+    - name: elasticsearch-rolling-upgrade | Disable replica allocation
       ansible.builtin.uri:
-        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/settings"
+        url: "{{ _elasticsearch_upgrade_api_url }}/_cluster/settings"
         method: PUT
-        body: '{ "persistent": { "cluster.routing.allocation.enable": null }}'
+        body:
+          persistent:
+            cluster.routing.allocation.enable: primaries
         body_format: json
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: "{{ elasticsearch_validate_api_certs }}"
         force_basic_auth: true
-      register: elasticsearch_response
-      until: (elasticsearch_response.json | default({})).acknowledged | default(false)
-      retries: 10
-      delay: 30
-      no_log: "{{ elasticstack_no_log }}"
-      when: _elasticsearch_cluster_reachable | bool
-
-      # this step is key!!!  Don't restart more nodes
-      # until all shards have completed recovery
-    # Barrier before this node goes down: the previous node's replicas must be
-    # back, otherwise shards are left with a single copy while we stop another node.
-    - name: elasticsearch-rolling-upgrade | Wait for cluster health before taking this node down
-      ansible.builtin.uri:
-        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/health"
-        method: GET
-        user: elastic
-        password: "{{ elasticstack_password.stdout }}"
         validate_certs: "{{ elasticsearch_validate_api_certs }}"
-        force_basic_auth: true
-      register: elasticsearch_response
-      # Also gate on the expected node count: elasticsearch_api_host defaults
-      # to localhost, so a just-restarted node briefly reports
-      # number_of_nodes: 1 before peer discovery finishes. Without this
-      # guard, a mixed-version 2-node upgrade can lock at status: yellow +
-      # unassigned_shards: 1 until the health-retry budget times out —
-      # even though everything is fine, we're just too early.
-      until: >-
-        ((elasticsearch_response.json | default({})).status | default('')) in _elasticsearch_upgrade_health_statuses
-        and ((elasticsearch_response.json | default({})).number_of_nodes | default(0) | int)
-            >= _elasticsearch_upgrade_expected_nodes | int
-      retries: "{{ elasticsearch_upgrade_health_retries | int }}"
-      delay: "{{ elasticsearch_upgrade_health_delay | int }}"
-      vars:
-        _elasticsearch_upgrade_health_statuses: "{{ ['green'] if elasticsearch_upgrade_wait_status == 'green' else ['green', 'yellow'] }}"
-        _elasticsearch_upgrade_expected_nodes: "{{ groups[elasticstack_elasticsearch_group_name] | default([inventory_hostname]) | length }}"
+        timeout: 20
+      register: _elasticsearch_upgrade_allocation
+      failed_when: >-
+        (_elasticsearch_upgrade_allocation.status | default(0)) != 200
+        or not ((_elasticsearch_upgrade_allocation.json | default({})).acknowledged | default(false) | bool)
       no_log: "{{ elasticstack_no_log }}"
-      changed_when: false
-      when: _elasticsearch_cluster_reachable | bool
 
-    # Disable replica allocation so the cluster doesn't waste I/O replicating
-    # shards that will come back when the node restarts.  Use "primaries" rather
-    # than "none" per the official upgrade docs — primaries still need to be
-    # assigned for indexing to continue during the upgrade.
-    - name: elasticsearch-rolling-upgrade | Disable shard allocation for the cluster
-      ansible.builtin.uri:
-        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/settings"
-        method: PUT
-        body: '{ "persistent": { "cluster.routing.allocation.enable": "primaries" }}'
-        body_format: json
-        user: elastic
-        password: "{{ elasticstack_password.stdout }}"
-        validate_certs: "{{ elasticsearch_validate_api_certs }}"
-        force_basic_auth: true
-      register: elasticsearch_response
-      until: (elasticsearch_response.json | default({})).acknowledged | default(false)
-      retries: 5
-      delay: 10
-      no_log: "{{ elasticstack_no_log }}"
-      when: _elasticsearch_cluster_reachable | bool
+    - name: elasticsearch-rolling-upgrade | Record ML upgrade-mode change attempt
+      ansible.builtin.set_fact:
+        _elasticsearch_upgrade_ml_attempted: true
+      when:
+        - elasticsearch_ml_enabled | bool
+        - not ((_elasticsearch_upgrade_ml_info.json | default({})).upgrade_mode | default(false) | bool)
 
-    # Put ML into upgrade mode so jobs are suspended gracefully and model
-    # state is saved.  This is idempotent — calling it when already in
-    # upgrade mode or when ML is disabled is a no-op (returns 200).
-    - name: elasticsearch-rolling-upgrade | Set ML upgrade mode
+    - name: elasticsearch-rolling-upgrade | Enable ML upgrade mode
       ansible.builtin.uri:
-        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_ml/set_upgrade_mode?enabled=true"
+        url: "{{ _elasticsearch_upgrade_api_url }}/_ml/set_upgrade_mode?enabled=true"
         method: POST
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: "{{ elasticsearch_validate_api_certs }}"
         force_basic_auth: true
-        status_code: [200]
-      register: _elasticsearch_ml_upgrade_mode
-      failed_when: false
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
+        timeout: 20
+      register: _elasticsearch_upgrade_ml
+      failed_when: >-
+        (_elasticsearch_upgrade_ml.status | default(0)) != 200
+        or not ((_elasticsearch_upgrade_ml.json | default({})).acknowledged | default(false) | bool)
       no_log: "{{ elasticstack_no_log }}"
-      when:
-        - _elasticsearch_cluster_reachable | bool
-        - elasticsearch_ml_enabled | bool
+      when: _elasticsearch_upgrade_ml_attempted | bool
 
     - name: elasticsearch-rolling-upgrade | Flush indices to speed up shard recovery
       ansible.builtin.uri:
-        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_flush"
+        url: "{{ _elasticsearch_upgrade_api_url }}/_flush"
         method: POST
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: "{{ elasticsearch_validate_api_certs }}"
         force_basic_auth: true
-      register: elasticsearch_flush_response
-      failed_when: false
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
+        timeout: 20
+        status_code: [200, 409, 503]
+      register: _elasticsearch_upgrade_flush
+      failed_when: >-
+        (_elasticsearch_upgrade_flush.status | default(0)) not in [-1, 200, 409, 503]
+      changed_when: false
       no_log: "{{ elasticstack_no_log }}"
-      when: _elasticsearch_cluster_reachable | bool
 
-    - name: elasticsearch-rolling-upgrade | Warn if flush failed
+    - name: elasticsearch-rolling-upgrade | Warn when optional flush did not complete
       ansible.builtin.debug:
-        msg: "Flush returned status {{ elasticsearch_flush_response.status | default('unknown') }}: {{ elasticsearch_flush_response.msg | default('') }}"
-      when:
-        - _elasticsearch_cluster_reachable | bool
-        - (elasticsearch_flush_response.status | default(0)) != 200
+        msg: >-
+          Flush did not complete successfully; proceeding without this optional
+          optimization (HTTP {{ _elasticsearch_upgrade_flush.status | default(0) }}).
+      when: >-
+        (_elasticsearch_upgrade_flush.status | default(0)) != 200
+        or (((_elasticsearch_upgrade_flush.json | default({}))._shards | default({})).failed | default(0) | int) > 0
 
-    - name: elasticsearch-rolling-upgrade | Shutdown elasticsearch service
+    - name: elasticsearch-rolling-upgrade | Recheck the cluster before stopping this node
+      ansible.builtin.include_tasks: elasticsearch-upgrade-preflight.yml
+
+    - name: elasticsearch-rolling-upgrade | Stop Elasticsearch
       ansible.builtin.service:
         name: elasticsearch
         enabled: true
         state: stopped
-      when:
-        - not elasticsearch_unsafe_upgrade_restart | bool
+      when: not elasticsearch_unsafe_upgrade_restart | bool
 
-    - name: elasticsearch-rolling-upgrade | Update Elasticsearch - rpm with managed repositories
+    - name: elasticsearch-rolling-upgrade | Update Elasticsearch
       ansible.builtin.package:
         name: "{{ elasticsearch_package }}"
-        state: latest  # noqa: package-latest
-        enablerepo:
-          - 'elastic-{{ elasticstack_release }}.x'
-      when:
-        - ansible_facts.os_family == "RedHat"
-        - elasticstack_full_stack | bool
+        state: "{{ 'latest' if (elasticstack_version | default('')) in ['', 'latest'] else 'present' }}"
+        enablerepo: "{{ ['elastic-' ~ elasticstack_release ~ '.x'] if ansible_facts.os_family == 'RedHat' else omit }}"
 
-    - name: elasticsearch-rolling-upgrade | Update Elasticsearch - deb or unmanaged repositories rpm
-      ansible.builtin.package:
-        name: "{{ elasticsearch_package }}"
-        state: latest  # noqa: package-latest
-      when:
-        - ansible_facts.os_family == "Debian" or
-          not elasticstack_full_stack | bool
-
-    - name: elasticsearch-rolling-upgrade | Start elasticsearch
+    - name: elasticsearch-rolling-upgrade | Start Elasticsearch
       ansible.builtin.service:
         name: elasticsearch
         enabled: true
-        state: started
-      when:
-        - elasticsearch_running.status.ActiveState == "active"
-        - not elasticsearch_unsafe_upgrade_restart | bool
+        state: "{{ 'restarted' if elasticsearch_unsafe_upgrade_restart | bool else 'started' }}"
 
-    - name: elasticsearch-rolling-upgrade | Restart elasticsearch (fast, for non-prod)
-      ansible.builtin.service:
+    - name: elasticsearch-rolling-upgrade | Wait for the Elasticsearch service
+      ansible.builtin.systemd:
         name: elasticsearch
-        enabled: true
-        state: restarted
-      when:
-        - elasticsearch_running.status.ActiveState == "active"
-        - elasticsearch_unsafe_upgrade_restart | bool
-
-    - name: elasticsearch-rolling-upgrade | Wait for elasticsearch node to come back up if it was stopped
-      ansible.builtin.wait_for:
-        host: "{{ elasticsearch_api_host }}"
-        port: "{{ elasticstack_elasticsearch_http_port }}"
-        delay: 30
-        timeout: 600
-
-    - name: elasticsearch-rolling-upgrade | Confirm the node joins the cluster
-      ansible.builtin.uri:
-        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cat/nodes?h=name"
-        method: GET
-        user: elastic
-        password: "{{ elasticstack_password.stdout }}"
-        validate_certs: "{{ elasticsearch_validate_api_certs }}"
-        force_basic_auth: true
-        return_content: true
-      register: elasticsearch_result
-      until: elasticsearch_nodename in (elasticsearch_result.content | default('')).split()
-      retries: 200
-      delay: 3
-      no_log: "{{ elasticstack_no_log }}"
-      changed_when: false
-
-    - name: elasticsearch-rolling-upgrade | Enable shard allocation for the cluster
-      ansible.builtin.uri:
-        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/settings"
-        method: PUT
-        body: '{ "persistent": { "cluster.routing.allocation.enable": null }}'
-        body_format: json
-        user: elastic
-        password: "{{ elasticstack_password.stdout }}"
-        validate_certs: "{{ elasticsearch_validate_api_certs }}"
-        force_basic_auth: true
-      register: elasticsearch_response
-      until: (elasticsearch_response.json | default({})).acknowledged | default(false)
-      retries: 5
-      delay: 30
-      no_log: "{{ elasticstack_no_log }}"
-
-    - name: elasticsearch-rolling-upgrade | Wait for cluster health to return to yellow or green
-      ansible.builtin.uri:
-        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_cluster/health"
-        method: GET
-        user: elastic
-        password: "{{ elasticstack_password.stdout }}"
-        validate_certs: "{{ elasticsearch_validate_api_certs }}"
-        force_basic_auth: true
-      register: elasticsearch_response
-      # Same expected-nodes guard as the pre-node-down wait — see comment
-      # there for the flake it prevents.
-      until: >-
-        ((elasticsearch_response.json | default({})).status | default('')) in _elasticsearch_upgrade_health_statuses
-        and ((elasticsearch_response.json | default({})).number_of_nodes | default(0) | int)
-            >= _elasticsearch_upgrade_expected_nodes | int
+      register: _elasticsearch_upgrade_started
+      until: (_elasticsearch_upgrade_started.status | default({})).ActiveState | default('') == 'active'
       retries: "{{ elasticsearch_upgrade_health_retries | int }}"
       delay: "{{ elasticsearch_upgrade_health_delay | int }}"
-      vars:
-        # Same gate as the pre-node-down health wait so both sides of the
-        # rolling loop honour the same operator preference.
-        _elasticsearch_upgrade_health_statuses: "{{ ['green'] if elasticsearch_upgrade_wait_status == 'green' else ['green', 'yellow'] }}"
-        _elasticsearch_upgrade_expected_nodes: "{{ groups[elasticstack_elasticsearch_group_name] | default([inventory_hostname]) | length }}"
-      no_log: "{{ elasticstack_no_log }}"
-      changed_when: false
 
-    # Take ML out of upgrade mode so jobs resume on the upgraded node.
-    - name: elasticsearch-rolling-upgrade | Disable ML upgrade mode
+    - name: elasticsearch-rolling-upgrade | Wait for this node to rejoin the cluster
       ansible.builtin.uri:
-        url: "{{ elasticsearch_http_protocol }}://{{ elasticsearch_api_host }}:{{ elasticstack_elasticsearch_http_port }}/_ml/set_upgrade_mode?enabled=false"
-        method: POST
+        url: "{{ _elasticsearch_upgrade_api_url }}/_cat/nodes?h=name"
+        method: GET
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
-        validate_certs: "{{ elasticsearch_validate_api_certs }}"
         force_basic_auth: true
-        status_code: [200]
-      register: _elasticsearch_ml_upgrade_mode_off
-      failed_when: false
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
+        timeout: 20
+        return_content: true
+      register: _elasticsearch_upgrade_rejoined
+      until: >-
+        (_elasticsearch_upgrade_rejoined.status | default(0)) == 200
+        and elasticsearch_nodename | default(ansible_facts.hostname | default(inventory_hostname))
+           in (_elasticsearch_upgrade_rejoined.content | default('')).split()
+      retries: "{{ elasticsearch_upgrade_health_retries | int }}"
+      delay: "{{ elasticsearch_upgrade_health_delay | int }}"
+      changed_when: false
       no_log: "{{ elasticstack_no_log }}"
-      when:
-        - elasticsearch_ml_enabled | bool
-        - _elasticsearch_ml_upgrade_mode is defined
-        - (_elasticsearch_ml_upgrade_mode.status | default(0)) == 200
 
-    - name: elasticsearch-rolling-upgrade | Record that rolling upgrade performed its own restart
+    - name: elasticsearch-rolling-upgrade | Read this node's running version
+      ansible.builtin.uri:
+        url: "{{ _elasticsearch_upgrade_api_url }}/_nodes/{{ elasticsearch_nodename | default(ansible_facts.hostname | default(inventory_hostname)) | urlencode }}?filter_path=nodes.*.name,nodes.*.version"
+        method: GET
+        user: elastic
+        password: "{{ elasticstack_password.stdout }}"
+        force_basic_auth: true
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
+        timeout: 20
+      register: _elasticsearch_upgrade_node_info
+      changed_when: false
+      no_log: "{{ elasticstack_no_log }}"
+
+    - name: elasticsearch-rolling-upgrade | Require the requested node version
+      ansible.builtin.assert:
+        that:
+          - _elasticsearch_upgrade_node_values | length == 1
+          - >-
+            (_elasticsearch_upgrade_node_values | first | default({})).name | default('')
+            == elasticsearch_nodename | default(ansible_facts.hostname | default(inventory_hostname))
+          - >-
+            ((_elasticsearch_upgrade_node_values | first | default({})).version | default('')).split('.')[0] | int
+            == elasticstack_release | int
+          - >-
+            elasticstack_version | default('') | string in ['', 'latest']
+            or (_elasticsearch_upgrade_node_values | first | default({})).version | default('') == elasticstack_version
+        fail_msg: The restarted node is not running the requested Elasticsearch version.
+      vars:
+        _elasticsearch_upgrade_node_values: "{{ (_elasticsearch_upgrade_node_info.json.nodes | default({})).values() | list }}"
+
+  rescue:
+    - name: elasticsearch-rolling-upgrade | Record the original failed task
       ansible.builtin.set_fact:
-        _elasticsearch_rolling_upgrade_performed: true
+        _elasticsearch_upgrade_failed_task: "{{ ansible_failed_task.name }}"
+
+  always:
+    - name: elasticsearch-rolling-upgrade | Restore temporary cluster settings
+      ansible.builtin.include_tasks: elasticsearch-upgrade-restore.yml
+
+- name: elasticsearch-rolling-upgrade | Propagate the original upgrade failure
+  ansible.builtin.assert:
+    that:
+      - _elasticsearch_upgrade_failed_task | length == 0
+    fail_msg: >-
+      Elasticsearch upgrade failed at '{{ _elasticsearch_upgrade_failed_task }}'.
+      Temporary settings were restored, but the upgrade did not succeed.
+
+- name: elasticsearch-rolling-upgrade | Verify the cluster after the upgrade
+  ansible.builtin.include_tasks: elasticsearch-upgrade-preflight.yml
+  when: not ansible_check_mode
+
+- name: elasticsearch-rolling-upgrade | Record completed rolling restart
+  ansible.builtin.set_fact:
+    _elasticsearch_rolling_upgrade_performed: true
+  when: not ansible_check_mode

@@ -502,7 +502,12 @@ class TestRepositoryContracts(unittest.TestCase):
             self.assertIn(package_notify, include_source)
 
         elasticsearch = (ROOT / "roles" / "elasticsearch" / "tasks" / "main.yml").read_text()
-        self.assertIn("_elasticstack_package_changed", elasticsearch)
+        self.assertIn("_elasticsearch_upgrade_candidate.changed", elasticsearch)
+        self.assertLess(
+            elasticsearch.index("Preview unpinned Elasticsearch package update"),
+            elasticsearch.index("Update Elasticsearch if needed"),
+        )
+        self.assertNotIn("Rolling restart after package upgrade", elasticsearch)
         self.assertNotIn("_elasticsearch_install_rpm_full", elasticsearch)
 
         elasticsearch_template = (

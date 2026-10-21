@@ -40,6 +40,8 @@ explicit:
       - tests/integration/collection_variable_contract.yml
     elasticsearch_cluster_set_up:
       - tests/integration/collection_variable_contract.yml
+    elasticsearch_upgrade_wait_status:
+      - molecule/elasticsearch_upgrade_8to9_single/converge.yml
   elasticstack:
     elasticstack_version:
       - tests/integration/collection_variable_contract.yml

@@ -211,6 +211,8 @@
     # Only change the release — don't pin elasticstack_version.
     # This exercises the real-world upgrade path.
     elasticstack_release: 9
+    elasticsearch_upgrade_wait_status: yellow
+    elasticsearch_manage_logging: true
     elasticsearch_heap: "1"
     elasticstack_no_log: false
     elasticsearch_seed_hosts: []
@@ -267,6 +269,36 @@
       ansible.builtin.set_fact:
         _elasticstack_role_imported: false
 
+    - name: Verify upgrade rejection before package configuration or service changes
+      ansible.builtin.include_tasks: ../shared/verify_upgrade_preflight.yml
+
+    - name: Record logging configuration before the upgrade
+      ansible.builtin.stat:
+        path: /etc/elasticsearch/log4j2.properties
+      register: _es_logging_before_upgrade
+
+    - name: Record a pending singleton restart request
+      ansible.builtin.set_fact:
+        _elasticsearch_restart_requested: true
+
     - name: Include Elasticsearch role (upgrade to 9.x)
       ansible.builtin.include_role:
         name: oddly.elasticstack.elasticsearch
+
+    - name: Read logging configuration after the upgrade
+      ansible.builtin.stat:
+        path: /etc/elasticsearch/log4j2.properties
+      register: _es_logging_after_upgrade
+
+    - name: Require changed logging configuration in the singleton fixture
+      ansible.builtin.assert:
+        that:
+          - _es_logging_before_upgrade.stat.checksum != _es_logging_after_upgrade.stat.checksum
+
+    - name: Activate pending singleton configuration changes
+      ansible.builtin.meta: flush_handlers
+
+    - name: Verify the singleton logging restart request completed
+      ansible.builtin.assert:
+        that:
+          - not (_elasticsearch_restart_requested | bool)

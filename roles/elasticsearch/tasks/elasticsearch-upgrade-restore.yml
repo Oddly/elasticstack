@@ -1,0 +1,128 @@
+---
+- name: elasticsearch-upgrade-restore | Resolve local cleanup observer and API
+  ansible.builtin.set_fact:
+    _elasticsearch_upgrade_cleanup_host: "{{ inventory_hostname }}"
+    _elasticsearch_upgrade_cleanup_url: "{{ _elasticsearch_upgrade_api_url }}"
+
+- name: elasticsearch-upgrade-restore | Verify cleanup cluster identity
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_upgrade_cleanup_url }}/_cluster/health"
+    method: GET
+    user: elastic
+    password: "{{ elasticstack_password.stdout }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+    timeout: 20
+  register: _elasticsearch_upgrade_cleanup_identity
+  changed_when: false
+  failed_when: false
+  ignore_unreachable: true
+  any_errors_fatal: false
+  no_log: "{{ elasticstack_no_log }}"
+  delegate_to: "{{ _elasticsearch_upgrade_cleanup_host }}"
+  when: _elasticsearch_upgrade_allocation_attempted | bool or _elasticsearch_upgrade_ml_attempted | bool
+
+- name: elasticsearch-upgrade-restore | Fall back to another cleanup observer
+  when:
+    - _elasticsearch_upgrade_allocation_attempted | bool or _elasticsearch_upgrade_ml_attempted | bool
+    - groups[elasticstack_elasticsearch_group_name] | difference([inventory_hostname]) | length > 0
+    - >-
+      (_elasticsearch_upgrade_cleanup_identity.status | default(0)) != 200
+      or (_elasticsearch_upgrade_cleanup_identity.json | default({})).cluster_name | default('') != elasticsearch_clustername
+  block:
+    - name: elasticsearch-upgrade-restore | Resolve fallback cleanup observer
+      ansible.builtin.set_fact:
+        _elasticsearch_upgrade_cleanup_host: >-
+          {{ groups[elasticstack_elasticsearch_group_name] | difference([inventory_hostname]) | first }}
+
+    - name: elasticsearch-upgrade-restore | Resolve fallback cleanup API
+      ansible.builtin.set_fact:
+        _elasticsearch_upgrade_cleanup_url: >-
+          {{ elasticsearch_maintenance_api_url
+             | default(('https' if elasticsearch_http_security | bool else elasticsearch_http_protocol)
+                       ~ '://' ~ (hostvars[_elasticsearch_upgrade_cleanup_host].elasticsearch_api_host
+                                 | default(_elasticsearch_upgrade_cleanup_host
+                                           if elasticsearch_api_host == inventory_hostname else elasticsearch_api_host))
+                       ~ ':' ~ (hostvars[_elasticsearch_upgrade_cleanup_host].elasticstack_elasticsearch_http_port
+                                 | default(elasticstack_elasticsearch_http_port))) }}
+
+    - name: elasticsearch-upgrade-restore | Verify fallback cleanup cluster identity
+      ansible.builtin.uri:
+        url: "{{ _elasticsearch_upgrade_cleanup_url }}/_cluster/health"
+        method: GET
+        user: elastic
+        password: "{{ elasticstack_password.stdout }}"
+        force_basic_auth: true
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
+        timeout: 20
+      register: _elasticsearch_upgrade_cleanup_fallback_identity
+      changed_when: false
+      failed_when: false
+      ignore_unreachable: true
+      any_errors_fatal: false
+      no_log: "{{ elasticstack_no_log }}"
+      delegate_to: "{{ _elasticsearch_upgrade_cleanup_host }}"
+
+    - name: elasticsearch-upgrade-restore | Record fallback cleanup identity
+      ansible.builtin.set_fact:
+        _elasticsearch_upgrade_cleanup_identity: "{{ _elasticsearch_upgrade_cleanup_fallback_identity }}"
+
+- name: elasticsearch-upgrade-restore | Restore allocation setting
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_upgrade_cleanup_url }}/_cluster/settings"
+    method: PUT
+    body:
+      persistent:
+        cluster.routing.allocation.enable: "{{ _elasticsearch_upgrade_previous_allocation }}"
+    body_format: json
+    user: elastic
+    password: "{{ elasticstack_password.stdout }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+    timeout: 20
+  register: _elasticsearch_upgrade_allocation_restore
+  failed_when: false
+  ignore_unreachable: true
+  any_errors_fatal: false
+  no_log: "{{ elasticstack_no_log }}"
+  delegate_to: "{{ _elasticsearch_upgrade_cleanup_host }}"
+  when:
+    - _elasticsearch_upgrade_allocation_attempted | bool
+    - (_elasticsearch_upgrade_cleanup_identity.status | default(0)) == 200
+    - (_elasticsearch_upgrade_cleanup_identity.json | default({})).cluster_name | default('') == elasticsearch_clustername
+
+- name: elasticsearch-upgrade-restore | Restore ML upgrade mode
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_upgrade_cleanup_url }}/_ml/set_upgrade_mode?enabled=false"
+    method: POST
+    user: elastic
+    password: "{{ elasticstack_password.stdout }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+    timeout: 20
+  register: _elasticsearch_upgrade_ml_restore
+  failed_when: false
+  ignore_unreachable: true
+  any_errors_fatal: false
+  no_log: "{{ elasticstack_no_log }}"
+  delegate_to: "{{ _elasticsearch_upgrade_cleanup_host }}"
+  when:
+    - _elasticsearch_upgrade_ml_attempted | bool
+    - (_elasticsearch_upgrade_cleanup_identity.status | default(0)) == 200
+    - (_elasticsearch_upgrade_cleanup_identity.json | default({})).cluster_name | default('') == elasticsearch_clustername
+
+- name: elasticsearch-upgrade-restore | Require successful restoration
+  ansible.builtin.assert:
+    that:
+      - >-
+        not (_elasticsearch_upgrade_allocation_attempted | bool)
+        or ((_elasticsearch_upgrade_allocation_restore.status | default(0)) == 200
+            and ((_elasticsearch_upgrade_allocation_restore.json | default({})).acknowledged | default(false) | bool))
+      - >-
+        not (_elasticsearch_upgrade_ml_attempted | bool)
+        or ((_elasticsearch_upgrade_ml_restore.status | default(0)) == 200
+            and ((_elasticsearch_upgrade_ml_restore.json | default({})).acknowledged | default(false) | bool))
+    fail_msg: >-
+      Temporary cluster settings could not be restored. Original failed task:
+      {{ _elasticsearch_upgrade_failed_task | default('none', true) }}.
+      Inspect this cluster before attempting another node.

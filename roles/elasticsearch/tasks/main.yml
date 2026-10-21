@@ -7,6 +7,14 @@
 - name: Detect if rolling upgrade is needed (pre-install)
   ansible.builtin.include_tasks: elasticsearch-upgrade-detection.yml
 
+- name: Validate existing installation before upgrade preparation
+  ansible.builtin.include_tasks: elasticsearch-upgrade-preflight.yml
+  when:
+    - ansible_facts.packages['elasticsearch'] is defined
+    - >-
+      _elasticsearch_needs_rolling_upgrade | bool
+      or elasticstack_version | default('') == 'latest'
+
 - name: Include global role
   ansible.builtin.import_role:
     name: oddly.elasticstack.elasticstack
@@ -186,6 +194,31 @@
       replace(' ', '')
       }}
 
+- name: Preview unpinned Elasticsearch package update
+  ansible.builtin.package:
+    name: elasticsearch
+    state: latest
+    enablerepo: "{{ ['elastic-' ~ elasticstack_release ~ '.x'] if ansible_facts.os_family == 'RedHat' else omit }}"
+  check_mode: true
+  register: _elasticsearch_upgrade_candidate
+  when:
+    - ansible_facts.packages['elasticsearch'] is defined
+    - elasticstack_version | default('') == 'latest'
+
+- name: Select rolling upgrade before unpinned package changes
+  ansible.builtin.set_fact:
+    _elasticsearch_needs_rolling_upgrade: true
+  when:
+    - _elasticsearch_upgrade_candidate.changed | default(false) | bool
+
+- name: Validate the upgrade batch before configuration changes
+  ansible.builtin.assert:
+    that:
+      - elasticsearch_security | bool
+      - ansible_play_batch | intersect(groups[elasticstack_elasticsearch_group_name] | default([])) | length == 1
+    fail_msg: Rolling upgrades require security and one Elasticsearch host per play batch.
+  when: _elasticsearch_needs_rolling_upgrade | bool
+
 - name: "WARNING: Rolling upgrade will be performed"
   ansible.builtin.pause:
     seconds: "{{ elasticsearch_upgrade_countdown | default(10) }}"
@@ -274,36 +307,18 @@
   when:
     - inventory_hostname in groups[elasticstack_elasticsearch_group_name] | default([])
     - _elasticsearch_needs_rolling_upgrade | bool
-    - elasticstack_password.stdout is defined
 
-# NOTE: When elasticstack_version is "latest", state: latest means the package
-# manager installs the newest available version. The shared installer records
-# whether that changed the package so the post-install detection below can
-# trigger a rolling restart (node-by-node with shard allocation management).
 - name: Install Elasticsearch package
   ansible.builtin.include_tasks: "{{ role_path }}/../elasticstack/tasks/install_elastic_package.yml"
   vars:
     _package_name: "{{ elasticsearch_package }}"
     _package_base_name: elasticsearch
     _package_notify: []
-
-# If a normal package install (not the rolling upgrade path) changed the
-# package, we need a rolling restart to avoid bringing all nodes down at
-# once. This covers the "latest" case where we didn't know pre-install
-# whether a newer version was available.
-- name: Detect if package was upgraded (post-install)
-  ansible.builtin.set_fact:
-    _elasticsearch_package_upgraded: >-
-      {{ _elasticstack_package_changed | default(false) | bool }}
-  when: not (_elasticsearch_needs_rolling_upgrade | bool)
-
-- name: Rolling restart after package upgrade
-  ansible.builtin.include_tasks: elasticsearch-rolling-upgrade.yml
-  when:
-    - inventory_hostname in groups[elasticstack_elasticsearch_group_name] | default([])
-    - not (_elasticsearch_needs_rolling_upgrade | bool)
-    - _elasticsearch_package_upgraded | default(false) | bool
-    - elasticstack_password.stdout is defined
+  when: >-
+    ansible_check_mode
+    or (not (_elasticsearch_needs_rolling_upgrade | bool)
+        and (ansible_facts.packages['elasticsearch'] is not defined
+             or elasticstack_version | default('') != 'latest'))
 
 - name: Warn about conflicting keys in elasticsearch_extra_config
   ansible.builtin.debug:
@@ -427,9 +442,9 @@
 - name: Rolling upgrade completed
   ansible.builtin.debug:
     msg: >-
-      A rolling upgrade was performed. Config files were written before the
-      upgrade so the restart picked up new config. The handler restart is
-      suppressed to prevent a second uncontrolled restart.
+      A rolling upgrade was performed. Multi-node handler restarts remain
+      suppressed to prevent a second uncontrolled restart. Singleton handlers
+      activate any configuration changed after the upgrade restart.
   when: _elasticsearch_rolling_upgrade_performed | default(false) | bool
 
 - name: Create elasticsearch systemd override directory
