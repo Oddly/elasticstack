@@ -61,7 +61,7 @@ class ActionModule(ActionBase):
                 if self._task.check_mode and state.get('repository_failure'):
                     return {'changed': False, 'failed': True, 'msg': 'simulated unavailable repository'}
                 if state.get('candidate_requires_repository') and args.get('state') == 'latest':
-                    result['changed'] = args.get('enablerepo') == ['elastic-9.x']
+                    result['changed'] = args.get('enablerepo') == state.get('candidate_repository', ['elastic-9.x'])
                 else:
                     result['changed'] = state.get('candidate', True)
                 if args.get('state') == 'present' and name == 'elasticsearch' and state['installed']:

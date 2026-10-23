@@ -64,3 +64,63 @@
       changed_when: false
       failed_when: es_available_rhel.stdout | int < 1
       when: ansible_facts.os_family == "RedHat"
+
+    - name: Verify externally managed RPM repository selection
+      when: ansible_facts.os_family == "RedHat"
+      block:
+        - name: Preserve managed repository configuration
+          ansible.builtin.slurp:
+            src: /etc/yum.repos.d/elastic-release.repo
+          register: external_repo_fixture_original
+
+        - name: Require the expected managed repository section
+          ansible.builtin.assert:
+            that:
+              - "'[' ~ 'elastic-' ~ elasticstack_release ~ '.x]' in (external_repo_fixture_original.content | b64decode)"
+
+        - name: Expose the external source and a disabled vendor repository trap
+          ansible.builtin.copy:
+            content: |
+              {{ (external_repo_fixture_original.content | b64decode) |
+                 replace('[elastic-' ~ elasticstack_release ~ '.x]', '[external-elastic-fixture]') }}
+              [elastic-{{ elasticstack_release }}.x]
+              name=Disabled vendor repository fixture
+              baseurl=file:///nonexistent-elastic-repository-fixture
+              enabled=0
+              gpgcheck=1
+              skip_if_unavailable=0
+              metadata_expire=0
+            dest: /etc/yum.repos.d/elastic-release.repo
+            owner: root
+            group: root
+            mode: "{{ repo_file_rhel.stat.mode }}"
+
+        - name: Check package resolution without the managed repository ID
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elasticstack
+            tasks_from: install_elastic_package
+            apply:
+              check_mode: true
+          vars:
+            elasticstack_enable_repos: false
+            elasticstack_full_stack: "{{ external_repo_fixture_full_stack }}"
+            elasticstack_version: ""
+            _package_name: bash
+            _package_base_name: bash
+          loop: [true, false]
+          loop_control:
+            loop_var: external_repo_fixture_full_stack
+
+        - name: Assert the installed fixture package needs no transaction
+          ansible.builtin.assert:
+            that:
+              - not _elasticstack_package_changed | bool
+      always:
+        - name: Restore the managed repository configuration
+          ansible.builtin.copy:
+            content: "{{ external_repo_fixture_original.content | b64decode }}"
+            dest: /etc/yum.repos.d/elastic-release.repo
+            owner: root
+            group: root
+            mode: "{{ repo_file_rhel.stat.mode }}"
+          when: external_repo_fixture_original.content is defined

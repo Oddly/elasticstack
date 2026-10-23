@@ -157,7 +157,7 @@
       ansible.builtin.package:
         name: "{{ elasticsearch_package }}"
         state: "{{ 'latest' if (elasticstack_version | default('')) in ['', 'latest'] else 'present' }}"
-        enablerepo: "{{ ['elastic-' ~ elasticstack_release ~ '.x'] if ansible_facts.os_family == 'RedHat' else omit }}"
+        enablerepo: "{{ ['elastic-' ~ elasticstack_release ~ '.x'] if ansible_facts.os_family == 'RedHat' and elasticstack_enable_repos | bool else omit }}"
 
     - name: elasticsearch-rolling-upgrade | Start Elasticsearch
       ansible.builtin.service:
