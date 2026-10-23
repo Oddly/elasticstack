@@ -9,8 +9,7 @@
   ansible.builtin.package:
     name: "{{ _package_name }}"
     state: "{{ 'latest' if (elasticstack_version | default('') == 'latest') else 'present' }}"
-    enablerepo:
-      - "elastic-{{ elasticstack_release }}.x"
+    enablerepo: "{{ ['elastic-' ~ elasticstack_release ~ '.x'] if elasticstack_enable_repos | bool else omit }}"
   environment: "{{ _package_environment | default({}) }}"
   register: _elasticstack_package_install_rpm_full
   until: _elasticstack_package_install_rpm_full is success
@@ -25,8 +24,7 @@
   ansible.builtin.package:
     name: "{{ _package_name }}"
     state: "{{ 'latest' if (elasticstack_version | default('') == 'latest') else 'present' }}"
-    enablerepo:
-      - "elastic-{{ elasticstack_release }}.x"
+    enablerepo: "{{ ['elastic-' ~ elasticstack_release ~ '.x'] if elasticstack_enable_repos | bool else omit }}"
   environment: "{{ _package_environment | default({}) }}"
   register: _elasticstack_package_install_rpm
   until: _elasticstack_package_install_rpm is success

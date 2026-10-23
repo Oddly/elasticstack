@@ -198,7 +198,7 @@
   ansible.builtin.package:
     name: elasticsearch
     state: latest
-    enablerepo: "{{ ['elastic-' ~ elasticstack_release ~ '.x'] if ansible_facts.os_family == 'RedHat' else omit }}"
+    enablerepo: "{{ ['elastic-' ~ elasticstack_release ~ '.x'] if ansible_facts.os_family == 'RedHat' and elasticstack_enable_repos | bool else omit }}"
   check_mode: true
   register: _elasticsearch_upgrade_candidate
   when:

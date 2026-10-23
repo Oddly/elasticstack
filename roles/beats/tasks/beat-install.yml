@@ -18,8 +18,7 @@
 - name: beat-install | Install rpm full-stack package for {{ _beat_name }}
   ansible.builtin.package:
     name: "{{ beats_package }}"
-    enablerepo:
-      - 'elastic-{{ elasticstack_release }}.x'
+    enablerepo: "{{ ['elastic-' ~ elasticstack_release ~ '.x'] if elasticstack_enable_repos | bool else omit }}"
   register: beats_install_rpm_full
   until: beats_install_rpm_full is success
   retries: 3
@@ -56,8 +55,7 @@
   ansible.builtin.package:
     name: "{{ _beat_name }}"
     state: latest
-    enablerepo:
-      - "elastic-{{ elasticstack_release }}.x"
+    enablerepo: "{{ ['elastic-' ~ elasticstack_release ~ '.x'] if elasticstack_enable_repos | bool else omit }}"
   register: beats_install_latest_rpm_full
   until: beats_install_latest_rpm_full is success
   retries: 3

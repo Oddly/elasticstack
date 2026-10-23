@@ -16,7 +16,7 @@ ANSIBLE = shutil.which('ansible-playbook')
 
 @unittest.skipUnless(ANSIBLE, 'ansible-playbook is required')
 class TestUpgradeSafety(unittest.TestCase):
-    def run_case(self, changes=None, variables=None, entry='elasticsearch-rolling-upgrade', count=2, serial=1, check=False, limit=None):
+    def run_case(self, changes=None, variables=None, entry='elasticsearch-rolling-upgrade', count=2, serial=1, check=False, limit=None, role='elasticsearch'):
         with tempfile.TemporaryDirectory(prefix='elasticstack-upgrade-test-') as directory:
             directory = Path(directory)
             collection = directory / 'collections/ansible_collections/oddly/elasticstack'
@@ -38,8 +38,8 @@ class TestUpgradeSafety(unittest.TestCase):
             state_path = directory / 'state.json'
             state_path.write_text(json.dumps(state))
             defaults = {}
-            for role in ('elasticstack', 'elasticsearch'):
-                defaults.update(yaml.safe_load((ROOT / f'roles/{role}/defaults/main.yml').read_text()))
+            for defaults_role in ('elasticstack', 'elasticsearch'):
+                defaults.update(yaml.safe_load((ROOT / f'roles/{defaults_role}/defaults/main.yml').read_text()))
             defaults.update({
                 'elasticstack_elasticsearch_group_name': 'search_members',
                 'elasticstack_release': 9, 'elasticstack_version': '9.1.2',
@@ -76,7 +76,7 @@ class TestUpgradeSafety(unittest.TestCase):
                 'strategy': 'upgrade_safety_mock',
                 'module_defaults': {'ansible.builtin.uri': {'ca_path': '/custom/trust/fixture.pem'}},
                 'tasks': [{'name': 'Exercise actual task entrypoint', 'ansible.builtin.include_role': {
-                    'name': 'oddly.elasticstack.elasticsearch', 'tasks_from': entry,
+                    'name': f'oddly.elasticstack.{role}', 'tasks_from': entry,
                 }}],
             }]
             play_path = directory / 'play.yml'
@@ -293,22 +293,59 @@ class TestUpgradeSafety(unittest.TestCase):
                     'elasticstack_version': 'latest', 'elasticstack_full_stack': full_stack,
                     'elasticstack_enable_repos': manage_repositories,
                 }
-                completed, state = self.run_case({'os_family': 'RedHat', 'candidate_requires_repository': True},
+                completed, state = self.run_case({'os_family': 'RedHat', 'candidate_requires_repository': True,
+                                                   'candidate_repository': ['elastic-9.x'] if manage_repositories else None},
                                                  entry='main', count=1, variables=variables)
                 self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
                 self.assertTrue(any(e.get('boundary') for e in state['events']), completed.stdout + completed.stderr)
                 self.assertEqual(state['package_writes'], ['node-alpha'])
                 packages = [e for e in state['events'] if e['action'] == 'package' and e['name'] == 'elasticsearch']
                 self.assertEqual([e['check_mode'] for e in packages], [True, False])
-                self.assertTrue(all(e['enablerepo'] == ['elastic-9.x'] for e in packages))
+                self.assertTrue(all(e['enablerepo'] == (['elastic-9.x'] if manage_repositories else None) for e in packages))
         completed, state = self.run_case({'os_family': 'RedHat', 'installed': ''}, entry='main', count=1, variables={
             'elasticstack_version': 'latest', 'elasticstack_full_stack': False, 'elasticstack_enable_repos': False,
         })
         self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
         self.assertTrue(any(e.get('boundary') for e in state['events']), completed.stdout + completed.stderr)
         package = next(e for e in state['events'] if e['action'] == 'package' and e['name'] == 'elasticsearch')
-        self.assertEqual(package['enablerepo'], ['elastic-9.x'])
+        self.assertIsNone(package['enablerepo'])
         self.assertFalse(package['check_mode'])
+
+    def test_shared_rpm_installer_respects_external_repository_management(self):
+        for full_stack in (True, False):
+            for manage_repositories in (True, False):
+                for version in ('9.1.2', 'latest'):
+                    with self.subTest(full_stack=full_stack, manage_repositories=manage_repositories, version=version):
+                        name = 'kibana' if version == 'latest' else 'kibana-9.1.2'
+                        completed, state = self.run_case({'os_family': 'RedHat'}, count=1,
+                            role='elasticstack', entry='install_elastic_package', variables={
+                                'elasticstack_full_stack': full_stack,
+                                'elasticstack_enable_repos': manage_repositories,
+                                'elasticstack_version': version,
+                                '_package_name': name, '_package_base_name': 'kibana',
+                            })
+                        self.assert_ok(completed)
+                        packages = [e for e in state['events'] if e['action'] == 'package']
+                        self.assertEqual(len(packages), 1)
+                        self.assertEqual(packages[0]['name'], name)
+                        self.assertEqual(packages[0]['enablerepo'], ['elastic-9.x'] if manage_repositories else None)
+
+    def test_beats_rpm_installer_respects_external_repository_management(self):
+        for full_stack in (True, False):
+            for manage_repositories in (True, False):
+                for version in ('9.1.2', 'latest'):
+                    with self.subTest(full_stack=full_stack, manage_repositories=manage_repositories, version=version):
+                        completed, state = self.run_case({'os_family': 'RedHat'}, count=1,
+                            role='beats', entry='beat-install', variables={
+                                'elasticstack_full_stack': full_stack,
+                                'elasticstack_enable_repos': manage_repositories,
+                                'elasticstack_version': version, '_beat_name': 'filebeat',
+                            })
+                        self.assert_ok(completed)
+                        packages = [e for e in state['events'] if e['action'] == 'package']
+                        self.assertEqual(len(packages), 2 if version == 'latest' else 1)
+                        expected = ['elastic-9.x'] if full_stack and manage_repositories else None
+                        self.assertTrue(all(e['enablerepo'] == expected for e in packages))
 
     def test_bad_rpm_repository_fails_preview_before_elasticsearch_changes(self):
         for failure in ('missing', 'unusable'):
