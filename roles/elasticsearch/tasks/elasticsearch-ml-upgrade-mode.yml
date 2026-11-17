@@ -1,0 +1,70 @@
+---
+- name: elasticsearch-ml-upgrade-mode | Verify cluster identity before changing ML mode
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_ml_url }}/_cluster/health"
+    user: elastic
+    password: "{{ _elasticsearch_ml_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+    timeout: 20
+  register: _elasticsearch_ml_identity
+  changed_when: false
+  ignore_unreachable: true
+  any_errors_fatal: false
+  no_log: "{{ elasticstack_no_log | default(true) | bool }}"
+
+- name: elasticsearch-ml-upgrade-mode | Require the expected cluster
+  ansible.builtin.assert:
+    that:
+      - _elasticsearch_ml_identity.json.cluster_name == elasticsearch_clustername
+    fail_msg: The API does not identify the expected Elasticsearch cluster.
+
+- name: elasticsearch-ml-upgrade-mode | Set ML upgrade mode
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_ml_url }}/_ml/set_upgrade_mode?enabled={{ _elasticsearch_ml_mode | bool | ternary('true', 'false') }}&timeout=120s"
+    method: POST
+    user: elastic
+    password: "{{ _elasticsearch_ml_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+    timeout: 180
+  register: _elasticsearch_ml_result
+  until: >-
+    (_elasticsearch_ml_result.status | default(0)) == 200
+    and ((_elasticsearch_ml_result.json | default({})).acknowledged | default(false) | bool)
+  retries: 2
+  delay: 10
+  ignore_unreachable: true
+  any_errors_fatal: false
+  no_log: "{{ elasticstack_no_log | default(true) | bool }}"
+
+- name: elasticsearch-ml-upgrade-mode | Verify ML upgrade mode
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_ml_url }}/_ml/info?filter_path=upgrade_mode"
+    user: elastic
+    password: "{{ _elasticsearch_ml_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+    timeout: 20
+  register: _elasticsearch_ml_readback
+  until: >-
+    (_elasticsearch_ml_readback.status | default(0)) == 200
+    and ((_elasticsearch_ml_readback.json | default({})).upgrade_mode | default(none))
+        is sameas (_elasticsearch_ml_mode | bool)
+  retries: 2
+  delay: 10
+  changed_when: false
+  ignore_unreachable: true
+  any_errors_fatal: false
+  no_log: "{{ elasticstack_no_log | default(true) | bool }}"
+
+- name: elasticsearch-ml-upgrade-mode | Require acknowledged and verified ML mode
+  ansible.builtin.assert:
+    that:
+      - (_elasticsearch_ml_result.status | default(0)) == 200
+      - (_elasticsearch_ml_result.json | default({})).acknowledged | default(false) | bool
+      - (_elasticsearch_ml_readback.status | default(0)) == 200
+      - >-
+        ((_elasticsearch_ml_readback.json | default({})).upgrade_mode | default(none))
+        is sameas (_elasticsearch_ml_mode | bool)
+    fail_msg: ML upgrade mode was not acknowledged and verified; inspect this cluster before continuing.

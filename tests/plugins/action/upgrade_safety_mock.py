@@ -83,9 +83,13 @@ class ActionModule(ActionBase):
                 validate_certs=args.get('validate_certs'),
                 ca_path=args.get('ca_path'),
                 body=args.get('body'),
+                timeout=args.get('timeout'),
             )
             observer = event['delegate_to'] or host
-            if 'elasticsearch-upgrade-restore |' in event['task']:
+            if ('elasticsearch-upgrade-restore |' in event['task']
+                    or event['task'].startswith('node_maintenance_end |')
+                    or (event['task'].startswith('elasticsearch-ml-upgrade-mode |')
+                        and task_vars.get('_elasticsearch_ml_mode') is False)):
                 if observer in state.get('cleanup_unreachable_hosts', []):
                     return {'changed': False, 'unreachable': True, 'msg': 'simulated unavailable management connection'}
                 if any(name in event['task'] for name in state.get('cleanup_unreachable_tasks', [])):
@@ -158,9 +162,25 @@ class ActionModule(ActionBase):
                 return {'status': 200, 'json': {'persistent': state['persistent'], 'transient': state.get('transient', {})}, 'changed': False}
             if path == '/_ml/info':
                 return {'status': 200, 'json': {'upgrade_mode': state['ml_mode']}, 'changed': False}
+            if path == '/_cluster/state/metadata':
+                return {'status': 200, 'json': {
+                    'cluster_name': state.get('cluster_name', 'fixture-cluster'),
+                    'metadata': {'cluster_coordination': {'voting_config_exclusions': state.get('voting', [])}},
+                }, 'changed': False}
             return {'status': 404, 'failed': True, 'msg': 'unhandled mock GET'}
         state['api_writes'].append(event)
-        restore = 'Restore ' in event['task']
+        cleanup_step = next((step for step, name in {
+            'allocation': 'Re-enable shard allocation', 'voting': 'Clear voting config exclusions',
+            'baseline': 'Restore recovery settings to the baseline',
+        }.items() if name in event['task']), None)
+        if cleanup_step and state.get('maintenance_failure') == cleanup_step:
+            return {'status': 503, 'failed': True, 'msg': 'simulated maintenance cleanup failure'}
+        if cleanup_step and state.get('maintenance_no_apply') == cleanup_step:
+            return {'status': 200, 'json': {'acknowledged': True}, 'changed': True}
+        if path == '/_cluster/voting_config_exclusions':
+            state['voting'] = [] if method == 'DELETE' else [{'node_name': event['host']}]
+            return {'status': 200, 'changed': True}
+        restore = 'Restore ' in event['task'] or (path == '/_ml/set_upgrade_mode' and 'enabled=false' in event['url'])
         if path == '/_cluster/settings':
             if restore and state.get('allocation_restore_failure'):
                 return {'status': 503, 'failed': True, 'msg': 'simulated allocation restore failure'}
@@ -176,7 +196,17 @@ class ActionModule(ActionBase):
         if path == '/_ml/set_upgrade_mode':
             if not restore and state.get('ml_failure'):
                 return {'status': 503, 'failed': True, 'msg': 'simulated ML failure'}
-            state['ml_mode'] = 'enabled=true' in event['url']
+            if restore:
+                attempts = state.setdefault('ml_restore_attempts', {})
+                attempts[event['host']] = attempts.get(event['host'], 0) + 1
+                statuses = state.get('ml_restore_statuses', [200])
+                status = statuses[min(attempts[event['host']] - 1, len(statuses) - 1)]
+                if status != 200:
+                    if state.get('ml_restore_applied_on_timeout'):
+                        state['ml_mode'] = False
+                    return {'status': status, 'failed': True, 'msg': 'simulated ML restore timeout or server failure'}
+            if not restore or not state.get('ml_restore_does_not_apply'):
+                state['ml_mode'] = 'enabled=true' in event['url']
             return {'status': 200, 'json': {'acknowledged': True}, 'changed': True}
         if path == '/_flush':
             status = state.get('flush_status', 200)

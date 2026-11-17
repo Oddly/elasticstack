@@ -1,0 +1,72 @@
+---
+- name: ml_upgrade_end | Restore ML only when this run attempted to change it
+  when:
+    - not ansible_check_mode
+    - (hostvars[elasticsearch_ml_upgrade_state_host | default(inventory_hostname)]._elasticsearch_ml_upgrade_state | default({})).get('pending', false) | bool
+  block:
+    - name: ml_upgrade_end | Find an API of the original cluster
+      ansible.builtin.uri:
+        url: "{{ _elasticsearch_ml_observer_url }}/_cluster/health"
+        user: elastic
+        password: "{{ elasticsearch_maintenance_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
+        timeout: 10
+      vars:
+        _elasticsearch_ml_observer_url: >-
+          {{ elasticsearch_maintenance_api_url
+             | default(('https' if elasticsearch_http_security | bool else elasticsearch_http_protocol) ~ '://'
+                       ~ (hostvars[item].elasticsearch_api_host | default(item))
+                       ~ ':' ~ (hostvars[item].elasticstack_elasticsearch_http_port
+                                | default(elasticstack_elasticsearch_http_port | default(9200)))) }}
+      delegate_to: "{{ item }}"
+      loop: "{{ elasticsearch_ml_upgrade_hosts | default([inventory_hostname]) }}"
+      register: _elasticsearch_ml_upgrade_probes
+      changed_when: false
+      failed_when: false
+      ignore_unreachable: true
+      no_log: "{{ elasticstack_no_log | default(true) | bool }}"
+
+    - name: ml_upgrade_end | Select APIs of the original cluster
+      ansible.builtin.set_fact:
+        _elasticsearch_ml_upgrade_observers: >-
+          {{ _elasticsearch_ml_upgrade_probes.results
+             | selectattr('status', 'defined') | selectattr('status', 'eq', 200)
+             | selectattr('json.cluster_name', 'defined')
+             | selectattr('json.cluster_name', 'eq',
+                          hostvars[elasticsearch_ml_upgrade_state_host | default(inventory_hostname)]._elasticsearch_ml_upgrade_state.cluster_name)
+             | map(attribute='item') | list }}
+
+    - name: ml_upgrade_end | Require a reachable API of the original cluster
+      ansible.builtin.assert:
+        that:
+          - _elasticsearch_ml_upgrade_observers | length > 0
+          - >-
+            hostvars[elasticsearch_ml_upgrade_state_host | default(inventory_hostname)]._elasticsearch_ml_upgrade_state.cluster_name
+            == elasticsearch_clustername
+        fail_msg: No reachable API of the original Elasticsearch cluster; ML mode was not restored.
+
+    - name: ml_upgrade_end | Restore and verify original ML mode
+      ansible.builtin.include_tasks:
+        file: elasticsearch-ml-upgrade-mode.yml
+        apply:
+          delegate_to: "{{ _elasticsearch_ml_upgrade_observers | first }}"
+      vars:
+        _elasticsearch_ml_observer: "{{ _elasticsearch_ml_upgrade_observers | first }}"
+        _elasticsearch_ml_url: >-
+          {{ elasticsearch_maintenance_api_url
+             | default(('https' if elasticsearch_http_security | bool else elasticsearch_http_protocol) ~ '://'
+                       ~ (hostvars[_elasticsearch_ml_observer].elasticsearch_api_host | default(_elasticsearch_ml_observer))
+                       ~ ':' ~ (hostvars[_elasticsearch_ml_observer].elasticstack_elasticsearch_http_port
+                                | default(elasticstack_elasticsearch_http_port | default(9200)))) }}
+        _elasticsearch_ml_password: "{{ elasticsearch_maintenance_password }}"
+        _elasticsearch_ml_mode: >-
+          {{ hostvars[elasticsearch_ml_upgrade_state_host | default(inventory_hostname)]._elasticsearch_ml_upgrade_state.previous }}
+
+    - name: ml_upgrade_end | Record successful ML restoration
+      ansible.builtin.set_fact:
+        _elasticsearch_ml_upgrade_state: >-
+          {{ hostvars[elasticsearch_ml_upgrade_state_host | default(inventory_hostname)]._elasticsearch_ml_upgrade_state
+             | combine({'pending': false}) }}
+      delegate_to: "{{ elasticsearch_ml_upgrade_state_host | default(inventory_hostname) }}"
+      delegate_facts: true

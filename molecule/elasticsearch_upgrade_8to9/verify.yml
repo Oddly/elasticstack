@@ -69,6 +69,23 @@
         fail_msg: "Cluster is unhealthy: {{ health.json.status }}"
         success_msg: "Cluster is {{ health.json.status }} with {{ health.json.number_of_nodes }} nodes"
 
+    - name: Read ML upgrade mode after the rolling upgrade
+      ansible.builtin.uri:
+        url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/_ml/info?filter_path=upgrade_mode
+        method: GET
+        force_basic_auth: true
+        user: elastic
+        password: "{{ elastic_pass.stdout }}"
+        validate_certs: false
+      register: _upgrade_ml_info
+      changed_when: false
+      no_log: true
+
+    - name: Verify ML upgrade mode was disabled after the rolling upgrade
+      ansible.builtin.assert:
+        that:
+          - _upgrade_ml_info.json.upgrade_mode is sameas false
+
     - name: Check all nodes are visible
       # Default _cat/nodes columns don't include version — must specify h=
       # explicitly. Without it the per-node version assert below fails

@@ -30,6 +30,14 @@
         executable: /bin/bash
       changed_when: false
 
+    - name: Require unused local test ports
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: "{{ item }}"
+        state: stopped
+        timeout: 5
+      loop: [19211, 9200]
+
     - name: Reset fake API log
       ansible.builtin.copy:
         dest: "{{ _fake_es_log }}"
@@ -40,7 +48,7 @@
       ansible.builtin.shell: |
         set -o pipefail
         nohup python3 {{ playbook_dir }}/../fakes/fake_es_rolling_api.py \
-          --ports 19211 \
+          --ports 19211,9200 \
           --nodes esA \
           --persistent-settings '{"indices.recovery.max_bytes_per_sec": "50mb"}' \
           --log {{ _fake_es_log }} >/tmp/elasticstack-node-maintenance-api.out 2>&1 &
@@ -69,11 +77,9 @@
   hosts: localhost
   gather_facts: false
   vars:
-    elasticstack_elasticsearch_http_port: 19211
     elasticsearch_api_host: 127.0.0.1
     elasticsearch_http_protocol: http
     elasticsearch_validate_api_certs: false
-    elasticstack_no_log: false
     elasticsearch_ml_enabled: true
     elasticsearch_nodename: esA
     # Restore semantics: the boost bumps max_bytes_per_sec to 500mb; the
@@ -92,6 +98,17 @@
     elasticsearch_maintenance_wait_health: true
     elasticsearch_maintenance_require_green: false
   tasks:
+    - name: Require standalone maintenance without the stack role
+      ansible.builtin.assert:
+        that:
+          - elasticstack_no_log is undefined
+          - _elasticstack_role_imported is undefined
+
+    - name: Restore cluster state before draining
+      ansible.builtin.include_role:
+        name: oddly.elasticstack.elasticsearch
+        tasks_from: node_maintenance_end
+
     - name: Drain the node
       ansible.builtin.include_role:
         name: oddly.elasticstack.elasticsearch
@@ -101,6 +118,12 @@
       ansible.builtin.include_role:
         name: oddly.elasticstack.elasticsearch
         tasks_from: node_maintenance_end
+
+    - name: Confirm the default API port was used without the stack role
+      ansible.builtin.assert:
+        that:
+          - _elasticsearch_maintenance_url == 'http://127.0.0.1:9200'
+          - _elasticstack_role_imported is undefined
 
 - name: Verify drain/restore conversation
   hosts: localhost

@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 import yaml
 
@@ -16,7 +16,7 @@ ANSIBLE = shutil.which('ansible-playbook')
 
 @unittest.skipUnless(ANSIBLE, 'ansible-playbook is required')
 class TestUpgradeSafety(unittest.TestCase):
-    def run_case(self, changes=None, variables=None, entry='elasticsearch-rolling-upgrade', count=2, serial=1, check=False, limit=None, role='elasticsearch'):
+    def run_case(self, changes=None, variables=None, entry='elasticsearch-rolling-upgrade', count=2, serial=1, check=False, limit=None, role='elasticsearch', strategy='upgrade_safety_mock'):
         with tempfile.TemporaryDirectory(prefix='elasticstack-upgrade-test-') as directory:
             directory = Path(directory)
             collection = directory / 'collections/ansible_collections/oddly/elasticstack'
@@ -70,14 +70,25 @@ class TestUpgradeSafety(unittest.TestCase):
             }}}}}
             inventory_path = directory / 'inventory.yml'
             inventory_path.write_text(yaml.safe_dump(inventory))
+            tasks = [{'name': 'Exercise actual task entrypoint', 'ansible.builtin.include_role': {
+                'name': f'oddly.elasticstack.{role}', 'tasks_from': entry,
+            }}]
+            if entry == 'node_maintenance_cycle':
+                tasks = [{
+                    'name': 'Exercise paired maintenance with cleanup on failure',
+                    'block': [{'name': 'Drain node', 'ansible.builtin.include_role': {
+                        'name': 'oddly.elasticstack.elasticsearch', 'tasks_from': 'node_maintenance_start',
+                    }}],
+                    'always': [{'name': 'Restore node', 'ansible.builtin.include_role': {
+                        'name': 'oddly.elasticstack.elasticsearch', 'tasks_from': 'node_maintenance_end',
+                    }}],
+                }]
             play = [{
                 'name': 'Exercise actual Elasticsearch role tasks', 'hosts': 'search_members',
                 'gather_facts': True, 'serial': serial, 'any_errors_fatal': True,
-                'strategy': 'upgrade_safety_mock',
+                'strategy': strategy,
                 'module_defaults': {'ansible.builtin.uri': {'ca_path': '/custom/trust/fixture.pem'}},
-                'tasks': [{'name': 'Exercise actual task entrypoint', 'ansible.builtin.include_role': {
-                    'name': f'oddly.elasticstack.{role}', 'tasks_from': entry,
-                }}],
+                'tasks': tasks,
             }]
             play_path = directory / 'play.yml'
             play_path.write_text(yaml.safe_dump(play))
@@ -109,6 +120,109 @@ class TestUpgradeSafety(unittest.TestCase):
         self.assertEqual(state['package_writes'], [])
         self.assertEqual(state['other_writes'], [])
         self.assertFalse(any(e['action'] == 'service' for e in state['events']))
+
+    def test_maintenance_restores_all_owned_state_and_declared_baseline(self):
+        completed, state = self.run_case(entry='node_maintenance_cycle', count=1, variables={
+            'elasticsearch_maintenance_password': 'fixture-only',
+            'elasticsearch_cluster_settings': {'indices.recovery.max_bytes_per_sec': '200mb'},
+            'elasticsearch_drain_cluster_settings': {
+                'indices.recovery.max_bytes_per_sec': '500mb',
+                'cluster.routing.allocation.node_concurrent_recoveries': 8,
+            },
+        })
+        self.assert_ok(completed)
+        self.assertEqual(state['persistent'], {'indices.recovery.max_bytes_per_sec': '200mb'})
+        self.assertEqual(state['voting'], [])
+        self.assertFalse(state['ml_mode'])
+        self.assertEqual([e['timeout'] for e in state['api_writes'] if e['path'] == '/_ml/set_upgrade_mode'], [180, 180])
+
+    def test_maintenance_preserves_ml_mode_that_was_already_enabled(self):
+        completed, state = self.run_case({'ml_mode': True}, entry='node_maintenance_cycle', count=1,
+                                         variables={'elasticsearch_maintenance_password': 'fixture-only'})
+        self.assert_ok(completed)
+        self.assertTrue(state['ml_mode'])
+        self.assertFalse(any(e['path'] == '/_ml/set_upgrade_mode' for e in state['api_writes']))
+
+    def test_maintenance_attempts_other_cleanup_after_each_failed_step(self):
+        for step in ('allocation', 'voting', 'baseline'):
+            with self.subTest(step=step):
+                completed, state = self.run_case({'maintenance_failure': step}, entry='node_maintenance_cycle', variables={
+                    'elasticsearch_maintenance_password': 'fixture-only',
+                    'elasticsearch_cluster_settings': {'indices.recovery.max_bytes_per_sec': '200mb'},
+                    'elasticsearch_drain_cluster_settings': {'indices.recovery.max_bytes_per_sec': '500mb'},
+                })
+                self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+                self.assertFalse(state['ml_mode'])
+                attempts = [e['task'] for e in state['api_writes'] if e['task'].startswith('node_maintenance_end |')]
+                for task in ('Re-enable shard allocation', 'Clear voting config exclusions', 'Restore recovery settings to the baseline'):
+                    self.assertTrue(any(task in name for name in attempts), attempts)
+                self.assertFalse(any(e['host'] == 'node-beta' for e in state['events']))
+
+    def test_maintenance_rejects_acknowledged_but_unrestored_state_even_when_green(self):
+        for step in ('allocation', 'voting', 'baseline'):
+            with self.subTest(step=step):
+                completed, state = self.run_case({'maintenance_no_apply': step}, entry='node_maintenance_cycle', variables={
+                    'elasticsearch_maintenance_password': 'fixture-only',
+                    'elasticsearch_cluster_settings': {'indices.recovery.max_bytes_per_sec': '200mb'},
+                    'elasticsearch_drain_cluster_settings': {'indices.recovery.max_bytes_per_sec': '500mb'},
+                })
+                self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+                self.assertFalse(state['ml_mode'])
+                self.assertFalse(any(e['host'] == 'node-beta' for e in state['events']))
+
+    def test_maintenance_check_mode_skips_verification_of_unexecuted_cleanup(self):
+        for wait_health in (False, True):
+            with self.subTest(wait_health=wait_health):
+                completed, state = self.run_case(entry='node_maintenance_end', count=1, check=True,
+                                                 strategy='linear', variables={
+                                                     'elasticsearch_maintenance_password': 'fixture-only',
+                                                     'elasticsearch_maintenance_wait_health': wait_health,
+                                                     'elasticsearch_cluster_settings': {'indices.recovery.max_bytes_per_sec': '200mb'},
+                                                     'elasticsearch_drain_cluster_settings': {'indices.recovery.max_bytes_per_sec': '500mb'},
+                                                 })
+                self.assert_ok(completed)
+                self.assertEqual(state['api_writes'], [])
+                self.assertEqual(state['package_writes'], [])
+                self.assertEqual(state['other_writes'], [])
+
+    def test_maintenance_rejects_persistent_allocation_hidden_by_a_transient_override(self):
+        completed, state = self.run_case({
+            'transient': {'cluster.routing.allocation.enable': 'all'},
+            'maintenance_no_apply': 'allocation',
+        }, entry='node_maintenance_cycle', variables={
+            'elasticsearch_maintenance_password': 'fixture-only',
+        })
+        self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+        self.assertEqual(state['persistent']['cluster.routing.allocation.enable'], 'primaries')
+        self.assertFalse(state['ml_mode'])
+        self.assertFalse(any(e['host'] == 'node-beta' for e in state['events']))
+
+    def test_maintenance_unreachable_allocation_cleanup_still_restores_ml(self):
+        completed, state = self.run_case({'cleanup_unreachable_tasks': ['Re-enable shard allocation']},
+                                         entry='node_maintenance_cycle', variables={
+                                             'elasticsearch_maintenance_password': 'fixture-only',
+                                         })
+        self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+        self.assertFalse(state['ml_mode'])
+        self.assertEqual(state['voting'], [])
+        self.assertFalse(any(e['host'] == 'node-beta' for e in state['events']))
+
+    def test_defensive_maintenance_does_not_claim_an_unknown_ml_pause(self):
+        completed, state = self.run_case({'ml_mode': True}, entry='node_maintenance_end', variables={
+            'elasticsearch_maintenance_password': 'fixture-only',
+        })
+        self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+        self.assertTrue(state['ml_mode'])
+        self.assertFalse(any(e['path'] == '/_ml/set_upgrade_mode' for e in state['api_writes']))
+        self.assertFalse(any(e['host'] == 'node-beta' for e in state['events']))
+
+    def test_maintenance_can_leave_ml_lifecycle_to_the_cluster_orchestrator(self):
+        completed, state = self.run_case({'ml_mode': True}, entry='node_maintenance_cycle', count=1, variables={
+            'elasticsearch_maintenance_password': 'fixture-only', 'elasticsearch_maintenance_manage_ml': False,
+        })
+        self.assert_ok(completed)
+        self.assertTrue(state['ml_mode'])
+        self.assertFalse(any(e['path'].startswith('/_ml/') for e in state['events'] if e['action'] == 'uri'))
 
     def test_two_nodes_use_checked_stop_install_start_and_restore(self):
         completed, state = self.run_case()
@@ -220,6 +334,19 @@ class TestUpgradeSafety(unittest.TestCase):
         self.assertEqual(state['persistent'], persistent)
         self.assertTrue(state['ml_mode'])
         self.assertFalse(any(e['path'] == '/_ml/set_upgrade_mode' for e in state['api_writes']))
+
+    def test_ml_enable_uses_explicit_server_timeout_and_longer_client_budget(self):
+        completed, state = self.run_case(count=1)
+        self.assert_ok(completed)
+        enables = [e for e in state['api_writes']
+                   if e['path'] == '/_ml/set_upgrade_mode' and 'enabled=true' in e['url']]
+        self.assertEqual(len(enables), 1)
+        enable = enables[0]
+        self.assertEqual(parse_qs(urlsplit(enable['url']).query).get('timeout'), ['120s'])
+        self.assertEqual(enable['timeout'], 180)
+        self.assertEqual(state['package_writes'], ['node-alpha'])
+        self.assertEqual(state['persistent'], {})
+        self.assertFalse(state['ml_mode'])
 
     def test_ml_failure_prevents_package_changes(self):
         completed, state = self.run_case({'ml_failure': True})
@@ -370,6 +497,47 @@ class TestUpgradeSafety(unittest.TestCase):
         self.assertEqual(state['persistent'], {})
         self.assertFalse(state['ml_mode'])
 
+    def test_ml_restore_retries_a_timeout_before_continuing(self):
+        completed, state = self.run_case({'ml_restore_statuses': [-1, 200]})
+        self.assert_ok(completed)
+        self.assertEqual(state['package_writes'], state['nodes'])
+        self.assertEqual(state['ml_restore_attempts'], dict.fromkeys(state['nodes'], 2))
+        self.assertFalse(state['ml_mode'])
+        restores = [e for e in state['api_writes'] if e['path'] == '/_ml/set_upgrade_mode' and 'enabled=false' in e['url']]
+        self.assertTrue(all(e['timeout'] > 60 for e in restores))
+        self.assertTrue(all('timeout=120s' in e['url'] for e in restores))
+
+    def test_ml_restore_retries_a_server_failure(self):
+        completed, state = self.run_case({'ml_restore_statuses': [500, 200]}, count=1)
+        self.assert_ok(completed)
+        self.assertEqual(state['ml_restore_attempts'], {'node-alpha': 2})
+        self.assertFalse(state['ml_mode'])
+
+    def test_ml_restore_can_confirm_a_change_applied_before_client_timeout(self):
+        completed, state = self.run_case({
+            'ml_restore_statuses': [-1, 200], 'ml_restore_applied_on_timeout': True,
+        }, count=1)
+        self.assert_ok(completed)
+        self.assertEqual(state['ml_restore_attempts'], {'node-alpha': 2})
+        self.assertFalse(state['ml_mode'])
+
+    def test_persistent_ml_restore_failure_stops_the_next_node(self):
+        completed, state = self.run_case({'ml_restore_statuses': [503]})
+        self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+        self.assertIn('Temporary cluster settings could not be restored', completed.stdout)
+        self.assertEqual(state['ml_restore_attempts'], {'node-alpha': 3})
+        self.assertEqual(state['package_writes'], ['node-alpha'])
+        self.assertTrue(state['ml_mode'])
+        self.assertFalse(any(e['host'] == 'node-beta' for e in state['events']))
+
+    def test_ml_restore_requires_observed_disabled_mode_not_only_acknowledgement(self):
+        completed, state = self.run_case({'ml_restore_does_not_apply': True})
+        self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+        self.assertIn('Temporary cluster settings could not be restored', completed.stdout)
+        self.assertEqual(state['package_writes'], ['node-alpha'])
+        self.assertTrue(state['ml_mode'])
+        self.assertFalse(any(e['host'] == 'node-beta' for e in state['events']))
+
     def test_allocation_cleanup_failure_does_not_skip_ml_cleanup(self):
         completed, state = self.run_case({'allocation_restore_failure': True})
         self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
@@ -469,7 +637,9 @@ class TestUpgradeSafety(unittest.TestCase):
         self.assertEqual(state['persistent'], {})
         self.assertFalse(state['ml_mode'])
         cleanup = [e for e in state['events'] if 'elasticsearch-upgrade-restore |' in e['task']]
-        self.assertEqual(len(cleanup), 3)
+        cleanup += [e for e in state['events']
+                    if e['task'].startswith('elasticsearch-ml-upgrade-mode |') and e['delegate_to']]
+        self.assertEqual(len(cleanup), 5)
         self.assertTrue(all(e['delegate_to'] == 'node-alpha' for e in cleanup))
 
     def test_unreachable_local_cleanup_can_fall_back_to_a_peer(self):
@@ -479,7 +649,8 @@ class TestUpgradeSafety(unittest.TestCase):
         self.assertFalse(state['ml_mode'])
         identities = [e for e in state['events'] if 'cleanup cluster identity' in e['task']]
         self.assertEqual([e['delegate_to'] for e in identities], ['node-alpha', 'node-beta'])
-        restores = [e for e in state['api_writes'] if 'Restore ' in e['task']]
+        restores = [e for e in state['api_writes']
+                    if 'Restore ' in e['task'] or (e['path'] == '/_ml/set_upgrade_mode' and 'enabled=false' in e['url'])]
         self.assertEqual([e['delegate_to'] for e in restores], ['node-beta', 'node-beta'])
 
     def test_failed_cleanup_peer_remains_fatal_with_original_upgrade_failure(self):
@@ -504,12 +675,22 @@ class TestUpgradeSafety(unittest.TestCase):
         self.assertIn('Temporary cluster settings could not be restored', completed.stdout)
         self.assertEqual(state['persistent'], {'cluster.routing.allocation.enable': 'primaries'})
         self.assertFalse(state['ml_mode'])
-        restore_tasks = [e['task'] for e in state['events'] if 'Restore ' in e['task']]
+        restore_tasks = [e['task'] for e in state['events']
+                         if 'Restore ' in e['task'] or (e.get('path') == '/_ml/set_upgrade_mode' and 'enabled=false' in e['url'])]
         self.assertEqual(restore_tasks, [
             'elasticsearch-upgrade-restore | Restore allocation setting',
-            'elasticsearch-upgrade-restore | Restore ML upgrade mode',
+            'elasticsearch-ml-upgrade-mode | Set ML upgrade mode',
         ])
         self.assertFalse(any(e['host'] == 'node-beta' for e in state['events']))
+
+    def test_unreachable_ml_cleanup_remains_fatal_with_original_failure(self):
+        for task in ('Set ML upgrade mode', 'Verify ML upgrade mode'):
+            with self.subTest(task=task):
+                completed, state = self.run_case({'package_failure': True, 'cleanup_unreachable_tasks': [task]})
+                self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+                self.assertIn('Temporary cluster settings could not be restored', completed.stdout)
+                self.assertIn('elasticsearch-rolling-upgrade | Update Elasticsearch', completed.stdout)
+                self.assertFalse(any(e['host'] == 'node-beta' for e in state['events']))
 
     def test_default_cleanup_api_uses_another_configured_cluster_member(self):
         completed, state = self.run_case({'package_failure': True}, variables={'elasticsearch_api_host': None})

@@ -20,4 +20,5 @@ class StrategyModule(LinearStrategy):
             defaults = _get_action_arg_defaults(task.action, task, TemplateEngine(loader=self._loader, variables=task_vars))
             task.args = {'original_action': task.action, 'original_args': defaults | task.args}
             task.action = 'ansible.legacy.upgrade_safety_mock'
+            task.delay = 0
         return super()._queue_task(host, task, task_vars, play_context)

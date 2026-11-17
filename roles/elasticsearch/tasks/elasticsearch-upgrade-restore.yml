@@ -3,6 +3,7 @@
   ansible.builtin.set_fact:
     _elasticsearch_upgrade_cleanup_host: "{{ inventory_hostname }}"
     _elasticsearch_upgrade_cleanup_url: "{{ _elasticsearch_upgrade_api_url }}"
+    _elasticsearch_upgrade_ml_restored: false
 
 - name: elasticsearch-upgrade-restore | Verify cleanup cluster identity
   ansible.builtin.uri:
@@ -91,25 +92,32 @@
     - (_elasticsearch_upgrade_cleanup_identity.status | default(0)) == 200
     - (_elasticsearch_upgrade_cleanup_identity.json | default({})).cluster_name | default('') == elasticsearch_clustername
 
-- name: elasticsearch-upgrade-restore | Restore ML upgrade mode
-  ansible.builtin.uri:
-    url: "{{ _elasticsearch_upgrade_cleanup_url }}/_ml/set_upgrade_mode?enabled=false"
-    method: POST
-    user: elastic
-    password: "{{ elasticstack_password.stdout }}"
-    force_basic_auth: true
-    validate_certs: "{{ elasticsearch_validate_api_certs }}"
-    timeout: 20
-  register: _elasticsearch_upgrade_ml_restore
-  failed_when: false
-  ignore_unreachable: true
-  any_errors_fatal: false
-  no_log: "{{ elasticstack_no_log }}"
-  delegate_to: "{{ _elasticsearch_upgrade_cleanup_host }}"
+- name: elasticsearch-upgrade-restore | Restore and verify ML upgrade mode
   when:
     - _elasticsearch_upgrade_ml_attempted | bool
     - (_elasticsearch_upgrade_cleanup_identity.status | default(0)) == 200
     - (_elasticsearch_upgrade_cleanup_identity.json | default({})).cluster_name | default('') == elasticsearch_clustername
+  block:
+    - name: elasticsearch-upgrade-restore | Restore ML upgrade mode
+      ansible.builtin.include_tasks:
+        file: elasticsearch-ml-upgrade-mode.yml
+        apply:
+          delegate_to: "{{ _elasticsearch_upgrade_cleanup_host }}"
+      vars:
+        _elasticsearch_ml_url: "{{ _elasticsearch_upgrade_cleanup_url }}"
+        _elasticsearch_ml_password: "{{ elasticstack_password.stdout }}"
+        _elasticsearch_ml_mode: false
+
+    - name: elasticsearch-upgrade-restore | Record verified ML restoration
+      ansible.builtin.set_fact:
+        _elasticsearch_upgrade_ml_restored: true
+
+  rescue:
+    - name: elasticsearch-upgrade-restore | Report unsuccessful ML restoration
+      ansible.builtin.debug:
+        msg:
+          ml_restore_http_status: "{{ _elasticsearch_ml_result.status | default(0) }}"
+          ml_readback_http_status: "{{ (_elasticsearch_ml_readback | default({})).status | default(0) }}"
 
 - name: elasticsearch-upgrade-restore | Require successful restoration
   ansible.builtin.assert:
@@ -120,8 +128,7 @@
             and ((_elasticsearch_upgrade_allocation_restore.json | default({})).acknowledged | default(false) | bool))
       - >-
         not (_elasticsearch_upgrade_ml_attempted | bool)
-        or ((_elasticsearch_upgrade_ml_restore.status | default(0)) == 200
-            and ((_elasticsearch_upgrade_ml_restore.json | default({})).acknowledged | default(false) | bool))
+        or (_elasticsearch_upgrade_ml_restored | default(false) | bool)
     fail_msg: >-
       Temporary cluster settings could not be restored. Original failed task:
       {{ _elasticsearch_upgrade_failed_task | default('none', true) }}.
