@@ -28,10 +28,6 @@
         path => "/var/log/logstash/standalone-output.log"
       }
   tasks:
-    - name: Include Elastic repos role
-      ansible.builtin.include_role:
-        name: oddly.elasticstack.repos
-
     - name: Include Logstash role
       ansible.builtin.include_role:
         name: oddly.elasticstack.logstash

@@ -285,6 +285,112 @@
           - _contract_bundle_format == 'pem'
           - _contract_bundle_ca_extracted | bool
 
+    - name: Write an unreadable private key
+      ansible.builtin.copy:
+        dest: "{{ _contract_material_dir }}/corrupt key.pem"
+        content: "not a private key\n"
+        mode: "0600"
+
+    - name: Expect an unreadable PEM key to fail validation
+      block:
+        - name: Validate certificate with an unreadable private key
+          ansible.builtin.include_tasks: ../../roles/elasticstack/tasks/certs/cert_validate.yml
+          vars:
+            _validate_cert_path: "{{ _contract_material_dir }}/encrypted certificate.pem"
+            _validate_key_path: "{{ _contract_material_dir }}/corrupt key.pem"
+            _validate_pass: ""
+            _validate_remote_src: false
+            _validate_service: "contract unreadable PEM key"
+            _validate_format_fact: _contract_corrupt_format
+            _validate_key_fact: _contract_corrupt_key
+            _validate_ca_extracted_fact: _contract_corrupt_ca_extracted
+      rescue:
+        - name: Record the unreadable private key rejection
+          ansible.builtin.set_fact:
+            _contract_corrupt_key_failed: true
+
+    - name: Assert unreadable keys cannot pass validation
+      ansible.builtin.assert:
+        that:
+          - _contract_corrupt_key_failed | default(false) | bool
+
+    - name: Generate an encrypted EC certificate and key
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - req
+          - -x509
+          - -newkey
+          - ec
+          - -pkeyopt
+          - ec_paramgen_curve:prime256v1
+          - -keyout
+          - "{{ _contract_material_dir }}/EC key.pem"
+          - -out
+          - "{{ _contract_material_dir }}/EC certificate.pem"
+          - -days
+          - "2"
+          - -passout
+          - stdin
+          - -subj
+          - /CN=localhost
+        stdin: "{{ _contract_secret }}"
+        stdin_add_newline: false
+      changed_when: true
+      no_log: true
+
+    - name: Validate matching EC material through the shared validator
+      ansible.builtin.include_tasks: ../../roles/elasticstack/tasks/certs/cert_validate.yml
+      vars:
+        _validate_cert_path: "{{ _contract_material_dir }}/EC certificate.pem"
+        _validate_key_path: "{{ _contract_material_dir }}/EC key.pem"
+        _validate_pass: "{{ _contract_secret }}"
+        _validate_remote_src: false
+        _validate_service: "contract EC PEM"
+        _validate_format_fact: _contract_ec_format
+        _validate_key_fact: _contract_ec_key
+        _validate_ca_extracted_fact: _contract_ec_ca_extracted
+
+    - name: Generate an expired certificate
+      community.crypto.x509_certificate:
+        path: "{{ _contract_material_dir }}/expired certificate.pem"
+        privatekey_path: "{{ _contract_material_dir }}/plain key.pem"
+        provider: selfsigned
+        selfsigned_not_before: "20200101000000Z"
+        selfsigned_not_after: "20200102000000Z"
+
+    - name: Package the expired certificate as PKCS12
+      community.crypto.openssl_pkcs12:
+        path: "{{ _contract_material_dir }}/expired certificate.p12"
+        friendly_name: expired-contract
+        certificate_path: "{{ _contract_material_dir }}/expired certificate.pem"
+        privatekey_path: "{{ _contract_material_dir }}/plain key.pem"
+        passphrase: "{{ _contract_p12_secret }}"
+      no_log: true
+
+    - name: Expect expired PKCS12 material to fail validation
+      block:
+        - name: Validate an expired PKCS12 certificate
+          ansible.builtin.include_tasks: ../../roles/elasticstack/tasks/certs/cert_validate.yml
+          vars:
+            _validate_cert_path: "{{ _contract_material_dir }}/expired certificate.p12"
+            _validate_key_path: ""
+            _validate_pass: "{{ _contract_p12_secret }}"
+            _validate_remote_src: false
+            _validate_service: "contract expired PKCS12"
+            _validate_format_fact: _contract_expired_format
+            _validate_key_fact: _contract_expired_key
+            _validate_ca_extracted_fact: _contract_expired_ca_extracted
+      rescue:
+        - name: Record the expired PKCS12 rejection
+          ansible.builtin.set_fact:
+            _contract_expired_p12_failed: "{{ 'has already expired' in ansible_failed_result.msg }}"
+
+    - name: Assert expired PKCS12 certificates are rejected for their expiry
+      ansible.builtin.assert:
+        that:
+          - _contract_expired_p12_failed | default(false) | bool
+
     - name: Remove the isolated contract workspace
       ansible.builtin.file:
         path: "{{ _contract_tmp.path }}"

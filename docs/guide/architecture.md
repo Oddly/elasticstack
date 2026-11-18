@@ -56,11 +56,13 @@ collection and supplied through variables or a secrets manager.
 
 ## Role execution order
 
-Roles should be applied in this order because each depends on the previous:
+In a full-stack deployment, apply service roles after the services they use.
+Each service role configures its package repositories through `elasticstack`;
+an explicit `repos` call is optional.
 
 ```mermaid
 graph TD
-    R[repos] -->|"APT/YUM repos ready"| E[elasticsearch]
+    R[repos via elasticstack] -->|"APT/YUM repos ready"| E[elasticsearch]
     E -->|"CA + passwords available"| K[kibana]
     E -->|"CA + passwords available"| L[logstash]
     L -->|"Logstash listening :5044"| B[beats]
@@ -81,7 +83,7 @@ Elastic Agent prerequisites depend on its mode: standalone uses
 passed through the root-owned
 `elastic_agent_fleet_server_service_token_file`.
 
-1. **repos** — Adds Elastic package repositories (APT/YUM). Must run first so packages are available.
+1. **repos** — Adds Elastic package repositories (APT/YUM). Called automatically through `elasticstack` before package installation; still available as a public role.
 2. **elasticsearch** — Installs ES, forms the cluster, initializes security (generates passwords, CA, certificates). Other roles need the CA and passwords.
 3. **kibana** — Connects to Elasticsearch using the `kibana_system` password, gets its TLS certificate from the ES CA.
 4. **logstash** — Creates its `logstash_writer` user and role in Elasticsearch, fetches TLS certificates from the ES CA, configures the pipeline.

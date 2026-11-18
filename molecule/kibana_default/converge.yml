@@ -11,9 +11,6 @@
     elasticstack_no_log: false
 
   tasks:
-    - name: Include Elastic Repos
-      ansible.builtin.include_role:
-        name: oddly.elasticstack.repos
     - name: Include Kibana
       ansible.builtin.include_role:
         name: oddly.elasticstack.kibana

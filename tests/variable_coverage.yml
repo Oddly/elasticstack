@@ -461,7 +461,6 @@ behaviors:
       - beats_filebeat_loadbalance
     scenario: beats_default
     roles:
-      - oddly.elasticstack.repos
       - oddly.elasticstack.beats
     expected:
       - "'localhost:5044' in (filebeat_yml.content | b64decode | from_yaml)['output.logstash']['hosts']"

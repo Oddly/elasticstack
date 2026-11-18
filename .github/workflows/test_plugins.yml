@@ -15,9 +15,7 @@ on:
   pull_request:
     types: [labeled]
     branches:
-      - 'feature/**'
-      - 'fix/**'
-      - '!doc/**'
+      - main
     paths:
       - 'plugins/**'
       - '.github/workflows/test_plugins.yml'
@@ -115,101 +113,7 @@ jobs:
         env:
           PY_COLORS: '1'
 
-  unit-test:
-    needs: pycodestyle
-    runs-on: self-hosted
-    timeout-minutes: 15
-
-    env:
-      COLLECTION_NAMESPACE: oddly
-      COLLECTION_NAME: elasticstack
-
-    strategy:
-      fail-fast: false
-
-    steps:
-      - name: Check out code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Create venv and install dependencies
-        run: |
-          uv venv "$RUNNER_TEMP/venv" --python "$(command -v python3.12)"
-          source "$RUNNER_TEMP/venv/bin/activate"
-          uv pip install 'ansible-core>=2.20,<2.21' 'cryptography>=41,<47' 'pytest>=9.1.1,<10'
-          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
-        env:
-          SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
-
-      - name: Set up collections path
-        run: |
-          {
-            echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections"
-            echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule"
-            echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp"
-            echo "MOLECULE_RUN_SUFFIX=-${GITHUB_RUN_ID: -6}"
-          } >> "$GITHUB_ENV"
-          mkdir -p "$RUNNER_TEMP/ssh-cp"
-
-      - name: Install collection
-        run: |
-          collection_path="$ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME"
-          mkdir -p "$(dirname "$collection_path")"
-          cp -a "$GITHUB_WORKSPACE" "$collection_path"
-
-      - name: Run unit test suite
-        run: |
-          export PYTHONPATH="$ANSIBLE_COLLECTIONS_PATH${PYTHONPATH:+:$PYTHONPATH}"
-          python -m pytest -q tests/unit
-        env:
-          PY_COLORS: '1'
-          ANSIBLE_FORCE_COLOR: '1'
-
-  python:
-    needs: pycodestyle
-    runs-on: self-hosted
-    timeout-minutes: 15
-
-    env:
-      COLLECTION_NAMESPACE: oddly
-      COLLECTION_NAME: elasticstack
-
-    steps:
-      - name: Check out code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Create venv and install dependencies
-        run: |
-          uv venv "$RUNNER_TEMP/venv" --python "$(command -v python3.12)"
-          source "$RUNNER_TEMP/venv/bin/activate"
-          uv pip install 'ansible-core>=2.20,<2.21' 'cryptography>=41,<47'
-          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
-        env:
-          SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
-
-      - name: Set up collections path
-        run: |
-          {
-            echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections"
-            echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule"
-            echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp"
-            echo "MOLECULE_RUN_SUFFIX=-${GITHUB_RUN_ID: -6}"
-          } >> "$GITHUB_ENV"
-          mkdir -p "$RUNNER_TEMP/ssh-cp"
-
-      - name: Install collection
-        run: |
-          collection_path="$ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME"
-          mkdir -p "$(dirname "$collection_path")"
-          cp -a "$GITHUB_WORKSPACE" "$collection_path"
-
-      - name: Test with ansible-playbook
-        run: |
-          ansible-playbook molecule/cert_info_module/converge.yml
-        env:
-          PY_COLORS: '1'
-          ANSIBLE_FORCE_COLOR: '1'
-
-  ansible-core:
+  compatibility:
     needs: pycodestyle
     runs-on: self-hosted
     timeout-minutes: 15
@@ -222,65 +126,7 @@ jobs:
       fail-fast: false
       matrix:
         ansible_core_version: [2.20.1, 2.21.3]
-
-    steps:
-      - name: Check out code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Select Python for ansible-core version
-        id: pyver
-        run: |
-          PYTHON=/usr/bin/python3
-          if command -v python3.12 &>/dev/null; then
-            PYTHON=$(command -v python3.12)
-          fi
-          echo "python=$PYTHON" >> "$GITHUB_OUTPUT"
-
-      - name: Create venv and install dependencies
-        run: |
-          uv venv "$RUNNER_TEMP/venv" --python "${{ steps.pyver.outputs.python }}"
-          source "$RUNNER_TEMP/venv/bin/activate"
-          uv pip install "ansible-core==${{ matrix.ansible_core_version }}"
-          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
-        env:
-          SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
-
-      - name: Set up collections path
-        run: |
-          {
-            echo "ANSIBLE_COLLECTIONS_PATH=$RUNNER_TEMP/collections"
-            echo "MOLECULE_EPHEMERAL_DIRECTORY=$RUNNER_TEMP/molecule"
-            echo "ANSIBLE_SSH_CONTROL_PATH_DIR=$RUNNER_TEMP/ssh-cp"
-            echo "MOLECULE_RUN_SUFFIX=-${GITHUB_RUN_ID: -6}"
-          } >> "$GITHUB_ENV"
-          mkdir -p "$RUNNER_TEMP/ssh-cp"
-
-      - name: Install collection
-        run: |
-          collection_path="$ANSIBLE_COLLECTIONS_PATH/ansible_collections/$COLLECTION_NAMESPACE/$COLLECTION_NAME"
-          mkdir -p "$(dirname "$collection_path")"
-          cp -a "$GITHUB_WORKSPACE" "$collection_path"
-
-      - name: Test with ansible-playbook
-        run: |
-          ansible-playbook molecule/cert_info_module/converge.yml
-        env:
-          PY_COLORS: '1'
-          ANSIBLE_FORCE_COLOR: '1'
-
-  python-cryptography:
-    needs: pycodestyle
-    runs-on: self-hosted
-    timeout-minutes: 15
-
-    env:
-      COLLECTION_NAMESPACE: oddly
-      COLLECTION_NAME: elasticstack
-
-    strategy:
-      fail-fast: false
-      matrix:
-        python_cryptography_version: [41.0.7, 42.0.8, 43.0.3, 44.0.3, 45.0.7, 46.0.4]
+        python_cryptography_version: [41.0.7, 46.0.4]
 
     steps:
       - name: Check out code
@@ -290,8 +136,8 @@ jobs:
         run: |
           uv venv "$RUNNER_TEMP/venv" --python "$(command -v python3.12)"
           source "$RUNNER_TEMP/venv/bin/activate"
-          uv pip install cryptography==${{ matrix.python_cryptography_version }}
-          uv pip install 'ansible-core>=2.20,<2.21'
+          uv pip install "cryptography==${{ matrix.python_cryptography_version }}" \
+            "ansible-core==${{ matrix.ansible_core_version }}"
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
         env:
           SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt

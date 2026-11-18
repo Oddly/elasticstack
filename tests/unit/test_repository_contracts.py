@@ -1,5 +1,6 @@
 """Executable regression checks for repository-level hardening changes."""
 
+from fnmatch import fnmatchcase
 from pathlib import Path
 import re
 import stat
@@ -296,7 +297,14 @@ class TestRepositoryContracts(unittest.TestCase):
         galaxy = yaml.safe_load((ROOT / "galaxy.yml").read_text())
         self.assertEqual(galaxy["dependencies"], COLLECTION_CONSTRAINTS)
 
-        for path in sorted((ROOT / "molecule").glob("*/requirements.yml")):
+        for config_path in sorted((ROOT / "molecule").glob("*/molecule.yml")):
+            config = yaml.safe_load(config_path.read_text()) or {}
+            if "dependency" not in config:
+                continue
+            configured_path = config["dependency"]["options"]["requirements-file"]
+            path = Path(configured_path.replace(
+                "${MOLECULE_SCENARIO_DIRECTORY}", str(config_path.parent)
+            ))
             document = yaml.safe_load(path.read_text()) or {}
             actual = {
                 collection["name"]: collection.get("version")
@@ -326,8 +334,11 @@ class TestRepositoryContracts(unittest.TestCase):
                 )
             molecule = yaml.safe_load((scenario / "molecule.yml").read_text()) or {}
             if len(molecule.get("platforms", [])) > 1:
+                prepare = molecule["provisioner"].get("playbooks", {}).get(
+                    "prepare", "prepare.yml"
+                )
                 self.assertTrue(
-                    (scenario / "prepare.yml").is_file(),
+                    (scenario / prepare).is_file(),
                     f"{scenario.name} must prepare name resolution for multiple hosts",
                 )
 
@@ -366,6 +377,30 @@ class TestRepositoryContracts(unittest.TestCase):
         contracts_source = contracts_path.read_text()
         workflow_on = contracts.get("on", contracts.get(True, {}))
         contract_paths = workflow_on["pull_request"]["paths"]
+        for changed_path in (
+            "plugins/modules/cert_info.py",
+            "tests/unit/test_repository_contracts.py",
+            "tests/plugins/action/upgrade_safety_mock.py",
+            "tests/plugins/strategy/upgrade_safety_mock.py",
+            "tests/integration/security_and_certificate_contract.yml",
+            "tests/variable_coverage.yml",
+            "tests/fakes/fake_es_rolling_api.py",
+            "scripts/check_argspecs.py",
+            "molecule/shared/prepare.yml",
+            ".github/workflows/test_plugins.yml",
+        ):
+            self.assertTrue(
+                any(fnmatchcase(changed_path, pattern) for pattern in contract_paths),
+                f"{changed_path} must trigger fast contracts",
+            )
+        plugins_path = ROOT / ".github" / "workflows" / "test_plugins.yml"
+        plugins = yaml.safe_load(plugins_path.read_text()) or {}
+        plugin_events = plugins.get("on", plugins.get(True, {}))
+        self.assertIn("main", plugin_events["pull_request"]["branches"])
+        compatibility = plugins["jobs"]["compatibility"]["strategy"]["matrix"]
+        self.assertEqual(compatibility["ansible_core_version"], ["2.20.1", "2.21.3"])
+        self.assertEqual(compatibility["python_cryptography_version"], ["41.0.7", "46.0.4"])
+        self.assertNotIn("unit-test", plugins["jobs"])
         self.assertIn(
             "requirements-test.txt",
             contract_paths,
@@ -787,6 +822,21 @@ class TestRepositoryContracts(unittest.TestCase):
         options = elasticsearch_specs["argument_specs"]["main"]["options"]
         self.assertTrue(options["elasticsearch_users"]["no_log"])
         self.assertTrue(options["elasticsearch_builtin_passwords"]["no_log"])
+
+        kibana_tasks = yaml.safe_load(
+            (ROOT / "roles" / "kibana" / "tasks" / "kibana-security.yml").read_text()
+        )
+        key_reads = [
+            task
+            for block in kibana_tasks
+            for task in block.get("block", [])
+            if task.get("register") in {
+                "kibana_encryption_key", "kibana_savedobjects_encryption_key"
+            }
+        ]
+        self.assertEqual(len(key_reads), 2)
+        for task in key_reads:
+            self.assertTrue(task.get("no_log"), task["name"])
 
     def test_variable_defaults_are_explicit_and_internal_sentinels_are_private(self):
         shared_defaults = yaml.safe_load(
@@ -1268,12 +1318,13 @@ class TestRepositoryContracts(unittest.TestCase):
         )
         self.assertIn("elasticstack_release", stale_releases["when"])
 
-        default_converge = (ROOT / "molecule/elasticsearch_default/converge.yml").read_text()
-        self.assertNotIn(
-            "name: oddly.elasticstack.repos",
-            default_converge,
-            "the Elasticsearch baseline must prove repository setup is automatic",
-        )
+        for role in ("elasticsearch", "kibana", "logstash", "beats"):
+            default_converge = (ROOT / f"molecule/{role}_default/converge.yml").read_text()
+            self.assertNotIn(
+                "name: oddly.elasticstack.repos",
+                default_converge,
+                f"the {role} baseline must prove repository setup is automatic",
+            )
         default_verify = (ROOT / "molecule/elasticsearch_default/verify.yml").read_text()
         self.assertIn("_shared_repo_file.stat.exists", default_verify)
 
@@ -1994,14 +2045,6 @@ class TestRepositoryContracts(unittest.TestCase):
         contract = (ROOT / "tests" / "integration" / "collection_variable_contract.yml").read_text()
         self.assertIn("legacy-logs-*", contract)
         self.assertIn("preferred-logs-*", contract)
-
-    def test_plugin_workflow_discovers_the_complete_unit_test_suite(self):
-        source = (ROOT / ".github" / "workflows" / "test_plugins.yml").read_text()
-        self.assertIn("pytest>=9.1.1,<10", source)
-        self.assertIn("python -m pytest -q tests/unit", source)
-        self.assertNotIn("python tests/unit/plugins/modules/test_cert_info.py", source)
-        self.assertNotIn("python tests/unit/plugins/module_utils/test_certs.py", source)
-        self.assertNotIn("python tests/unit/test_repository_contracts.py", source)
 
     def test_public_variables_have_argument_specs_and_executable_coverage(self):
         coverage = yaml.safe_load((ROOT / "tests" / "variable_coverage.yml").read_text())

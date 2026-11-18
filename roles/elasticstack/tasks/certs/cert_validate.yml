@@ -34,6 +34,8 @@
     argv:
       - openssl
       - x509
+      - -inform
+      - PEM
       - -in
       - "{{ _validate_cert_path }}"
       - -noout
@@ -148,32 +150,24 @@
 
 # --- Certificate expiry check ---
 
-- name: certs | cert_validate | Check certificate has not expired — {{ _validate_service }}
-  ansible.builtin.command:
-    argv:
-      - openssl
-      - x509
-      - -in
-      - "{{ _validate_cert_path }}"
-      - -noout
-      - -checkend
-      - "0"
-  register: _elasticstack_validate_expiry_check
-  failed_when: false
-  changed_when: false
-  check_mode: false
+- name: certs | cert_validate | Read certificate validity — {{ _validate_service }}
+  oddly.elasticstack.cert_info:
+    path: "{{ _validate_cert_path }}"
+    format: "{{ lookup('vars', _validate_format_fact) }}"
+    passphrase: "{{ _validate_pass | default('', true) }}"
+  register: _elasticstack_validate_cert_info
   delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
   become: "{{ _validate_remote_src | bool }}"
-  when: _elasticstack_validate_pem_probe.rc == 0
+  no_log: true
 
 - name: certs | cert_validate | Fail if certificate already expired — {{ _validate_service }}
   ansible.builtin.fail:
     msg: >-
       {{ _validate_service }} certificate {{ _validate_cert_path }} has already expired.
       Replace it with a valid certificate and re-run the playbook.
-  when:
-    - _elasticstack_validate_pem_probe.rc == 0
-    - _elasticstack_validate_expiry_check.rc != 0
+  when: >-
+    (_elasticstack_validate_cert_info.not_valid_after | regex_replace('[+-]\\d{2}:\\d{2}$', '') |
+    to_datetime('%Y-%m-%d %H:%M:%S')) <= now(utc=true)
 
 # --- PEM key-cert match verification ---
 
@@ -182,30 +176,34 @@
     - _elasticstack_validate_pem_probe.rc == 0
     - lookup('vars', _validate_key_fact) | length > 0
   block:
-    - name: certs | cert_validate | Get certificate modulus — {{ _validate_service }}
-      ansible.builtin.shell:
-        cmd: >-
-          set -o pipefail &&
-          openssl x509 -in {{ _validate_cert_path | quote }} -noout -modulus 2>/dev/null |
-          openssl md5
-        executable: /bin/bash
-      register: _elasticstack_validate_cert_modulus
+    - name: certs | cert_validate | Read certificate public key — {{ _validate_service }}
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - x509
+          - -in
+          - "{{ _validate_cert_path }}"
+          - -noout
+          - -pubkey
+      register: _elasticstack_validate_cert_public_key
       changed_when: false
       check_mode: false
       delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
       become: "{{ _validate_remote_src | bool }}"
 
-    - name: certs | cert_validate | Get key modulus — {{ _validate_service }}
-      ansible.builtin.shell:
-        cmd: >-
-          set -o pipefail &&
-          openssl rsa -in {{ lookup('vars', _validate_key_fact) | quote }} -noout -modulus
-          {{ '-passin stdin' if (_validate_pass | default('', true) | length > 0) else '' }}
-          2>/dev/null | openssl md5
-        executable: /bin/bash
+    - name: certs | cert_validate | Read private key public key — {{ _validate_service }}
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - pkey
+          - -in
+          - "{{ lookup('vars', _validate_key_fact) }}"
+          - -pubout
+          - -passin
+          - "{{ 'stdin' if (_validate_pass | default('', true) | length > 0) else 'pass:' }}"
         stdin: "{{ _validate_pass | default('', true) }}"
         stdin_add_newline: false
-      register: _elasticstack_validate_key_modulus
+      register: _elasticstack_validate_key_public_key
       changed_when: false
       failed_when: false
       check_mode: false
@@ -213,61 +211,16 @@
       become: "{{ _validate_remote_src | bool }}"
       no_log: true
 
-    # If RSA modulus failed, try EC key
-    - name: certs | cert_validate | Get EC key fingerprint — {{ _validate_service }}
-      ansible.builtin.shell:
-        cmd: >-
-          set -o pipefail &&
-          openssl ec -in {{ lookup('vars', _validate_key_fact) | quote }} -pubout
-          {{ '-passin stdin' if (_validate_pass | default('', true) | length > 0) else '' }}
-          2>/dev/null | openssl md5
-        executable: /bin/bash
-        stdin: "{{ _validate_pass | default('', true) }}"
-        stdin_add_newline: false
-      register: _elasticstack_validate_ec_key_fp
-      changed_when: false
-      failed_when: false
-      check_mode: false
-      delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
-      become: "{{ _validate_remote_src | bool }}"
-      no_log: true
-      when: _elasticstack_validate_key_modulus.rc != 0
-
-    - name: certs | cert_validate | Get EC cert public key fingerprint — {{ _validate_service }}
-      ansible.builtin.shell:
-        cmd: >-
-          set -o pipefail &&
-          openssl x509 -in {{ _validate_cert_path | quote }} -noout -pubkey 2>/dev/null |
-          openssl md5
-        executable: /bin/bash
-      register: _elasticstack_validate_ec_cert_fp
-      changed_when: false
-      check_mode: false
-      delegate_to: "{{ omit if (_validate_remote_src | bool) else 'localhost' }}"
-      become: "{{ _validate_remote_src | bool }}"
-      when: _elasticstack_validate_key_modulus.rc != 0
-
-    - name: certs | cert_validate | Fail if RSA key does not match certificate — {{ _validate_service }}
+    - name: certs | cert_validate | Fail if private key is unreadable or does not match — {{ _validate_service }}
       ansible.builtin.fail:
         msg: >-
-          {{ _validate_service }} private key does not match the certificate.
+          {{ _validate_service }} private key cannot be read or does not match the certificate.
+          Check the key file and its passphrase.
           Certificate: {{ _validate_cert_path }}
           Key: {{ lookup('vars', _validate_key_fact) }}
-      when:
-        - _elasticstack_validate_key_modulus.rc == 0
-        - _elasticstack_validate_cert_modulus.stdout != _elasticstack_validate_key_modulus.stdout
-
-    - name: certs | cert_validate | Fail if EC key does not match certificate — {{ _validate_service }}
-      ansible.builtin.fail:
-        msg: >-
-          {{ _validate_service }} private key does not match the certificate.
-          Certificate: {{ _validate_cert_path }}
-          Key: {{ lookup('vars', _validate_key_fact) }}
-      when:
-        - _elasticstack_validate_key_modulus.rc != 0
-        - _elasticstack_validate_ec_key_fp is defined
-        - _elasticstack_validate_ec_key_fp.rc == 0
-        - _elasticstack_validate_ec_cert_fp.stdout != _elasticstack_validate_ec_key_fp.stdout
+      when: >-
+        _elasticstack_validate_key_public_key.rc != 0 or
+        _elasticstack_validate_cert_public_key.stdout != _elasticstack_validate_key_public_key.stdout
 
 # --- SAN hostname check (warn only) ---
 

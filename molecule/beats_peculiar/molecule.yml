@@ -3,7 +3,7 @@ prerun: false
 dependency:
   name: galaxy
   options:
-    requirements-file: requirements.yml
+    requirements-file: ${MOLECULE_SCENARIO_DIRECTORY}/../shared/requirements.yml
 driver:
   name: default
 platforms:
@@ -12,6 +12,8 @@ platforms:
     memory_mb: 2048
 provisioner:
   name: ansible
+  playbooks:
+    prepare: ../shared/prepare.yml
   env:
     ANSIBLE_LOG_PATH: /var/log/ansible.log
   connection_options:

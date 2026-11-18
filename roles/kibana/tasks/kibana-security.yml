@@ -333,6 +333,7 @@
         src: "{{ elasticstack_ca_dir }}/encryption_key"
       register: kibana_encryption_key
       check_mode: false
+      no_log: true
 
     - name: kibana-security | Use provided saved objects encryption key
       ansible.builtin.copy:
@@ -373,6 +374,7 @@
         src: "{{ elasticstack_ca_dir }}/savedobjects_encryption_key"
       register: kibana_savedobjects_encryption_key
       check_mode: false
+      no_log: true
 
 # -- Auto-generated cert tasks (only for elasticsearch_ca) --
 - name: kibana-security | Handle auto-generated Kibana certificate distribution

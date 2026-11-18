@@ -13,9 +13,6 @@
       - localhost
     beats_filebeat_loadbalance: false
   tasks:
-    - name: Include Elastic repos role
-      ansible.builtin.include_role:
-        name: oddly.elasticstack.repos
     - name: Include Beats
       ansible.builtin.include_role:
         name: oddly.elasticstack.beats

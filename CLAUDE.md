@@ -106,10 +106,9 @@ roles/
                   variables service roles read (elasticstack_release,
                   elasticstack_security, elasticstack_cert_pass,
                   elasticstack_ca_host).
-  repos/          Elastic APT/YUM repo setup. Version-aware. Included
-                  directly from playbooks and molecule converge.yml
-                  before the service role runs — service roles never
-                  pull it in themselves.
+  repos/          Elastic APT/YUM repo setup. Version-aware. Service roles
+                  configure repositories through elasticstack; explicit
+                  repos calls remain available for repository-only use.
   elasticsearch/  Installs + configures Elasticsearch. Owns cluster
                   bootstrap, TLS keystore population, rolling upgrades, node
                   maintenance entry points (node_maintenance_start/_end).
