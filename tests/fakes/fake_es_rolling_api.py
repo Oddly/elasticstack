@@ -81,6 +81,12 @@ def handler(state):
                     "metadata": {"cluster_coordination": {"voting_config_exclusions": state.voting_exclusions}},
                 })
                 return
+            if self.path.startswith("/_nodes/_master/settings"):
+                self._send_json({
+                    "_nodes": {"total": 1, "successful": 1, "failed": 0},
+                    "nodes": {"master": {"settings": {}}},
+                })
+                return
             if self.path.startswith("/_cat/nodes"):
                 if self.server.server_port in state.fail_nodes_on:
                     self._send_json({"error": "simulated rejoin failure"}, status=503)
@@ -132,7 +138,7 @@ def handler(state):
                         if value is None:
                             state.persistent_settings.pop(key, None)
                         else:
-                            state.persistent_settings[key] = str(value)
+                            state.persistent_settings[key] = str(value).lower() if isinstance(value, bool) else str(value)
                 self._send_json({"acknowledged": True})
                 return
             self._send_json({"error": "not found"}, status=404)

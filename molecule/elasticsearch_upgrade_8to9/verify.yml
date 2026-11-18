@@ -69,6 +69,32 @@
         fail_msg: "Cluster is unhealthy: {{ health.json.status }}"
         success_msg: "Cluster is {{ health.json.status }} with {{ health.json.number_of_nodes }} nodes"
 
+    - name: Verify retry-safe maintenance with a boolean recovery baseline
+      when: inventory_hostname == groups[elasticstack_elasticsearch_group_name][0]
+      vars:
+        elasticsearch_maintenance_api_url: "https://localhost:{{ elasticstack_elasticsearch_http_port }}"
+        elasticsearch_maintenance_password: "{{ elastic_pass.stdout }}"
+        elasticsearch_validate_api_certs: false
+        elasticsearch_cluster_settings:
+          indices.recovery.use_snapshots: false
+        elasticsearch_drain_cluster_settings:
+          indices.recovery.use_snapshots: true
+      block:
+        - name: Prepare node maintenance
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elasticsearch
+            tasks_from: node_maintenance_start
+
+        - name: Retry ML preparation before cleanup
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elasticsearch
+            tasks_from: ml_upgrade_start
+      always:
+        - name: Restore node maintenance
+          ansible.builtin.include_role:
+            name: oddly.elasticstack.elasticsearch
+            tasks_from: node_maintenance_end
+
     - name: Read ML upgrade mode after the rolling upgrade
       ansible.builtin.uri:
         url: https://localhost:{{ elasticstack_elasticsearch_http_port }}/_ml/info?filter_path=upgrade_mode

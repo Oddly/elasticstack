@@ -83,6 +83,10 @@ class TestUpgradeSafety(unittest.TestCase):
                         'name': 'oddly.elasticstack.elasticsearch', 'tasks_from': 'node_maintenance_end',
                     }}],
                 }]
+            elif entry == 'ml_upgrade_retry':
+                tasks = [{'name': 'Exercise retry-safe ML lifecycle', 'ansible.builtin.include_role': {
+                    'name': 'oddly.elasticstack.elasticsearch', 'tasks_from': step,
+                }} for step in ('ml_upgrade_start', 'ml_upgrade_start', 'ml_upgrade_end')]
             play = [{
                 'name': 'Exercise actual Elasticsearch role tasks', 'hosts': 'search_members',
                 'gather_facts': True, 'serial': serial, 'any_errors_fatal': True,
@@ -142,6 +146,95 @@ class TestUpgradeSafety(unittest.TestCase):
         self.assert_ok(completed)
         self.assertTrue(state['ml_mode'])
         self.assertFalse(any(e['path'] == '/_ml/set_upgrade_mode' for e in state['api_writes']))
+
+    def test_ml_retry_preserves_pending_original_mode(self):
+        for owner in ('node-alpha', 'node-beta'):
+            with self.subTest(owner=owner):
+                completed, state = self.run_case(entry='ml_upgrade_retry', limit='node-alpha', variables={
+                    'elasticsearch_maintenance_password': 'fixture-only',
+                    'elasticsearch_ml_upgrade_state_host': owner,
+                })
+                self.assert_ok(completed)
+                self.assertFalse(state['ml_mode'])
+                mutations = [parse_qs(urlsplit(e['url']).query)['enabled']
+                             for e in state['api_writes'] if e['path'] == '/_ml/set_upgrade_mode']
+                self.assertEqual(mutations, [['true'], ['false']])
+
+    def test_ml_retry_rejects_pending_state_from_another_cluster(self):
+        completed, state = self.run_case(entry='ml_upgrade_start', count=1, variables={
+            'elasticsearch_maintenance_password': 'fixture-only',
+            '_elasticsearch_ml_upgrade_state': {
+                'recorded': True, 'previous': False, 'pending': True, 'cluster_name': 'another-cluster',
+            },
+        })
+        self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+        self.assertEqual(state['api_writes'], [])
+
+    def test_maintenance_checks_elected_master_allocation_settings(self):
+        for allocation in ('all', 'primaries', None):
+            with self.subTest(allocation=allocation):
+                settings = {'cluster.routing.allocation.enable': allocation} if allocation else {}
+                completed, state = self.run_case({
+                    'defaults': {'cluster.routing.allocation.enable': 'all'}, 'master_settings': settings,
+                }, entry='node_maintenance_cycle', variables={'elasticsearch_maintenance_password': 'fixture-only'})
+                if allocation == 'primaries':
+                    self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+                    self.assertFalse(any(e['host'] == 'node-beta' for e in state['events']))
+                else:
+                    self.assert_ok(completed)
+                self.assertFalse(state['ml_mode'])
+                readbacks = [e for e in state['events'] if e.get('path') == '/_nodes/_master/settings']
+                self.assertTrue(readbacks)
+                self.assertTrue(all(parse_qs(urlsplit(e['url']).query).get('flat_settings') == ['true']
+                                    for e in readbacks))
+
+    def test_maintenance_rejects_missing_ambiguous_or_failed_master_settings(self):
+        responses = [
+            {},
+            {'_nodes': {'total': 1, 'successful': 1, 'failed': 0}, 'nodes': {
+                'master-a': {'settings': {}}, 'master-b': {'settings': {}},
+            }},
+            {'_nodes': {'total': 1, 'successful': 0, 'failed': 1}, 'nodes': {'master': {'settings': {}}}},
+            {'_nodes': {'total': 1, 'successful': 1, 'failed': 0}, 'nodes': {'master': {}}},
+        ]
+        for response in responses:
+            with self.subTest(response=response):
+                completed, state = self.run_case({'master_settings_response': response},
+                                                 entry='node_maintenance_cycle', variables={
+                                                     'elasticsearch_maintenance_password': 'fixture-only',
+                                                 })
+                self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+                self.assertFalse(state['ml_mode'])
+                self.assertFalse(any(e['host'] == 'node-beta' for e in state['events']))
+
+    def test_maintenance_accepts_boolean_recovery_baselines(self):
+        for baseline in (False, True):
+            with self.subTest(baseline=baseline):
+                key = 'indices.recovery.use_snapshots'
+                completed, state = self.run_case({'transient': {key: str(baseline).lower()}},
+                                                 entry='node_maintenance_cycle', count=1, variables={
+                                                     'elasticsearch_maintenance_password': 'fixture-only',
+                                                     'elasticsearch_cluster_settings': {key: baseline},
+                                                     'elasticsearch_drain_cluster_settings': {key: not baseline},
+                                                 })
+                self.assert_ok(completed)
+                self.assertEqual(state['persistent'][key], str(baseline).lower())
+                self.assertFalse(state['ml_mode'])
+
+    def test_maintenance_rejects_conflicting_transient_boolean_recovery_settings(self):
+        for baseline in (False, True):
+            with self.subTest(baseline=baseline):
+                key = 'indices.recovery.use_snapshots'
+                completed, state = self.run_case({'transient': {key: str(not baseline).lower()}},
+                                                 entry='node_maintenance_cycle', variables={
+                                                     'elasticsearch_maintenance_password': 'fixture-only',
+                                                     'elasticsearch_cluster_settings': {key: baseline},
+                                                     'elasticsearch_drain_cluster_settings': {key: not baseline},
+                                                 })
+                self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+                self.assertEqual(state['persistent'][key], str(baseline).lower())
+                self.assertFalse(state['ml_mode'])
+                self.assertFalse(any(e['host'] == 'node-beta' for e in state['events']))
 
     def test_maintenance_attempts_other_cleanup_after_each_failed_step(self):
         for step in ('allocation', 'voting', 'baseline'):

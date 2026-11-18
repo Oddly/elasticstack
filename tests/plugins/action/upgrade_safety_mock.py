@@ -2,7 +2,7 @@ import base64
 import fcntl
 import json
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from ansible.plugins.action import ActionBase
 
@@ -154,12 +154,20 @@ class ActionModule(ActionBase):
                 if state.get('rejoin_failure') and state['package_writes']:
                     nodes = []
                 return {'status': 200, 'content': '\n'.join(nodes), 'changed': False}
+            if path == '/_nodes/_master/settings':
+                return {'status': 200, 'json': state.get('master_settings_response', {
+                    '_nodes': {'total': 1, 'successful': 1, 'failed': 0},
+                    'nodes': {'master': {'settings': state.get('master_settings', {})}},
+                }), 'changed': False}
             if path.startswith('/_nodes/'):
                 name = path.split('/')[-1]
                 version = state.get('running_version', '9.1.2')
                 return {'status': 200, 'json': {'nodes': {name: {'name': name, 'version': version}}}, 'changed': False}
             if path == '/_cluster/settings':
-                return {'status': 200, 'json': {'persistent': state['persistent'], 'transient': state.get('transient', {})}, 'changed': False}
+                settings = {'persistent': state['persistent'], 'transient': state.get('transient', {})}
+                if parse_qs(urlsplit(event['url']).query).get('include_defaults') == ['true']:
+                    settings['defaults'] = state.get('defaults', {'cluster.routing.allocation.enable': 'all'})
+                return {'status': 200, 'json': settings, 'changed': False}
             if path == '/_ml/info':
                 return {'status': 200, 'json': {'upgrade_mode': state['ml_mode']}, 'changed': False}
             if path == '/_cluster/state/metadata':
@@ -191,7 +199,7 @@ class ActionModule(ActionBase):
                 if value is None:
                     state['persistent'].pop(key, None)
                 else:
-                    state['persistent'][key] = value
+                    state['persistent'][key] = str(value).lower() if isinstance(value, bool) else value
             return {'status': 200, 'json': {'acknowledged': not state.get('unacknowledged_allocation')}, 'changed': True}
         if path == '/_ml/set_upgrade_mode':
             if not restore and state.get('ml_failure'):

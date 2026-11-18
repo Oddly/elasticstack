@@ -128,6 +128,18 @@
   changed_when: false
   no_log: "{{ elasticstack_no_log | default(true) | bool }}"
 
+- name: node_maintenance_end | Read elected master settings for allocation defaults
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_maintenance_url }}/_nodes/_master/settings?flat_settings=true"
+    user: elastic
+    password: "{{ elasticsearch_maintenance_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+    timeout: 20
+  register: _elasticsearch_maintenance_master_readback
+  changed_when: false
+  no_log: "{{ elasticstack_no_log | default(true) | bool }}"
+
 - name: node_maintenance_end | Read remaining voting exclusions and cluster identity
   ansible.builtin.uri:
     url: "{{ _elasticsearch_maintenance_url }}/_cluster/state/metadata?filter_path=cluster_name,metadata.cluster_coordination.voting_config_exclusions"
@@ -147,10 +159,16 @@
       - (_elasticsearch_maintenance_voting.status | default(0)) == 200
       - _elasticsearch_maintenance_voting_readback.json.cluster_name == elasticsearch_clustername
       - _elasticsearch_maintenance_voting_readback.json.metadata.cluster_coordination.voting_config_exclusions == []
+      - _elasticsearch_maintenance_master_readback.json.get('_nodes', {}).get('total') == 1
+      - _elasticsearch_maintenance_master_readback.json.get('_nodes', {}).get('successful') == 1
+      - _elasticsearch_maintenance_master_readback.json.get('_nodes', {}).get('failed') == 0
+      - _elasticsearch_maintenance_master_readback.json.get('nodes', {}) | length == 1
+      - (_elasticsearch_maintenance_master_readback.json.nodes.values() | first).get('settings', none) is mapping
       - _elasticsearch_maintenance_settings_readback.json.persistent.get('cluster.routing.allocation.enable', 'all') == 'all'
       - >-
         _elasticsearch_maintenance_settings_readback.json.transient.get('cluster.routing.allocation.enable',
-          _elasticsearch_maintenance_settings_readback.json.persistent.get('cluster.routing.allocation.enable', 'all')) == 'all'
+          _elasticsearch_maintenance_settings_readback.json.persistent.get('cluster.routing.allocation.enable',
+            (_elasticsearch_maintenance_master_readback.json.nodes.values() | first).settings.get('cluster.routing.allocation.enable', 'all'))) == 'all'
       - >-
         not (elasticsearch_drain_cluster_settings | length > 0)
         or ((_elasticsearch_maintenance_restore.json | default({})).acknowledged | default(false) | bool)
@@ -160,8 +178,14 @@
 - name: node_maintenance_end | Require the declared recovery baseline without transient overrides
   ansible.builtin.assert:
     that:
-      - _elasticsearch_maintenance_settings_readback.json.persistent.get(item.key, none) | string == item.value | string
-      - _elasticsearch_maintenance_settings_readback.json.transient.get(item.key, item.value) | string == item.value | string
+      - >-
+        _elasticsearch_maintenance_settings_readback.json.persistent.get(item.key, none) | string
+        == _elasticsearch_maintenance_expected_value
+      - >-
+        _elasticsearch_maintenance_settings_readback.json.transient.get(item.key, _elasticsearch_maintenance_expected_value) | string
+        == _elasticsearch_maintenance_expected_value
+  vars:
+    _elasticsearch_maintenance_expected_value: "{{ item.value | string | lower if item.value is boolean else item.value | string }}"
   loop: "{{ _elasticsearch_maintenance_baseline | dict2items }}"
   when: not ansible_check_mode
 
