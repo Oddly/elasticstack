@@ -6,6 +6,7 @@ from urllib.parse import parse_qs, urlsplit
 import argparse
 import json
 import threading
+import uuid
 
 
 class State:
@@ -19,6 +20,7 @@ class State:
         self.health_status = health_status
         self.in_flight = in_flight
         self.ml_mode = False
+        self.cluster_uuid = uuid.uuid4().hex
         self.voting_exclusions = []
         self.lock = threading.Lock()
 
@@ -57,6 +59,9 @@ def handler(state):
 
         def do_GET(self):
             state.log(self.server.server_port, "GET", self.path, "")
+            if self.path == "/":
+                self._send_json({"cluster_name": "elasticsearch", "cluster_uuid": state.cluster_uuid})
+                return
             if self.path.startswith("/_cluster/settings"):
                 with state.lock:
                     persistent_settings = dict(state.persistent_settings)

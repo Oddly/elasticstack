@@ -81,12 +81,21 @@
 - name: node_maintenance_end | Compute the declared recovery baseline
   ansible.builtin.set_fact:
     _elasticsearch_maintenance_baseline: >-
-      {{ dict(_elasticsearch_maintenance_drain_keys
-              | zip([None] * (_elasticsearch_maintenance_drain_keys | length)))
-         | combine(elasticsearch_cluster_settings | default({}) | dict2items
-                   | selectattr('key', 'in', _elasticsearch_maintenance_drain_keys) | items2dict) }}
-  vars:
-    _elasticsearch_maintenance_drain_keys: "{{ elasticsearch_drain_cluster_settings | list }}"
+      {%- macro flatten(settings, prefix, result) -%}
+        {%- for key, value in settings.items() -%}
+          {%- if value is mapping -%}
+            {{- flatten(value, prefix ~ key ~ '.', result) -}}
+          {%- else -%}
+            {%- set result.flat = result.flat | combine({prefix ~ key: value}) -%}
+          {%- endif -%}
+        {%- endfor -%}
+      {%- endmacro -%}
+      {%- set baseline = namespace(flat={}) -%}
+      {%- set drain = namespace(flat={}) -%}
+      {%- set _ = flatten(elasticsearch_cluster_settings | default({}), '', baseline) -%}
+      {%- set _ = flatten(elasticsearch_drain_cluster_settings, '', drain) -%}
+      {{ dict(drain.flat | zip([None] * (drain.flat | length)))
+         | combine(baseline.flat | dict2items | selectattr('key', 'in', drain.flat) | items2dict) }}
 
 - name: node_maintenance_end | Restore recovery settings to the baseline
   ansible.builtin.uri:
@@ -164,11 +173,11 @@
       - _elasticsearch_maintenance_master_readback.json.get('_nodes', {}).get('failed') == 0
       - _elasticsearch_maintenance_master_readback.json.get('nodes', {}) | length == 1
       - (_elasticsearch_maintenance_master_readback.json.nodes.values() | first).get('settings', none) is mapping
-      - _elasticsearch_maintenance_settings_readback.json.persistent.get('cluster.routing.allocation.enable', 'all') == 'all'
+      - _elasticsearch_maintenance_settings_readback.json.persistent.get('cluster.routing.allocation.enable', 'all') | lower == 'all'
       - >-
         _elasticsearch_maintenance_settings_readback.json.transient.get('cluster.routing.allocation.enable',
           _elasticsearch_maintenance_settings_readback.json.persistent.get('cluster.routing.allocation.enable',
-            (_elasticsearch_maintenance_master_readback.json.nodes.values() | first).settings.get('cluster.routing.allocation.enable', 'all'))) == 'all'
+            (_elasticsearch_maintenance_master_readback.json.nodes.values() | first).settings.get('cluster.routing.allocation.enable', 'all'))) | lower == 'all'
       - >-
         not (elasticsearch_drain_cluster_settings | length > 0)
         or ((_elasticsearch_maintenance_restore.json | default({})).acknowledged | default(false) | bool)
@@ -209,7 +218,7 @@
     that:
       - >-
         _elasticsearch_maintenance_ml_readback.json.upgrade_mode
-        is sameas ((_elasticsearch_ml_upgrade_state | default({})).get('previous', false) | bool)
+        is sameas (_elasticsearch_ml_upgrade_restored_mode | default(false))
     fail_msg: ML mode is not restored, or ownership is unknown; inspect this cluster before proceeding.
   when:
     - not ansible_check_mode

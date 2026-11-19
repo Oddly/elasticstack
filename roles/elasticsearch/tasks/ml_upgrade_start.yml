@@ -23,7 +23,7 @@
 
     - name: ml_upgrade_start | Read cluster identity
       ansible.builtin.uri:
-        url: "{{ _elasticsearch_ml_upgrade_url }}/_cluster/health"
+        url: "{{ _elasticsearch_ml_upgrade_url }}/"
         user: elastic
         password: "{{ elasticsearch_maintenance_password }}"
         force_basic_auth: true
@@ -49,24 +49,35 @@
       ansible.builtin.assert:
         that:
           - _elasticsearch_ml_upgrade_identity.json.cluster_name == elasticsearch_clustername
+          - _elasticsearch_ml_upgrade_identity.json.cluster_uuid | default(none) is string
+          - _elasticsearch_ml_upgrade_identity.json.cluster_uuid | length > 0
+          - _elasticsearch_ml_upgrade_identity.json.cluster_uuid != '_na_'
           - (_elasticsearch_ml_upgrade_original.json | default({})).upgrade_mode | default(none) is boolean
           - >-
-            not (_elasticsearch_ml_upgrade_owner_state.get('pending', false) | bool)
-            or ((_elasticsearch_ml_upgrade_owner_state.get('recorded', false) | bool)
+            not (_elasticsearch_ml_upgrade_owner_state.get('recorded', false) | bool
+                 or _elasticsearch_ml_upgrade_owner_state.get('pending', false) | bool)
+            or (_elasticsearch_ml_upgrade_owner_state.get('recorded', false) is sameas true
                 and _elasticsearch_ml_upgrade_owner_state.get('previous', none) is boolean
-                and _elasticsearch_ml_upgrade_owner_state.get('cluster_name') == elasticsearch_clustername)
+                and _elasticsearch_ml_upgrade_owner_state.get('pending', none) is boolean
+                and _elasticsearch_ml_upgrade_owner_state.get('cluster_name') == elasticsearch_clustername
+                and _elasticsearch_ml_upgrade_owner_state.get('cluster_uuid') == _elasticsearch_ml_upgrade_identity.json.cluster_uuid)
         fail_msg: The cluster identity or original ML upgrade mode could not be recorded safely.
 
     - name: ml_upgrade_start | Record original ML mode before attempting a change
       ansible.builtin.set_fact:
         _elasticsearch_ml_upgrade_state:
           recorded: true
-          previous: "{{ _elasticsearch_ml_upgrade_original.json.upgrade_mode }}"
-          pending: "{{ not (_elasticsearch_ml_upgrade_original.json.upgrade_mode | bool) }}"
+          previous: >-
+            {{ _elasticsearch_ml_upgrade_owner_state.previous
+               if _elasticsearch_ml_upgrade_owner_state.get('recorded', false)
+               else _elasticsearch_ml_upgrade_original.json.upgrade_mode }}
+          pending: >-
+            {{ _elasticsearch_ml_upgrade_owner_state.get('pending', false)
+               or not (_elasticsearch_ml_upgrade_original.json.upgrade_mode | bool) }}
           cluster_name: "{{ elasticsearch_clustername }}"
+          cluster_uuid: "{{ _elasticsearch_ml_upgrade_identity.json.cluster_uuid }}"
       delegate_to: "{{ elasticsearch_ml_upgrade_state_host | default(inventory_hostname) }}"
       delegate_facts: true
-      when: not (_elasticsearch_ml_upgrade_owner_state.get('pending', false) | bool)
 
     - name: ml_upgrade_start | Enable and verify ML upgrade mode
       ansible.builtin.include_tasks: elasticsearch-ml-upgrade-mode.yml
@@ -74,4 +85,5 @@
         _elasticsearch_ml_url: "{{ _elasticsearch_ml_upgrade_url }}"
         _elasticsearch_ml_password: "{{ elasticsearch_maintenance_password }}"
         _elasticsearch_ml_mode: true
+        _elasticsearch_ml_expected_uuid: "{{ _elasticsearch_ml_upgrade_identity.json.cluster_uuid }}"
       when: not (_elasticsearch_ml_upgrade_original.json.upgrade_mode | bool)

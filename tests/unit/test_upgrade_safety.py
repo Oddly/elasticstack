@@ -83,10 +83,11 @@ class TestUpgradeSafety(unittest.TestCase):
                         'name': 'oddly.elasticstack.elasticsearch', 'tasks_from': 'node_maintenance_end',
                     }}],
                 }]
-            elif entry == 'ml_upgrade_retry':
-                tasks = [{'name': 'Exercise retry-safe ML lifecycle', 'ansible.builtin.include_role': {
+            elif entry == 'ml_upgrade_retry' or isinstance(entry, tuple):
+                steps = entry if isinstance(entry, tuple) else ('ml_upgrade_start', 'ml_upgrade_start', 'ml_upgrade_end')
+                tasks = [{'name': 'Exercise ML lifecycle', 'ansible.builtin.include_role': {
                     'name': 'oddly.elasticstack.elasticsearch', 'tasks_from': step,
-                }} for step in ('ml_upgrade_start', 'ml_upgrade_start', 'ml_upgrade_end')]
+                }} for step in steps]
             play = [{
                 'name': 'Exercise actual Elasticsearch role tasks', 'hosts': 'search_members',
                 'gather_facts': True, 'serial': serial, 'any_errors_fatal': True,
@@ -140,6 +141,35 @@ class TestUpgradeSafety(unittest.TestCase):
         self.assertFalse(state['ml_mode'])
         self.assertEqual([e['timeout'] for e in state['api_writes'] if e['path'] == '/_ml/set_upgrade_mode'], [180, 180])
 
+    def test_maintenance_restores_nested_and_dotted_recovery_baselines(self):
+        baselines = [
+            {'indices.recovery.max_bytes_per_sec': '200mb', 'indices.recovery.use_snapshots': False},
+            {'indices': {'recovery': {'max_bytes_per_sec': '200mb', 'use_snapshots': False}}},
+            {'indices.recovery': {'max_bytes_per_sec': '200mb'}, 'indices.recovery.use_snapshots': False},
+        ]
+        drains = [
+            {'indices.recovery.max_bytes_per_sec': '500mb', 'indices.recovery.use_snapshots': True},
+            {'indices': {'recovery': {'max_bytes_per_sec': '500mb', 'use_snapshots': True}}},
+            {'indices.recovery': {'max_bytes_per_sec': '500mb'}, 'indices.recovery.use_snapshots': True},
+        ]
+        initial = {
+            'indices.recovery.max_bytes_per_sec': '200mb', 'indices.recovery.use_snapshots': 'false',
+            'indices.recovery.max_concurrent_file_chunks': '2',
+        }
+        for baseline in baselines:
+            for drain in drains:
+                with self.subTest(baseline=baseline, drain=drain):
+                    completed, state = self.run_case({'persistent': initial}, entry='node_maintenance_cycle', count=1, variables={
+                        'elasticsearch_maintenance_password': 'fixture-only',
+                        'elasticsearch_cluster_settings': baseline,
+                        'elasticsearch_drain_cluster_settings': drain | {
+                            'cluster.routing.allocation.node_concurrent_recoveries': 8,
+                        },
+                    })
+                    self.assert_ok(completed)
+                    self.assertEqual(state['persistent'], initial)
+                    self.assertFalse(state['ml_mode'])
+
     def test_maintenance_preserves_ml_mode_that_was_already_enabled(self):
         completed, state = self.run_case({'ml_mode': True}, entry='node_maintenance_cycle', count=1,
                                          variables={'elasticsearch_maintenance_password': 'fixture-only'})
@@ -149,16 +179,17 @@ class TestUpgradeSafety(unittest.TestCase):
 
     def test_ml_retry_preserves_pending_original_mode(self):
         for owner in ('node-alpha', 'node-beta'):
-            with self.subTest(owner=owner):
-                completed, state = self.run_case(entry='ml_upgrade_retry', limit='node-alpha', variables={
-                    'elasticsearch_maintenance_password': 'fixture-only',
-                    'elasticsearch_ml_upgrade_state_host': owner,
-                })
-                self.assert_ok(completed)
-                self.assertFalse(state['ml_mode'])
-                mutations = [parse_qs(urlsplit(e['url']).query)['enabled']
-                             for e in state['api_writes'] if e['path'] == '/_ml/set_upgrade_mode']
-                self.assertEqual(mutations, [['true'], ['false']])
+            for original in (False, True):
+                with self.subTest(owner=owner, original=original):
+                    completed, state = self.run_case({'ml_mode': original}, entry='ml_upgrade_retry', limit='node-alpha', variables={
+                        'elasticsearch_maintenance_password': 'fixture-only',
+                        'elasticsearch_ml_upgrade_state_host': owner,
+                    })
+                    self.assert_ok(completed)
+                    self.assertEqual(state['ml_mode'], original)
+                    mutations = [parse_qs(urlsplit(e['url']).query)['enabled']
+                                 for e in state['api_writes'] if e['path'] == '/_ml/set_upgrade_mode']
+                    self.assertEqual(mutations, [] if original else [['true'], ['false']])
 
     def test_ml_retry_rejects_pending_state_from_another_cluster(self):
         completed, state = self.run_case(entry='ml_upgrade_start', count=1, variables={
@@ -170,8 +201,105 @@ class TestUpgradeSafety(unittest.TestCase):
         self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
         self.assertEqual(state['api_writes'], [])
 
+    def test_ml_lifecycle_rejects_same_name_with_different_or_missing_uuid(self):
+        for entry in ('ml_upgrade_start', 'ml_upgrade_end'):
+            for uuid in ('another-uuid', None, '', '_na_', 7):
+                with self.subTest(entry=entry, uuid=uuid):
+                    completed, state = self.run_case({'cluster_uuid': uuid, 'ml_mode': True}, entry=entry, count=1, variables={
+                        'elasticsearch_maintenance_password': 'fixture-only',
+                        '_elasticsearch_ml_upgrade_state': {
+                            'recorded': True, 'previous': False, 'pending': True,
+                            'cluster_name': 'fixture-cluster', 'cluster_uuid': 'fixture-uuid',
+                        },
+                    })
+                    self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+                    self.assertTrue(state['ml_mode'])
+                    self.assertEqual(state['api_writes'], [])
+
+    def test_ml_restore_selects_the_observer_with_the_original_uuid(self):
+        completed, state = self.run_case({
+            'ml_mode': True, 'cluster_uuid_by_observer': {'node-alpha': 'another-uuid'},
+        }, entry='ml_upgrade_end', limit='node-alpha', variables={
+            'elasticsearch_maintenance_password': 'fixture-only',
+            'elasticsearch_api_host': None,
+            'elasticsearch_ml_upgrade_hosts': ['node-alpha', 'node-beta'],
+            '_elasticsearch_ml_upgrade_state': {
+                'recorded': True, 'previous': False, 'pending': True,
+                'cluster_name': 'fixture-cluster', 'cluster_uuid': 'fixture-uuid',
+            },
+        })
+        self.assert_ok(completed)
+        self.assertFalse(state['ml_mode'])
+        self.assertEqual([e['delegate_to'] for e in state['api_writes']], ['node-beta'])
+
+    def test_ml_mutation_rechecks_uuid_after_observer_selection(self):
+        completed, state = self.run_case({
+            'ml_mode': True, 'cluster_uuid_by_task': {
+                'elasticsearch-ml-upgrade-mode | Verify cluster identity before changing ML mode': 'another-uuid',
+            },
+        }, entry='ml_upgrade_end', count=1, variables={
+            'elasticsearch_maintenance_password': 'fixture-only',
+            '_elasticsearch_ml_upgrade_state': {
+                'recorded': True, 'previous': False, 'pending': True,
+                'cluster_name': 'fixture-cluster', 'cluster_uuid': 'fixture-uuid',
+            },
+        })
+        self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+        self.assertTrue(state['ml_mode'])
+        self.assertEqual(state['api_writes'], [])
+
+    def test_maintenance_rejects_foreign_or_incomplete_ml_ownership(self):
+        records = [
+            {'recorded': True, 'previous': True, 'pending': False, 'cluster_name': 'another-cluster', 'cluster_uuid': 'another-uuid'},
+            {'recorded': True, 'previous': True, 'pending': False, 'cluster_name': 'fixture-cluster', 'cluster_uuid': 'another-uuid'},
+            {'recorded': False, 'previous': True, 'pending': False, 'cluster_name': 'fixture-cluster', 'cluster_uuid': 'fixture-uuid'},
+            {'previous': True},
+        ]
+        for record in records:
+            with self.subTest(record=record):
+                completed, state = self.run_case({'ml_mode': True}, entry='node_maintenance_end', count=1, variables={
+                    'elasticsearch_maintenance_password': 'fixture-only', '_elasticsearch_ml_upgrade_state': record,
+                })
+                self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+                self.assertTrue(state['ml_mode'])
+                self.assertFalse(any(e['path'] == '/_ml/set_upgrade_mode' for e in state['api_writes']))
+
+    def test_ml_end_rejects_a_changed_unowned_original_mode(self):
+        completed, state = self.run_case(entry='ml_upgrade_end', count=1, variables={
+            'elasticsearch_maintenance_password': 'fixture-only',
+            '_elasticsearch_ml_upgrade_state': {
+                'recorded': True, 'previous': True, 'pending': False,
+                'cluster_name': 'fixture-cluster', 'cluster_uuid': 'fixture-uuid',
+            },
+        })
+        self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+        self.assertEqual(state['api_writes'], [])
+        self.assertFalse(state['ml_mode'])
+
+    def test_completed_ml_ownership_is_not_reused_by_defensive_cleanup(self):
+        completed, state = self.run_case({'ml_mode': True}, count=1,
+                                         entry=('ml_upgrade_start', 'ml_upgrade_end', 'node_maintenance_end'), variables={
+                                             'elasticsearch_maintenance_password': 'fixture-only',
+                                         })
+        self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+        self.assertIn('ML mode is not restored, or ownership is unknown', completed.stdout)
+        self.assertTrue(state['ml_mode'])
+        self.assertFalse(any(e['path'] == '/_ml/set_upgrade_mode' for e in state['api_writes']))
+
+    def test_maintenance_accepts_uppercase_cluster_allocation(self):
+        for source in ('persistent', 'transient'):
+            with self.subTest(source=source):
+                changes = {source: {'cluster.routing.allocation.enable': 'ALL'}}
+                if source == 'persistent':
+                    changes['maintenance_no_apply'] = 'allocation'
+                completed, state = self.run_case(changes, entry='node_maintenance_end', count=1, variables={
+                    'elasticsearch_maintenance_password': 'fixture-only',
+                })
+                self.assert_ok(completed)
+                self.assertFalse(state['ml_mode'])
+
     def test_maintenance_checks_elected_master_allocation_settings(self):
-        for allocation in ('all', 'primaries', None):
+        for allocation in ('all', 'ALL', 'aLl', 'primaries', None):
             with self.subTest(allocation=allocation):
                 settings = {'cluster.routing.allocation.enable': allocation} if allocation else {}
                 completed, state = self.run_case({
@@ -280,7 +408,7 @@ class TestUpgradeSafety(unittest.TestCase):
 
     def test_maintenance_rejects_persistent_allocation_hidden_by_a_transient_override(self):
         completed, state = self.run_case({
-            'transient': {'cluster.routing.allocation.enable': 'all'},
+            'transient': {'cluster.routing.allocation.enable': 'ALL'},
             'maintenance_no_apply': 'allocation',
         }, entry='node_maintenance_cycle', variables={
             'elasticsearch_maintenance_password': 'fixture-only',
@@ -790,16 +918,25 @@ class TestUpgradeSafety(unittest.TestCase):
         self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
         cleanup = [e for e in state['events'] if e['action'] == 'uri' and 'cleanup cluster identity' in e['task']]
         self.assertEqual([event['delegate_to'] for event in cleanup], ['node-alpha', 'node-beta'])
-        self.assertTrue(all(event['url'] == 'https://localhost:9200/_cluster/health' for event in cleanup))
+        self.assertTrue(all(event['url'] == 'https://localhost:9200/' for event in cleanup))
         self.assertEqual(state['persistent'], {})
         self.assertFalse(state['ml_mode'])
 
+    def test_missing_or_uncommitted_cluster_uuid_stops_before_upgrade_writes(self):
+        for uuid in (None, '', '_na_', False):
+            with self.subTest(uuid=uuid):
+                completed, state = self.run_case({'cluster_uuid': uuid}, count=1)
+                self.assert_stopped_before_writes(completed, state)
+
     def test_unknown_cleanup_cluster_is_not_modified(self):
-        completed, state = self.run_case({'wrong_cleanup_cluster': True})
-        self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
-        self.assertEqual(state['package_writes'], ['node-alpha'])
-        self.assertFalse(any('Restore ' in e['task'] for e in state['api_writes']))
-        self.assertFalse(any(e['host'] == 'node-beta' for e in state['events']))
+        for change in ('wrong_cleanup_cluster', 'wrong_cleanup_uuid'):
+            with self.subTest(change=change):
+                completed, state = self.run_case({change: True})
+                self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+                self.assertEqual(state['package_writes'], ['node-alpha'])
+                self.assertFalse(any('Restore ' in e['task'] for e in state['api_writes']))
+                self.assertFalse(any(e['path'] == '/_ml/set_upgrade_mode' and 'enabled=false' in e['url'] for e in state['api_writes']))
+                self.assertFalse(any(e['host'] == 'node-beta' for e in state['events']))
 
     def test_main_rejects_in_place_downgrade_before_writes(self):
         completed, state = self.run_case(entry='main', variables={'elasticstack_version': '9.0.0'})

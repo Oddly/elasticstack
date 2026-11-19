@@ -87,8 +87,10 @@
     # cluster setting must be 200mb (not null), otherwise a caller who
     # declared a persistent recovery ceiling would silently lose it.
     elasticsearch_cluster_settings:
-      indices.recovery.max_bytes_per_sec: "200mb"
-      indices.recovery.use_snapshots: false
+      indices:
+        recovery:
+          max_bytes_per_sec: "200mb"
+          use_snapshots: false
     elasticsearch_drain_cluster_settings:
       indices.recovery.max_bytes_per_sec: "500mb"
       indices.recovery.use_snapshots: true
@@ -123,6 +125,14 @@
       vars:
         elasticsearch_maintenance_api_url: "{{ _elasticsearch_maintenance_url }}"
 
+    - name: Require ownership of the current cluster before cleanup
+      ansible.builtin.assert:
+        that:
+          - _elasticsearch_ml_upgrade_state.cluster_uuid == _elasticsearch_ml_upgrade_identity.json.cluster_uuid
+          - _elasticsearch_ml_upgrade_state.recorded is sameas true
+          - _elasticsearch_ml_upgrade_state.pending is sameas true
+          - _elasticsearch_ml_upgrade_state.previous is sameas false
+
     - name: Restore the node
       ansible.builtin.include_role:
         name: oddly.elasticstack.elasticsearch
@@ -133,6 +143,7 @@
         that:
           - _elasticsearch_maintenance_url == 'http://127.0.0.1:9200'
           - _elasticstack_role_imported is undefined
+          - _elasticsearch_ml_upgrade_state == {}
 
 - name: Verify drain/restore conversation
   hosts: localhost

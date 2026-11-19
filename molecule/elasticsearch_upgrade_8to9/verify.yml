@@ -76,7 +76,9 @@
         elasticsearch_maintenance_password: "{{ elastic_pass.stdout }}"
         elasticsearch_validate_api_certs: false
         elasticsearch_cluster_settings:
-          indices.recovery.use_snapshots: false
+          indices:
+            recovery:
+              use_snapshots: false
         elasticsearch_drain_cluster_settings:
           indices.recovery.use_snapshots: true
       block:
@@ -89,11 +91,24 @@
           ansible.builtin.include_role:
             name: oddly.elasticstack.elasticsearch
             tasks_from: ml_upgrade_start
+
+        - name: Verify ML ownership is bound to this cluster
+          ansible.builtin.assert:
+            that:
+              - _elasticsearch_ml_upgrade_state.cluster_uuid == es_info.json.cluster_uuid
+              - _elasticsearch_ml_upgrade_state.recorded is sameas true
+              - _elasticsearch_ml_upgrade_state.pending is sameas true
+              - _elasticsearch_ml_upgrade_state.previous is sameas false
       always:
         - name: Restore node maintenance
           ansible.builtin.include_role:
             name: oddly.elasticstack.elasticsearch
             tasks_from: node_maintenance_end
+
+        - name: Verify completed ML ownership is consumed
+          ansible.builtin.assert:
+            that:
+              - _elasticsearch_ml_upgrade_state | default({}) == {}
 
     - name: Read ML upgrade mode after the rolling upgrade
       ansible.builtin.uri:

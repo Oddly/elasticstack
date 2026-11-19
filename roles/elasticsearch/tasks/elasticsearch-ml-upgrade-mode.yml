@@ -1,7 +1,7 @@
 ---
 - name: elasticsearch-ml-upgrade-mode | Verify cluster identity before changing ML mode
   ansible.builtin.uri:
-    url: "{{ _elasticsearch_ml_url }}/_cluster/health"
+    url: "{{ _elasticsearch_ml_url }}/"
     user: elastic
     password: "{{ _elasticsearch_ml_password }}"
     force_basic_auth: true
@@ -17,6 +17,10 @@
   ansible.builtin.assert:
     that:
       - _elasticsearch_ml_identity.json.cluster_name == elasticsearch_clustername
+      - _elasticsearch_ml_expected_uuid is string
+      - _elasticsearch_ml_expected_uuid | length > 0
+      - _elasticsearch_ml_expected_uuid != '_na_'
+      - _elasticsearch_ml_identity.json.cluster_uuid | default(none) == _elasticsearch_ml_expected_uuid
     fail_msg: The API does not identify the expected Elasticsearch cluster.
 
 - name: elasticsearch-ml-upgrade-mode | Set ML upgrade mode

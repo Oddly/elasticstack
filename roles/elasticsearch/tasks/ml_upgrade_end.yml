@@ -1,12 +1,39 @@
 ---
-- name: ml_upgrade_end | Restore ML only when this run attempted to change it
+- name: ml_upgrade_end | Reset the verified result for this cleanup
+  ansible.builtin.set_fact:
+    _elasticsearch_ml_upgrade_restored_mode: false
+  when: not ansible_check_mode
+
+- name: ml_upgrade_end | Restore and consume this run's ML ownership
+  vars:
+    _elasticsearch_ml_upgrade_owner_state: >-
+      {{ hostvars[elasticsearch_ml_upgrade_state_host | default(inventory_hostname)]._elasticsearch_ml_upgrade_state | default({}) }}
+    _elasticsearch_ml_restore_observer: "{{ _elasticsearch_ml_upgrade_observers | first }}"
+    _elasticsearch_ml_restore_url: >-
+      {{ elasticsearch_maintenance_api_url
+         | default(('https' if elasticsearch_http_security | bool else elasticsearch_http_protocol) ~ '://'
+                   ~ (hostvars[_elasticsearch_ml_restore_observer].elasticsearch_api_host | default(_elasticsearch_ml_restore_observer))
+                   ~ ':' ~ (hostvars[_elasticsearch_ml_restore_observer].elasticstack_elasticsearch_http_port
+                            | default(elasticstack_elasticsearch_http_port | default(9200)))) }}
   when:
     - not ansible_check_mode
-    - (hostvars[elasticsearch_ml_upgrade_state_host | default(inventory_hostname)]._elasticsearch_ml_upgrade_state | default({})).get('pending', false) | bool
+    - _elasticsearch_ml_upgrade_owner_state.get('recorded', false) | bool or _elasticsearch_ml_upgrade_owner_state.get('pending', false) | bool
   block:
+    - name: ml_upgrade_end | Require valid ownership of the original cluster
+      ansible.builtin.assert:
+        that:
+          - _elasticsearch_ml_upgrade_owner_state.get('recorded', false) is sameas true
+          - _elasticsearch_ml_upgrade_owner_state.get('previous', none) is boolean
+          - _elasticsearch_ml_upgrade_owner_state.get('pending', none) is boolean
+          - _elasticsearch_ml_upgrade_owner_state.get('cluster_name') == elasticsearch_clustername
+          - _elasticsearch_ml_upgrade_owner_state.get('cluster_uuid', none) is string
+          - _elasticsearch_ml_upgrade_owner_state.cluster_uuid | length > 0
+          - _elasticsearch_ml_upgrade_owner_state.cluster_uuid != '_na_'
+        fail_msg: The original ML ownership or cluster identity is invalid; ML mode was not restored.
+
     - name: ml_upgrade_end | Find an API of the original cluster
       ansible.builtin.uri:
-        url: "{{ _elasticsearch_ml_observer_url }}/_cluster/health"
+        url: "{{ _elasticsearch_ml_observer_url }}/"
         user: elastic
         password: "{{ elasticsearch_maintenance_password }}"
         force_basic_auth: true
@@ -33,17 +60,15 @@
           {{ _elasticsearch_ml_upgrade_probes.results
              | selectattr('status', 'defined') | selectattr('status', 'eq', 200)
              | selectattr('json.cluster_name', 'defined')
-             | selectattr('json.cluster_name', 'eq',
-                          hostvars[elasticsearch_ml_upgrade_state_host | default(inventory_hostname)]._elasticsearch_ml_upgrade_state.cluster_name)
+             | selectattr('json.cluster_name', 'eq', _elasticsearch_ml_upgrade_owner_state.cluster_name)
+             | selectattr('json.cluster_uuid', 'defined')
+             | selectattr('json.cluster_uuid', 'eq', _elasticsearch_ml_upgrade_owner_state.cluster_uuid)
              | map(attribute='item') | list }}
 
     - name: ml_upgrade_end | Require a reachable API of the original cluster
       ansible.builtin.assert:
         that:
           - _elasticsearch_ml_upgrade_observers | length > 0
-          - >-
-            hostvars[elasticsearch_ml_upgrade_state_host | default(inventory_hostname)]._elasticsearch_ml_upgrade_state.cluster_name
-            == elasticsearch_clustername
         fail_msg: No reachable API of the original Elasticsearch cluster; ML mode was not restored.
 
     - name: ml_upgrade_end | Restore and verify original ML mode
@@ -52,21 +77,39 @@
         apply:
           delegate_to: "{{ _elasticsearch_ml_upgrade_observers | first }}"
       vars:
-        _elasticsearch_ml_observer: "{{ _elasticsearch_ml_upgrade_observers | first }}"
-        _elasticsearch_ml_url: >-
-          {{ elasticsearch_maintenance_api_url
-             | default(('https' if elasticsearch_http_security | bool else elasticsearch_http_protocol) ~ '://'
-                       ~ (hostvars[_elasticsearch_ml_observer].elasticsearch_api_host | default(_elasticsearch_ml_observer))
-                       ~ ':' ~ (hostvars[_elasticsearch_ml_observer].elasticstack_elasticsearch_http_port
-                                | default(elasticstack_elasticsearch_http_port | default(9200)))) }}
+        _elasticsearch_ml_url: "{{ _elasticsearch_ml_restore_url }}"
         _elasticsearch_ml_password: "{{ elasticsearch_maintenance_password }}"
-        _elasticsearch_ml_mode: >-
-          {{ hostvars[elasticsearch_ml_upgrade_state_host | default(inventory_hostname)]._elasticsearch_ml_upgrade_state.previous }}
+        _elasticsearch_ml_mode: "{{ _elasticsearch_ml_upgrade_owner_state.previous }}"
+        _elasticsearch_ml_expected_uuid: "{{ _elasticsearch_ml_upgrade_owner_state.cluster_uuid }}"
+      when: _elasticsearch_ml_upgrade_owner_state.pending | bool
 
-    - name: ml_upgrade_end | Record successful ML restoration
+    - name: ml_upgrade_end | Read ML mode when this run did not change it
+      ansible.builtin.uri:
+        url: "{{ _elasticsearch_ml_restore_url }}/_ml/info?filter_path=upgrade_mode"
+        user: elastic
+        password: "{{ elasticsearch_maintenance_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ elasticsearch_validate_api_certs }}"
+        timeout: 20
+      delegate_to: "{{ _elasticsearch_ml_upgrade_observers | default([inventory_hostname], true) | first }}"
+      register: _elasticsearch_ml_upgrade_unchanged
+      changed_when: false
+      no_log: "{{ elasticstack_no_log | default(true) | bool }}"
+      when: not (_elasticsearch_ml_upgrade_owner_state.pending | bool)
+
+    - name: ml_upgrade_end | Require the unchanged original mode
+      ansible.builtin.assert:
+        that:
+          - _elasticsearch_ml_upgrade_unchanged.json.upgrade_mode is sameas _elasticsearch_ml_upgrade_owner_state.previous
+        fail_msg: ML mode no longer matches its unchanged original state; inspect this cluster before continuing.
+      when: not (_elasticsearch_ml_upgrade_owner_state.pending | bool)
+
+    - name: ml_upgrade_end | Record the verified original mode for this cleanup
       ansible.builtin.set_fact:
-        _elasticsearch_ml_upgrade_state: >-
-          {{ hostvars[elasticsearch_ml_upgrade_state_host | default(inventory_hostname)]._elasticsearch_ml_upgrade_state
-             | combine({'pending': false}) }}
+        _elasticsearch_ml_upgrade_restored_mode: "{{ _elasticsearch_ml_upgrade_owner_state.previous }}"
+
+    - name: ml_upgrade_end | Consume completed ML ownership
+      ansible.builtin.set_fact:
+        _elasticsearch_ml_upgrade_state: {}
       delegate_to: "{{ elasticsearch_ml_upgrade_state_host | default(inventory_hostname) }}"
       delegate_facts: true

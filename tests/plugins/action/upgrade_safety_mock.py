@@ -132,6 +132,15 @@ class ActionModule(ActionBase):
             status = -1 if failure in {'tls', 'timeout'} else 503
             return {'changed': False, 'failed': True, 'status': status, 'msg': 'simulated API failure'}
         if method == 'GET':
+            if path == '/':
+                cleanup = 'cleanup cluster identity' in event['task']
+                observer = event['delegate_to'] or event['host']
+                uuid = state.get('cluster_uuid_by_task', {}).get(event['task'],
+                    state.get('cluster_uuid_by_observer', {}).get(observer, state.get('cluster_uuid', 'fixture-uuid')))
+                return {'status': 200, 'json': {
+                    'cluster_name': 'wrong-cluster' if cleanup and state.get('wrong_cleanup_cluster') else state.get('cluster_name', 'fixture-cluster'),
+                    'cluster_uuid': 'wrong-uuid' if cleanup and state.get('wrong_cleanup_uuid') else uuid,
+                }, 'changed': False}
             if path == '/_cluster/health':
                 post = bool(state['package_writes'])
                 cleanup = 'cleanup cluster identity' in event['task']
@@ -195,8 +204,12 @@ class ActionModule(ActionBase):
             body = event['body']
             if isinstance(body, str):
                 body = json.loads(body)
-            for key, value in body['persistent'].items():
-                if value is None:
+            settings = list(body['persistent'].items())
+            while settings:
+                key, value = settings.pop()
+                if isinstance(value, dict):
+                    settings.extend((f'{key}.{child}', child_value) for child, child_value in value.items())
+                elif value is None:
                     state['persistent'].pop(key, None)
                 else:
                     state['persistent'][key] = str(value).lower() if isinstance(value, bool) else value

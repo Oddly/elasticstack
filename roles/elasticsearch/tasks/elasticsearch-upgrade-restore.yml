@@ -7,7 +7,7 @@
 
 - name: elasticsearch-upgrade-restore | Verify cleanup cluster identity
   ansible.builtin.uri:
-    url: "{{ _elasticsearch_upgrade_cleanup_url }}/_cluster/health"
+    url: "{{ _elasticsearch_upgrade_cleanup_url }}/"
     method: GET
     user: elastic
     password: "{{ elasticstack_password.stdout }}"
@@ -30,6 +30,7 @@
     - >-
       (_elasticsearch_upgrade_cleanup_identity.status | default(0)) != 200
       or (_elasticsearch_upgrade_cleanup_identity.json | default({})).cluster_name | default('') != elasticsearch_clustername
+      or (_elasticsearch_upgrade_cleanup_identity.json | default({})).cluster_uuid | default('') != _elasticsearch_upgrade_identity.json.cluster_uuid
   block:
     - name: elasticsearch-upgrade-restore | Resolve fallback cleanup observer
       ansible.builtin.set_fact:
@@ -49,7 +50,7 @@
 
     - name: elasticsearch-upgrade-restore | Verify fallback cleanup cluster identity
       ansible.builtin.uri:
-        url: "{{ _elasticsearch_upgrade_cleanup_url }}/_cluster/health"
+        url: "{{ _elasticsearch_upgrade_cleanup_url }}/"
         method: GET
         user: elastic
         password: "{{ elasticstack_password.stdout }}"
@@ -91,12 +92,14 @@
     - _elasticsearch_upgrade_allocation_attempted | bool
     - (_elasticsearch_upgrade_cleanup_identity.status | default(0)) == 200
     - (_elasticsearch_upgrade_cleanup_identity.json | default({})).cluster_name | default('') == elasticsearch_clustername
+    - (_elasticsearch_upgrade_cleanup_identity.json | default({})).cluster_uuid | default('') == _elasticsearch_upgrade_identity.json.cluster_uuid
 
 - name: elasticsearch-upgrade-restore | Restore and verify ML upgrade mode
   when:
     - _elasticsearch_upgrade_ml_attempted | bool
     - (_elasticsearch_upgrade_cleanup_identity.status | default(0)) == 200
     - (_elasticsearch_upgrade_cleanup_identity.json | default({})).cluster_name | default('') == elasticsearch_clustername
+    - (_elasticsearch_upgrade_cleanup_identity.json | default({})).cluster_uuid | default('') == _elasticsearch_upgrade_identity.json.cluster_uuid
   block:
     - name: elasticsearch-upgrade-restore | Restore ML upgrade mode
       ansible.builtin.include_tasks:
@@ -107,6 +110,7 @@
         _elasticsearch_ml_url: "{{ _elasticsearch_upgrade_cleanup_url }}"
         _elasticsearch_ml_password: "{{ elasticstack_password.stdout }}"
         _elasticsearch_ml_mode: false
+        _elasticsearch_ml_expected_uuid: "{{ _elasticsearch_upgrade_identity.json.cluster_uuid }}"
 
     - name: elasticsearch-upgrade-restore | Record verified ML restoration
       ansible.builtin.set_fact:
