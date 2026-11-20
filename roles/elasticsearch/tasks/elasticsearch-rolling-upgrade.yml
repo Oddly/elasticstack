@@ -19,6 +19,19 @@
 - name: elasticsearch-rolling-upgrade | Validate the existing installation
   ansible.builtin.include_tasks: elasticsearch-upgrade-preflight.yml
 
+- name: elasticsearch-rolling-upgrade | Read cluster identity
+  ansible.builtin.uri:
+    url: "{{ _elasticsearch_upgrade_api_url }}/"
+    user: elastic
+    password: "{{ elasticstack_password.stdout }}"
+    force_basic_auth: true
+    validate_certs: "{{ elasticsearch_validate_api_certs }}"
+    timeout: 20
+  register: _elasticsearch_upgrade_identity
+  changed_when: false
+  check_mode: false
+  no_log: "{{ elasticstack_no_log }}"
+
 - name: elasticsearch-rolling-upgrade | Read allocation settings
   ansible.builtin.uri:
     url: "{{ _elasticsearch_upgrade_api_url }}/_cluster/settings?flat_settings=true"
@@ -51,6 +64,10 @@
 - name: elasticsearch-rolling-upgrade | Validate recorded cluster settings
   ansible.builtin.assert:
     that:
+      - _elasticsearch_upgrade_identity.json.cluster_name == elasticsearch_clustername
+      - _elasticsearch_upgrade_identity.json.cluster_uuid | default(none) is string
+      - _elasticsearch_upgrade_identity.json.cluster_uuid | length > 0
+      - _elasticsearch_upgrade_identity.json.cluster_uuid != '_na_'
       - (_elasticsearch_upgrade_settings.json | default({})).persistent is mapping
       - >-
         ((_elasticsearch_upgrade_settings.json.transient | default({})).get('cluster.routing.allocation.enable', none)) is none
@@ -102,20 +119,13 @@
         - elasticsearch_ml_enabled | bool
         - not ((_elasticsearch_upgrade_ml_info.json | default({})).upgrade_mode | default(false) | bool)
 
-    - name: elasticsearch-rolling-upgrade | Enable ML upgrade mode
-      ansible.builtin.uri:
-        url: "{{ _elasticsearch_upgrade_api_url }}/_ml/set_upgrade_mode?enabled=true"
-        method: POST
-        user: elastic
-        password: "{{ elasticstack_password.stdout }}"
-        force_basic_auth: true
-        validate_certs: "{{ elasticsearch_validate_api_certs }}"
-        timeout: 20
-      register: _elasticsearch_upgrade_ml
-      failed_when: >-
-        (_elasticsearch_upgrade_ml.status | default(0)) != 200
-        or not ((_elasticsearch_upgrade_ml.json | default({})).acknowledged | default(false) | bool)
-      no_log: "{{ elasticstack_no_log }}"
+    - name: elasticsearch-rolling-upgrade | Enable and verify ML upgrade mode
+      ansible.builtin.include_tasks: elasticsearch-ml-upgrade-mode.yml
+      vars:
+        _elasticsearch_ml_url: "{{ _elasticsearch_upgrade_api_url }}"
+        _elasticsearch_ml_password: "{{ elasticstack_password.stdout }}"
+        _elasticsearch_ml_mode: true
+        _elasticsearch_ml_expected_uuid: "{{ _elasticsearch_upgrade_identity.json.cluster_uuid }}"
       when: _elasticsearch_upgrade_ml_attempted | bool
 
     - name: elasticsearch-rolling-upgrade | Flush indices to speed up shard recovery

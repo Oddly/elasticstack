@@ -22,7 +22,7 @@ on:
       - '.github/workflows/test_role_elasticsearch.yml'
       - '.github/workflows/molecule.yml'
   schedule:
-    - cron: "0 2 * * 1,3,5"  # Mon/Wed/Fri — 60 jobs, stagger with full_stack
+    - cron: "0 2 * * 1,3,5"  # Mon/Wed/Fri — stagger with full_stack
 
 permissions:
   contents: read
@@ -43,8 +43,18 @@ jobs:
     needs: lint_elasticsearch
     uses: ./.github/workflows/molecule.yml
     with:
-      scenarios: '["elasticsearch_default","elasticsearch_roles_calculation","elasticsearch_custom","elasticsearch_no-security","elasticsearch_cert_content"]'
+      scenarios: '["elasticsearch_default"]'
       distros: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && '["rockylinux10","debian13"]' || '["rockylinux9","rockylinux10","ubuntu2204","ubuntu2404","ubuntu2604","debian13"]' }}
+      max-parallel: 1
+    secrets: inherit
+
+  molecule_elasticsearch_features:
+    needs: lint_elasticsearch
+    uses: ./.github/workflows/molecule.yml
+    with:
+      scenarios: '["elasticsearch_roles_calculation","elasticsearch_custom","elasticsearch_no-security","elasticsearch_cert_content"]'
+      distros: '["rockylinux10","debian13"]'
+      max-parallel: 1
     secrets: inherit
 
   molecule_elasticsearch_diagnostics:

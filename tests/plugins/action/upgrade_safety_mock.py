@@ -2,7 +2,7 @@ import base64
 import fcntl
 import json
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from ansible.plugins.action import ActionBase
 
@@ -83,9 +83,13 @@ class ActionModule(ActionBase):
                 validate_certs=args.get('validate_certs'),
                 ca_path=args.get('ca_path'),
                 body=args.get('body'),
+                timeout=args.get('timeout'),
             )
             observer = event['delegate_to'] or host
-            if 'elasticsearch-upgrade-restore |' in event['task']:
+            if ('elasticsearch-upgrade-restore |' in event['task']
+                    or event['task'].startswith('node_maintenance_end |')
+                    or (event['task'].startswith('elasticsearch-ml-upgrade-mode |')
+                        and task_vars.get('_elasticsearch_ml_mode') is False)):
                 if observer in state.get('cleanup_unreachable_hosts', []):
                     return {'changed': False, 'unreachable': True, 'msg': 'simulated unavailable management connection'}
                 if any(name in event['task'] for name in state.get('cleanup_unreachable_tasks', [])):
@@ -128,6 +132,15 @@ class ActionModule(ActionBase):
             status = -1 if failure in {'tls', 'timeout'} else 503
             return {'changed': False, 'failed': True, 'status': status, 'msg': 'simulated API failure'}
         if method == 'GET':
+            if path == '/':
+                cleanup = 'cleanup cluster identity' in event['task']
+                observer = event['delegate_to'] or event['host']
+                uuid = state.get('cluster_uuid_by_task', {}).get(event['task'],
+                    state.get('cluster_uuid_by_observer', {}).get(observer, state.get('cluster_uuid', 'fixture-uuid')))
+                return {'status': 200, 'json': {
+                    'cluster_name': 'wrong-cluster' if cleanup and state.get('wrong_cleanup_cluster') else state.get('cluster_name', 'fixture-cluster'),
+                    'cluster_uuid': 'wrong-uuid' if cleanup and state.get('wrong_cleanup_uuid') else uuid,
+                }, 'changed': False}
             if path == '/_cluster/health':
                 post = bool(state['package_writes'])
                 cleanup = 'cleanup cluster identity' in event['task']
@@ -150,33 +163,71 @@ class ActionModule(ActionBase):
                 if state.get('rejoin_failure') and state['package_writes']:
                     nodes = []
                 return {'status': 200, 'content': '\n'.join(nodes), 'changed': False}
+            if path == '/_nodes/_master/settings':
+                return {'status': 200, 'json': state.get('master_settings_response', {
+                    '_nodes': {'total': 1, 'successful': 1, 'failed': 0},
+                    'nodes': {'master': {'settings': state.get('master_settings', {})}},
+                }), 'changed': False}
             if path.startswith('/_nodes/'):
                 name = path.split('/')[-1]
                 version = state.get('running_version', '9.1.2')
                 return {'status': 200, 'json': {'nodes': {name: {'name': name, 'version': version}}}, 'changed': False}
             if path == '/_cluster/settings':
-                return {'status': 200, 'json': {'persistent': state['persistent'], 'transient': state.get('transient', {})}, 'changed': False}
+                settings = {'persistent': state['persistent'], 'transient': state.get('transient', {})}
+                if parse_qs(urlsplit(event['url']).query).get('include_defaults') == ['true']:
+                    settings['defaults'] = state.get('defaults', {'cluster.routing.allocation.enable': 'all'})
+                return {'status': 200, 'json': settings, 'changed': False}
             if path == '/_ml/info':
                 return {'status': 200, 'json': {'upgrade_mode': state['ml_mode']}, 'changed': False}
+            if path == '/_cluster/state/metadata':
+                return {'status': 200, 'json': {
+                    'cluster_name': state.get('cluster_name', 'fixture-cluster'),
+                    'metadata': {'cluster_coordination': {'voting_config_exclusions': state.get('voting', [])}},
+                }, 'changed': False}
             return {'status': 404, 'failed': True, 'msg': 'unhandled mock GET'}
         state['api_writes'].append(event)
-        restore = 'Restore ' in event['task']
+        cleanup_step = next((step for step, name in {
+            'allocation': 'Re-enable shard allocation', 'voting': 'Clear voting config exclusions',
+            'baseline': 'Restore recovery settings to the baseline',
+        }.items() if name in event['task']), None)
+        if cleanup_step and state.get('maintenance_failure') == cleanup_step:
+            return {'status': 503, 'failed': True, 'msg': 'simulated maintenance cleanup failure'}
+        if cleanup_step and state.get('maintenance_no_apply') == cleanup_step:
+            return {'status': 200, 'json': {'acknowledged': True}, 'changed': True}
+        if path == '/_cluster/voting_config_exclusions':
+            state['voting'] = [] if method == 'DELETE' else [{'node_name': event['host']}]
+            return {'status': 200, 'changed': True}
+        restore = 'Restore ' in event['task'] or (path == '/_ml/set_upgrade_mode' and 'enabled=false' in event['url'])
         if path == '/_cluster/settings':
             if restore and state.get('allocation_restore_failure'):
                 return {'status': 503, 'failed': True, 'msg': 'simulated allocation restore failure'}
             body = event['body']
             if isinstance(body, str):
                 body = json.loads(body)
-            for key, value in body['persistent'].items():
-                if value is None:
+            settings = list(body['persistent'].items())
+            while settings:
+                key, value = settings.pop()
+                if isinstance(value, dict):
+                    settings.extend((f'{key}.{child}', child_value) for child, child_value in value.items())
+                elif value is None:
                     state['persistent'].pop(key, None)
                 else:
-                    state['persistent'][key] = value
+                    state['persistent'][key] = str(value).lower() if isinstance(value, bool) else value
             return {'status': 200, 'json': {'acknowledged': not state.get('unacknowledged_allocation')}, 'changed': True}
         if path == '/_ml/set_upgrade_mode':
             if not restore and state.get('ml_failure'):
                 return {'status': 503, 'failed': True, 'msg': 'simulated ML failure'}
-            state['ml_mode'] = 'enabled=true' in event['url']
+            if restore:
+                attempts = state.setdefault('ml_restore_attempts', {})
+                attempts[event['host']] = attempts.get(event['host'], 0) + 1
+                statuses = state.get('ml_restore_statuses', [200])
+                status = statuses[min(attempts[event['host']] - 1, len(statuses) - 1)]
+                if status != 200:
+                    if state.get('ml_restore_applied_on_timeout'):
+                        state['ml_mode'] = False
+                    return {'status': status, 'failed': True, 'msg': 'simulated ML restore timeout or server failure'}
+            if not restore or not state.get('ml_restore_does_not_apply'):
+                state['ml_mode'] = 'enabled=true' in event['url']
             return {'status': 200, 'json': {'acknowledged': True}, 'changed': True}
         if path == '/_flush':
             status = state.get('flush_status', 200)

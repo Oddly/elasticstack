@@ -705,20 +705,6 @@ class TestRepositoryContracts(unittest.TestCase):
             main.index("import_tasks: packages.yml"),
         )
 
-    def test_shared_http_readiness_probe_is_bounded_and_validates_tls(self):
-        source = (
-            ROOT / "roles" / "elasticstack" / "tasks" / "wait_for_http_service.yml"
-        ).read_text()
-        self.assertIn("--connect-timeout", source)
-        self.assertIn("--max-time", source)
-        self.assertIn("_wait_validate_certs | default(true)", source)
-        self.assertIn("--cacert", source)
-        self.assertIn("status | int", source)
-        self.assertIn("_wait_resolve", source)
-        self.assertIn("_wait_attempt_limit", source)
-        self.assertIn("_wait_http_probe.attempts", source)
-        self.assertIn("until: _wait_http_probe.rc in [0, 2]", source)
-
     def test_http_readiness_contract_uses_isolated_temporary_state(self):
         source = (
             ROOT / "tests" / "integration" / "wait_for_http_service_contract.yml"

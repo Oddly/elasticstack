@@ -74,6 +74,51 @@
         logstash_output_elasticsearch: false
         logstash_user_password: ""
 
+    - name: security_and_certificate_contract | Allow centrally managed full-stack pipelines with external certificates
+      ansible.builtin.include_tasks: ../../roles/logstash/tasks/logstash-password-validation.yml
+      vars:
+        _logstash_security: true
+        elasticstack_full_stack: true
+        logstash_cert_source: external
+        logstash_no_pipelines: true
+        logstash_create_user: true
+        logstash_output_elasticsearch: true
+        logstash_user_password: ""
+
+    - name: security_and_certificate_contract | Allow external certificates without actual user creation
+      ansible.builtin.include_tasks: ../../roles/logstash/tasks/logstash-password-validation.yml
+      vars:
+        _logstash_security: true
+        elasticstack_full_stack: true
+        logstash_cert_source: external
+        logstash_no_pipelines: false
+        logstash_create_user: true
+        logstash_output_elasticsearch: false
+        logstash_user_password: ""
+
+    - name: security_and_certificate_contract | Allow custom pipelines without a standard output password
+      ansible.builtin.include_tasks: ../../roles/logstash/tasks/logstash-password-validation.yml
+      vars:
+        _logstash_security: true
+        elasticstack_full_stack: false
+        logstash_cert_source: external
+        logstash_no_pipelines: false
+        logstash_custom_pipeline: "input {} output {}"
+        logstash_create_user: false
+        logstash_output_elasticsearch: true
+        logstash_user_password: ""
+
+    - name: security_and_certificate_contract | Allow absent local pipelines without a standard output password
+      ansible.builtin.include_tasks: ../../roles/logstash/tasks/logstash-password-validation.yml
+      vars:
+        _logstash_security: true
+        elasticstack_full_stack: true
+        logstash_cert_source: elasticsearch_ca
+        logstash_no_pipelines: true
+        logstash_create_user: false
+        logstash_output_elasticsearch: true
+        logstash_user_password: ""
+
     - name: Accept a valid Logstash password for secured output
       ansible.builtin.include_tasks: ../../roles/logstash/tasks/logstash-password-validation.yml
       vars:
@@ -92,8 +137,9 @@
             _logstash_security: true
             elasticstack_full_stack: true
             logstash_cert_source: elasticsearch_ca
+            logstash_no_pipelines: true
             logstash_create_user: true
-            logstash_output_elasticsearch: true
+            logstash_output_elasticsearch: false
             logstash_user_password: ""
       rescue:
         - name: Record empty creator password failure

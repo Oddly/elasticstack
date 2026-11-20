@@ -22,7 +22,7 @@ on:
       - '.github/workflows/test_role_logstash.yml'
       - '.github/workflows/molecule.yml'
   schedule:
-    - cron: "0 5 * * 1,3,5"  # Mon/Wed/Fri — 84 jobs, alternate with full_stack
+    - cron: "0 5 * * 1,3,5"  # Mon/Wed/Fri — alternate with full_stack
 
 permissions:
   contents: read
@@ -43,10 +43,18 @@ jobs:
     needs: lint_logstash
     uses: ./.github/workflows/molecule.yml
     with:
-      scenarios: '["logstash_default","logstash_ssl","logstash_custom_pipeline","logstash_advanced","logstash_external_certs","logstash_standalone_certs","logstash_centralized_pipelines"]'
+      scenarios: '["logstash_default"]'
       distros: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && '["rockylinux10","debian13"]' || '["rockylinux9","rockylinux10","ubuntu2204","ubuntu2404","ubuntu2604","debian13"]' }}
-      # PR: 9 only. Cron/schedule keeps ["8","9"] — Logstash config differs
-      # meaningfully between majors (api.http.* vs http.* etc.), so we still
-      # want ES 8.19 covered before its 2027-07-15 EOL.
       releases: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && '["9"]' || '["8","9"]' }}
+      max-parallel: 1
+    secrets: inherit
+
+  molecule_logstash_features:
+    needs: lint_logstash
+    uses: ./.github/workflows/molecule.yml
+    with:
+      scenarios: '["logstash_ssl","logstash_custom_pipeline","logstash_advanced","logstash_external_certs","logstash_standalone_certs","logstash_centralized_pipelines"]'
+      distros: '["rockylinux10","debian13"]'
+      releases: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && '["9"]' || '["8","9"]' }}
+      max-parallel: 1
     secrets: inherit

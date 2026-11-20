@@ -22,7 +22,7 @@ on:
       - '.github/workflows/test_role_beats.yml'
       - '.github/workflows/molecule.yml'
   schedule:
-    - cron: "30 5 * * 2,4,6"  # Tue/Thu/Sat — 60 jobs, alternate with logstash
+    - cron: "30 5 * * 2,4,6"  # Tue/Thu/Sat — alternate with logstash
 
 permissions:
   contents: read
@@ -43,8 +43,19 @@ jobs:
     needs: lint_beats
     uses: ./.github/workflows/molecule.yml
     with:
-      scenarios: '["beats_default","beats_peculiar","beats_advanced","beats_security","beats_external_certs"]'
+      scenarios: '["beats_default"]'
       # PR: 9 only. Cron keeps ["8","9"] until ES 8.19 EOL 2027-07-15.
       releases: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && '["9"]' || '["8","9"]' }}
       distros: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && '["rockylinux10","debian13"]' || '["rockylinux9","rockylinux10","ubuntu2204","ubuntu2404","ubuntu2604","debian13"]' }}
+      max-parallel: 1
+    secrets: inherit
+
+  molecule_beats_features:
+    needs: lint_beats
+    uses: ./.github/workflows/molecule.yml
+    with:
+      scenarios: '["beats_peculiar","beats_advanced","beats_security","beats_external_certs"]'
+      releases: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && '["9"]' || '["8","9"]' }}
+      distros: '["rockylinux10","debian13"]'
+      max-parallel: 1
     secrets: inherit

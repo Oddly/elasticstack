@@ -2,9 +2,11 @@
 """Small fake Elasticsearch API used by the rolling restart contract test."""
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlsplit
 import argparse
 import json
 import threading
+import uuid
 
 
 class State:
@@ -17,6 +19,9 @@ class State:
         self.fail_nodes_on = fail_nodes_on
         self.health_status = health_status
         self.in_flight = in_flight
+        self.ml_mode = False
+        self.cluster_uuid = uuid.uuid4().hex
+        self.voting_exclusions = []
         self.lock = threading.Lock()
 
     def log(self, port, method, path, body):
@@ -54,19 +59,38 @@ def handler(state):
 
         def do_GET(self):
             state.log(self.server.server_port, "GET", self.path, "")
+            if self.path == "/":
+                self._send_json({"cluster_name": "elasticsearch", "cluster_uuid": state.cluster_uuid})
+                return
             if self.path.startswith("/_cluster/settings"):
                 with state.lock:
                     persistent_settings = dict(state.persistent_settings)
-                self._send_json({"persistent": persistent_settings})
+                self._send_json({"persistent": persistent_settings, "transient": {}})
                 return
             if self.path.startswith("/_cluster/health"):
                 self._send_json(
                     {
                         "status": state.health_status,
+                        "cluster_name": "elasticsearch",
                         "relocating_shards": state.in_flight,
                         "initializing_shards": state.in_flight,
                     }
                 )
+                return
+            if self.path.startswith("/_ml/info"):
+                self._send_json({"upgrade_mode": state.ml_mode})
+                return
+            if self.path.startswith("/_cluster/state/metadata"):
+                self._send_json({
+                    "cluster_name": "elasticsearch",
+                    "metadata": {"cluster_coordination": {"voting_config_exclusions": state.voting_exclusions}},
+                })
+                return
+            if self.path.startswith("/_nodes/_master/settings"):
+                self._send_json({
+                    "_nodes": {"total": 1, "successful": 1, "failed": 0},
+                    "nodes": {"master": {"settings": {}}},
+                })
                 return
             if self.path.startswith("/_cat/nodes"):
                 if self.server.server_port in state.fail_nodes_on:
@@ -88,9 +112,12 @@ def handler(state):
                 self._send_json({"_shards": {"failed": 0}})
                 return
             if self.path.startswith("/_cluster/voting_config_exclusions"):
+                names = parse_qs(urlsplit(self.path).query).get("node_names", [])
+                state.voting_exclusions = [{"node_name": name} for name in names]
                 self._send_json({})
                 return
             if self.path.startswith("/_ml/set_upgrade_mode"):
+                state.ml_mode = parse_qs(urlsplit(self.path).query)["enabled"] == ["true"]
                 self._send_json({"acknowledged": True})
                 return
             self._send_json({"error": "not found"}, status=404)
@@ -98,6 +125,7 @@ def handler(state):
         def do_DELETE(self):
             state.log(self.server.server_port, "DELETE", self.path, "")
             if self.path.startswith("/_cluster/voting_config_exclusions"):
+                state.voting_exclusions = []
                 self._send_json({})
                 return
             self._send_json({"error": "not found"}, status=404)
@@ -115,7 +143,7 @@ def handler(state):
                         if value is None:
                             state.persistent_settings.pop(key, None)
                         else:
-                            state.persistent_settings[key] = str(value)
+                            state.persistent_settings[key] = str(value).lower() if isinstance(value, bool) else str(value)
                 self._send_json({"acknowledged": True})
                 return
             self._send_json({"error": "not found"}, status=404)

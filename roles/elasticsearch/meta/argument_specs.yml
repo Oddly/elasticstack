@@ -429,6 +429,10 @@ argument_specs:
     description: Health gate, voting exclusion, primaries-only allocation, ML upgrade mode, optional recovery boost and flush.
       Pair with node_maintenance_end in an always block so cluster state is restored even when the maintenance itself fails.
     options:
+      elasticsearch_maintenance_manage_ml:
+        description: Manage ML mode during node maintenance. Disable when a cluster-wide orchestrator owns ML mode.
+        type: bool
+        default: true
       elasticsearch_maintenance_password:
         description: Password for the elastic user, used for all API calls in the entry point.
         type: str
@@ -460,8 +464,12 @@ argument_specs:
     short_description: Restore cluster state after node maintenance
     description: Re-enables allocation, disables ML upgrade mode, clears voting exclusions, restores boosted recovery settings
       to their baseline from elasticsearch_cluster_settings, optionally waits for the node to rejoin, and gates on cluster
-      health. All restore steps are best-effort so the entry point is safe to run defensively.
+      health. Cleanup steps are attempted independently and verified before succeeding; failed verification fails the entry point.
     options:
+      elasticsearch_maintenance_manage_ml:
+        description: Manage ML mode during node maintenance. Disable when a cluster-wide orchestrator owns ML mode.
+        type: bool
+        default: true
       elasticsearch_maintenance_password:
         description: Password for the elastic user, used for all API calls in the entry point.
         type: str
@@ -500,3 +508,35 @@ argument_specs:
         description: Persistent cluster settings that were applied during the drain; every key is restored to its baseline.
         type: dict
         default: {}
+  ml_upgrade_start:
+    short_description: Record the original ML mode and pause ML for a cluster upgrade
+    options:
+      elasticsearch_maintenance_password:
+        description: Password for the elastic user.
+        type: str
+        required: true
+        no_log: true
+      elasticsearch_maintenance_api_url:
+        description: Base URL of the cluster API. Defaults to the protocol, API host and HTTP port.
+        type: str
+      elasticsearch_ml_upgrade_state_host:
+        description: Inventory host holding the original ML state across serial plays. Defaults to the current host.
+        type: str
+  ml_upgrade_end:
+    short_description: Restore ML only if this upgrade attempted to change the original mode
+    options:
+      elasticsearch_maintenance_password:
+        description: Password for the elastic user.
+        type: str
+        required: true
+        no_log: true
+      elasticsearch_maintenance_api_url:
+        description: Base URL of the cluster API. Defaults to the protocol, API host and HTTP port.
+        type: str
+      elasticsearch_ml_upgrade_state_host:
+        description: Inventory host holding the original ML state across serial plays. Defaults to the current host.
+        type: str
+      elasticsearch_ml_upgrade_hosts:
+        description: Candidate API observers for restoration. Defaults to the current host.
+        type: list
+        elements: str

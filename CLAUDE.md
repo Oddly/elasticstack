@@ -132,10 +132,10 @@ group, or the current inventory host when that group is empty).
 Elasticsearch has two extension points worth calling out separately:
 
 - External `tasks_from:` entry points — invoked by callers with
-  `include_role: name: … tasks_from: <name>`. Only two exist:
-  `node_maintenance_start` and `node_maintenance_end` (external
-  orchestrators for cluster health gating, voting exclusions, and ML
-  upgrade mode). Documented in `docs/reference/elasticsearch.md`.
+  `include_role: name: … tasks_from: <name>`. These include
+  `node_maintenance_start` and `node_maintenance_end` (cluster health,
+  voting exclusions and node maintenance), plus `ml_upgrade_start` and
+  `ml_upgrade_end` (cluster-wide ML lifecycle with original-state ownership).
 - Internal `include_tasks` from `main.yml` — `elasticsearch-rolling-upgrade.yml`
   fires when `elasticsearch-upgrade-detection.yml` sets
   `_elasticsearch_needs_rolling_upgrade`. Not an external entry point.
