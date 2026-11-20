@@ -48,6 +48,18 @@
       xpack.management.logstash.poll_interval: 5s
       xpack.management.elasticsearch.ssl.certificate_authority: /etc/logstash/certs/ca.pem
 
+  pre_tasks:
+    - name: converge | Allow central pipelines with external certificates and default user and output settings
+      ansible.builtin.include_tasks: ../../roles/logstash/tasks/logstash-password-validation.yml
+      vars:
+        _logstash_security: true
+        elasticstack_full_stack: true
+        logstash_cert_source: external
+        logstash_no_pipelines: true
+        logstash_create_user: true
+        logstash_output_elasticsearch: true
+        logstash_user_password: ""
+
   tasks:
     - name: Include Elastic repos role
       ansible.builtin.include_role:
