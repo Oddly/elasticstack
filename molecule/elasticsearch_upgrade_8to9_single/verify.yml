@@ -72,6 +72,11 @@
         src: /etc/elasticsearch/elasticsearch.yml
       register: _es_yml
 
+    - name: Verify ML remains enabled without upgrade maintenance
+      ansible.builtin.assert:
+        that:
+          - (_es_yml.content | b64decode | from_yaml)['xpack.ml.enabled'] | bool
+
     - name: Verify the external CA survived the rolling upgrade
       ansible.builtin.assert:
         that:
