@@ -212,6 +212,7 @@
     # This exercises the real-world upgrade path.
     elasticstack_release: 9
     elasticsearch_upgrade_wait_status: yellow
+    elasticsearch_maintenance_manage_ml: false
     elasticsearch_manage_logging: true
     elasticsearch_heap: "1"
     elasticstack_no_log: false
@@ -284,6 +285,11 @@
     - name: Include Elasticsearch role (upgrade to 9.x)
       ansible.builtin.include_role:
         name: oddly.elasticstack.elasticsearch
+
+    - name: Verify the singleton upgrade skipped ML maintenance
+      ansible.builtin.assert:
+        that:
+          - not (_elasticsearch_upgrade_ml_attempted | bool)
 
     - name: Read logging configuration after the upgrade
       ansible.builtin.stat:

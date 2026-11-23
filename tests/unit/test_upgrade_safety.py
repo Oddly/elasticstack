@@ -445,6 +445,33 @@ class TestUpgradeSafety(unittest.TestCase):
         self.assertTrue(state['ml_mode'])
         self.assertFalse(any(e['path'].startswith('/_ml/') for e in state['events'] if e['action'] == 'uri'))
 
+    def test_rolling_upgrade_can_skip_ml_maintenance(self):
+        for original in (False, True):
+            with self.subTest(original=original):
+                completed, state = self.run_case({'api_failure': '/_ml/info', 'ml_mode': original}, count=1,
+                                                 variables={'elasticsearch_maintenance_manage_ml': False})
+                self.assert_ok(completed)
+                self.assertEqual(state['ml_mode'], original)
+                self.assertFalse(any(e['path'].startswith('/_ml/') for e in state['events'] if e['action'] == 'uri'))
+                self.assertEqual(state['package_writes'], ['node-alpha'])
+                self.assertEqual(state['services']['node-alpha'], 'active')
+                self.assertEqual(state['persistent'], {})
+                paths = [e['path'] for e in state['events'] if e['action'] == 'uri']
+                self.assertIn('/', paths)
+                self.assertIn('/_cluster/health', paths)
+                self.assertIn('/_nodes/node-alpha', paths)
+                self.assertEqual([e['path'] for e in state['api_writes']], ['/_cluster/settings', '/_flush', '/_cluster/settings'])
+
+    def test_skipping_ml_maintenance_preserves_failed_upgrade_cleanup(self):
+        completed, state = self.run_case({'package_failure': True, 'ml_mode': True},
+                                         variables={'elasticsearch_maintenance_manage_ml': False})
+        self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+        self.assertEqual(state['persistent'], {})
+        self.assertTrue(state['ml_mode'])
+        self.assertFalse(any(e['path'].startswith('/_ml/') for e in state['events'] if e['action'] == 'uri'))
+        self.assertIn('elasticsearch-rolling-upgrade | Update Elasticsearch', completed.stdout)
+        self.assertFalse(any(e['host'] == 'node-beta' for e in state['events']))
+
     def test_two_nodes_use_checked_stop_install_start_and_restore(self):
         completed, state = self.run_case()
         self.assert_ok(completed)
